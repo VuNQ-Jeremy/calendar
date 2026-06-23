@@ -317,7 +317,7 @@ function CalendarScreen() {
 
   const usedColors = [...new Set(data.events.map(e => e.color))];
 
-  return React.createElement('div', { className: 'content', style: { maxWidth: 1320 } },
+  return React.createElement('div', { className: 'content' },
     React.createElement(PageHeader, {
       title: 'Calendar', subtitle: 'Color-coded by class. Drag any event to reschedule.',
       actions: React.createElement('div', { className: 'm-row' },
