@@ -1,0 +1,17 @@
+{
+  "name": "mochi-lms",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Mochi — a warm, family-friendly learning management calendar app",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.0"
+  }
+}

@@ -1,0 +1,7 @@
+/* Mochi webfonts — loaded from Google Fonts.
+   Display: Fredoka (rounded, warm, geometric)
+   Body/UI: Nunito Sans (humanist, rounded terminals, highly readable)
+   Numeric/mono: DM Mono (dates, times, grades, tabular figures)
+   NOTE: served from Google's CDN. If you need self-hosted binaries,
+   download the families and replace this @import with local @font-face. */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&family=DM+Mono:wght@400;500&display=swap');
