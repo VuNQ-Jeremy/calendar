@@ -23,7 +23,16 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, wrappedOnClose]);
 
-  if (!open) return null;
+  React.useEffect(() => {
+    return () => console.log('[Modal] UNMOUNTING');
+  }, []);
+
+  if (!open) {
+    console.log('[Modal] open is false, not rendering');
+    return null;
+  }
+
+  console.log('[Modal] rendering (open=true)');
 
   const handleOverlayClick = (e) => {
     console.log('[Modal overlay click]', { target: e.target.tagName, current: e.currentTarget.className, isSame: e.target === e.currentTarget });
