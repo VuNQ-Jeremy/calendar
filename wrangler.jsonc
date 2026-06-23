@@ -1,15 +1,31 @@
 {
-  // Cloudflare Workers config for Mochi — a static single-page app.
-  // `npm run build` emits the SPA to dist/; this deploys those files as
-  // Workers Static Assets with SPA fallback. Pre-configuring here stops
-  // `wrangler deploy` from running its interactive first-time project setup.
+  // Cloudflare Workers config for Mochi.
+  //
+  // The Worker (worker/index.js) serves the built SPA via the ASSETS binding and
+  // a JSON API at /api/* backed by D1 (the DB binding).
+  //
+  // ONE-TIME SETUP before the first deploy (see BACKEND.md):
+  //   1. npx wrangler d1 create mochi
+  //   2. paste the returned database_id below
+  //   3. npx wrangler d1 migrations apply mochi --remote
+  // Until database_id is filled in, `wrangler deploy` will fail at the D1 step.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "calendar",
   "compatibility_date": "2026-06-23",
+  "main": "worker/index.js",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mochi",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
   "observability": {
     "enabled": true
   }

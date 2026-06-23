@@ -7,7 +7,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cf:dev": "npm run build && wrangler dev",
+    "cf:deploy": "npm run build && wrangler deploy",
+    "db:create": "wrangler d1 create mochi",
+    "db:migrate:local": "wrangler d1 migrations apply mochi --local",
+    "db:migrate": "wrangler d1 migrations apply mochi --remote",
+    "db:seed:local": "wrangler d1 execute mochi --local --file=./seed.sql",
+    "db:seed": "wrangler d1 execute mochi --remote --file=./seed.sql"
   },
   "devDependencies": {
     "react": "^18.3.1",
