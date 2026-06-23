@@ -44,7 +44,7 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
   };
 
   return React.createElement('div', { className: 'm-overlay', onClick: handleOverlayClick },
-    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
+    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true', onClick: (e) => { e.stopPropagation(); } },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
         React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: (e) => { console.log('[Close button] clicked'); wrappedOnClose(); } }, React.createElement(MIcon, { name: 'x', size: 18 })),
