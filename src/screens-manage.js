@@ -3,23 +3,21 @@ import { MIcon } from './icons.js';
 import { useStore } from './store.js';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from './ui.js';
 import { colorOf, iso, TODAY, makeCode } from './lib/core.js';
-import { useLang, getCal } from './lib/i18n.js';
+import { useLang } from './lib/i18n.js';
 
 // app/screens-manage.jsx — Classes, Students/Users (with invite codes), Materials
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv, Switch: MSw } = DS;
-const WK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // ============================================================ CLASSES ============================================================
 function ClassesScreen() {
   const { data, add, update, remove } = useStore();
-  const { t, lang } = useLang();
-  const { dow } = getCal(lang);
+  const { t } = useLang();
   const [modal, setModal] = React.useState(null);
   const [detail, setDetail] = React.useState(null);
   const [confirm, confirmNode] = useConfirm();
   const studentsOf = (c) => data.students.filter(s => c.studentIds.includes(s.id));
 
-  const openNew = () => setModal({ name: '', subject: '', color: 'green', room: '', schedule: [], studentIds: [] });
+  const openNew = () => setModal({ name: '', subject: '', color: 'green', room: '', studentIds: [] });
   const save = (f) => { if (!f.name.trim()) f.name = t('cls_default_name'); if (f.id) update('classes', f.id, f); else add('classes', f); setModal(null); };
   const del = async (c) => { if (await confirm({ title: t('cls_delete_q'), message: t('cls_delete_msg', { name: c.name }), confirmLabel: t('delete'), danger: true })) remove('classes', c.id); };
 
@@ -47,13 +45,6 @@ function ClassesScreen() {
             ),
             React.createElement('div', { className: 'lrow__meta', style: { margin: '14px 0' } },
               React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'mapPin', size: 14 }), c.room || t('cls_no_room')),
-              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'clock', size: 14 }), t('cls_per_week', { n: c.schedule.length })),
-            ),
-            React.createElement('div', { className: 'm-stack', style: { gap: 4, marginBottom: 14 } },
-              c.schedule.length ? c.schedule.map((s, i) => React.createElement('div', { key: i, className: 'm-row m-mono', style: { fontSize: 'var(--text-xs)', color: 'var(--text-muted)', gap: 8 } },
-                React.createElement('span', { style: { fontWeight: 700, color: col.ink, minWidth: 32 } }, dow[s.day]),
-                `${s.start}–${s.end}`,
-              )) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-xs)' } }, t('cls_no_schedule')),
             ),
             React.createElement('div', { className: 'm-spread' },
               React.createElement('div', { className: 'avatar-stack' },
@@ -73,8 +64,7 @@ function ClassesScreen() {
 
 function ClassDetailModal({ cls, onClose, onEdit }) {
   const { data } = useStore();
-  const { t, lang } = useLang();
-  const { dow } = getCal(lang);
+  const { t } = useLang();
   const col = colorOf(cls.color);
   const roster = data.students.filter(s => cls.studentIds.includes(s.id));
   const materials = data.materials.filter(m => m.classId === cls.id);
@@ -102,13 +92,6 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
       Stat('clipboard', t('cls_stat_openwork'), openHw),
       Stat('folder', t('stat_materials'), materials.length),
     ),
-    React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, t('cls_weekly_schedule')),
-    React.createElement('div', { className: 'm-stack', style: { gap: 6, marginBottom: 20 } },
-      cls.schedule.length ? cls.schedule.map((s, i) => React.createElement('div', { key: i, className: 'm-row', style: { gap: 12, padding: '8px 12px', background: col.soft, borderRadius: 'var(--radius-md)' } },
-        React.createElement('span', { style: { fontWeight: 800, color: col.ink, minWidth: 42 } }, dow[s.day]),
-        React.createElement('span', { className: 'm-mono', style: { color: 'var(--text-body)' } }, `${s.start} – ${s.end}`),
-      )) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, t('cls_no_schedule_yet')),
-    ),
     React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, t('cls_roster_n', { n: roster.length })),
     roster.length ? React.createElement('div', { className: 'm-grid cols-2', style: { gap: 8, marginBottom: materials.length ? 20 : 0 } },
       roster.map(s => React.createElement('div', { key: s.id, className: 'm-row', style: { gap: 10, padding: '6px 4px' } },
@@ -126,12 +109,8 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
 }
 
 function ClassModal({ draft, setDraft, onClose, onSave, students }) {
-  const { t, lang } = useLang();
-  const { dow } = getCal(lang);
+  const { t } = useLang();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
-  const addSlot = () => set('schedule', [...draft.schedule, { day: 1, start: '09:00', end: '09:45' }]);
-  const setSlot = (i, k, v) => set('schedule', draft.schedule.map((s, j) => j === i ? { ...s, [k]: v } : s));
-  const rmSlot = (i) => set('schedule', draft.schedule.filter((_, j) => j !== i));
   const toggleStudent = (id) => set('studentIds', draft.studentIds.includes(id) ? draft.studentIds.filter(x => x !== id) : [...draft.studentIds, id]);
 
   return React.createElement(Modal, {
@@ -154,17 +133,6 @@ function ClassModal({ draft, setDraft, onClose, onSave, students }) {
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
       React.createElement(ColorPicker, { label: t('color'), value: draft.color, onChange: v => set('color', v) }),
     ),
-    React.createElement('hr', { className: 'divider' }),
-    React.createElement('div', { className: 'm-spread', style: { marginBottom: 10 } },
-      React.createElement('label', { className: 'mochi-field__label', style: { margin: 0 } }, t('cls_weekly_schedule')),
-      React.createElement(MBtn, { variant: 'soft', size: 'sm', iconLeft: React.createElement(MIcon, { name: 'plus', size: 15 }), onClick: addSlot }, t('cls_add_time')),
-    ),
-    draft.schedule.map((s, i) => React.createElement('div', { key: i, className: 'sched-row' },
-      React.createElement(MSelect, { value: String(s.day), onChange: v => setSlot(i, 'day', Number(v)), options: dow.map((d, idx) => ({ value: String(idx), label: d })) }),
-      React.createElement('input', { type: 'time', className: 'mochi-input', value: s.start, onChange: e => setSlot(i, 'start', e.target.value) }),
-      React.createElement('input', { type: 'time', className: 'mochi-input', value: s.end, onChange: e => setSlot(i, 'end', e.target.value) }),
-      React.createElement(MIB, { label: t('remove'), size: 'sm', onClick: () => rmSlot(i) }, React.createElement(MIcon, { name: 'x', size: 16 })),
-    )),
     React.createElement('hr', { className: 'divider' }),
     React.createElement('label', { className: 'mochi-field__label' }, t('cls_roster_assigned', { n: draft.studentIds.length })),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 8, marginTop: 8 } },
