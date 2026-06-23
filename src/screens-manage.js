@@ -3,6 +3,7 @@ import { MIcon } from './icons.js';
 import { useStore } from './store.js';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from './ui.js';
 import { colorOf, iso, TODAY, makeCode } from './lib/core.js';
+import { useLang, getCal } from './lib/i18n.js';
 
 // app/screens-manage.jsx — Classes, Students/Users (with invite codes), Materials
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv, Switch: MSw } = DS;
@@ -11,19 +12,21 @@ const WK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // ============================================================ CLASSES ============================================================
 function ClassesScreen() {
   const { data, add, update, remove } = useStore();
+  const { t, lang } = useLang();
+  const { dow } = getCal(lang);
   const [modal, setModal] = React.useState(null);
   const [detail, setDetail] = React.useState(null);
   const [confirm, confirmNode] = useConfirm();
   const studentsOf = (c) => data.students.filter(s => c.studentIds.includes(s.id));
 
   const openNew = () => setModal({ name: '', subject: '', color: 'green', room: '', schedule: [], studentIds: [] });
-  const save = (f) => { if (!f.name.trim()) f.name = 'New class'; if (f.id) update('classes', f.id, f); else add('classes', f); setModal(null); };
-  const del = async (c) => { if (await confirm({ title: 'Delete class?', message: `“${c.name}” and its schedule will be removed. Students stay in the system.`, confirmLabel: 'Delete', danger: true })) remove('classes', c.id); };
+  const save = (f) => { if (!f.name.trim()) f.name = t('cls_default_name'); if (f.id) update('classes', f.id, f); else add('classes', f); setModal(null); };
+  const del = async (c) => { if (await confirm({ title: t('cls_delete_q'), message: t('cls_delete_msg', { name: c.name }), confirmLabel: t('delete'), danger: true })) remove('classes', c.id); };
 
   return React.createElement('div', { className: 'content' },
     React.createElement(PageHeader, {
-      title: 'Classes', subtitle: 'Subjects, schedules, and rosters',
-      actions: React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNew }, 'New class'),
+      title: t('cls_title'), subtitle: t('cls_sub'),
+      actions: React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNew }, t('cls_new')),
     }),
     React.createElement('div', { className: 'm-grid cols-3' },
       data.classes.map(c => {
@@ -31,32 +34,32 @@ function ClassesScreen() {
         const roster = studentsOf(c);
         return React.createElement(MC, { key: c.id, interactive: true, style: { padding: 0, overflow: 'hidden' } },
           React.createElement('div', { style: { height: 8, background: col.base } }),
-          React.createElement('div', { style: { padding: 18, cursor: 'pointer' }, onClick: () => setDetail(c), title: 'View class details' },
+          React.createElement('div', { style: { padding: 18, cursor: 'pointer' }, onClick: () => setDetail(c), title: t('cls_view_details') },
             React.createElement('div', { className: 'm-spread', style: { alignItems: 'flex-start' } },
               React.createElement('div', { style: { flex: 1, minWidth: 0 } },
                 React.createElement('h3', { style: { margin: '0 0 6px', fontSize: 'var(--text-lg)' } }, c.name),
-                React.createElement(MTag, { color: c.color }, c.subject || 'General'),
+                React.createElement(MTag, { color: c.color }, c.subject || t('cls_general')),
               ),
               React.createElement('div', { className: 'lrow__actions', style: { flexShrink: 0 } },
-                React.createElement(MIB, { label: 'Edit', size: 'sm', onClick: (e) => { e.stopPropagation(); setModal({ ...c }); } }, React.createElement(MIcon, { name: 'edit', size: 16 })),
-                React.createElement(MIB, { label: 'Delete', size: 'sm', onClick: (e) => { e.stopPropagation(); del(c); } }, React.createElement(MIcon, { name: 'trash', size: 16 })),
+                React.createElement(MIB, { label: t('edit'), size: 'sm', onClick: (e) => { e.stopPropagation(); setModal({ ...c }); } }, React.createElement(MIcon, { name: 'edit', size: 16 })),
+                React.createElement(MIB, { label: t('delete'), size: 'sm', onClick: (e) => { e.stopPropagation(); del(c); } }, React.createElement(MIcon, { name: 'trash', size: 16 })),
               ),
             ),
             React.createElement('div', { className: 'lrow__meta', style: { margin: '14px 0' } },
-              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'mapPin', size: 14 }), c.room || 'No room'),
-              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'clock', size: 14 }), `${c.schedule.length}×/week`),
+              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'mapPin', size: 14 }), c.room || t('cls_no_room')),
+              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'clock', size: 14 }), t('cls_per_week', { n: c.schedule.length })),
             ),
             React.createElement('div', { className: 'm-stack', style: { gap: 4, marginBottom: 14 } },
               c.schedule.length ? c.schedule.map((s, i) => React.createElement('div', { key: i, className: 'm-row m-mono', style: { fontSize: 'var(--text-xs)', color: 'var(--text-muted)', gap: 8 } },
-                React.createElement('span', { style: { fontWeight: 700, color: col.ink, minWidth: 32 } }, WK[s.day]),
+                React.createElement('span', { style: { fontWeight: 700, color: col.ink, minWidth: 32 } }, dow[s.day]),
                 `${s.start}–${s.end}`,
-              )) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-xs)' } }, 'No schedule set'),
+              )) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-xs)' } }, t('cls_no_schedule')),
             ),
             React.createElement('div', { className: 'm-spread' },
               React.createElement('div', { className: 'avatar-stack' },
                 roster.slice(0, 5).map(s => React.createElement(MAv, { key: s.id, name: s.name, color: s.color, size: 'sm' })),
               ),
-              React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-xs)', fontWeight: 700 } }, `${roster.length} students`),
+              React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-xs)', fontWeight: 700 } }, t('cls_students_n', { n: roster.length })),
             ),
           ),
         );
@@ -70,6 +73,8 @@ function ClassesScreen() {
 
 function ClassDetailModal({ cls, onClose, onEdit }) {
   const { data } = useStore();
+  const { t, lang } = useLang();
+  const { dow } = getCal(lang);
   const col = colorOf(cls.color);
   const roster = data.students.filter(s => cls.studentIds.includes(s.id));
   const materials = data.materials.filter(m => m.classId === cls.id);
@@ -84,35 +89,35 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
   return React.createElement(Modal, {
     open: true, onClose, title: cls.name, width: 600,
     footer: React.createElement(React.Fragment, null,
-      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, 'Close'),
-      React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'edit', size: 16 }), onClick: onEdit }, 'Edit class'),
+      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, t('close')),
+      React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'edit', size: 16 }), onClick: onEdit }, t('cls_edit_class')),
     ),
   },
     React.createElement('div', { className: 'm-row', style: { gap: 10, marginBottom: 16 } },
-      React.createElement(MTag, { color: cls.color }, cls.subject || 'General'),
-      React.createElement('span', { className: 'm-row m-muted', style: { gap: 5, fontSize: 'var(--text-sm)' } }, React.createElement(MIcon, { name: 'mapPin', size: 14 }), cls.room || 'No room'),
+      React.createElement(MTag, { color: cls.color }, cls.subject || t('cls_general')),
+      React.createElement('span', { className: 'm-row m-muted', style: { gap: 5, fontSize: 'var(--text-sm)' } }, React.createElement(MIcon, { name: 'mapPin', size: 14 }), cls.room || t('cls_no_room')),
     ),
     React.createElement('div', { className: 'm-row', style: { gap: 10, marginBottom: 20 } },
-      Stat('users', 'Students', roster.length),
-      Stat('clipboard', 'Open work', openHw),
-      Stat('folder', 'Materials', materials.length),
+      Stat('users', t('stat_students'), roster.length),
+      Stat('clipboard', t('cls_stat_openwork'), openHw),
+      Stat('folder', t('stat_materials'), materials.length),
     ),
-    React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, 'Weekly schedule'),
+    React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, t('cls_weekly_schedule')),
     React.createElement('div', { className: 'm-stack', style: { gap: 6, marginBottom: 20 } },
       cls.schedule.length ? cls.schedule.map((s, i) => React.createElement('div', { key: i, className: 'm-row', style: { gap: 12, padding: '8px 12px', background: col.soft, borderRadius: 'var(--radius-md)' } },
-        React.createElement('span', { style: { fontWeight: 800, color: col.ink, minWidth: 42 } }, WK[s.day]),
+        React.createElement('span', { style: { fontWeight: 800, color: col.ink, minWidth: 42 } }, dow[s.day]),
         React.createElement('span', { className: 'm-mono', style: { color: 'var(--text-body)' } }, `${s.start} – ${s.end}`),
-      )) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, 'No schedule set yet.'),
+      )) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, t('cls_no_schedule_yet')),
     ),
-    React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, `Roster · ${roster.length}`),
+    React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, t('cls_roster_n', { n: roster.length })),
     roster.length ? React.createElement('div', { className: 'm-grid cols-2', style: { gap: 8, marginBottom: materials.length ? 20 : 0 } },
       roster.map(s => React.createElement('div', { key: s.id, className: 'm-row', style: { gap: 10, padding: '6px 4px' } },
         React.createElement(MAv, { name: s.name, color: s.color, size: 'sm' }),
         React.createElement('span', { style: { fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--text-strong)' } }, s.name),
       )),
-    ) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, 'No students assigned.'),
+    ) : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, t('cls_no_students_assigned')),
     materials.length > 0 && React.createElement(React.Fragment, null,
-      React.createElement('div', { className: 'mochi-eyebrow', style: { margin: '4px 0 8px' } }, `Materials · ${materials.length}`),
+      React.createElement('div', { className: 'mochi-eyebrow', style: { margin: '4px 0 8px' } }, t('cls_materials_n', { n: materials.length })),
       React.createElement('div', { className: 'tablebar' },
         materials.map(m => React.createElement('span', { key: m.id, className: 'mchip' }, React.createElement(MIcon, { name: m.type === 'link' ? 'link' : m.type === 'video' ? 'video' : 'file', size: 12 }), m.title)),
       ),
@@ -121,6 +126,8 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
 }
 
 function ClassModal({ draft, setDraft, onClose, onSave, students }) {
+  const { t, lang } = useLang();
+  const { dow } = getCal(lang);
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const addSlot = () => set('schedule', [...draft.schedule, { day: 1, start: '09:00', end: '09:45' }]);
   const setSlot = (i, k, v) => set('schedule', draft.schedule.map((s, j) => j === i ? { ...s, [k]: v } : s));
@@ -128,42 +135,42 @@ function ClassModal({ draft, setDraft, onClose, onSave, students }) {
   const toggleStudent = (id) => set('studentIds', draft.studentIds.includes(id) ? draft.studentIds.filter(x => x !== id) : [...draft.studentIds, id]);
 
   return React.createElement(Modal, {
-    open: true, onClose, title: draft.id ? 'Edit class' : 'New class', width: 600,
+    open: true, onClose, title: draft.id ? t('cls_edit_class') : t('cls_new_class'), width: 600,
     footer: React.createElement(React.Fragment, null,
-      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, 'Cancel'),
-      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, 'Save class'),
+      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, t('cancel')),
+      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, t('cls_save')),
     ),
   },
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
       React.createElement('div', { className: 'mochi-field' },
-        React.createElement('label', { className: 'mochi-field__label' }, 'Class name'),
-        React.createElement('input', { className: 'mochi-input', autoFocus: true, placeholder: 'e.g. Biology 9A', value: draft.name, onChange: e => set('name', e.target.value) }),
+        React.createElement('label', { className: 'mochi-field__label' }, t('cls_name')),
+        React.createElement('input', { className: 'mochi-input', autoFocus: true, placeholder: t('cls_name_ph'), value: draft.name, onChange: e => set('name', e.target.value) }),
       ),
       React.createElement('div', { className: 'mochi-field' },
-        React.createElement('label', { className: 'mochi-field__label' }, 'Subject'),
-        React.createElement('input', { className: 'mochi-input', placeholder: 'e.g. Science', value: draft.subject, onChange: e => set('subject', e.target.value) }),
+        React.createElement('label', { className: 'mochi-field__label' }, t('cls_subject')),
+        React.createElement('input', { className: 'mochi-input', placeholder: t('cls_subject_ph'), value: draft.subject, onChange: e => set('subject', e.target.value) }),
       ),
     ),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
       React.createElement('div', { className: 'mochi-field' },
-        React.createElement('label', { className: 'mochi-field__label' }, 'Room'),
-        React.createElement('input', { className: 'mochi-input', placeholder: 'e.g. Room 204', value: draft.room, onChange: e => set('room', e.target.value) }),
+        React.createElement('label', { className: 'mochi-field__label' }, t('cls_room')),
+        React.createElement('input', { className: 'mochi-input', placeholder: t('cls_room_ph'), value: draft.room, onChange: e => set('room', e.target.value) }),
       ),
-      React.createElement(ColorPicker, { label: 'Color', value: draft.color, onChange: v => set('color', v) }),
+      React.createElement(ColorPicker, { label: t('color'), value: draft.color, onChange: v => set('color', v) }),
     ),
     React.createElement('hr', { className: 'divider' }),
     React.createElement('div', { className: 'm-spread', style: { marginBottom: 10 } },
-      React.createElement('label', { className: 'mochi-field__label', style: { margin: 0 } }, 'Weekly schedule'),
-      React.createElement(MBtn, { variant: 'soft', size: 'sm', iconLeft: React.createElement(MIcon, { name: 'plus', size: 15 }), onClick: addSlot }, 'Add time'),
+      React.createElement('label', { className: 'mochi-field__label', style: { margin: 0 } }, t('cls_weekly_schedule')),
+      React.createElement(MBtn, { variant: 'soft', size: 'sm', iconLeft: React.createElement(MIcon, { name: 'plus', size: 15 }), onClick: addSlot }, t('cls_add_time')),
     ),
     draft.schedule.map((s, i) => React.createElement('div', { key: i, className: 'sched-row' },
-      React.createElement(MSelect, { value: String(s.day), onChange: v => setSlot(i, 'day', Number(v)), options: WK.map((d, idx) => ({ value: String(idx), label: d })) }),
+      React.createElement(MSelect, { value: String(s.day), onChange: v => setSlot(i, 'day', Number(v)), options: dow.map((d, idx) => ({ value: String(idx), label: d })) }),
       React.createElement('input', { type: 'time', className: 'mochi-input', value: s.start, onChange: e => setSlot(i, 'start', e.target.value) }),
       React.createElement('input', { type: 'time', className: 'mochi-input', value: s.end, onChange: e => setSlot(i, 'end', e.target.value) }),
-      React.createElement(MIB, { label: 'Remove', size: 'sm', onClick: () => rmSlot(i) }, React.createElement(MIcon, { name: 'x', size: 16 })),
+      React.createElement(MIB, { label: t('remove'), size: 'sm', onClick: () => rmSlot(i) }, React.createElement(MIcon, { name: 'x', size: 16 })),
     )),
     React.createElement('hr', { className: 'divider' }),
-    React.createElement('label', { className: 'mochi-field__label' }, `Roster · ${draft.studentIds.length} assigned`),
+    React.createElement('label', { className: 'mochi-field__label' }, t('cls_roster_assigned', { n: draft.studentIds.length })),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 8, marginTop: 8 } },
       students.map(s => {
         const on = draft.studentIds.includes(s.id);
@@ -180,6 +187,9 @@ function ClassModal({ draft, setDraft, onClose, onSave, students }) {
 // ============================================================ STUDENTS / USERS ============================================================
 function StudentsScreen() {
   const { data, add, update, remove } = useStore();
+  const { t } = useLang();
+  const relLabel = (r) => t('rel_' + String(r || 'guardian').toLowerCase());
+  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
   const [tab, setTab] = React.useState('students');
   const [modal, setModal] = React.useState(null);
   const [staffModal, setStaffModal] = React.useState(null);
@@ -189,26 +199,26 @@ function StudentsScreen() {
 
   const classNames = (ids) => data.classes.filter(c => ids.includes(c.id)).map(c => c.name);
   const openNew = () => setModal({ name: '', grade: '9', color: 'blue', guardian: '', email: '', classIds: [] });
-  const save = (f) => { if (!f.name.trim()) f.name = 'New student'; if (f.id) update('students', f.id, f); else add('students', f); setModal(null); };
-  const del = async (s) => { if (await confirm({ title: 'Remove student?', message: `${s.name} will be removed from all classes.`, confirmLabel: 'Remove', danger: true })) remove('students', s.id); };
+  const save = (f) => { if (!f.name.trim()) f.name = t('sm_default_name'); if (f.id) update('students', f.id, f); else add('students', f); setModal(null); };
+  const del = async (s) => { if (await confirm({ title: t('student_remove_q'), message: t('student_remove_msg', { name: s.name }), confirmLabel: t('remove'), danger: true })) remove('students', s.id); };
   const openNewStaff = () => setStaffModal({ name: '', email: '', role: 'Teacher', color: 'violet', phone: '' });
-  const saveStaff = (f) => { if (!f.name.trim()) f.name = 'New staff'; if (f.id) update('users', f.id, f); else add('users', f); setStaffModal(null); };
-  const delStaff = async (u) => { if (await confirm({ title: 'Remove staff member?', message: `${u.name} will lose access.`, confirmLabel: 'Remove', danger: true })) remove('users', u.id); };
+  const saveStaff = (f) => { if (!f.name.trim()) f.name = t('stf_default_name'); if (f.id) update('users', f.id, f); else add('users', f); setStaffModal(null); };
+  const delStaff = async (u) => { if (await confirm({ title: t('staff_remove_q'), message: t('staff_remove_msg', { name: u.name }), confirmLabel: t('remove'), danger: true })) remove('users', u.id); };
   const openNewParent = () => setParentModal({ name: '', email: '', phone: '', relation: 'Guardian', color: 'green', studentIds: [] });
-  const saveParent = (f) => { if (!f.name.trim()) f.name = 'New parent'; if (f.id) update('parents', f.id, f); else add('parents', f); setParentModal(null); };
-  const delParent = async (p) => { if (await confirm({ title: 'Remove parent?', message: `${p.name} will lose portal access.`, confirmLabel: 'Remove', danger: true })) remove('parents', p.id); };
+  const saveParent = (f) => { if (!f.name.trim()) f.name = t('par_default_name'); if (f.id) update('parents', f.id, f); else add('parents', f); setParentModal(null); };
+  const delParent = async (p) => { if (await confirm({ title: t('parent_remove_q'), message: t('parent_remove_msg', { name: p.name }), confirmLabel: t('remove'), danger: true })) remove('parents', p.id); };
 
   return React.createElement('div', { className: 'content' },
     React.createElement(PageHeader, {
-      title: 'People', subtitle: 'Students, staff, and onboarding invites',
+      title: t('ppl_title'), subtitle: t('ppl_sub'),
       actions: React.createElement('div', { className: 'm-row' },
-        React.createElement(MBtn, { variant: 'secondary', iconLeft: React.createElement(MIcon, { name: 'key', size: 17 }), onClick: () => setInviteModal(true) }, 'Generate invite'),
-        tab === 'students' && React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNew }, 'Add student'),
-        tab === 'staff' && React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNewStaff }, 'Add staff'),
-        tab === 'parents' && React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNewParent }, 'Add parent'),
+        React.createElement(MBtn, { variant: 'secondary', iconLeft: React.createElement(MIcon, { name: 'key', size: 17 }), onClick: () => setInviteModal(true) }, t('ppl_gen_invite')),
+        tab === 'students' && React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNew }, t('ppl_add_student')),
+        tab === 'staff' && React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNewStaff }, t('ppl_add_staff')),
+        tab === 'parents' && React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNewParent }, t('ppl_add_parent')),
       ),
     }),
-    React.createElement(DS.Tabs, { value: tab, onChange: setTab, tabs: [{ id: 'students', label: `Students · ${data.students.length}` }, { id: 'staff', label: `Staff · ${data.users.length}` }, { id: 'parents', label: `Parents · ${(data.parents || []).length}` }, { id: 'invites', label: `Invites · ${data.invites.filter(i => !i.used).length}` }] }),
+    React.createElement(DS.Tabs, { value: tab, onChange: setTab, tabs: [{ id: 'students', label: t('ppl_tab_students', { n: data.students.length }) }, { id: 'staff', label: t('ppl_tab_staff', { n: data.users.length }) }, { id: 'parents', label: t('ppl_tab_parents', { n: (data.parents || []).length }) }, { id: 'invites', label: t('ppl_tab_invites', { n: data.invites.filter(i => !i.used).length }) }] }),
 
     tab === 'students' && React.createElement('div', { className: 'm-stack' },
       data.students.map(s => React.createElement('div', { key: s.id, className: 'lrow' },
@@ -216,7 +226,7 @@ function StudentsScreen() {
         React.createElement('div', { style: { flex: 1, minWidth: 0 } },
           React.createElement('div', { className: 'lrow__title' }, s.name),
           React.createElement('div', { className: 'lrow__meta' },
-            React.createElement('span', null, `Grade ${s.grade}`),
+            React.createElement('span', null, t('ppl_grade', { g: s.grade })),
             s.guardian && React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'users', size: 13 }), s.guardian),
           ),
         ),
@@ -225,8 +235,8 @@ function StudentsScreen() {
           s.classIds.length > 3 && React.createElement('span', { className: 'mchip' }, `+${s.classIds.length - 3}`),
         ),
         React.createElement('div', { className: 'lrow__actions' },
-          React.createElement(MIB, { label: 'Edit', size: 'sm', onClick: () => setModal({ ...s }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
-          React.createElement(MIB, { label: 'Delete', size: 'sm', onClick: () => del(s) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
+          React.createElement(MIB, { label: t('edit'), size: 'sm', onClick: () => setModal({ ...s }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
+          React.createElement(MIB, { label: t('delete'), size: 'sm', onClick: () => del(s) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
         ),
       )),
     ),
@@ -241,10 +251,10 @@ function StudentsScreen() {
             u.phone && React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'clock', size: 13 }), u.phone),
           ),
         ),
-        React.createElement(MBadge, { color: u.role === 'Admin' ? 'brand' : 'violet' }, u.role),
+        React.createElement(MBadge, { color: u.role === 'Admin' ? 'brand' : 'violet' }, roleLabel(u.role)),
         React.createElement('div', { className: 'lrow__actions' },
-          React.createElement(MIB, { label: 'Edit', size: 'sm', onClick: () => setStaffModal({ ...u }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
-          React.createElement(MIB, { label: 'Delete', size: 'sm', onClick: () => delStaff(u) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
+          React.createElement(MIB, { label: t('edit'), size: 'sm', onClick: () => setStaffModal({ ...u }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
+          React.createElement(MIB, { label: t('delete'), size: 'sm', onClick: () => delStaff(u) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
         ),
       )),
     ),
@@ -252,7 +262,7 @@ function StudentsScreen() {
     tab === 'invites' && React.createElement(InvitesPanel, {}),
 
     tab === 'parents' && React.createElement('div', { className: 'm-stack' },
-      (data.parents || []).length === 0 && React.createElement('div', { className: 'm-empty' }, 'No parents yet. Add one or generate a parent invite code.'),
+      (data.parents || []).length === 0 && React.createElement('div', { className: 'm-empty' }, t('ppl_no_parents')),
       (data.parents || []).map(p => {
         const kids = data.students.filter(s => (p.studentIds || []).includes(s.id));
         return React.createElement('div', { key: p.id, className: 'lrow' },
@@ -266,10 +276,10 @@ function StudentsScreen() {
           ),
           React.createElement('div', { className: 'tablebar', style: { maxWidth: 320, justifyContent: 'flex-end' } },
             kids.length ? kids.slice(0, 3).map(s => React.createElement(MTag, { key: s.id, color: s.color }, s.name))
-              : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, 'No children linked'),
+              : React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, t('ppl_no_children')),
             kids.length > 3 && React.createElement('span', { className: 'mchip' }, `+${kids.length - 3}`),
           ),
-          React.createElement(MBadge, { color: 'green' }, p.relation || 'Guardian'),
+          React.createElement(MBadge, { color: 'green' }, relLabel(p.relation)),
           React.createElement('div', { className: 'lrow__actions' },
             React.createElement(MIB, { label: 'Edit', size: 'sm', onClick: () => setParentModal({ ...p }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
             React.createElement(MIB, { label: 'Delete', size: 'sm', onClick: () => delParent(p) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
@@ -287,58 +297,61 @@ function StudentsScreen() {
 }
 
 function StudentModal({ draft, setDraft, onClose, onSave, classes }) {
+  const { t } = useLang();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const toggle = (id) => set('classIds', draft.classIds.includes(id) ? draft.classIds.filter(x => x !== id) : [...draft.classIds, id]);
   return React.createElement(Modal, {
-    open: true, onClose, title: draft.id ? 'Edit student' : 'Add student', width: 540,
+    open: true, onClose, title: draft.id ? t('sm_edit') : t('sm_add'), width: 540,
     footer: React.createElement(React.Fragment, null,
-      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, 'Cancel'),
-      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, 'Save'),
+      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, t('cancel')),
+      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, t('save')),
     ),
   },
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Full name'), React.createElement('input', { className: 'mochi-input', autoFocus: true, value: draft.name, onChange: e => set('name', e.target.value) })),
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Grade'), React.createElement('input', { className: 'mochi-input', value: draft.grade, onChange: e => set('grade', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_fullname')), React.createElement('input', { className: 'mochi-input', autoFocus: true, value: draft.name, onChange: e => set('name', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('sm_grade')), React.createElement('input', { className: 'mochi-input', value: draft.grade, onChange: e => set('grade', e.target.value) })),
     ),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Guardian'), React.createElement('input', { className: 'mochi-input', placeholder: 'Parent / guardian', value: draft.guardian, onChange: e => set('guardian', e.target.value) })),
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Email'), React.createElement('input', { className: 'mochi-input', type: 'email', value: draft.email, onChange: e => set('email', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('sm_guardian')), React.createElement('input', { className: 'mochi-input', placeholder: t('sm_guardian_ph'), value: draft.guardian, onChange: e => set('guardian', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_email')), React.createElement('input', { className: 'mochi-input', type: 'email', value: draft.email, onChange: e => set('email', e.target.value) })),
     ),
-    React.createElement(ColorPicker, { label: 'Avatar color', value: draft.color, onChange: v => set('color', v) }),
+    React.createElement(ColorPicker, { label: t('prof_avatar_color'), value: draft.color, onChange: v => set('color', v) }),
     React.createElement('hr', { className: 'divider' }),
-    React.createElement('label', { className: 'mochi-field__label' }, 'Enrolled classes'),
+    React.createElement('label', { className: 'mochi-field__label' }, t('sm_enrolled')),
     React.createElement('div', { style: { marginTop: 8 } },
-      React.createElement(TokenSearch, { items: classes, selectedIds: draft.classIds, onToggle: toggle, placeholder: 'Search classes by name\u2026', emptyHint: 'All classes added' }),
+      React.createElement(TokenSearch, { items: classes, selectedIds: draft.classIds, onToggle: toggle, placeholder: t('sm_search_classes'), emptyHint: t('sm_all_classes_added') }),
     ),
   );
 }
 
 function StaffModal({ draft, setDraft, onClose, onSave }) {
+  const { t } = useLang();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   return React.createElement(Modal, {
-    open: true, onClose, title: draft.id ? 'Edit staff' : 'Add staff', width: 520,
+    open: true, onClose, title: draft.id ? t('stf_edit') : t('stf_add'), width: 520,
     footer: React.createElement(React.Fragment, null,
-      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, 'Cancel'),
-      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, 'Save'),
+      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, t('cancel')),
+      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, t('save')),
     ),
   },
     React.createElement('div', { className: 'mochi-field' },
-      React.createElement('label', { className: 'mochi-field__label' }, 'Full name'),
+      React.createElement('label', { className: 'mochi-field__label' }, t('prof_fullname')),
       React.createElement('input', { className: 'mochi-input', autoFocus: true, value: draft.name, onChange: e => set('name', e.target.value) }),
     ),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Email'), React.createElement('input', { className: 'mochi-input', type: 'email', value: draft.email, onChange: e => set('email', e.target.value) })),
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Phone'), React.createElement('input', { className: 'mochi-input', type: 'tel', value: draft.phone || '', onChange: e => set('phone', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_email')), React.createElement('input', { className: 'mochi-input', type: 'email', value: draft.email, onChange: e => set('email', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_phone')), React.createElement('input', { className: 'mochi-input', type: 'tel', value: draft.phone || '', onChange: e => set('phone', e.target.value) })),
     ),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-      React.createElement(MSelect, { label: 'Role', value: draft.role, onChange: v => set('role', v), options: [{ value: 'Teacher', label: 'Teacher' }, { value: 'Admin', label: 'Admin' }, { value: 'Assistant', label: 'Assistant' }] }),
-      React.createElement(ColorPicker, { label: 'Avatar color', value: draft.color, onChange: v => set('color', v) }),
+      React.createElement(MSelect, { label: t('stf_role'), value: draft.role, onChange: v => set('role', v), options: [{ value: 'Teacher', label: t('role_teacher') }, { value: 'Admin', label: t('role_admin') }, { value: 'Assistant', label: t('role_assistant') }] }),
+      React.createElement(ColorPicker, { label: t('prof_avatar_color'), value: draft.color, onChange: v => set('color', v) }),
     ),
   );
 }
 
 // ---- Reusable token search (type-ahead multi-select) ----
 function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
+  const { t } = useLang();
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
   const wrapRef = React.useRef(null);
@@ -360,7 +373,7 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
     ),
     React.createElement('div', { className: 'tokensearch__field' },
       React.createElement(MIcon, { name: 'search', size: 17 }),
-      React.createElement('input', { className: 'tokensearch__input', placeholder: placeholder || 'Search\u2026', value: q,
+      React.createElement('input', { className: 'tokensearch__input', placeholder: placeholder || t('search'), value: q,
         onChange: e => { setQ(e.target.value); setOpen(true); }, onFocus: () => setOpen(true) }),
     ),
     open && React.createElement('div', { className: 'tokensearch__menu' },
@@ -370,34 +383,35 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
             React.createElement('span', { style: { flex: 1, textAlign: 'left' } }, i.name),
             React.createElement(MIcon, { name: 'plus', size: 14 }),
           ))
-        : React.createElement('div', { className: 'tokensearch__empty' }, ql ? `No match for \u201c${q}\u201d` : (emptyHint || 'Nothing left to add')),
+        : React.createElement('div', { className: 'tokensearch__empty' }, ql ? t('ts_no_match', { q }) : (emptyHint || t('ts_nothing_left'))),
     ),
   );
 }
 
 function ParentModal({ draft, setDraft, onClose, onSave, students }) {
+  const { t } = useLang();
   const set = (k, v) => setDraft(d => ({ ...d, [k]: v }));
   const toggleKid = (id) => set('studentIds', (draft.studentIds || []).includes(id) ? draft.studentIds.filter(x => x !== id) : [...(draft.studentIds || []), id]);
   return React.createElement(Modal, {
-    open: true, onClose, title: draft.id ? 'Edit parent' : 'Add parent', width: 540,
+    open: true, onClose, title: draft.id ? t('par_edit') : t('par_add'), width: 540,
     footer: React.createElement(React.Fragment, null,
-      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, 'Cancel'),
-      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, 'Save'),
+      React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, t('cancel')),
+      React.createElement(MBtn, { variant: 'primary', onClick: () => onSave(draft) }, t('save')),
     ),
   },
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Full name'), React.createElement('input', { className: 'mochi-input', autoFocus: true, value: draft.name, onChange: e => set('name', e.target.value) })),
-      React.createElement(MSelect, { label: 'Relation', value: draft.relation, onChange: v => set('relation', v), options: [{ value: 'Mother', label: 'Mother' }, { value: 'Father', label: 'Father' }, { value: 'Guardian', label: 'Guardian' }, { value: 'Other', label: 'Other' }] }),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_fullname')), React.createElement('input', { className: 'mochi-input', autoFocus: true, value: draft.name, onChange: e => set('name', e.target.value) })),
+      React.createElement(MSelect, { label: t('par_relation'), value: draft.relation, onChange: v => set('relation', v), options: [{ value: 'Mother', label: t('rel_mother') }, { value: 'Father', label: t('rel_father') }, { value: 'Guardian', label: t('rel_guardian') }, { value: 'Other', label: t('rel_other') }] }),
     ),
     React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Email'), React.createElement('input', { className: 'mochi-input', type: 'email', value: draft.email, onChange: e => set('email', e.target.value) })),
-      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, 'Phone'), React.createElement('input', { className: 'mochi-input', type: 'tel', value: draft.phone || '', onChange: e => set('phone', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_email')), React.createElement('input', { className: 'mochi-input', type: 'email', value: draft.email, onChange: e => set('email', e.target.value) })),
+      React.createElement('div', { className: 'mochi-field' }, React.createElement('label', { className: 'mochi-field__label' }, t('prof_phone')), React.createElement('input', { className: 'mochi-input', type: 'tel', value: draft.phone || '', onChange: e => set('phone', e.target.value) })),
     ),
-    React.createElement(ColorPicker, { label: 'Avatar color', value: draft.color, onChange: v => set('color', v) }),
+    React.createElement(ColorPicker, { label: t('prof_avatar_color'), value: draft.color, onChange: v => set('color', v) }),
     React.createElement('hr', { className: 'divider' }),
-    React.createElement('label', { className: 'mochi-field__label' }, 'Children'),
+    React.createElement('label', { className: 'mochi-field__label' }, t('par_children')),
     React.createElement('div', { style: { marginTop: 8 } },
-      React.createElement(TokenSearch, { items: students, selectedIds: draft.studentIds || [], onToggle: toggleKid, placeholder: 'Search students by name\u2026', emptyHint: 'All students linked' }),
+      React.createElement(TokenSearch, { items: students, selectedIds: draft.studentIds || [], onToggle: toggleKid, placeholder: t('par_search_students'), emptyHint: t('par_all_linked') }),
     ),
   );
 }
@@ -405,24 +419,26 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }) {
 // ---- Invites ----
 function InvitesPanel() {
   const { data, remove } = useStore();
+  const { t } = useLang();
+  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
   const [copied, setCopied] = React.useState(null);
   const copy = (code) => { navigator.clipboard && navigator.clipboard.writeText(code); setCopied(code); setTimeout(() => setCopied(null), 1500); };
   const classOf = (id) => (data.classes.find(c => c.id === id) || {}).name;
-  if (!data.invites.length) return React.createElement(MC, null, React.createElement(Empty, { icon: 'key', title: 'No invite codes yet', sub: 'Generate a one-time code to onboard a student or parent.' }));
+  if (!data.invites.length) return React.createElement(MC, null, React.createElement(Empty, { icon: 'key', title: t('inv_none_title'), sub: t('inv_none_sub') }));
   return React.createElement('div', { className: 'm-stack' },
     data.invites.map(inv => React.createElement('div', { key: inv.id, className: 'lrow' },
       React.createElement('div', { className: 'iconwrap', style: { background: inv.used ? 'var(--cream-200)' : 'var(--orange-100)', color: inv.used ? 'var(--taupe-500)' : 'var(--orange-700)' } }, React.createElement(MIcon, { name: 'key', size: 18 })),
       React.createElement('div', { style: { flex: 1 } },
         React.createElement('div', { className: 'm-row', style: { gap: 10 } },
           React.createElement('span', { className: 'm-mono', style: { fontSize: 'var(--text-lg)', fontWeight: 500, letterSpacing: '0.08em', color: inv.used ? 'var(--text-disabled)' : 'var(--text-strong)', textDecoration: inv.used ? 'line-through' : 'none' } }, inv.code),
-          React.createElement(MBadge, { color: inv.role === 'Parent' ? 'violet' : 'blue' }, inv.role),
-          inv.used && React.createElement(MBadge, { color: 'neutral' }, 'Used'),
+          React.createElement(MBadge, { color: inv.role === 'Parent' ? 'violet' : 'blue' }, roleLabel(inv.role)),
+          inv.used && React.createElement(MBadge, { color: 'neutral' }, t('inv_used')),
         ),
-        React.createElement('div', { className: 'lrow__meta' }, inv.name || 'Unassigned', inv.classId && ` · ${classOf(inv.classId)}`),
+        React.createElement('div', { className: 'lrow__meta' }, inv.name || t('inv_unassigned'), inv.classId && ` · ${classOf(inv.classId)}`),
       ),
       React.createElement('div', { className: 'lrow__actions' },
-        !inv.used && React.createElement(MBtn, { variant: 'soft', size: 'sm', iconLeft: React.createElement(MIcon, { name: copied === inv.code ? 'check' : 'copy', size: 15 }), onClick: () => copy(inv.code) }, copied === inv.code ? 'Copied' : 'Copy'),
-        React.createElement(MIB, { label: 'Revoke', size: 'sm', onClick: () => remove('invites', inv.id) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
+        !inv.used && React.createElement(MBtn, { variant: 'soft', size: 'sm', iconLeft: React.createElement(MIcon, { name: copied === inv.code ? 'check' : 'copy', size: 15 }), onClick: () => copy(inv.code) }, copied === inv.code ? t('copied') : t('copy')),
+        React.createElement(MIB, { label: t('delete'), size: 'sm', onClick: () => remove('invites', inv.id) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
       ),
     )),
   );
@@ -430,38 +446,40 @@ function InvitesPanel() {
 
 function InviteModal({ onClose }) {
   const { data, add } = useStore();
+  const { t } = useLang();
   const [role, setRole] = React.useState('Student');
   const [name, setName] = React.useState('');
   const [classId, setClassId] = React.useState('');
   const [generated, setGenerated] = React.useState(null);
+  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
   const gen = () => { const code = makeCode(); const item = { code, role, name, classId: classId || null, createdAt: iso(TODAY), used: false }; add('invites', item); setGenerated(code); };
   const copy = () => navigator.clipboard && navigator.clipboard.writeText(generated);
 
   return React.createElement(Modal, {
-    open: true, onClose, title: 'Generate invite code', width: 480,
+    open: true, onClose, title: t('invm_title'), width: 480,
     footer: generated
-      ? React.createElement(MBtn, { variant: 'primary', onClick: onClose }, 'Done')
+      ? React.createElement(MBtn, { variant: 'primary', onClick: onClose }, t('done'))
       : React.createElement(React.Fragment, null,
-          React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, 'Cancel'),
-          React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'sparkle', size: 16 }), onClick: gen }, 'Generate code'),
+          React.createElement(MBtn, { variant: 'secondary', onClick: onClose }, t('cancel')),
+          React.createElement(MBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'sparkle', size: 16 }), onClick: gen }, t('invm_generate')),
         ),
   },
     generated
       ? React.createElement('div', { style: { textAlign: 'center', padding: '10px 0' } },
-          React.createElement('p', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, `Share this one-time code with your ${role.toLowerCase()}. It works once.`),
+          React.createElement('p', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, t('invm_share', { role: roleLabel(role).toLowerCase() })),
           React.createElement('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 'var(--text-4xl)', fontWeight: 500, letterSpacing: '0.12em', color: 'var(--brand-soft-ink)', background: 'var(--orange-100)', borderRadius: 'var(--radius-lg)', padding: '20px', margin: '12px 0' } }, generated),
-          React.createElement(MBtn, { variant: 'soft', iconLeft: React.createElement(MIcon, { name: 'copy', size: 16 }), onClick: copy }, 'Copy to clipboard'),
+          React.createElement(MBtn, { variant: 'soft', iconLeft: React.createElement(MIcon, { name: 'copy', size: 16 }), onClick: copy }, t('invm_copy_clip')),
         )
       : React.createElement(React.Fragment, null,
           React.createElement('div', { className: 'mochi-field' },
-            React.createElement('label', { className: 'mochi-field__label' }, 'Invite as'),
-            React.createElement(DS.Tabs, { value: role, onChange: setRole, tabs: [{ id: 'Student', label: 'Student' }, { id: 'Staff', label: 'Staff' }, { id: 'Parent', label: 'Parent' }] }),
+            React.createElement('label', { className: 'mochi-field__label' }, t('invm_invite_as')),
+            React.createElement(DS.Tabs, { value: role, onChange: setRole, tabs: [{ id: 'Student', label: t('role_student') }, { id: 'Staff', label: t('role_staff') }, { id: 'Parent', label: t('role_parent') }] }),
           ),
           React.createElement('div', { className: 'mochi-field' },
-            React.createElement('label', { className: 'mochi-field__label' }, 'Name (optional)'),
-            React.createElement('input', { className: 'mochi-input', placeholder: `${role} name`, value: name, onChange: e => setName(e.target.value) }),
+            React.createElement('label', { className: 'mochi-field__label' }, t('invm_name_opt')),
+            React.createElement('input', { className: 'mochi-input', placeholder: t('invm_name_ph', { role: roleLabel(role) }), value: name, onChange: e => setName(e.target.value) }),
           ),
-          React.createElement(MSelect, { label: 'Link to class (optional)', value: classId, onChange: setClassId, options: [{ value: '', label: 'No class' }, ...data.classes.map(c => ({ value: c.id, label: c.name }))] }),
+          React.createElement(MSelect, { label: t('invm_link_class'), value: classId, onChange: setClassId, options: [{ value: '', label: t('invm_no_class') }, ...data.classes.map(c => ({ value: c.id, label: c.name }))] }),
         ),
   );
 }

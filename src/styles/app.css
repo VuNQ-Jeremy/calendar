@@ -35,6 +35,7 @@ html, body { height: 100%; margin: 0; }
 .auth-brand__chips .mochi-tag { background: rgba(255,255,255,.92); border-color: transparent; }
 .auth-brand__paws { display: flex; gap: var(--space-4); align-items: center; margin-top: var(--space-10); color: rgba(255,255,255,.5); }
 .auth-card__form { padding: var(--space-10) var(--space-10); display: flex; flex-direction: column; justify-content: center; }
+.auth-langbar { display: flex; justify-content: flex-end; margin-bottom: var(--space-4); }
 .auth-title { font-family: var(--font-display); font-size: var(--text-2xl); margin: 0 0 var(--space-1); color: var(--text-strong); }
 .auth-sub { color: var(--text-muted); font-size: var(--text-sm); margin: 0 0 var(--space-6); }
 .auth-field { position: relative; margin-bottom: var(--space-3); }
@@ -77,9 +78,10 @@ html, body { height: 100%; margin: 0; }
 .sb__item.is-active { background: var(--brand-soft); color: var(--brand-soft-ink); }
 .sb__item:hover:not(.is-active) { background: var(--cream-200); }
 .sb__item .count { margin-left: auto; }
-/* "Give feedback" call-to-action; margin-top:auto pins it (and the profile
-   footer below it) to the bottom of the sidebar. */
-.sb__cta { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 11px var(--space-3); margin-bottom: var(--space-3); border-radius: var(--radius-md); border: 1.5px solid var(--brand); background: var(--brand-soft); color: var(--brand-soft-ink); font-family: inherit; font-weight: 800; font-size: var(--text-sm); cursor: pointer; transition: filter var(--dur-fast) var(--ease-out); }
+/* Bottom group: language switch, then the feedback CTA, then the profile footer.
+   margin-top:auto on the language bar pins the whole group to the bottom. */
+.sb__langbar { margin-top: auto; display: flex; justify-content: center; padding: var(--space-2) 0 var(--space-3); }
+.sb__cta { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 11px var(--space-3); margin-bottom: var(--space-3); border-radius: var(--radius-md); border: 1.5px solid var(--brand); background: var(--brand-soft); color: var(--brand-soft-ink); font-family: inherit; font-weight: 800; font-size: var(--text-sm); cursor: pointer; transition: filter var(--dur-fast) var(--ease-out); }
 .sb__cta:hover { filter: brightness(0.97); }
 .sb__cta:active { transform: scale(0.98); }
 .sb__foot { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface-card); border: var(--border-width) solid var(--border-subtle); box-shadow: var(--shadow-xs); width: 100%; cursor: pointer; text-align: left; font-family: inherit; transition: border-color var(--dur-fast), background var(--dur-fast); }
@@ -104,6 +106,7 @@ html, body { height: 100%; margin: 0; }
   .sb__cta { padding: 11px 0; }
   .sb__cta span { display: none; }
   .sb__help { display: none; }
+  .sb__langbar { display: none; }
 }
 
 .main { overflow: auto; display: flex; flex-direction: column; min-width: 0; }

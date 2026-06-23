@@ -4,6 +4,7 @@ import { useStore } from './store.js';
 import { PageHeader, Empty, Modal, MSelect } from './ui.js';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar.js';
+import { useLang, locale } from './lib/i18n.js';
 
 // app/screens-core.jsx — Dashboard (Today) + Homework
 const { Card: SC, Button: SBtn, IconButton: SIB, Tag: STag, Badge: SBadge, Avatar: SAvatar, Checkbox: SCheck, ProgressBar: SProg } = DS;
@@ -24,29 +25,31 @@ function StatCard({ icon, color, num, label }) {
 // ---- Dashboard / Today ----
 function DashboardScreen({ user, onNav }) {
   const { data, update } = useStore();
+  const { t, lang } = useLang();
   const today = iso(TODAY);
   const todays = expandEvents(data.events, TODAY, TODAY).sort((a, b) => toMin(a.start) - toMin(b.start));
   const dueToday = data.homework.filter(h => h.due === today && !h.done);
   const pending = data.homework.filter(h => !h.done);
   const className = (id) => (data.classes.find(c => c.id === id) || {}).name;
+  const todayStr = new Date(TODAY).toLocaleDateString(locale(lang), { weekday: 'long', month: 'long', day: 'numeric' });
 
   return React.createElement('div', { className: 'content' },
     React.createElement(PageHeader, {
-      title: `Good morning, ${user.name.split(' ')[0]}`,
-      subtitle: new Date(TODAY).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) + ` · ${todays.length} on the calendar today`,
+      title: t('dash_greeting', { name: user.name.split(' ')[0] }),
+      subtitle: t('dash_sub', { date: todayStr, count: todays.length }),
     }),
     React.createElement('div', { className: 'm-grid cols-4' },
-      React.createElement(StatCard, { icon: 'book', color: 'green', num: data.classes.length, label: 'Active classes' }),
-      React.createElement(StatCard, { icon: 'users', color: 'blue', num: data.students.length, label: 'Students' }),
-      React.createElement(StatCard, { icon: 'clipboard', color: 'orange', num: pending.length, label: 'Open homework' }),
-      React.createElement(StatCard, { icon: 'folder', color: 'violet', num: data.materials.length, label: 'Materials' }),
+      React.createElement(StatCard, { icon: 'book', color: 'green', num: data.classes.length, label: t('stat_classes') }),
+      React.createElement(StatCard, { icon: 'users', color: 'blue', num: data.students.length, label: t('stat_students') }),
+      React.createElement(StatCard, { icon: 'clipboard', color: 'orange', num: pending.length, label: t('stat_homework') }),
+      React.createElement(StatCard, { icon: 'folder', color: 'violet', num: data.materials.length, label: t('stat_materials') }),
     ),
     React.createElement('div', { className: 'm-grid', style: { gridTemplateColumns: '1.4fr 1fr' } },
       // Today's schedule
       React.createElement(SC, null,
         React.createElement('div', { className: 'm-spread', style: { marginBottom: 16 } },
-          React.createElement('h2', { style: { margin: 0, fontSize: 'var(--text-xl)' } }, 'Today’s schedule'),
-          React.createElement(SBtn, { variant: 'ghost', size: 'sm', iconRight: React.createElement(MIcon, { name: 'chevronRight', size: 16 }), onClick: () => onNav('calendar') }, 'Calendar'),
+          React.createElement('h2', { style: { margin: 0, fontSize: 'var(--text-xl)' } }, t('dash_today_schedule')),
+          React.createElement(SBtn, { variant: 'ghost', size: 'sm', iconRight: React.createElement(MIcon, { name: 'chevronRight', size: 16 }), onClick: () => onNav('calendar') }, t('nav_calendar')),
         ),
         todays.length ? React.createElement('div', { className: 'm-stack' },
           todays.map((e, i) => {
@@ -58,15 +61,15 @@ function DashboardScreen({ user, onNav }) {
                 React.createElement('div', { className: 'lrow__title', style: { fontSize: 'var(--text-md)' } }, e.title),
                 e.location && React.createElement('div', { className: 'm-muted', style: { fontSize: 'var(--text-xs)' } }, e.location),
               ),
-              e.classId && React.createElement(STag, { color: c.tagColor || e.color }, className(e.classId) || 'Class'),
+              e.classId && React.createElement(STag, { color: c.tagColor || e.color }, className(e.classId) || t('class')),
             );
           }),
-        ) : React.createElement(Empty, { icon: 'calendar', title: 'Nothing scheduled', sub: 'Enjoy the quiet.' }),
+        ) : React.createElement(Empty, { icon: 'calendar', title: t('dash_nothing_scheduled'), sub: t('dash_enjoy_quiet') }),
       ),
       // Due today
       React.createElement(SC, null,
         React.createElement('div', { className: 'm-spread', style: { marginBottom: 16 } },
-          React.createElement('h2', { style: { margin: 0, fontSize: 'var(--text-xl)' } }, 'Due today'),
+          React.createElement('h2', { style: { margin: 0, fontSize: 'var(--text-xl)' } }, t('dash_due_today')),
           dueToday.length > 0 && React.createElement(SBadge, { color: 'brand' }, dueToday.length),
         ),
         dueToday.length ? React.createElement('div', { className: 'm-stack' },
@@ -81,7 +84,7 @@ function DashboardScreen({ user, onNav }) {
               React.createElement('span', { style: { width: 10, height: 10, borderRadius: 9, background: c.base } }),
             );
           }),
-        ) : React.createElement(Empty, { icon: 'check', title: 'All caught up!', sub: 'No homework due today.' }),
+        ) : React.createElement(Empty, { icon: 'check', title: t('dash_all_caught'), sub: t('dash_no_hw_today') }),
       ),
     ),
   );
@@ -90,6 +93,7 @@ function DashboardScreen({ user, onNav }) {
 // ---- Homework ----
 function HomeworkScreen() {
   const { data, add, update, remove } = useStore();
+  const { t, lang } = useLang();
   const [filter, setFilter] = React.useState('all');
   const [modal, setModal] = React.useState(null);
   const className = (id) => (data.classes.find(c => c.id === id) || {}).name || '—';
@@ -100,21 +104,21 @@ function HomeworkScreen() {
   const today = iso(TODAY);
 
   const openNew = () => setModal({ title: '', classId: data.classes[0]?.id || '', due: today, color: data.classes[0]?.color || 'orange', done: false, points: 10, notes: '' });
-  const save = (f) => { if (!f.title.trim()) f.title = 'Untitled task'; if (f.id) update('homework', f.id, f); else add('homework', f); setModal(null); };
+  const save = (f) => { if (!f.title.trim()) f.title = t('hw_untitled'); if (f.id) update('homework', f.id, f); else add('homework', f); setModal(null); };
 
   return React.createElement('div', { className: 'content' },
     React.createElement(PageHeader, {
-      title: 'Homework', subtitle: 'A checklist of assigned homework — check each off as it’s done',
-      actions: React.createElement(SBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNew }, 'Add task'),
+      title: t('hw_title'), subtitle: t('hw_sub'),
+      actions: React.createElement(SBtn, { variant: 'primary', iconLeft: React.createElement(MIcon, { name: 'plus', size: 18 }), onClick: openNew }, t('hw_add')),
     }),
     React.createElement(SC, { style: { padding: 18 } },
       React.createElement('div', { className: 'm-spread', style: { marginBottom: 10 } },
-        React.createElement('div', { style: { fontWeight: 800, color: 'var(--text-strong)' } }, `${done} of ${data.homework.length} complete`),
+        React.createElement('div', { style: { fontWeight: 800, color: 'var(--text-strong)' } }, t('hw_complete', { done, total: data.homework.length })),
         React.createElement('div', { className: 'm-mono m-muted' }, `${pct}%`),
       ),
       React.createElement(SProg, { value: pct, color: 'green' }),
     ),
-    React.createElement(DS.Tabs, { value: filter, onChange: setFilter, tabs: [{ id: 'all', label: 'All' }, { id: 'open', label: 'Open' }, { id: 'done', label: 'Done' }] }),
+    React.createElement(DS.Tabs, { value: filter, onChange: setFilter, tabs: [{ id: 'all', label: t('all') }, { id: 'open', label: t('hw_tab_open') }, { id: 'done', label: t('hw_tab_done') }] }),
     React.createElement('div', { className: 'm-stack' },
       list.length ? list.map(h => {
         const c = colorOf(h.color);
@@ -126,43 +130,43 @@ function HomeworkScreen() {
             React.createElement('div', { className: 'lrow__title', style: { textDecoration: h.done ? 'line-through' : 'none', opacity: h.done ? 0.55 : 1 } }, h.title),
             React.createElement('div', { className: 'lrow__meta' },
               React.createElement(STag, { color: h.color }, className(h.classId)),
-              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'clock', size: 14 }), overdue ? React.createElement('strong', { style: { color: 'var(--danger)' } }, 'Overdue') : new Date(h.due).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-              (h.points != null && h.points !== '') && React.createElement('span', { className: 'mchip', style: { background: 'var(--cream-200)', color: 'var(--text-body)' } }, React.createElement(MIcon, { name: 'flag', size: 12 }), `${h.points} pts`),
+              React.createElement('span', { className: 'm-row', style: { gap: 5 } }, React.createElement(MIcon, { name: 'clock', size: 14 }), overdue ? React.createElement('strong', { style: { color: 'var(--danger)' } }, t('hw_overdue')) : new Date(h.due).toLocaleDateString(locale(lang), { month: 'short', day: 'numeric' })),
+              (h.points != null && h.points !== '') && React.createElement('span', { className: 'mchip', style: { background: 'var(--cream-200)', color: 'var(--text-body)' } }, React.createElement(MIcon, { name: 'flag', size: 12 }), t('hw_pts', { n: h.points })),
             ),
             h.notes && React.createElement('div', { className: 'm-muted', style: { fontSize: 'var(--text-sm)', marginTop: 6, textWrap: 'pretty' } }, h.notes),
           ),
           React.createElement('div', { className: 'lrow__actions' },
-            React.createElement(SIB, { label: 'Edit', size: 'sm', onClick: () => setModal({ ...h }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
-            React.createElement(SIB, { label: 'Delete', size: 'sm', onClick: () => remove('homework', h.id) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
+            React.createElement(SIB, { label: t('edit'), size: 'sm', onClick: () => setModal({ ...h }) }, React.createElement(MIcon, { name: 'edit', size: 16 })),
+            React.createElement(SIB, { label: t('delete'), size: 'sm', onClick: () => remove('homework', h.id) }, React.createElement(MIcon, { name: 'trash', size: 16 })),
           ),
         );
-      }) : React.createElement(SC, null, React.createElement(Empty, { icon: 'clipboard', title: 'No tasks here', sub: 'Add homework to get started.' })),
+      }) : React.createElement(SC, null, React.createElement(Empty, { icon: 'clipboard', title: t('hw_no_tasks'), sub: t('hw_add_start') })),
     ),
     modal && React.createElement(Modal, {
-      open: true, onClose: () => setModal(null), title: modal.id ? 'Edit task' : 'New task', width: 480,
+      open: true, onClose: () => setModal(null), title: modal.id ? t('hw_edit_task') : t('hw_new_task'), width: 480,
       footer: React.createElement(React.Fragment, null,
-        React.createElement(SBtn, { variant: 'secondary', onClick: () => setModal(null) }, 'Cancel'),
-        React.createElement(SBtn, { variant: 'primary', onClick: () => save(modal) }, 'Save'),
+        React.createElement(SBtn, { variant: 'secondary', onClick: () => setModal(null) }, t('cancel')),
+        React.createElement(SBtn, { variant: 'primary', onClick: () => save(modal) }, t('save')),
       ),
     },
       React.createElement('div', { className: 'mochi-field' },
-        React.createElement('label', { className: 'mochi-field__label' }, 'Task'),
+        React.createElement('label', { className: 'mochi-field__label' }, t('hw_task')),
         React.createElement('input', { className: 'mochi-input', autoFocus: true, value: modal.title, onChange: e => setModal(m => ({ ...m, title: e.target.value })) }),
       ),
       React.createElement('div', { className: 'm-grid cols-2', style: { gap: 14 } },
-        React.createElement(MSelect, { label: 'Class', value: modal.classId, onChange: v => { const c = data.classes.find(x => x.id === v); setModal(m => ({ ...m, classId: v, color: c ? c.color : m.color })); }, options: data.classes.map(c => ({ value: c.id, label: c.name })) }),
+        React.createElement(MSelect, { label: t('class'), value: modal.classId, onChange: v => { const c = data.classes.find(x => x.id === v); setModal(m => ({ ...m, classId: v, color: c ? c.color : m.color })); }, options: data.classes.map(c => ({ value: c.id, label: c.name })) }),
         React.createElement('div', { className: 'mochi-field' },
-          React.createElement('label', { className: 'mochi-field__label' }, 'Due'),
+          React.createElement('label', { className: 'mochi-field__label' }, t('hw_due')),
           React.createElement('input', { type: 'date', className: 'mochi-input', value: modal.due, onChange: e => setModal(m => ({ ...m, due: e.target.value })) }),
         ),
       ),
       React.createElement('div', { className: 'mochi-field', style: { maxWidth: 160 } },
-        React.createElement('label', { className: 'mochi-field__label' }, 'Points'),
+        React.createElement('label', { className: 'mochi-field__label' }, t('hw_points')),
         React.createElement('input', { type: 'number', min: 0, className: 'mochi-input', value: modal.points ?? '', onChange: e => setModal(m => ({ ...m, points: e.target.value === '' ? '' : Number(e.target.value) })) }),
       ),
       React.createElement('div', { className: 'mochi-field' },
-        React.createElement('label', { className: 'mochi-field__label' }, 'Notes'),
-        React.createElement('textarea', { className: 'mochi-input', rows: 3, style: { resize: 'vertical', minHeight: 72, paddingTop: 10 }, placeholder: 'Instructions, what to hand in, resources…', value: modal.notes || '', onChange: e => setModal(m => ({ ...m, notes: e.target.value })) }),
+        React.createElement('label', { className: 'mochi-field__label' }, t('hw_notes')),
+        React.createElement('textarea', { className: 'mochi-input', rows: 3, style: { resize: 'vertical', minHeight: 72, paddingTop: 10 }, placeholder: t('hw_notes_ph'), value: modal.notes || '', onChange: e => setModal(m => ({ ...m, notes: e.target.value })) }),
       ),
     ),
   );

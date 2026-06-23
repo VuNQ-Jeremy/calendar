@@ -1,12 +1,14 @@
 import { React, DS } from './lib/globals.js';
 import { MIcon } from './icons.js';
 import { PALETTE } from './lib/core.js';
+import { useLang } from './lib/i18n.js';
 
 // app/ui.jsx — shared UI helpers (Modal, Select, ColorPicker, PageHeader, Empty, Field)
 const { Button, IconButton, Card } = DS;
 
 // ---- Modal / dialog ----
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
+  const { t } = useLang();
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
@@ -18,7 +20,7 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
     React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
-        React.createElement(IconButton, { label: 'Close', size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
+        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
       ),
       React.createElement('div', { className: 'm-dialog__body' }, children),
       footer && React.createElement('div', { className: 'm-dialog__foot' }, footer),
@@ -84,6 +86,7 @@ function Empty({ icon = 'sparkle', title, sub, action }) {
 
 // ---- Confirm dialog hook ----
 function useConfirm() {
+  const { t } = useLang();
   const [state, setState] = React.useState(null);
   const confirm = (opts) => new Promise((resolve) => {
     setState({ ...opts, resolve });
@@ -92,8 +95,8 @@ function useConfirm() {
     open: true, onClose: () => { state.resolve(false); setState(null); },
     title: state.title, width: 420,
     footer: React.createElement(React.Fragment, null,
-      React.createElement(Button, { variant: 'secondary', onClick: () => { state.resolve(false); setState(null); } }, 'Cancel'),
-      React.createElement(Button, { variant: state.danger ? 'danger' : 'primary', onClick: () => { state.resolve(true); setState(null); } }, state.confirmLabel || 'Confirm'),
+      React.createElement(Button, { variant: 'secondary', onClick: () => { state.resolve(false); setState(null); } }, t('cancel')),
+      React.createElement(Button, { variant: state.danger ? 'danger' : 'primary', onClick: () => { state.resolve(true); setState(null); } }, state.confirmLabel || t('confirm')),
     ),
   }, React.createElement('p', { style: { margin: 0, color: 'var(--text-body)' } }, state.message));
   return [confirm, node];

@@ -8,7 +8,7 @@ import { ClassesScreen, StudentsScreen } from './screens-manage.js';
 import { MaterialsScreen, ProfileScreen } from './screens-extra.js';
 import { FeedbackScreen, FeedbackModal, newFeedbackDraft } from './feedback.js';
 import { InstructionsModal, SEEN_INTRO_KEY } from './instructions.js';
-import { useLang } from './lib/i18n.js';
+import { useLang, LanguageToggle } from './lib/i18n.js';
 
 // app/shell.jsx — app shell: sidebar nav, topbar, routing, profile entry
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB, Button: ShBtn } = DS;
@@ -52,6 +52,7 @@ function Sidebar({ active, onNav, user, onFeedback, onHelp }) {
         counts[n.id] > 0 && React.createElement('span', { className: 'count' }, React.createElement(ShBadge, { color: 'brand' }, counts[n.id])),
       )),
     )),
+    React.createElement('div', { className: 'sb__langbar' }, React.createElement(LanguageToggle, null)),
     React.createElement('button', { className: 'sb__cta', onClick: onFeedback, title: t('cta_feedback') },
       React.createElement(MIcon, { name: 'message', size: 18 }),
       React.createElement('span', null, t('cta_feedback')),

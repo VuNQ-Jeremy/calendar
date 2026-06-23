@@ -1,6 +1,7 @@
 import { React, DS } from './lib/globals.js';
 import { MIcon } from './icons.js';
 import { useStore } from './store.js';
+import { useLang, LanguageToggle } from './lib/i18n.js';
 
 // app/auth.jsx — login / signup / forgot password / onboarding via one-time code
 const { Button: AButton, Input: AInput, Switch: ASwitch, Tag: ATag } = DS;
@@ -14,6 +15,8 @@ function AuthField({ icon, ...props }) {
 
 function AuthScreen({ onLogin }) {
   const { data } = useStore();
+  const { t } = useLang();
+  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
   const [mode, setMode] = React.useState('login'); // login | signup | forgot | code
   const [email, setEmail] = React.useState('');
   const [pw, setPw] = React.useState('');
@@ -29,23 +32,23 @@ function AuthScreen({ onLogin }) {
   const reset = () => { setError(''); setSent(false); setCodeOk(null); };
 
   const doLogin = () => {
-    if (!email || !pw) { setError('Enter your email and password.'); return; }
+    if (!email || !pw) { setError(t('auth_enter_both')); return; }
     const user = data.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     onLogin(user || { id: 'u1', name: email.split('@')[0].replace(/^./, c => c.toUpperCase()), email, role: 'Teacher', color: 'orange' }, remember);
   };
   const doSignup = () => {
-    if (!name || !email || !pw) { setError('Fill in your name, email, and password.'); return; }
-    if (pw !== pw2) { setError('Passwords don’t match.'); return; }
+    if (!name || !email || !pw) { setError(t('auth_fill_all')); return; }
+    if (pw !== pw2) { setError(t('auth_pw_nomatch')); return; }
     onLogin({ id: 'new', name, email, role: 'Teacher', color: 'violet' }, true);
   };
   const checkCode = () => {
     const norm = code.trim().toUpperCase().replace(/\s/g, '');
     const match = data.invites.find(i => i.code.replace('-', '') === norm.replace('-', '') && !i.used);
     if (match) { setCodeOk(match); setError(''); }
-    else { setError('That code isn’t valid or has already been used.'); setCodeOk(null); }
+    else { setError(t('auth_invite_invalid')); setCodeOk(null); }
   };
   const finishOnboard = () => {
-    if (!name || !pw) { setError('Add your name and a password to finish.'); return; }
+    if (!name || !pw) { setError(t('auth_add_name_pw')); return; }
     onLogin({ id: 'invited', name, email: email || codeOk.name, role: codeOk.role, color: 'green', invited: true }, true);
   };
 
@@ -55,12 +58,12 @@ function AuthScreen({ onLogin }) {
   const Brand = React.createElement('div', { className: 'auth-brand' },
     React.createElement('div', { className: 'auth-brand__mark' }, React.createElement(MIcon, { name: 'paw', size: 30 })),
     React.createElement('div', { className: 'auth-brand__name' }, 'Mochi'),
-    React.createElement('p', { className: 'auth-brand__tag' }, 'A calm home for classes, calendars, and coursework — for your whole school family.'),
+    React.createElement('p', { className: 'auth-brand__tag' }, t('auth_tagline')),
     React.createElement('div', { className: 'auth-brand__chips' },
-      React.createElement(ATag, { color: 'green' }, 'Classes'),
-      React.createElement(ATag, { color: 'blue' }, 'Calendar'),
-      React.createElement(ATag, { color: 'violet' }, 'Materials'),
-      React.createElement(ATag, { color: 'orange' }, 'Homework'),
+      React.createElement(ATag, { color: 'green' }, t('chip_classes')),
+      React.createElement(ATag, { color: 'blue' }, t('chip_calendar')),
+      React.createElement(ATag, { color: 'violet' }, t('chip_materials')),
+      React.createElement(ATag, { color: 'orange' }, t('chip_homework')),
     ),
     React.createElement('div', { className: 'auth-brand__paws' },
       React.createElement(MIcon, { name: 'paw', size: 16 }),
@@ -72,77 +75,80 @@ function AuthScreen({ onLogin }) {
   let form;
   if (mode === 'login') {
     form = React.createElement(React.Fragment, null,
-      React.createElement('h2', { className: 'auth-title' }, 'Welcome back'),
-      React.createElement('p', { className: 'auth-sub' }, 'Sign in to pick up where you left off.'),
+      React.createElement('h2', { className: 'auth-title' }, t('auth_welcome')),
+      React.createElement('p', { className: 'auth-sub' }, t('auth_welcome_sub')),
       React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: 'you@school.edu', value: email, onChange: e => setEmail(e.target.value) }),
       React.createElement('div', { className: 'auth-field' },
         React.createElement(MIcon, { name: 'lock', size: 18, className: 'auth-field__icon' }),
-        React.createElement('input', { className: 'mochi-input auth-input', type: showPw ? 'text' : 'password', placeholder: 'Password', value: pw, onChange: e => setPw(e.target.value), onKeyDown: e => e.key === 'Enter' && doLogin() }),
+        React.createElement('input', { className: 'mochi-input auth-input', type: showPw ? 'text' : 'password', placeholder: t('auth_password'), value: pw, onChange: e => setPw(e.target.value), onKeyDown: e => e.key === 'Enter' && doLogin() }),
         React.createElement('button', { type: 'button', className: 'auth-field__eye', onClick: () => setShowPw(s => !s), 'aria-label': 'Toggle password' }, React.createElement(MIcon, { name: showPw ? 'eyeOff' : 'eye', size: 18 })),
       ),
       error && React.createElement('div', { className: 'auth-error' }, error),
       React.createElement('div', { className: 'auth-row' },
-        React.createElement(ASwitch, { checked: remember, onChange: e => setRemember(e.target.checked), label: 'Remember me' }),
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('forgot'); } }, 'Forgot password?'),
+        React.createElement(ASwitch, { checked: remember, onChange: e => setRemember(e.target.checked), label: t('auth_remember') }),
+        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('forgot'); } }, t('auth_forgot')),
       ),
-      React.createElement(AButton, { variant: 'primary', block: true, onClick: doLogin }, 'Sign in'),
-      React.createElement('div', { className: 'auth-divider' }, React.createElement('span', null, 'or')),
-      React.createElement(AButton, { variant: 'secondary', block: true, onClick: () => { reset(); setMode('code'); }, iconLeft: React.createElement(MIcon, { name: 'key', size: 18 }) }, 'I have an invite code'),
-      React.createElement('p', { className: 'auth-foot' }, 'New here? ',
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('signup'); } }, 'Create an account')),
+      React.createElement(AButton, { variant: 'primary', block: true, onClick: doLogin }, t('auth_signin')),
+      React.createElement('div', { className: 'auth-divider' }, React.createElement('span', null, t('auth_or'))),
+      React.createElement(AButton, { variant: 'secondary', block: true, onClick: () => { reset(); setMode('code'); }, iconLeft: React.createElement(MIcon, { name: 'key', size: 18 }) }, t('auth_have_code')),
+      React.createElement('p', { className: 'auth-foot' }, t('auth_new_here'),
+        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('signup'); } }, t('auth_create_account'))),
     );
   } else if (mode === 'signup') {
     form = React.createElement(React.Fragment, null,
-      React.createElement('h2', { className: 'auth-title' }, 'Create your account'),
-      React.createElement('p', { className: 'auth-sub' }, 'For teachers and staff. Takes about a minute.'),
-      React.createElement(AuthField, { icon: 'users', placeholder: 'Full name', value: name, onChange: e => setName(e.target.value) }),
+      React.createElement('h2', { className: 'auth-title' }, t('auth_create_title')),
+      React.createElement('p', { className: 'auth-sub' }, t('auth_create_sub')),
+      React.createElement(AuthField, { icon: 'users', placeholder: t('auth_fullname_ph'), value: name, onChange: e => setName(e.target.value) }),
       React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: 'you@school.edu', value: email, onChange: e => setEmail(e.target.value) }),
-      React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: 'Password', value: pw, onChange: e => setPw(e.target.value) }),
-      React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: 'Confirm password', value: pw2, onChange: e => setPw2(e.target.value) }),
+      React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: t('auth_password'), value: pw, onChange: e => setPw(e.target.value) }),
+      React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: t('auth_confirm_pw'), value: pw2, onChange: e => setPw2(e.target.value) }),
       error && React.createElement('div', { className: 'auth-error' }, error),
-      React.createElement(AButton, { variant: 'primary', block: true, onClick: doSignup }, 'Create account'),
-      React.createElement('p', { className: 'auth-foot' }, 'Already have an account? ',
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, 'Sign in')),
+      React.createElement(AButton, { variant: 'primary', block: true, onClick: doSignup }, t('auth_create_btn')),
+      React.createElement('p', { className: 'auth-foot' }, t('auth_have_account'),
+        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, t('auth_signin'))),
     );
   } else if (mode === 'forgot') {
     form = React.createElement(React.Fragment, null,
-      React.createElement('h2', { className: 'auth-title' }, 'Reset your password'),
-      React.createElement('p', { className: 'auth-sub' }, sent ? 'Check your inbox for a reset link.' : 'We’ll send a reset link to your email.'),
+      React.createElement('h2', { className: 'auth-title' }, t('auth_reset_title')),
+      React.createElement('p', { className: 'auth-sub' }, sent ? t('auth_reset_sub_sent') : t('auth_reset_sub')),
       !sent && React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: 'you@school.edu', value: email, onChange: e => setEmail(e.target.value) }),
       error && React.createElement('div', { className: 'auth-error' }, error),
       sent
-        ? React.createElement('div', { className: 'auth-success' }, React.createElement(MIcon, { name: 'check', size: 18 }), 'Sent to ', React.createElement('strong', null, email || 'your email'))
-        : React.createElement(AButton, { variant: 'primary', block: true, onClick: () => { if (!email) { setError('Enter your email.'); return; } setError(''); setSent(true); } }, 'Send reset link'),
+        ? React.createElement('div', { className: 'auth-success' }, React.createElement(MIcon, { name: 'check', size: 18 }), t('auth_sent_to'), ' ', React.createElement('strong', null, email || '—'))
+        : React.createElement(AButton, { variant: 'primary', block: true, onClick: () => { if (!email) { setError(t('auth_enter_email')); return; } setError(''); setSent(true); } }, t('auth_send_reset')),
       React.createElement('p', { className: 'auth-foot' },
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, '← Back to sign in')),
+        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, t('auth_back_signin'))),
     );
   } else if (mode === 'code') {
     form = codeOk
       ? React.createElement(React.Fragment, null,
-          React.createElement('h2', { className: 'auth-title' }, 'You’re invited 🎉'),
-          React.createElement('p', { className: 'auth-sub' }, 'Joining as ', React.createElement('strong', null, codeOk.role.toLowerCase()), codeOk.name ? ` · ${codeOk.name}` : ''),
-          React.createElement(AuthField, { icon: 'users', placeholder: 'Your name', value: name, onChange: e => setName(e.target.value) }),
-          React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: 'Email (optional)', value: email, onChange: e => setEmail(e.target.value) }),
-          React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: 'Choose a password', value: pw, onChange: e => setPw(e.target.value) }),
+          React.createElement('h2', { className: 'auth-title' }, t('auth_invited_title')),
+          React.createElement('p', { className: 'auth-sub' }, t('auth_joining_as'), ' ', React.createElement('strong', null, roleLabel(codeOk.role).toLowerCase()), codeOk.name ? ` · ${codeOk.name}` : ''),
+          React.createElement(AuthField, { icon: 'users', placeholder: t('auth_your_name'), value: name, onChange: e => setName(e.target.value) }),
+          React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: t('auth_email_optional'), value: email, onChange: e => setEmail(e.target.value) }),
+          React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: t('auth_choose_pw'), value: pw, onChange: e => setPw(e.target.value) }),
           error && React.createElement('div', { className: 'auth-error' }, error),
-          React.createElement(AButton, { variant: 'primary', block: true, onClick: finishOnboard }, 'Join Mochi'),
+          React.createElement(AButton, { variant: 'primary', block: true, onClick: finishOnboard }, t('auth_join')),
         )
       : React.createElement(React.Fragment, null,
-          React.createElement('h2', { className: 'auth-title' }, 'Enter your invite code'),
-          React.createElement('p', { className: 'auth-sub' }, 'Your school admin gave you a one-time code to get started.'),
+          React.createElement('h2', { className: 'auth-title' }, t('auth_invite_title')),
+          React.createElement('p', { className: 'auth-sub' }, t('auth_invite_sub')),
           React.createElement('input', { className: 'mochi-input auth-code', placeholder: 'ABC-123', value: code, maxLength: 7, onChange: e => setCode(e.target.value.toUpperCase()), onKeyDown: e => e.key === 'Enter' && checkCode() }),
           error && React.createElement('div', { className: 'auth-error' }, error),
-          sampleInvite && React.createElement('div', { className: 'auth-hint-code' }, 'Demo code: ', React.createElement('button', { className: 'auth-link', onClick: () => setCode(sampleInvite.code) }, sampleInvite.code)),
-          React.createElement(AButton, { variant: 'primary', block: true, onClick: checkCode }, 'Continue'),
+          sampleInvite && React.createElement('div', { className: 'auth-hint-code' }, t('auth_demo_code'), ' ', React.createElement('button', { className: 'auth-link', onClick: () => setCode(sampleInvite.code) }, sampleInvite.code)),
+          React.createElement(AButton, { variant: 'primary', block: true, onClick: checkCode }, t('auth_continue')),
           React.createElement('p', { className: 'auth-foot' },
-            React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, '← Back to sign in')),
+            React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, t('auth_back_signin'))),
         );
   }
 
   return React.createElement('div', { className: 'auth-wrap' },
     React.createElement('div', { className: 'auth-card' },
       React.createElement('div', { className: 'auth-card__brand' }, Brand),
-      React.createElement('div', { className: 'auth-card__form' }, form),
+      React.createElement('div', { className: 'auth-card__form' },
+        React.createElement('div', { className: 'auth-langbar' }, React.createElement(LanguageToggle, null)),
+        form,
+      ),
     ),
   );
 }

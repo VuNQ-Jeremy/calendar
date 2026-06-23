@@ -5,7 +5,7 @@ import { React, DS } from './lib/globals.js';
 import { MIcon } from './icons.js';
 import { Modal } from './ui.js';
 import { ICON_TINT } from './lib/core.js';
-import { useLang, LanguageToggle } from './lib/i18n.js';
+import { useLang } from './lib/i18n.js';
 
 const { Button } = DS;
 
@@ -28,10 +28,7 @@ export function InstructionsModal({ onClose }) {
     open: true, onClose, title: t('intro_title'), width: 580,
     footer: React.createElement(Button, { variant: 'primary', onClick: onClose }, t('intro_get_started')),
   },
-    React.createElement('div', { className: 'm-spread', style: { gap: 12, marginBottom: 12 } },
-      React.createElement('p', { className: 'm-muted', style: { margin: 0, fontSize: 'var(--text-sm)', maxWidth: '42ch' } }, t('intro_lead')),
-      React.createElement(LanguageToggle, null),
-    ),
+    React.createElement('p', { className: 'm-muted', style: { marginTop: 0, fontSize: 'var(--text-sm)' } }, t('intro_lead')),
     React.createElement('div', { className: 'm-stack', style: { gap: 14 } },
       FEATURES.map((f) => React.createElement('div', { key: f.key, className: 'm-row', style: { gap: 14, alignItems: 'flex-start' } },
         React.createElement('div', { className: 'iconwrap', style: { width: 44, height: 44, ...ICON_TINT(f.color) } },

@@ -52,11 +52,13 @@ the render smoke test.
 ## Onboarding & language
 
 A welcome guide (`src/instructions.js`), organized by feature, shows on a user's
-first visit and reopens from the **?** in the sidebar. The app supports
-**English and Tiếng Việt** via a small i18n layer (`src/lib/i18n.js`); switch
-languages from the guide or the Profile page. The instruction content and
-sidebar chrome are translated; other screens can be translated by extending the
-`STRINGS` dictionary.
+first visit and reopens from the **?** in the sidebar. The app is fully bilingual
+— **English and Tiếng Việt** — via a small i18n layer (`src/lib/i18n.js`):
+`t(key, vars)` translates with `{placeholder}` interpolation, and `getCal(lang)`
+localizes calendar month/weekday names. Every screen (auth, dashboard, calendar,
+classes, people, materials, homework, feedback, profile) reads from the `STRINGS`
+dictionary. Switch languages from the toggle in the sidebar (above "Give
+feedback"), on the login screen, or on the Profile page; the choice persists.
 
 ## What's implemented
 
