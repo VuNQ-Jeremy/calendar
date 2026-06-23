@@ -20,8 +20,10 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
   if (!open) return null;
 
   const handleOverlayClick = (e) => {
+    console.log('[Modal overlay click]', { target: e.target.tagName, current: e.currentTarget.className, isSame: e.target === e.currentTarget });
     // Close only if clicking the overlay background itself, not elements inside
     if (e.target === e.currentTarget) {
+      console.log('[Modal] closing from overlay click');
       onClose && onClose();
     }
   };
