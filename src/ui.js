@@ -34,16 +34,7 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
 
   console.log('[Modal] rendering (open=true)');
 
-  const handleOverlayClick = (e) => {
-    console.log('[Modal overlay click]', { target: e.target.tagName, current: e.currentTarget.className, isSame: e.target === e.currentTarget });
-    // Close only if clicking the overlay background itself, not elements inside
-    if (e.target === e.currentTarget) {
-      console.log('[Modal] closing from overlay click');
-      wrappedOnClose();
-    }
-  };
-
-  return React.createElement('div', { className: 'm-overlay', onClick: handleOverlayClick },
+  return React.createElement('div', { className: 'm-overlay' },
     React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true', onClick: (e) => { e.stopPropagation(); } },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
