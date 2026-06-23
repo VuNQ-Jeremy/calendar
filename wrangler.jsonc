@@ -4,11 +4,9 @@
   // The Worker (worker/index.js) serves the built SPA via the ASSETS binding and
   // a JSON API at /api/* backed by D1 (the DB binding).
   //
-  // ONE-TIME SETUP before the first deploy (see BACKEND.md):
-  //   1. npx wrangler d1 create mochi
-  //   2. paste the returned database_id below
-  //   3. npx wrangler d1 migrations apply mochi --remote
-  // Until database_id is filled in, `wrangler deploy` will fail at the D1 step.
+  // The D1 database is provisioned. To apply the schema to it, run:
+  //   npm run db:migrate         (remote)   /   npm run db:migrate:local
+  // See BACKEND.md for details.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "calendar",
   "compatibility_date": "2026-06-23",
@@ -21,8 +19,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "mochi",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_name": "mochi-class",
+      "database_id": "26f4f6f7-0fce-4b33-b02a-38722c780c5e",
       "migrations_dir": "migrations"
     }
   ],

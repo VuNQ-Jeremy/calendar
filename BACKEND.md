@@ -34,18 +34,15 @@ Collections: `classes`, `students`, `users` (staff), `parents`, `events`,
 `homework`, `materials`, `invites`. The shapes match `src/store.js` exactly, so
 the store's `add` / `update` / `remove` / `setTheme` map 1:1 onto these.
 
-## One-time provisioning (required before deploy)
+## One-time provisioning
+
+The D1 database `mochi-class` is already created and wired into `wrangler.jsonc`.
+Apply the schema (and optional demo data) to it:
 
 ```bash
-npx wrangler d1 create mochi          # 1) create the database
-# 2) paste the printed database_id into wrangler.jsonc (d1_databases[0])
-npm run db:migrate                    # 3) apply migrations to the remote DB
-npm run db:seed                       # 4) (optional) load demo data
+npm run db:migrate                    # apply migrations to the remote DB
+npm run db:seed                       # (optional) load demo data
 ```
-
-**Until `database_id` is filled in, `wrangler deploy` (and the Cloudflare
-auto-deploy) will fail at the D1 step.** Static asset serving still works; only
-`/api/*` needs the DB.
 
 ## Local development
 
