@@ -1,0 +1,16 @@
+{
+  // Cloudflare Workers config for Mochi — a static single-page app.
+  // `npm run build` emits the SPA to dist/; this deploys those files as
+  // Workers Static Assets with SPA fallback. Pre-configuring here stops
+  // `wrangler deploy` from running its interactive first-time project setup.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "calendar",
+  "compatibility_date": "2026-06-23",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
