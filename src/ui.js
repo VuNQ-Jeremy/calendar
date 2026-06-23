@@ -9,42 +9,25 @@ const { Button, IconButton, Card } = DS;
 // ---- Modal / dialog ----
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
   const { t } = useLang();
-  const onCloseRef = React.useRef();
-  onCloseRef.current = onClose;
-  const dialogRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!open) return;
-    console.log('[Modal] opened, setting up listeners');
-    const onDocClick = (e) => {
-      const inDialog = e.target.closest('.m-dialog');
-      const dialogElem = dialogRef.current;
-      const containsCheck = dialogElem && dialogElem.contains(e.target);
-      console.log('[Modal click]', {
-        target: e.target.tagName + '.' + e.target.className,
-        closest: !!inDialog,
-        contains: containsCheck,
-        dialogRef: !!dialogElem,
-      });
-      if (!inDialog && !containsCheck) {
-        console.log('[Modal] CLOSING (click outside)');
-        onCloseRef.current && onCloseRef.current();
-      }
-    };
-    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current && onCloseRef.current(); };
-    document.addEventListener('click', onDocClick, true);
+    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
     window.addEventListener('keydown', onKey);
-    console.log('[Modal] listeners attached');
-    return () => {
-      console.log('[Modal] cleaning up listeners');
-      document.removeEventListener('click', onDocClick, true);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
-  return React.createElement('div', { className: 'm-overlay' },
-    React.createElement('div', { className: 'm-dialog', ref: dialogRef, style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
+
+  const handleOverlayClick = (e) => {
+    // Close only if clicking the overlay background itself, not elements inside
+    if (e.target === e.currentTarget) {
+      onClose && onClose();
+    }
+  };
+
+  return React.createElement('div', { className: 'm-overlay', onClick: handleOverlayClick },
+    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
         React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
