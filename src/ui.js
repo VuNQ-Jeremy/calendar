@@ -10,12 +10,18 @@ const { Button, IconButton, Card } = DS;
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
   const { t } = useLang();
 
+  // Wrap onClose to log when it's called
+  const wrappedOnClose = React.useCallback(() => {
+    console.log('[Modal] onClose called', new Error().stack.split('\n').slice(1, 4).join('\n'));
+    onClose && onClose();
+  }, [onClose]);
+
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') wrappedOnClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, wrappedOnClose]);
 
   if (!open) return null;
 
@@ -24,7 +30,7 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
     // Close only if clicking the overlay background itself, not elements inside
     if (e.target === e.currentTarget) {
       console.log('[Modal] closing from overlay click');
-      onClose && onClose();
+      wrappedOnClose();
     }
   };
 
@@ -32,7 +38,7 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
     React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
-        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
+        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: wrappedOnClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
       ),
       React.createElement('div', { className: 'm-dialog__body' }, children),
       footer && React.createElement('div', { className: 'm-dialog__foot' }, footer),
