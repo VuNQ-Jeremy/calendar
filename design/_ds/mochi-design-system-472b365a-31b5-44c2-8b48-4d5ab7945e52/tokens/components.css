@@ -1,0 +1,257 @@
+/* ============================================================
+   MOCHI · COMPONENT STYLES
+   Class-based styling for the React primitives so hover/focus/
+   active states work properly. All values come from tokens.
+   ============================================================ */
+
+/* ---------- Button ---------- */
+.mochi-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-sm);
+  line-height: 1;
+  padding: 0 var(--space-5);
+  height: 44px;
+  border-radius: var(--radius-pill);
+  border: var(--border-width) solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform var(--dur-fast) var(--ease-soft),
+              background var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out);
+  user-select: none;
+}
+.mochi-btn:active { transform: scale(0.96); }
+.mochi-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.mochi-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.mochi-btn.is-primary {
+  background: var(--brand);
+  color: var(--text-on-brand);
+  box-shadow: var(--shadow-sm);
+}
+.mochi-btn.is-primary:hover:not(:disabled) { background: var(--brand-hover); box-shadow: var(--shadow-md); }
+.mochi-btn.is-primary:active:not(:disabled) { background: var(--brand-press); }
+
+.mochi-btn.is-secondary {
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.mochi-btn.is-secondary:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--taupe-400); }
+
+.mochi-btn.is-ghost {
+  background: transparent;
+  color: var(--text-body);
+}
+.mochi-btn.is-ghost:hover:not(:disabled) { background: var(--surface-sunken); }
+
+.mochi-btn.is-soft {
+  background: var(--brand-soft);
+  color: var(--brand-soft-ink);
+}
+.mochi-btn.is-soft:hover:not(:disabled) { background: var(--orange-200); }
+
+.mochi-btn.is-danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.mochi-btn.is-danger:hover:not(:disabled) { filter: brightness(0.95); box-shadow: var(--shadow-md); }
+
+.mochi-btn.is-sm { height: 36px; font-size: var(--text-xs); padding: 0 var(--space-4); }
+.mochi-btn.is-lg { height: 52px; font-size: var(--text-md); padding: 0 var(--space-8); }
+.mochi-btn.is-block { display: flex; width: 100%; }
+
+/* ---------- Icon button ---------- */
+.mochi-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-soft);
+}
+.mochi-icon-btn:hover { background: var(--surface-sunken); }
+.mochi-icon-btn:active { transform: scale(0.92); }
+.mochi-icon-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.mochi-icon-btn.is-sm { width: 36px; height: 36px; }
+.mochi-icon-btn.is-solid { background: var(--brand); color: #fff; }
+.mochi-icon-btn.is-solid:hover { background: var(--brand-hover); }
+
+/* ---------- Card ---------- */
+.mochi-card {
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-6);
+}
+.mochi-card.is-flat { box-shadow: none; }
+.mochi-card.is-raised { box-shadow: var(--shadow-md); border-color: transparent; }
+.mochi-card.is-interactive { cursor: pointer; transition: transform var(--dur-base) var(--ease-soft), box-shadow var(--dur-base) var(--ease-out); }
+.mochi-card.is-interactive:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+/* ---------- Badge (count / status) ---------- */
+.mochi-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-body);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-wide);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-body);
+  line-height: 1.2;
+}
+.mochi-badge.is-brand   { background: var(--brand); color: #fff; }
+.mochi-badge.is-violet  { background: var(--cat-violet-soft); color: var(--cat-violet-ink); }
+.mochi-badge.is-green   { background: var(--cat-green-soft); color: var(--cat-green-ink); }
+.mochi-badge.is-blue    { background: var(--cat-blue-soft); color: var(--cat-blue-ink); }
+.mochi-badge.is-orange  { background: var(--cat-orange-soft); color: var(--cat-orange-ink); }
+.mochi-badge.is-success { background: var(--green-100); color: var(--green-700); }
+.mochi-badge.is-warning { background: #FBEFD0; color: #8a6512; }
+.mochi-badge.is-danger  { background: #FBE3DD; color: #a23a25; }
+
+/* ---------- Tag (subject / category pill with dot) ---------- */
+.mochi-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-weight: var(--fw-semibold);
+  font-size: var(--text-xs);
+  padding: 5px 12px 5px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-body);
+  border: var(--border-width) solid transparent;
+}
+.mochi-tag .mochi-tag__dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--taupe-400); flex: none;
+}
+.mochi-tag.is-violet { background: var(--cat-violet-soft); color: var(--cat-violet-ink); }
+.mochi-tag.is-violet .mochi-tag__dot { background: var(--cat-violet); }
+.mochi-tag.is-green  { background: var(--cat-green-soft); color: var(--cat-green-ink); }
+.mochi-tag.is-green .mochi-tag__dot { background: var(--cat-green); }
+.mochi-tag.is-blue   { background: var(--cat-blue-soft); color: var(--cat-blue-ink); }
+.mochi-tag.is-blue .mochi-tag__dot { background: var(--cat-blue); }
+.mochi-tag.is-orange { background: var(--cat-orange-soft); color: var(--cat-orange-ink); }
+.mochi-tag.is-orange .mochi-tag__dot { background: var(--cat-orange); }
+
+/* ---------- Avatar ---------- */
+.mochi-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: var(--cocoa-100);
+  color: var(--cocoa-700);
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  flex: none;
+  border: 2px solid var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+.mochi-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mochi-avatar.is-violet { background: var(--cat-violet-soft); color: var(--cat-violet-ink); }
+.mochi-avatar.is-green  { background: var(--cat-green-soft);  color: var(--cat-green-ink); }
+.mochi-avatar.is-blue   { background: var(--cat-blue-soft);   color: var(--cat-blue-ink); }
+.mochi-avatar.is-orange { background: var(--cat-orange-soft); color: var(--cat-orange-ink); }
+
+/* ---------- Field / Input ---------- */
+.mochi-field { display: flex; flex-direction: column; gap: var(--space-2); }
+.mochi-field__label {
+  font-family: var(--font-body);
+  font-weight: var(--fw-bold);
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.mochi-field__hint { font-size: var(--text-xs); color: var(--text-muted); }
+.mochi-field__error { font-size: var(--text-xs); color: var(--danger); font-weight: var(--fw-semibold); }
+
+.mochi-input {
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  color: var(--text-strong);
+  background: var(--surface-card);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 11px var(--space-4);
+  width: 100%;
+  transition: border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+.mochi-input::placeholder { color: var(--text-disabled); }
+.mochi-input:hover:not(:disabled):not(:focus) { border-color: var(--taupe-400); }
+.mochi-input:focus { outline: none; border-color: var(--border-focus); box-shadow: var(--shadow-focus); }
+.mochi-input:disabled { background: var(--surface-sunken); cursor: not-allowed; color: var(--text-disabled); }
+.mochi-input.has-error { border-color: var(--danger); }
+.mochi-input.has-error:focus { box-shadow: 0 0 0 3px rgba(220,106,82,0.3); }
+
+/* ---------- Checkbox ---------- */
+.mochi-check { display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; font-size: var(--text-md); color: var(--text-body); }
+.mochi-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.mochi-check__box {
+  width: 22px; height: 22px; border-radius: 7px; flex: none;
+  border: var(--border-width) solid var(--border-strong);
+  background: var(--surface-card);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  transition: background var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), transform var(--dur-fast) var(--ease-soft);
+}
+.mochi-check input:checked + .mochi-check__box { background: var(--brand); border-color: var(--brand); }
+.mochi-check input:checked + .mochi-check__box svg { transform: scale(1); }
+.mochi-check__box svg { transform: scale(0); transition: transform var(--dur-base) var(--ease-soft); }
+.mochi-check input:focus-visible + .mochi-check__box { box-shadow: var(--shadow-focus); }
+.mochi-check.is-done { color: var(--text-muted); text-decoration: line-through; text-decoration-color: var(--taupe-400); }
+
+/* ---------- Switch ---------- */
+.mochi-switch { display: inline-flex; align-items: center; cursor: pointer; }
+.mochi-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.mochi-switch__track {
+  width: 46px; height: 28px; border-radius: var(--radius-pill);
+  background: var(--sand-400); position: relative;
+  transition: background var(--dur-base) var(--ease-out);
+}
+.mochi-switch__thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-base) var(--ease-soft);
+}
+.mochi-switch input:checked + .mochi-switch__track { background: var(--brand); }
+.mochi-switch input:checked + .mochi-switch__track .mochi-switch__thumb { transform: translateX(18px); }
+.mochi-switch input:focus-visible + .mochi-switch__track { box-shadow: var(--shadow-focus); }
+
+/* ---------- Progress ---------- */
+.mochi-progress { width: 100%; height: 10px; border-radius: var(--radius-pill); background: var(--surface-sunken); overflow: hidden; }
+.mochi-progress__fill { height: 100%; border-radius: var(--radius-pill); background: var(--brand); transition: width var(--dur-slow) var(--ease-out); }
+.mochi-progress__fill.is-violet { background: var(--cat-violet); }
+.mochi-progress__fill.is-green  { background: var(--cat-green); }
+.mochi-progress__fill.is-blue   { background: var(--cat-blue); }
+
+/* ---------- Tabs ---------- */
+.mochi-tabs { display: inline-flex; gap: var(--space-1); padding: var(--space-1); background: var(--surface-sunken); border-radius: var(--radius-pill); }
+.mochi-tabs__tab {
+  border: none; background: transparent; cursor: pointer;
+  font-family: var(--font-body); font-weight: var(--fw-bold); font-size: var(--text-sm);
+  color: var(--text-muted); padding: 8px var(--space-4); border-radius: var(--radius-pill);
+  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.mochi-tabs__tab:hover { color: var(--text-body); }
+.mochi-tabs__tab.is-active { background: var(--surface-card); color: var(--text-strong); box-shadow: var(--shadow-xs); }

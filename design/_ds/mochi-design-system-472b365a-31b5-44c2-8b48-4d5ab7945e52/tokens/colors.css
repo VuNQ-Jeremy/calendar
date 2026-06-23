@@ -1,0 +1,115 @@
+/* ============================================================
+   MOCHI · COLORS
+   Warm, cozy, family-education palette.
+   Primary = "Mochi orange" (the cat). Pastel accents for
+   subject / category coding: violet, green, blue, + the orange.
+   Neutrals are warm (cream + cocoa), never pure white/gray.
+   ============================================================ */
+:root {
+  /* ---- Brand: Mochi Orange (primary) ---- */
+  --orange-50:  #FFF4EA;
+  --orange-100: #FFE7D1;
+  --orange-200: #FFD0A8;
+  --orange-300: #FCB377;
+  --orange-400: #F79A4E;   /* base */
+  --orange-500: #EF8434;
+  --orange-600: #D96B1C;
+  --orange-700: #B0521A;   /* text-safe on cream */
+
+  /* ---- Accent: Violet (lavender) ---- */
+  --violet-50:  #F4F0FE;
+  --violet-100: #E8E0FD;
+  --violet-200: #D4C6F7;
+  --violet-300: #BBA6EF;
+  --violet-400: #A185E4;   /* base */
+  --violet-500: #8A6BD6;
+  --violet-700: #5E45A0;   /* text-safe */
+
+  /* ---- Accent: Green (sage) ---- */
+  --green-50:  #EEF8EE;
+  --green-100: #D9F0DB;
+  --green-200: #B6E0BA;
+  --green-300: #8ECC95;
+  --green-400: #6FB97A;   /* base */
+  --green-500: #519A5D;
+  --green-700: #356B40;   /* text-safe */
+
+  /* ---- Accent: Blue (sky) ---- */
+  --blue-50:  #ECF6FB;
+  --blue-100: #D6ECF6;
+  --blue-200: #ADD8EC;
+  --blue-300: #7EBFDF;
+  --blue-400: #57A7D2;   /* base */
+  --blue-500: #3B89B8;
+  --blue-700: #265E80;   /* text-safe */
+
+  /* ---- Support: Cocoa (Mochi's fur / warm brown) ---- */
+  --cocoa-100: #F2E5DA;
+  --cocoa-300: #D3A981;
+  --cocoa-500: #A9744F;
+  --cocoa-700: #6E472C;
+
+  /* ---- Warm neutrals (cream → cocoa-ink) ---- */
+  --cream-50:  #FFFCF8;   /* page background */
+  --cream-100: #FDF6EC;   /* raised surface tint */
+  --cream-200: #F6EDDF;   /* subtle fill / hover */
+  --sand-300:  #ECE0CF;   /* hairline borders */
+  --sand-400:  #DBCBB4;   /* stronger borders */
+  --taupe-400: #B8A893;   /* muted icon / disabled */
+  --taupe-500: #8C7C68;   /* secondary text */
+  --ink-700:   #5C4F42;   /* body text */
+  --ink-900:   #3A312A;   /* headings / high-emphasis */
+
+  /* ---- Status (warmed) ---- */
+  --success: #519A5D;
+  --warning: #E0A02E;
+  --danger:  #DC6A52;
+  --info:    #3B89B8;
+
+  /* ============================================================
+     SEMANTIC ALIASES — use these in components/screens
+     ============================================================ */
+  /* Surfaces */
+  --bg-page:        var(--cream-50);
+  --surface-card:   #FFFFFF;
+  --surface-raised: var(--cream-100);
+  --surface-sunken: var(--cream-200);
+  --surface-hover:  var(--cream-200);
+
+  /* Text */
+  --text-strong:    var(--ink-900);
+  --text-body:      var(--ink-700);
+  --text-muted:     var(--taupe-500);
+  --text-disabled:  var(--taupe-400);
+  --text-on-brand:  #FFFFFF;
+  --text-link:      var(--orange-700);
+
+  /* Borders / lines */
+  --border-subtle:  var(--sand-300);
+  --border-strong:  var(--sand-400);
+  --border-focus:   var(--orange-400);
+
+  /* Brand / primary action */
+  --brand:          var(--orange-400);
+  --brand-hover:    var(--orange-500);
+  --brand-press:    var(--orange-600);
+  --brand-soft:     var(--orange-100);
+  --brand-soft-ink: var(--orange-700);
+
+  /* Subject / category tokens (calendar, homework, tags) */
+  --cat-violet:      var(--violet-400);
+  --cat-violet-soft: var(--violet-100);
+  --cat-violet-ink:  var(--violet-700);
+  --cat-green:       var(--green-400);
+  --cat-green-soft:  var(--green-100);
+  --cat-green-ink:   var(--green-700);
+  --cat-blue:        var(--blue-400);
+  --cat-blue-soft:   var(--blue-100);
+  --cat-blue-ink:    var(--blue-700);
+  --cat-orange:      var(--orange-400);
+  --cat-orange-soft: var(--orange-100);
+  --cat-orange-ink:  var(--orange-700);
+
+  /* Focus ring */
+  --ring: 0 0 0 3px rgba(247, 154, 78, 0.35);
+}
