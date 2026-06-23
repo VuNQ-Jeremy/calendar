@@ -190,7 +190,6 @@ function CalendarThemePanel() {
 
 // ============================================================ PROFILE ============================================================
 function ProfileScreen({ user, onSave, onLogout }) {
-  const { reset } = useStore();
   const [f, setF] = React.useState(() => ({ name: user.name, email: user.email || '', phone: user.phone || '', color: user.color || 'orange' }));
   const [saved, setSaved] = React.useState(false);
   const set = (k, v) => { setF(p => ({ ...p, [k]: v })); setSaved(false); };
@@ -236,9 +235,8 @@ function ProfileScreen({ user, onSave, onLogout }) {
         ),
         React.createElement(XC, null,
           React.createElement('h2', { style: { margin: '0 0 4px', fontSize: 'var(--text-xl)' } }, 'Account'),
-          React.createElement('p', { className: 'm-muted', style: { fontSize: 'var(--text-sm)', marginTop: 0 } }, 'Manage your session and demo data.'),
+          React.createElement('p', { className: 'm-muted', style: { fontSize: 'var(--text-sm)', marginTop: 0 } }, 'Manage your session.'),
           React.createElement('div', { className: 'm-row', style: { gap: 12 } },
-            React.createElement(XBtn, { variant: 'secondary', iconLeft: React.createElement(MIcon, { name: 'repeat', size: 15 }), onClick: reset }, 'Reset demo data'),
             React.createElement(XBtn, { variant: 'danger', iconLeft: React.createElement(MIcon, { name: 'logout', size: 16 }), onClick: onLogout }, 'Log out'),
           ),
         ),

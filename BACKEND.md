@@ -54,10 +54,10 @@ npm run cf:dev                        # build + run the Worker locally (Miniflar
 
 `wrangler dev` runs the Worker against a local D1 — no remote database needed.
 
-## Next step: point the frontend at the API
+## Frontend data source
 
-In `src/store.js`, replace the `localStorage` load/persist and the
-`add`/`update`/`remove`/`setTheme` implementations with `fetch` calls:
+`src/store.js` now reads and writes **only** through this API — D1 is the single
+source of truth. There is no seed data or localStorage persistence of app data:
 
 - on mount: `GET /api/state` → initial data
 - `add(key, item)` → `POST /api/{key}`
@@ -65,5 +65,14 @@ In `src/store.js`, replace the `localStorage` load/persist and the
 - `remove(key, id)` → `DELETE /api/{key}/{id}`
 - `setTheme(patch)` → `PUT /api/theme`
 
-Then layer on real auth (the `accounts`/`sessions` tables) for login, signup,
-"remember me", password reset, and invite-code redemption.
+Mutations update local React state optimistically, then persist; on failure the
+store re-syncs from `/api/state`. So the database must be migrated (and
+optionally seeded) for the app to show any data.
+
+> `seed.sql` is **optional** demo data — skip it for a clean, empty database.
+
+## Next step
+
+Real auth using the `accounts`/`sessions` tables (login, signup, "remember me",
+password reset, invite-code redemption), replacing the mocked auth in
+`src/auth.js`.
