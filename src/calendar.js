@@ -359,8 +359,8 @@ function CalendarScreen() {
     ),
     React.createElement(EventModal, { open: !!editor, onClose: () => setEditor(null), draft: editor, onSave: save, onDelete: del, classes: data.classes }),
     themeOpen && React.createElement(Modal, {
-      open: true, onClose: () => setThemeOpen(false), title: t('theme_title'), width: 560,
-      footer: React.createElement(CBtn, { variant: 'primary', onClick: () => setThemeOpen(false) }, t('done')),
+      open: true, onClose: () => { console.log('[Calendar] onClose called'); setThemeOpen(false); }, title: t('theme_title'), width: 560,
+      footer: React.createElement(CBtn, { variant: 'primary', onClick: () => { console.log('[Calendar] footer done clicked'); setThemeOpen(false); } }, t('done')),
     }, React.createElement(CalendarThemePanel, null)),
   );
 }
