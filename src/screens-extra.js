@@ -139,6 +139,19 @@ const PRESETS = {
   dusk:     { tk: 'preset_dusk',  bg: '#2E2A33', gridLine: '#43404B', today: '#3C3845', header: '#34303B', swatches: ['#2E2A33', '#43404B', '#A185E4'] },
 };
 
+// A single color row. Defined at module scope (stable identity) so live theme
+// updates re-render via props instead of remounting the <input type=color>.
+function ThemeColorRow({ value, label, sub, onChange }) {
+  return React.createElement('div', { className: 'colorrow' },
+    React.createElement('input', { type: 'color', value, onChange: e => onChange(e.target.value) }),
+    React.createElement('div', { style: { flex: 1 } },
+      React.createElement('div', { className: 'colorrow__label' }, label),
+      React.createElement('div', { className: 'colorrow__sub' }, sub),
+    ),
+    React.createElement('span', { className: 'm-mono m-muted', style: { fontSize: 'var(--text-xs)' } }, String(value).toUpperCase()),
+  );
+}
+
 // Renders the full theme editor body (presets + color pickers + background image). Used inside the Calendar "Customize" modal.
 function CalendarThemePanel() {
   const { data, setTheme } = useStore();
@@ -146,14 +159,6 @@ function CalendarThemePanel() {
   const theme = data.theme;
   const matchPreset = Object.entries(PRESETS).find(([, p]) => p.bg === theme.bg && p.gridLine === theme.gridLine && p.today === theme.today)?.[0];
   const applyPreset = (key) => { const p = PRESETS[key]; setTheme({ bg: p.bg, gridLine: p.gridLine, today: p.today, header: p.header }); };
-  const ColorRow = ({ k, label, sub }) => React.createElement('div', { className: 'colorrow' },
-    React.createElement('input', { type: 'color', value: theme[k], onChange: e => setTheme({ [k]: e.target.value }) }),
-    React.createElement('div', { style: { flex: 1 } },
-      React.createElement('div', { className: 'colorrow__label' }, label),
-      React.createElement('div', { className: 'colorrow__sub' }, sub),
-    ),
-    React.createElement('span', { className: 'm-mono m-muted', style: { fontSize: 'var(--text-xs)' } }, theme[k].toUpperCase()),
-  );
 
   return React.createElement('div', null,
     React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, t('theme_presets')),
@@ -166,10 +171,10 @@ function CalendarThemePanel() {
       ),
     ),
     React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 4 } }, t('theme_finetune')),
-    React.createElement(ColorRow, { k: 'bg', label: t('theme_canvas'), sub: t('theme_canvas_sub') }),
-    React.createElement(ColorRow, { k: 'header', label: t('theme_dayheader'), sub: t('theme_dayheader_sub') }),
-    React.createElement(ColorRow, { k: 'gridLine', label: t('theme_grid'), sub: t('theme_grid_sub') }),
-    React.createElement(ColorRow, { k: 'today', label: t('theme_today'), sub: t('theme_today_sub') }),
+    React.createElement(ThemeColorRow, { value: theme.bg, label: t('theme_canvas'), sub: t('theme_canvas_sub'), onChange: v => setTheme({ bg: v }) }),
+    React.createElement(ThemeColorRow, { value: theme.header, label: t('theme_dayheader'), sub: t('theme_dayheader_sub'), onChange: v => setTheme({ header: v }) }),
+    React.createElement(ThemeColorRow, { value: theme.gridLine, label: t('theme_grid'), sub: t('theme_grid_sub'), onChange: v => setTheme({ gridLine: v }) }),
+    React.createElement(ThemeColorRow, { value: theme.today, label: t('theme_today'), sub: t('theme_today_sub'), onChange: v => setTheme({ today: v }) }),
     React.createElement('hr', { className: 'divider', style: { margin: '18px 0 14px' } }),
     React.createElement('div', { className: 'mochi-eyebrow', style: { marginBottom: 8 } }, t('theme_bgimage')),
     React.createElement('div', { className: 'mochi-field' },
