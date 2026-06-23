@@ -6,13 +6,14 @@ import { DashboardScreen, HomeworkScreen } from './screens-core.js';
 import { CalendarScreen } from './calendar.js';
 import { ClassesScreen, StudentsScreen } from './screens-manage.js';
 import { MaterialsScreen, ProfileScreen } from './screens-extra.js';
+import { FeedbackScreen, FeedbackModal, newFeedbackDraft } from './feedback.js';
 
 // app/shell.jsx — app shell: sidebar nav, topbar, routing, profile entry
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB, Button: ShBtn } = DS;
 
 const NAV = [
   { group: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard', icon: 'home' }, { id: 'calendar', label: 'Calendar', icon: 'calendar' }] },
-  { group: 'Manage', items: [{ id: 'classes', label: 'Classes', icon: 'book' }, { id: 'students', label: 'People', icon: 'users' }, { id: 'materials', label: 'Materials', icon: 'folder' }, { id: 'homework', label: 'Homework', icon: 'clipboard' }] },
+  { group: 'Manage', items: [{ id: 'classes', label: 'Classes', icon: 'book' }, { id: 'students', label: 'People', icon: 'users' }, { id: 'materials', label: 'Materials', icon: 'folder' }, { id: 'homework', label: 'Homework', icon: 'clipboard' }, { id: 'feedback', label: 'Feedback', icon: 'message' }] },
 ];
 
 const HEADERS = {
@@ -25,11 +26,12 @@ const HEADERS = {
   profile: { ph: 'Search…' },
 };
 
-function Sidebar({ active, onNav, user }) {
+function Sidebar({ active, onNav, user, onFeedback }) {
   const { data } = useStore();
   const today = iso(TODAY);
   const dueCount = data.homework.filter(h => !h.done && h.due <= today).length;
-  const counts = { homework: dueCount, students: data.invites.filter(i => !i.used).length };
+  const newFeedback = (data.feedback || []).filter(f => f.status === 'new').length;
+  const counts = { homework: dueCount, students: data.invites.filter(i => !i.used).length, feedback: newFeedback };
   return React.createElement('aside', { className: 'sb' },
     React.createElement('div', { className: 'sb__brand' },
       React.createElement('span', { className: 'sb__brand-mark' }, React.createElement(MIcon, { name: 'paw', size: 20 })),
@@ -43,6 +45,10 @@ function Sidebar({ active, onNav, user }) {
         counts[n.id] > 0 && React.createElement('span', { className: 'count' }, React.createElement(ShBadge, { color: 'brand' }, counts[n.id])),
       )),
     )),
+    React.createElement('button', { className: 'sb__cta', onClick: onFeedback, title: 'Share feedback' },
+      React.createElement(MIcon, { name: 'message', size: 18 }),
+      React.createElement('span', null, 'Give feedback'),
+    ),
     React.createElement('button', { className: 'sb__foot' + (active === 'profile' ? ' is-active' : ''), onClick: () => onNav('profile'), title: 'Manage your profile' },
       React.createElement(ShAv, { name: user.name, color: user.color, size: 'md' }),
       React.createElement('div', { style: { minWidth: 0, textAlign: 'left' } },
@@ -55,7 +61,18 @@ function Sidebar({ active, onNav, user }) {
 }
 
 function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
+  const { add } = useStore();
   const [active, setActive] = React.useState('dashboard');
+  const [feedbackDraft, setFeedbackDraft] = React.useState(null);
+
+  const openFeedback = () => setFeedbackDraft(newFeedbackDraft(user));
+  const saveFeedback = (f) => {
+    if (!f.message.trim()) { setFeedbackDraft(null); return; }
+    add('feedback', f);
+    setFeedbackDraft(null);
+    setActive('feedback');
+  };
+
   const Screen = {
     dashboard: () => React.createElement(DashboardScreen, { user, onNav: setActive }),
     calendar: () => React.createElement(CalendarScreen, null),
@@ -63,6 +80,7 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
     students: () => React.createElement(StudentsScreen, null),
     materials: () => React.createElement(MaterialsScreen, null),
     homework: () => React.createElement(HomeworkScreen, null),
+    feedback: () => React.createElement(FeedbackScreen, { user }),
     profile: () => React.createElement(ProfileScreen, { user, onSave: onUpdateUser, onLogout }),
   }[active];
 
@@ -77,10 +95,11 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
   };
 
   return React.createElement('div', { className: 'app', style: shellStyle, 'data-density': tweaks.density },
-    React.createElement(Sidebar, { active, onNav: setActive, user }),
+    React.createElement(Sidebar, { active, onNav: setActive, user, onFeedback: openFeedback }),
     React.createElement('div', { className: 'main' },
       React.createElement(Screen, null),
     ),
+    feedbackDraft && React.createElement(FeedbackModal, { draft: feedbackDraft, setDraft: setFeedbackDraft, onClose: () => setFeedbackDraft(null), onSave: saveFeedback }),
   );
 }
 

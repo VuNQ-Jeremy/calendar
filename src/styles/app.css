@@ -70,7 +70,12 @@ html, body { height: 100%; margin: 0; }
 .sb__item.is-active { background: var(--brand-soft); color: var(--brand-soft-ink); }
 .sb__item:hover:not(.is-active) { background: var(--cream-200); }
 .sb__item .count { margin-left: auto; }
-.sb__foot { margin-top: auto; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface-card); border: var(--border-width) solid var(--border-subtle); box-shadow: var(--shadow-xs); width: 100%; cursor: pointer; text-align: left; font-family: inherit; transition: border-color var(--dur-fast), background var(--dur-fast); }
+/* "Give feedback" call-to-action; margin-top:auto pins it (and the profile
+   footer below it) to the bottom of the sidebar. */
+.sb__cta { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 11px var(--space-3); margin-bottom: var(--space-3); border-radius: var(--radius-md); border: 1.5px solid var(--brand); background: var(--brand-soft); color: var(--brand-soft-ink); font-family: inherit; font-weight: 800; font-size: var(--text-sm); cursor: pointer; transition: filter var(--dur-fast) var(--ease-out); }
+.sb__cta:hover { filter: brightness(0.97); }
+.sb__cta:active { transform: scale(0.98); }
+.sb__foot { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-lg); background: var(--surface-card); border: var(--border-width) solid var(--border-subtle); box-shadow: var(--shadow-xs); width: 100%; cursor: pointer; text-align: left; font-family: inherit; transition: border-color var(--dur-fast), background var(--dur-fast); }
 .sb__foot:hover { border-color: var(--border-strong); background: var(--cream-100); }
 .sb__foot.is-active { border-color: var(--brand); background: var(--brand-soft); }
 .sb__foot .nm { font-weight: 800; font-size: var(--text-sm); color: var(--text-strong); line-height: 1.2; }
@@ -89,6 +94,8 @@ html, body { height: 100%; margin: 0; }
   .sb__foot { justify-content: center; padding: var(--space-2); }
   .sb__foot .nm, .sb__foot .sub { display: none; }
   .sb__foot > svg { display: none; }
+  .sb__cta { padding: 11px 0; }
+  .sb__cta span { display: none; }
 }
 
 .main { overflow: auto; display: flex; flex-direction: column; min-width: 0; }

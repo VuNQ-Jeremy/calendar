@@ -33,6 +33,7 @@ const COLLECTIONS = {
   homework:  { table: 'homework', scal: [['title', 'title'], ['classId', 'class_id'], ['due', 'due'], ['points', 'points'], ['notes', 'notes'], ['color', 'color'], ['done', 'done']], bools: ['done'] },
   materials: { table: 'materials', scal: [['title', 'title'], ['type', 'type'], ['classId', 'class_id'], ['url', 'url'], ['fileName', 'file_name'], ['favorite', 'favorite'], ['addedAt', 'added_at']], bools: ['favorite'] },
   invites:   { table: 'invites',  scal: [['code', 'code'], ['role', 'role'], ['name', 'name'], ['classId', 'class_id'], ['createdAt', 'created_at'], ['used', 'used']], bools: ['used'] },
+  feedback:  { table: 'feedback', scal: [['message', 'message'], ['category', 'category'], ['author', 'author'], ['status', 'status'], ['createdAt', 'created_at']] },
 };
 
 export default {
@@ -98,7 +99,7 @@ const run = (env, sql, ...binds) => env.DB.prepare(sql).bind(...binds).run();
 async function getState(env) {
   const [
     classRows, scheduleRows, classStudentRows, studentRows, staffRows,
-    parentRows, parentStudentRows, eventRows, homeworkRows, materialRows, inviteRows,
+    parentRows, parentStudentRows, eventRows, homeworkRows, materialRows, inviteRows, feedbackRows,
   ] = await Promise.all([
     rows(env, 'SELECT * FROM classes'),
     rows(env, 'SELECT * FROM class_schedule ORDER BY id'),
@@ -111,6 +112,7 @@ async function getState(env) {
     rows(env, 'SELECT * FROM homework'),
     rows(env, 'SELECT * FROM materials'),
     rows(env, 'SELECT * FROM invites'),
+    rows(env, 'SELECT * FROM feedback ORDER BY created_at DESC'),
   ]);
 
   const group = (list, keyField, valField) => {
@@ -148,6 +150,7 @@ async function getState(env) {
     homework: homeworkRows.map(mapHomework),
     materials: materialRows.map(mapMaterial),
     invites: inviteRows.map(mapInvite),
+    feedback: feedbackRows.map(mapFeedback),
     theme: await getTheme(env),
   };
 }
@@ -156,6 +159,7 @@ const mapEvent = (e) => ({ id: e.id, title: e.title, date: e.date, start: e.star
 const mapHomework = (h) => ({ id: h.id, title: h.title, classId: h.class_id, due: h.due, points: h.points, notes: h.notes, color: h.color, done: !!h.done });
 const mapMaterial = (m) => ({ id: m.id, title: m.title, type: m.type, classId: m.class_id, url: m.url, fileName: m.file_name, favorite: !!m.favorite, addedAt: m.added_at });
 const mapInvite = (i) => ({ id: i.id, code: i.code, role: i.role, name: i.name, classId: i.class_id, createdAt: i.created_at, used: !!i.used });
+const mapFeedback = (f) => ({ id: f.id, message: f.message, category: f.category, author: f.author, status: f.status, createdAt: f.created_at });
 
 async function readItem(env, collection, cfg, id) {
   const row = await one(env, `SELECT * FROM ${cfg.table} WHERE id = ?`, id);
@@ -180,6 +184,7 @@ async function readItem(env, collection, cfg, id) {
   if (collection === 'homework') return mapHomework(row);
   if (collection === 'materials') return mapMaterial(row);
   if (collection === 'invites') return mapInvite(row);
+  if (collection === 'feedback') return mapFeedback(row);
   return row;
 }
 

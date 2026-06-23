@@ -60,6 +60,10 @@ function seed() {
     { id: 'p3', name: 'Sofia Rivera', email: 'sofia.rivera@home.com', phone: '', color: 'violet', studentIds: ['s3'], relation: 'Mother' },
     { id: 'p4', name: 'Greg Bennett', email: 'greg.bennett@home.com', phone: '(555) 240-9026', color: 'orange', studentIds: ['s4'], relation: 'Father' },
   ];
+  const feedback = [
+    { id: 'fb1', message: 'Love the calendar color themes — the per-class hues make my week so easy to scan.', category: 'praise', author: 'Priya Nair', status: 'reviewed', createdAt: iso(addDays(TODAY, -2)) },
+    { id: 'fb2', message: 'Could we get a print / PDF export of the month view for the staff room board?', category: 'idea', author: 'Sam Okafor', status: 'new', createdAt: iso(addDays(TODAY, -1)) },
+  ];
   const theme = {
     bg: '#FFFCF8',        // calendar canvas
     gridLine: '#ECE0CF',  // grid hairlines
@@ -68,7 +72,7 @@ function seed() {
     bgImage: '',          // optional background image url
     bgOpacity: 0.12,
   };
-  return { classes, students, users, events, homework, materials, invites, parents, theme };
+  return { classes, students, users, events, homework, materials, invites, parents, feedback, theme };
 }
 
 function load() {
