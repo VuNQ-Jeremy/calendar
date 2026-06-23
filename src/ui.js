@@ -47,7 +47,7 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
     React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
-        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: wrappedOnClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
+        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: (e) => { console.log('[Close button] clicked'); wrappedOnClose(); } }, React.createElement(MIcon, { name: 'x', size: 18 })),
       ),
       React.createElement('div', { className: 'm-dialog__body' }, children),
       footer && React.createElement('div', { className: 'm-dialog__foot' }, footer),
