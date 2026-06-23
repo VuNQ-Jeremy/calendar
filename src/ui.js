@@ -9,34 +9,26 @@ const { Button, IconButton, Card } = DS;
 // ---- Modal / dialog ----
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
   const { t } = useLang();
-  const dialogRef = React.useRef(null);
-  // Keep a stable ref to onClose so the effect never needs to re-run due to a
-  // new arrow-function identity on each parent render.
-  const onCloseRef = React.useRef(onClose);
-  onCloseRef.current = onClose;
-
   React.useEffect(() => {
     if (!open) return;
-    // Capture phase fires before any React synthetic handlers (and before any
-    // child onClick can call setState and trigger a re-render that would
-    // detach e.target from the dialog's DOM subtree).
     const onDocClick = (e) => {
-      if (dialogRef.current && !dialogRef.current.contains(e.target)) {
-        onCloseRef.current && onCloseRef.current();
+      // Only close if the click happened outside the dialog element.
+      if (!e.target.closest('.m-dialog')) {
+        onClose && onClose();
       }
     };
-    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current && onCloseRef.current(); };
+    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
     document.addEventListener('click', onDocClick, true);
     window.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('click', onDocClick, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open]); // stable: onClose changes handled via ref above
+  }, [open, onClose]);
 
   if (!open) return null;
   return React.createElement('div', { className: 'm-overlay' },
-    React.createElement('div', { className: 'm-dialog', ref: dialogRef, style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
+    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
         React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
