@@ -184,14 +184,24 @@ function CalendarThemePanel() {
     React.createElement('label', { className: 'm-row', style: { gap: 10, padding: '12px', border: '1.5px dashed var(--border-strong)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--text-muted)', marginBottom: 14 } },
       React.createElement(MIcon, { name: 'upload', size: 18 }),
       React.createElement('span', { style: { fontSize: 'var(--text-sm)', fontWeight: 600 } }, t('theme_upload_img')),
-      React.createElement('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: e => { const f = e.target.files[0]; if (f) { const r = new FileReader(); r.onload = () => setTheme({ bgImage: r.result }); r.readAsDataURL(f); } } }),
+      React.createElement('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: e => {
+        const f = e.target.files[0];
+        if (f) {
+          const r = new FileReader();
+          // Bump opacity to a clearly visible level on upload if it's still at
+          // the subtle default, so the image is actually seen (not washed out).
+          r.onload = () => setTheme({ bgImage: r.result, ...(theme.bgOpacity <= 0.15 ? { bgOpacity: 0.6 } : {}) });
+          r.readAsDataURL(f);
+        }
+        e.target.value = '';
+      } }),
     ),
     React.createElement('div', { className: 'mochi-field' },
       React.createElement('div', { className: 'm-spread' },
         React.createElement('label', { className: 'mochi-field__label', style: { margin: 0 } }, t('theme_opacity')),
         React.createElement('span', { className: 'm-mono m-muted', style: { fontSize: 'var(--text-xs)' } }, Math.round(theme.bgOpacity * 100) + '%'),
       ),
-      React.createElement('input', { type: 'range', min: 0, max: 0.6, step: 0.02, value: theme.bgOpacity, onChange: e => setTheme({ bgOpacity: Number(e.target.value) }), style: { width: '100%', accentColor: 'var(--brand)' } }),
+      React.createElement('input', { type: 'range', min: 0, max: 1, step: 0.02, value: theme.bgOpacity, onChange: e => setTheme({ bgOpacity: Number(e.target.value) }), style: { width: '100%', accentColor: 'var(--brand)' } }),
     ),
     theme.bgImage && React.createElement(XBtn, { variant: 'ghost', size: 'sm', iconLeft: React.createElement(MIcon, { name: 'x', size: 15 }), onClick: () => setTheme({ bgImage: '' }) }, t('theme_remove_img')),
   );
