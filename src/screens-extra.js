@@ -3,7 +3,7 @@ import { MIcon } from './icons.js';
 import { useStore } from './store.js';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.js';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
-import { useLang, LanguageToggle } from './lib/i18n.js';
+import { useLang } from './lib/i18n.js';
 
 // app/screens-extra.jsx — Materials (with download) + reusable Calendar theme panel + Profile page
 const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Badge: XBadge, Switch: XSw, Avatar: XAvatar } = DS;
@@ -212,7 +212,27 @@ function ProfileScreen({ user, onSave, onLogout }) {
       // Avatar card
       React.createElement(XC, { style: { textAlign: 'center' } },
         React.createElement('div', { style: { display: 'grid', placeItems: 'center', marginBottom: 16 } },
-          React.createElement(XAvatar, { name: f.name, color: f.color, size: 'xl' }),
+          React.createElement('div', { style: { position: 'relative', display: 'inline-block' } },
+            user.avatar
+              ? React.createElement('img', { src: user.avatar, alt: f.name, style: { width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', display: 'block' } })
+              : React.createElement(XAvatar, { name: f.name, color: f.color, size: 'xl' }),
+            React.createElement('label', {
+              title: t('prof_upload_avatar'),
+              style: { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, background: 'var(--brand)', borderRadius: '50%', display: 'grid', placeItems: 'center', cursor: 'pointer', border: '2.5px solid var(--surface-card)', boxSizing: 'border-box' },
+            },
+              React.createElement(MIcon, { name: 'upload', size: 13, style: { color: '#fff' } }),
+              React.createElement('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: (e) => {
+                const file = e.target.files[0]; if (!file) return;
+                const r = new FileReader();
+                r.onload = () => { onSave({ avatar: r.result }); };
+                r.readAsDataURL(file);
+                e.target.value = '';
+              }}),
+            ),
+          ),
+        ),
+        user.avatar && React.createElement('div', { style: { marginBottom: 8 } },
+          React.createElement(XBtn, { variant: 'ghost', size: 'sm', onClick: () => onSave({ avatar: '' }) }, t('prof_remove_avatar')),
         ),
         React.createElement('div', { style: { fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-lg)' } }, f.name),
         React.createElement('div', { className: 'm-muted', style: { fontSize: 'var(--text-sm)', marginBottom: 16 } }, t('role_' + String(user.role || '').toLowerCase())),
@@ -241,15 +261,6 @@ function ProfileScreen({ user, onSave, onLogout }) {
           React.createElement('div', { className: 'm-row', style: { gap: 12, marginTop: 6 } },
             React.createElement(XBtn, { variant: 'primary', onClick: doSave, disabled: !dirty }, saved && !dirty ? t('prof_saved') : t('prof_save')),
             saved && !dirty && React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, t('prof_uptodate')),
-          ),
-        ),
-        React.createElement(XC, null,
-          React.createElement('div', { className: 'm-spread' },
-            React.createElement('div', null,
-              React.createElement('h2', { style: { margin: '0 0 4px', fontSize: 'var(--text-xl)' } }, t('language')),
-              React.createElement('p', { className: 'm-muted', style: { fontSize: 'var(--text-sm)', margin: 0 } }, t('prof_lang_sub')),
-            ),
-            React.createElement(LanguageToggle, null),
           ),
         ),
         React.createElement(XC, null,

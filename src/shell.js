@@ -58,7 +58,9 @@ function Sidebar({ active, onNav, user, onFeedback, onHelp }) {
       React.createElement('span', null, t('cta_feedback')),
     ),
     React.createElement('button', { className: 'sb__foot' + (active === 'profile' ? ' is-active' : ''), onClick: () => onNav('profile'), title: 'Manage your profile' },
-      React.createElement(ShAv, { name: user.name, color: user.color, size: 'md' }),
+      user.avatar
+        ? React.createElement('img', { src: user.avatar, alt: user.name, style: { width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 } })
+        : React.createElement(ShAv, { name: user.name, color: user.color, size: 'md' }),
       React.createElement('div', { style: { minWidth: 0, textAlign: 'left' } },
         React.createElement('div', { className: 'nm' }, user.name),
         React.createElement('div', { className: 'sub' }, user.role),

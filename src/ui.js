@@ -9,10 +9,6 @@ const { Button, IconButton, Card } = DS;
 // ---- Modal / dialog ----
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
   const { t } = useLang();
-  // Only treat it as a backdrop dismissal when the press AND release both land
-  // on the overlay itself. This stops interactions with controls inside the
-  // dialog (color pickers, sliders, drags ending on the backdrop) from closing it.
-  const pressedBackdrop = React.useRef(false);
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
@@ -22,14 +18,9 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
   if (!open) return null;
   return React.createElement('div', {
     className: 'm-overlay',
-    onMouseDown: (e) => { pressedBackdrop.current = e.target === e.currentTarget; },
-    onMouseUp: (e) => {
-      const dismiss = pressedBackdrop.current && e.target === e.currentTarget;
-      pressedBackdrop.current = false;
-      if (dismiss) onClose && onClose();
-    },
+    onClick: () => onClose && onClose(),
   },
-    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
+    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true', onClick: (e) => e.stopPropagation() },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
         React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),

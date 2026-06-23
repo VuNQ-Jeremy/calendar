@@ -151,6 +151,7 @@ export const STRINGS = {
     prof_save: 'Save changes', prof_saved: 'Saved ✓', prof_uptodate: 'Your profile is up to date.',
     prof_account: 'Account', prof_account_sub: 'Manage your session.', prof_logout: 'Log out',
     prof_avatar_color: 'Avatar color', prof_lang_sub: 'English · Tiếng Việt',
+    prof_upload_avatar: 'Upload photo', prof_remove_avatar: 'Remove photo',
 
     // feedback
     fb_title: 'Feedback', fb_sub: 'Ideas, bug reports, and praise from your team', fb_log: 'Log feedback',
@@ -282,6 +283,7 @@ export const STRINGS = {
     prof_save: 'Lưu thay đổi', prof_saved: 'Đã lưu ✓', prof_uptodate: 'Hồ sơ của bạn đã cập nhật.',
     prof_account: 'Tài khoản', prof_account_sub: 'Quản lý phiên đăng nhập.', prof_logout: 'Đăng xuất',
     prof_avatar_color: 'Màu đại diện', prof_lang_sub: 'English · Tiếng Việt',
+    prof_upload_avatar: 'Tải ảnh lên', prof_remove_avatar: 'Xóa ảnh',
 
     fb_title: 'Phản hồi', fb_sub: 'Ý tưởng, báo lỗi và lời khen từ nhóm của bạn', fb_log: 'Ghi phản hồi',
     fb_tab_all: 'Tất cả · {n}', fb_tab_new: 'Mới · {n}', fb_tab_reviewed: 'Đã xem · {n}', fb_tab_done: 'Đã xử lý · {n}',

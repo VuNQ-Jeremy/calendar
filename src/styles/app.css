@@ -215,8 +215,8 @@ html, body { height: 100%; margin: 0; }
 
 /* ============================================================ CALENDAR ============================================================ */
 .calwrap { background: var(--cal-bg, var(--surface-card)); border-radius: var(--radius-lg); border: var(--border-width) solid var(--border-subtle); overflow: hidden; box-shadow: var(--shadow-sm); position: relative; }
-.calwrap__bgimg { position: absolute; inset: 0; background-size: cover; background-position: center; pointer-events: none; }
 .calwrap > * { position: relative; }
+.calwrap .calwrap__bgimg { position: absolute; inset: 0; background-size: cover; background-position: center; pointer-events: none; }
 
 /* month grid */
 .month { display: grid; grid-template-columns: repeat(7, 1fr); }

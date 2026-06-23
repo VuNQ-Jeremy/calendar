@@ -1,7 +1,7 @@
 import { React, DS } from './lib/globals.js';
 import { MIcon } from './icons.js';
 import { useStore } from './store.js';
-import { useLang, LanguageToggle } from './lib/i18n.js';
+import { useLang } from './lib/i18n.js';
 
 // app/auth.jsx — login / signup / forgot password / onboarding via one-time code
 const { Button: AButton, Input: AInput, Switch: ASwitch, Tag: ATag } = DS;
@@ -17,7 +17,7 @@ function AuthScreen({ onLogin }) {
   const { data } = useStore();
   const { t } = useLang();
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
-  const [mode, setMode] = React.useState('login'); // login | forgot | code
+  const [mode, setMode] = React.useState('login'); // login | code
   const [email, setEmail] = React.useState('');
   const [pw, setPw] = React.useState('');
   const [name, setName] = React.useState('');
@@ -25,10 +25,9 @@ function AuthScreen({ onLogin }) {
   const [showPw, setShowPw] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [error, setError] = React.useState('');
-  const [sent, setSent] = React.useState(false);
   const [codeOk, setCodeOk] = React.useState(null); // matched invite
 
-  const reset = () => { setError(''); setSent(false); setCodeOk(null); };
+  const reset = () => { setError(''); setCodeOk(null); };
 
   const doLogin = () => {
     if (!email || !pw) { setError(t('auth_enter_both')); return; }
@@ -80,23 +79,10 @@ function AuthScreen({ onLogin }) {
       error && React.createElement('div', { className: 'auth-error' }, error),
       React.createElement('div', { className: 'auth-row' },
         React.createElement(ASwitch, { checked: remember, onChange: e => setRemember(e.target.checked), label: t('auth_remember') }),
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('forgot'); } }, t('auth_forgot')),
       ),
       React.createElement(AButton, { variant: 'primary', block: true, onClick: doLogin }, t('auth_signin')),
       React.createElement('div', { className: 'auth-divider' }, React.createElement('span', null, t('auth_or'))),
       React.createElement(AButton, { variant: 'secondary', block: true, onClick: () => { reset(); setMode('code'); }, iconLeft: React.createElement(MIcon, { name: 'key', size: 18 }) }, t('auth_have_code')),
-    );
-  } else if (mode === 'forgot') {
-    form = React.createElement(React.Fragment, null,
-      React.createElement('h2', { className: 'auth-title' }, t('auth_reset_title')),
-      React.createElement('p', { className: 'auth-sub' }, sent ? t('auth_reset_sub_sent') : t('auth_reset_sub')),
-      !sent && React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: 'you@school.edu', value: email, onChange: e => setEmail(e.target.value) }),
-      error && React.createElement('div', { className: 'auth-error' }, error),
-      sent
-        ? React.createElement('div', { className: 'auth-success' }, React.createElement(MIcon, { name: 'check', size: 18 }), t('auth_sent_to'), ' ', React.createElement('strong', null, email || '—'))
-        : React.createElement(AButton, { variant: 'primary', block: true, onClick: () => { if (!email) { setError(t('auth_enter_email')); return; } setError(''); setSent(true); } }, t('auth_send_reset')),
-      React.createElement('p', { className: 'auth-foot' },
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, t('auth_back_signin'))),
     );
   } else if (mode === 'code') {
     form = codeOk
@@ -125,7 +111,6 @@ function AuthScreen({ onLogin }) {
     React.createElement('div', { className: 'auth-card' },
       React.createElement('div', { className: 'auth-card__brand' }, Brand),
       React.createElement('div', { className: 'auth-card__form' },
-        React.createElement('div', { className: 'auth-langbar' }, React.createElement(LanguageToggle, null)),
         form,
       ),
     ),
