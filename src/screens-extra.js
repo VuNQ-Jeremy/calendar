@@ -3,6 +3,7 @@ import { MIcon } from './icons.js';
 import { useStore } from './store.js';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.js';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
+import { useLang, LanguageToggle } from './lib/i18n.js';
 
 // app/screens-extra.jsx — Materials (with download) + reusable Calendar theme panel + Profile page
 const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Badge: XBadge, Switch: XSw, Avatar: XAvatar } = DS;
@@ -190,6 +191,7 @@ function CalendarThemePanel() {
 
 // ============================================================ PROFILE ============================================================
 function ProfileScreen({ user, onSave, onLogout }) {
+  const { t } = useLang();
   const [f, setF] = React.useState(() => ({ name: user.name, email: user.email || '', phone: user.phone || '', color: user.color || 'orange' }));
   const [saved, setSaved] = React.useState(false);
   const set = (k, v) => { setF(p => ({ ...p, [k]: v })); setSaved(false); };
@@ -231,6 +233,15 @@ function ProfileScreen({ user, onSave, onLogout }) {
           React.createElement('div', { className: 'm-row', style: { gap: 12, marginTop: 6 } },
             React.createElement(XBtn, { variant: 'primary', onClick: doSave, disabled: !dirty }, saved && !dirty ? 'Saved ✓' : 'Save changes'),
             saved && !dirty && React.createElement('span', { className: 'm-muted', style: { fontSize: 'var(--text-sm)' } }, 'Your profile is up to date.'),
+          ),
+        ),
+        React.createElement(XC, null,
+          React.createElement('div', { className: 'm-spread' },
+            React.createElement('div', null,
+              React.createElement('h2', { style: { margin: '0 0 4px', fontSize: 'var(--text-xl)' } }, t('language')),
+              React.createElement('p', { className: 'm-muted', style: { fontSize: 'var(--text-sm)', margin: 0 } }, 'English · Tiếng Việt'),
+            ),
+            React.createElement(LanguageToggle, null),
           ),
         ),
         React.createElement(XC, null,

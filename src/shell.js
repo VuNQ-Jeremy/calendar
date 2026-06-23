@@ -7,13 +7,16 @@ import { CalendarScreen } from './calendar.js';
 import { ClassesScreen, StudentsScreen } from './screens-manage.js';
 import { MaterialsScreen, ProfileScreen } from './screens-extra.js';
 import { FeedbackScreen, FeedbackModal, newFeedbackDraft } from './feedback.js';
+import { InstructionsModal, SEEN_INTRO_KEY } from './instructions.js';
+import { useLang } from './lib/i18n.js';
 
 // app/shell.jsx — app shell: sidebar nav, topbar, routing, profile entry
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB, Button: ShBtn } = DS;
 
+// `tk` is the i18n key used to translate the label at render time.
 const NAV = [
-  { group: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard', icon: 'home' }, { id: 'calendar', label: 'Calendar', icon: 'calendar' }] },
-  { group: 'Manage', items: [{ id: 'classes', label: 'Classes', icon: 'book' }, { id: 'students', label: 'People', icon: 'users' }, { id: 'materials', label: 'Materials', icon: 'folder' }, { id: 'homework', label: 'Homework', icon: 'clipboard' }, { id: 'feedback', label: 'Feedback', icon: 'message' }] },
+  { tk: 'nav_overview', items: [{ id: 'dashboard', tk: 'nav_dashboard', icon: 'home' }, { id: 'calendar', tk: 'nav_calendar', icon: 'calendar' }] },
+  { tk: 'nav_manage', items: [{ id: 'classes', tk: 'nav_classes', icon: 'book' }, { id: 'students', tk: 'nav_people', icon: 'users' }, { id: 'materials', tk: 'nav_materials', icon: 'folder' }, { id: 'homework', tk: 'nav_homework', icon: 'clipboard' }, { id: 'feedback', tk: 'nav_feedback', icon: 'message' }] },
 ];
 
 const HEADERS = {
@@ -26,8 +29,9 @@ const HEADERS = {
   profile: { ph: 'Search…' },
 };
 
-function Sidebar({ active, onNav, user, onFeedback }) {
+function Sidebar({ active, onNav, user, onFeedback, onHelp }) {
   const { data } = useStore();
+  const { t } = useLang();
   const today = iso(TODAY);
   const dueCount = data.homework.filter(h => !h.done && h.due <= today).length;
   const newFeedback = (data.feedback || []).filter(f => f.status === 'new').length;
@@ -36,18 +40,21 @@ function Sidebar({ active, onNav, user, onFeedback }) {
     React.createElement('div', { className: 'sb__brand' },
       React.createElement('span', { className: 'sb__brand-mark' }, React.createElement(MIcon, { name: 'paw', size: 20 })),
       'Mochi',
+      React.createElement('span', { className: 'sb__help' },
+        React.createElement(ShIB, { label: t('help_label'), size: 'sm', onClick: onHelp }, React.createElement(MIcon, { name: 'help', size: 18 })),
+      ),
     ),
-    NAV.map(sec => React.createElement('div', { key: sec.group },
-      React.createElement('div', { className: 'sb__section' }, sec.group),
+    NAV.map(sec => React.createElement('div', { key: sec.tk },
+      React.createElement('div', { className: 'sb__section' }, t(sec.tk)),
       sec.items.map(n => React.createElement('button', { key: n.id, className: 'sb__item' + (active === n.id ? ' is-active' : ''), onClick: () => onNav(n.id) },
         React.createElement(MIcon, { name: n.icon, size: 20 }),
-        React.createElement('span', null, n.label),
+        React.createElement('span', null, t(n.tk)),
         counts[n.id] > 0 && React.createElement('span', { className: 'count' }, React.createElement(ShBadge, { color: 'brand' }, counts[n.id])),
       )),
     )),
-    React.createElement('button', { className: 'sb__cta', onClick: onFeedback, title: 'Share feedback' },
+    React.createElement('button', { className: 'sb__cta', onClick: onFeedback, title: t('cta_feedback') },
       React.createElement(MIcon, { name: 'message', size: 18 }),
-      React.createElement('span', null, 'Give feedback'),
+      React.createElement('span', null, t('cta_feedback')),
     ),
     React.createElement('button', { className: 'sb__foot' + (active === 'profile' ? ' is-active' : ''), onClick: () => onNav('profile'), title: 'Manage your profile' },
       React.createElement(ShAv, { name: user.name, color: user.color, size: 'md' }),
@@ -64,6 +71,16 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
   const { add } = useStore();
   const [active, setActive] = React.useState('dashboard');
   const [feedbackDraft, setFeedbackDraft] = React.useState(null);
+  const [introOpen, setIntroOpen] = React.useState(false);
+
+  // Show the welcome guide automatically the first time, once per browser.
+  React.useEffect(() => {
+    try { if (!localStorage.getItem(SEEN_INTRO_KEY)) setIntroOpen(true); } catch (e) { /* storage unavailable */ }
+  }, []);
+  const closeIntro = () => {
+    setIntroOpen(false);
+    try { localStorage.setItem(SEEN_INTRO_KEY, '1'); } catch (e) { /* storage unavailable */ }
+  };
 
   const openFeedback = () => setFeedbackDraft(newFeedbackDraft(user));
   const saveFeedback = (f) => {
@@ -95,11 +112,12 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
   };
 
   return React.createElement('div', { className: 'app', style: shellStyle, 'data-density': tweaks.density },
-    React.createElement(Sidebar, { active, onNav: setActive, user, onFeedback: openFeedback }),
+    React.createElement(Sidebar, { active, onNav: setActive, user, onFeedback: openFeedback, onHelp: () => setIntroOpen(true) }),
     React.createElement('div', { className: 'main' },
       React.createElement(Screen, null),
     ),
     feedbackDraft && React.createElement(FeedbackModal, { draft: feedbackDraft, setDraft: setFeedbackDraft, onClose: () => setFeedbackDraft(null), onSave: saveFeedback }),
+    introOpen && React.createElement(InstructionsModal, { onClose: closeIntro }),
   );
 }
 

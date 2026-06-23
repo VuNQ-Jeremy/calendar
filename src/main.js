@@ -2,6 +2,7 @@
 
 import './styles/app.css';
 import { React, ReactDOM } from './lib/globals.js';
+import { LanguageProvider } from './lib/i18n.js';
 import { StoreProvider } from './store.js';
 import { AppShell } from './shell.js';
 import { AuthScreen } from './auth.js';
@@ -33,10 +34,12 @@ function Root() {
     return nu;
   });
 
-  return React.createElement(StoreProvider, null,
-    user
-      ? React.createElement(AppShell, { user, onLogout: logout, onUpdateUser: updateUser, tweaks: TWEAKS })
-      : React.createElement(AuthScreen, { onLogin: login }),
+  return React.createElement(LanguageProvider, null,
+    React.createElement(StoreProvider, null,
+      user
+        ? React.createElement(AppShell, { user, onLogout: logout, onUpdateUser: updateUser, tweaks: TWEAKS })
+        : React.createElement(AuthScreen, { onLogin: login }),
+    ),
   );
 }
 
