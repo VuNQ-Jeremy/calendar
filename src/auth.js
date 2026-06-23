@@ -17,10 +17,9 @@ function AuthScreen({ onLogin }) {
   const { data } = useStore();
   const { t } = useLang();
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
-  const [mode, setMode] = React.useState('login'); // login | signup | forgot | code
+  const [mode, setMode] = React.useState('login'); // login | forgot | code
   const [email, setEmail] = React.useState('');
   const [pw, setPw] = React.useState('');
-  const [pw2, setPw2] = React.useState('');
   const [name, setName] = React.useState('');
   const [remember, setRemember] = React.useState(true);
   const [showPw, setShowPw] = React.useState(false);
@@ -35,11 +34,6 @@ function AuthScreen({ onLogin }) {
     if (!email || !pw) { setError(t('auth_enter_both')); return; }
     const user = data.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     onLogin(user || { id: 'u1', name: email.split('@')[0].replace(/^./, c => c.toUpperCase()), email, role: 'Teacher', color: 'orange' }, remember);
-  };
-  const doSignup = () => {
-    if (!name || !email || !pw) { setError(t('auth_fill_all')); return; }
-    if (pw !== pw2) { setError(t('auth_pw_nomatch')); return; }
-    onLogin({ id: 'new', name, email, role: 'Teacher', color: 'violet' }, true);
   };
   const checkCode = () => {
     const norm = code.trim().toUpperCase().replace(/\s/g, '');
@@ -91,21 +85,6 @@ function AuthScreen({ onLogin }) {
       React.createElement(AButton, { variant: 'primary', block: true, onClick: doLogin }, t('auth_signin')),
       React.createElement('div', { className: 'auth-divider' }, React.createElement('span', null, t('auth_or'))),
       React.createElement(AButton, { variant: 'secondary', block: true, onClick: () => { reset(); setMode('code'); }, iconLeft: React.createElement(MIcon, { name: 'key', size: 18 }) }, t('auth_have_code')),
-      React.createElement('p', { className: 'auth-foot' }, t('auth_new_here'),
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('signup'); } }, t('auth_create_account'))),
-    );
-  } else if (mode === 'signup') {
-    form = React.createElement(React.Fragment, null,
-      React.createElement('h2', { className: 'auth-title' }, t('auth_create_title')),
-      React.createElement('p', { className: 'auth-sub' }, t('auth_create_sub')),
-      React.createElement(AuthField, { icon: 'users', placeholder: t('auth_fullname_ph'), value: name, onChange: e => setName(e.target.value) }),
-      React.createElement(AuthField, { icon: 'mail', type: 'email', placeholder: 'you@school.edu', value: email, onChange: e => setEmail(e.target.value) }),
-      React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: t('auth_password'), value: pw, onChange: e => setPw(e.target.value) }),
-      React.createElement(AuthField, { icon: 'lock', type: 'password', placeholder: t('auth_confirm_pw'), value: pw2, onChange: e => setPw2(e.target.value) }),
-      error && React.createElement('div', { className: 'auth-error' }, error),
-      React.createElement(AButton, { variant: 'primary', block: true, onClick: doSignup }, t('auth_create_btn')),
-      React.createElement('p', { className: 'auth-foot' }, t('auth_have_account'),
-        React.createElement('button', { className: 'auth-link', onClick: () => { reset(); setMode('login'); } }, t('auth_signin'))),
     );
   } else if (mode === 'forgot') {
     form = React.createElement(React.Fragment, null,
