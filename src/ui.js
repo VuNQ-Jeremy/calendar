@@ -9,22 +9,24 @@ const { Button, IconButton, Card } = DS;
 // ---- Modal / dialog ----
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
   const { t } = useLang();
+  const onCloseRef = React.useRef();
+  onCloseRef.current = onClose;
+
   React.useEffect(() => {
     if (!open) return;
     const onDocClick = (e) => {
-      // Only close if the click happened outside the dialog element.
       if (!e.target.closest('.m-dialog')) {
-        onClose && onClose();
+        onCloseRef.current && onCloseRef.current();
       }
     };
-    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current && onCloseRef.current(); };
     document.addEventListener('click', onDocClick, true);
     window.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('click', onDocClick, true);
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return React.createElement('div', { className: 'm-overlay' },
