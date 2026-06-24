@@ -282,6 +282,33 @@ function AgendaView({ cursor, events, onPick }) {
   );
 }
 
+// ---- Customize drawer (slide-in panel, not a modal) ----
+// Renders the theme editor as a right-hand drawer so internal clicks never
+// risk dismissing it. Closes only via the X button, the backdrop, or Escape.
+function CalendarThemeDrawer({ onClose }) {
+  const { t } = useLang();
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return React.createElement('div', { className: 'drawer-scrim', onClick: (e) => { if (e.target === e.currentTarget) onClose(); } },
+    React.createElement('aside', { className: 'drawer', role: 'dialog', 'aria-modal': 'true' },
+      React.createElement('div', { className: 'drawer__head' },
+        React.createElement('h3', { className: 'drawer__title' }, t('theme_title')),
+        React.createElement(CIBtn, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
+      ),
+      React.createElement('div', { className: 'drawer__body' },
+        React.createElement(CalendarThemePanel, null),
+      ),
+      React.createElement('div', { className: 'drawer__foot' },
+        React.createElement(CBtn, { variant: 'primary', onClick: onClose }, t('done')),
+      ),
+    ),
+  );
+}
+
 // ---- Calendar screen ----
 function CalendarScreen() {
   const { data, add, update, remove } = useStore();
@@ -358,10 +385,7 @@ function CalendarScreen() {
       }),
     ),
     React.createElement(EventModal, { open: !!editor, onClose: () => setEditor(null), draft: editor, onSave: save, onDelete: del, classes: data.classes }),
-    themeOpen && React.createElement(Modal, {
-      open: true, onClose: () => { console.log('[Calendar] onClose called'); setThemeOpen(false); }, title: t('theme_title'), width: 560,
-      footer: React.createElement(CBtn, { variant: 'primary', onClick: () => { console.log('[Calendar] footer done clicked'); setThemeOpen(false); } }, t('done')),
-    }, React.createElement(CalendarThemePanel, null)),
+    themeOpen && React.createElement(CalendarThemeDrawer, { onClose: () => setThemeOpen(false) }),
   );
 }
 

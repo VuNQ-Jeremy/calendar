@@ -168,6 +168,15 @@ html, body { height: 100%; margin: 0; }
 @keyframes mfade { from { opacity: 0; } }
 @keyframes mpop { from { opacity: 0; transform: translateY(12px) scale(0.97); } }
 
+/* slide-in drawer (used by Calendar "Customize") */
+.drawer-scrim { position: fixed; inset: 0; background: rgba(58, 49, 42, 0.38); backdrop-filter: blur(3px); display: flex; justify-content: flex-end; z-index: 1000; animation: mfade var(--dur-base) var(--ease-out); }
+.drawer { background: var(--surface-card); box-shadow: var(--shadow-xl); width: 100%; max-width: 420px; height: 100%; display: flex; flex-direction: column; animation: drawer-in var(--dur-slow) var(--ease-soft); }
+.drawer__head { display: flex; align-items: center; justify-content: space-between; padding: var(--space-5) var(--space-6); border-bottom: 1.5px solid var(--border-subtle); }
+.drawer__title { font-family: var(--font-display); font-size: var(--text-xl); margin: 0; }
+.drawer__body { padding: var(--space-6); overflow-y: auto; flex: 1; }
+.drawer__foot { display: flex; gap: var(--space-3); justify-content: flex-end; padding: var(--space-4) var(--space-6); border-top: 1.5px solid var(--border-subtle); }
+@keyframes drawer-in { from { transform: translateX(100%); } }
+
 /* token search (type-ahead multi-select) */
 .tokensearch { position: relative; }
 .tokensearch__field { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 42px;

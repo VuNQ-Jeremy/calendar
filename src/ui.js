@@ -10,35 +10,23 @@ const { Button, IconButton, Card } = DS;
 function Modal({ open, onClose, title, children, footer, width = 520 }) {
   const { t } = useLang();
 
-  // Wrap onClose to log when it's called
-  const wrappedOnClose = React.useCallback(() => {
-    console.log('[Modal] onClose called', new Error().stack.split('\n').slice(1, 4).join('\n'));
-    onClose && onClose();
-  }, [onClose]);
-
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === 'Escape') wrappedOnClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') onClose && onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, wrappedOnClose]);
+  }, [open, onClose]);
 
-  React.useEffect(() => {
-    return () => console.log('[Modal] UNMOUNTING');
-  }, []);
+  if (!open) return null;
 
-  if (!open) {
-    console.log('[Modal] open is false, not rendering');
-    return null;
-  }
-
-  console.log('[Modal] rendering (open=true)');
-
-  return React.createElement('div', { className: 'm-overlay' },
-    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true', onClick: (e) => { e.stopPropagation(); } },
+  return React.createElement('div', {
+    className: 'm-overlay',
+    onClick: (e) => { if (e.target === e.currentTarget) onClose && onClose(); },
+  },
+    React.createElement('div', { className: 'm-dialog', style: { maxWidth: width }, role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'm-dialog__head' },
         React.createElement('h3', { className: 'm-dialog__title' }, title),
-        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: (e) => { console.log('[Close button] clicked'); wrappedOnClose(); } }, React.createElement(MIcon, { name: 'x', size: 18 })),
+        React.createElement(IconButton, { label: t('close'), size: 'sm', onClick: onClose }, React.createElement(MIcon, { name: 'x', size: 18 })),
       ),
       React.createElement('div', { className: 'm-dialog__body' }, children),
       footer && React.createElement('div', { className: 'm-dialog__foot' }, footer),
