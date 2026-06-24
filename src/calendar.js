@@ -288,20 +288,12 @@ function AgendaView({ cursor, events, onPick }) {
 function CalendarThemeDrawer({ onClose }) {
   const { t } = useLang();
   React.useEffect(() => {
-    console.log('[Drawer] mounted');
-    return () => console.log('[Drawer] unmounted');
-  }, []);
-
-  React.useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return React.createElement('div', { className: 'drawer-scrim', onClick: (e) => {
-    console.log('[Drawer scrim click]', { target: e.target.tagName, current: e.currentTarget.className, same: e.target === e.currentTarget });
-    if (e.target === e.currentTarget) onClose();
-  } },
+  return React.createElement('div', { className: 'drawer-scrim', onClick: (e) => { if (e.target === e.currentTarget) onClose(); } },
     React.createElement('aside', { className: 'drawer', role: 'dialog', 'aria-modal': 'true' },
       React.createElement('div', { className: 'drawer__head' },
         React.createElement('h3', { className: 'drawer__title' }, t('theme_title')),
@@ -311,7 +303,7 @@ function CalendarThemeDrawer({ onClose }) {
         React.createElement(CalendarThemePanel, null),
       ),
       React.createElement('div', { className: 'drawer__foot' },
-        React.createElement(CBtn, { variant: 'primary', onClick: (e) => { console.log('[Done button] clicked'); onClose(); } }, t('done')),
+        React.createElement(CBtn, { variant: 'primary', onClick: onClose }, t('done')),
       ),
     ),
   );

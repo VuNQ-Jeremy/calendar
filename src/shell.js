@@ -93,7 +93,11 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
     setActive('feedback');
   };
 
-  const Screen = {
+  // Build the active screen as a React *element* (not a freshly-created
+  // component type). Creating a new function per render and passing it to
+  // React.createElement would remount the screen on every AppShell re-render
+  // (e.g. when the store updates), wiping local screen state like open drawers.
+  const screen = {
     dashboard: () => React.createElement(DashboardScreen, { user, onNav: setActive }),
     calendar: () => React.createElement(CalendarScreen, null),
     classes: () => React.createElement(ClassesScreen, null),
@@ -117,7 +121,7 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
   return React.createElement('div', { className: 'app', style: shellStyle, 'data-density': tweaks.density },
     React.createElement(Sidebar, { active, onNav: setActive, user, onFeedback: openFeedback, onHelp: () => setIntroOpen(true) }),
     React.createElement('div', { className: 'main' },
-      React.createElement(Screen, null),
+      screen(),
     ),
     feedbackDraft && React.createElement(FeedbackModal, { draft: feedbackDraft, setDraft: setFeedbackDraft, onClose: () => setFeedbackDraft(null), onSave: saveFeedback }),
     introOpen && React.createElement(InstructionsModal, { onClose: closeIntro }),
