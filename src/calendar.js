@@ -311,7 +311,7 @@ function CalendarThemeDrawer({ onClose }) {
         React.createElement(CalendarThemePanel, null),
       ),
       React.createElement('div', { className: 'drawer__foot' },
-        React.createElement(CBtn, { variant: 'primary', onClick: onClose }, t('done')),
+        React.createElement(CBtn, { variant: 'primary', onClick: (e) => { console.log('[Done button] clicked'); onClose(); } }, t('done')),
       ),
     ),
   );
