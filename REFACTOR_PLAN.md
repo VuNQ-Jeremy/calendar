@@ -14,6 +14,11 @@ _Also decided: **backend logic lives in the Worker, written in TypeScript from P
 **exclusively through RR7 loaders/actions** — the hand-rolled JSON `/api/*` surface retires. See
 "Server architecture" below._
 
+> **Executing this plan:** detailed per-phase task files (exact commands, file paths, code
+> snippets, acceptance criteria) live in [`docs/refactor/`](./docs/refactor/README.md). An
+> executor (engineer or AI agent) should start there — this document is the *why*, those are the
+> *how*.
+
 ## Server architecture (decided)
 
 ```
