@@ -71,22 +71,17 @@ function Root() {
       return nu;
     });
 
-  return React.createElement(
-    LanguageProvider,
-    null,
-    React.createElement(
-      StoreProvider,
-      null,
-      user
-        ? React.createElement(AppShell, {
-            user,
-            onLogout: logout,
-            onUpdateUser: updateUser,
-            tweaks: TWEAKS,
-          })
-        : React.createElement(AuthScreen, { onLogin: login }),
-    ),
+  return (
+    <LanguageProvider>
+      <StoreProvider>
+        {user ? (
+          <AppShell user={user} onLogout={logout} onUpdateUser={updateUser} tweaks={TWEAKS} />
+        ) : (
+          <AuthScreen onLogin={login} />
+        )}
+      </StoreProvider>
+    </LanguageProvider>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Root));
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
