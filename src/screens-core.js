@@ -2,7 +2,7 @@ import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { useStore } from './store.js';
-import { PageHeader, Empty, Modal, MSelect } from './ui.js';
+import { PageHeader, Empty, Modal, MSelect } from './ui.jsx';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar.js';
 import { useLang, locale } from './lib/i18n.js';

@@ -4,7 +4,7 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { Modal } from './ui.js';
+import { Modal } from './ui.jsx';
 import { ICON_TINT } from './lib/core.js';
 import { useLang } from './lib/i18n.js';
 

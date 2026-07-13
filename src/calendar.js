@@ -2,7 +2,7 @@ import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { useStore } from './store.js';
-import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.js';
+import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, addDays, TODAY } from './lib/core.js';
 import { CalendarThemePanel } from './screens-extra.js';
 import { useLang, getCal } from './lib/i18n.js';

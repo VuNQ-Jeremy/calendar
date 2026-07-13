@@ -2,7 +2,7 @@ import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { useStore } from './store.js';
-import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from './ui.js';
+import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from './ui.jsx';
 import { colorOf, iso, TODAY, makeCode } from './lib/core.js';
 import { useLang } from './lib/i18n.js';
 
