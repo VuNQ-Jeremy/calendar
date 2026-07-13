@@ -7,8 +7,8 @@ import { DashboardScreen, HomeworkScreen } from './screens-core.js';
 import { CalendarScreen } from './calendar.js';
 import { ClassesScreen, StudentsScreen } from './screens-manage.js';
 import { MaterialsScreen, ProfileScreen } from './screens-extra.js';
-import { FeedbackScreen, FeedbackModal, newFeedbackDraft } from './feedback.js';
-import { InstructionsModal, SEEN_INTRO_KEY } from './instructions.js';
+import { FeedbackScreen, FeedbackModal, newFeedbackDraft } from './feedback.jsx';
+import { InstructionsModal, SEEN_INTRO_KEY } from './instructions.jsx';
 import { useLang, LanguageToggle } from './lib/i18n.js';
 
 // app/shell.jsx — app shell: sidebar nav, topbar, routing, profile entry

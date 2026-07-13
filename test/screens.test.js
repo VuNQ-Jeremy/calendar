@@ -6,7 +6,7 @@ import { StoreProvider } from '../src/store.js';
 import { DashboardScreen, HomeworkScreen } from '../src/screens-core.js';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.js';
 import { ClassesScreen, StudentsScreen } from '../src/screens-manage.js';
-import { FeedbackScreen } from '../src/feedback.js';
+import { FeedbackScreen } from '../src/feedback.jsx';
 import { AuthScreen } from '../src/auth.jsx';
 import { CalendarScreen } from '../src/calendar.js';
 
