@@ -5,10 +5,10 @@ import { LanguageProvider } from '../src/lib/i18n.jsx';
 import { StoreProvider } from '../src/store.jsx';
 import { DashboardScreen, HomeworkScreen } from '../src/screens-core.jsx';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.jsx';
-import { ClassesScreen, StudentsScreen } from '../src/screens-manage.jsx';
+import { ClassesScreen, StudentsScreen } from '../src/screens-manage/index.jsx';
 import { FeedbackScreen } from '../src/feedback.jsx';
 import { AuthScreen } from '../src/auth.jsx';
-import { CalendarScreen } from '../src/calendar.jsx';
+import { CalendarScreen } from '../src/calendar/index.jsx';
 
 const TEST_USER = {
   id: 'u1',

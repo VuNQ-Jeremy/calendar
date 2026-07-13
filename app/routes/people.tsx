@@ -1,4 +1,4 @@
-import { StudentsScreen } from '../../src/screens-manage.jsx';
+import { StudentsScreen } from '../../src/screens-manage/index.jsx';
 
 export default function People() {
   return <StudentsScreen />;
