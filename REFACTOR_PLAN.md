@@ -3,6 +3,12 @@
 _Reviewed: 2026-07-13. Scope: the whole runnable app (`src/`, `worker/`, build + deploy). The
 `design/` prototype is reference material and stays untouched._
 
+_Updated 2026-07-13: decision to **move off the pure-SPA model** to server-side rendering, driven
+by the product direction (an IELTS-prep-style platform à la theieltsdictionary.com: public
+content/dictionary/test pages that must be crawlable and fast for SEO, plus an interactive
+logged-in app). Phases 2–3 now adopt **React Router v7 framework mode (SSR) on Cloudflare
+Workers** instead of client-side routing + TanStack Query._
+
 ---
 
 ## 1. Current stack (what's actually here)
@@ -25,9 +31,11 @@ _Reviewed: 2026-07-13. Scope: the whole runnable app (`src/`, `worker/`, build +
 
 ### Verdict on the stack itself
 
-The **platform choices are good and should stay**: Vite + React SPA + Cloudflare Worker + D1 +
-static assets is well-matched to a small teacher/admin tool. There is no case for migrating to
-Next/Remix/etc. The problems are all in *how* the stack is wired:
+The **core platform choices are good and should stay**: React + Cloudflare Worker + D1. But the
+product direction (public, SEO-dependent content pages alongside the interactive app) rules out
+staying a pure client-rendered SPA — the rendering model changes (see Phase 2), while the runtime,
+database, and design system carry over. Beyond that, the problems are all in *how* the stack is
+wired:
 
 1. **React from a third-party CDN at runtime** — production availability and security depend on
    unpkg; no version lockstep with `package.json`; defeats Vite's bundling, tree-shaking, and
@@ -56,7 +64,11 @@ docs already call "next steps".
   collection, relation cleanup on delete).
 - New GitHub Actions job: lint + test + build on every push/PR (keep the existing deploy job).
 
-### Phase 1 — Own the module graph (mechanical, high value)
+### Phase 1 — Own the module graph (mechanical, high value — **hard prerequisite for SSR**)
+
+> SSR cannot work with the current wiring: React as a `window` global from unpkg and the DS bundle
+> attached to `window.MochiDesignSystem_472b36` only exist in a browser. This phase must land
+> before Phase 2.
 - Move `react`/`react-dom` to real `dependencies`; **import them instead of UMD CDN scripts**.
 - Vendor the DS components as an ES module: wrap or port `_ds_bundle.js` into
   `src/ds/` (component names and props stay identical — it remains the binding contract), so the
@@ -69,33 +81,50 @@ docs already call "next steps".
   `screens-manage.js` (452 lines → `classes/`, `people/`), `calendar.js` (392 lines →
   `calendar/` with grid/modal/theme-panel modules).
 
-### Phase 2 — Routing
-- Add **react-router** (data router). Map screens to routes: `/dashboard`, `/calendar`,
-  `/classes`, `/people`, `/materials`, `/homework`, `/feedback`, `/profile`, `/login`.
-- Auth gate becomes a layout route; sidebar nav becomes `<NavLink>`s. The Worker's
-  `single-page-application` fallback already supports this — no backend change.
+### Phase 2 — React Router v7 framework mode: SSR on the Worker
 
-### Phase 3 — State & data layer
-- Replace the single-snapshot context with **TanStack Query**: one query per collection (the
-  Worker API is already per-collection), mutations with optimistic updates + invalidation —
-  exactly the semantics `store.js` hand-rolls today, minus the whole-app re-render and with
-  retries/refetch for free.
+**Why RR7 over the alternatives:** it server-renders inside the existing Cloudflare Worker with
+first-class official CF + D1 support; all current React code and the Mochi DS (a binding React
+component contract) carry over unchanged; and route loaders run in the Worker with direct D1
+access. Astro would put the interactive app inside one giant React island (a SPA again, plus a
+second mental model); Next.js on Cloudflare (OpenNext) is heavier with more Workers friction and
+buys nothing here.
+
+- Adopt **React Router v7 framework mode** with `@react-router/cloudflare`; the RR7 server handler
+  becomes the Worker entry, with the existing `/api/*` handler mounted alongside during migration.
+- Routes: `/login`, and an authed layout route wrapping `/dashboard`, `/calendar`, `/classes`,
+  `/people`, `/materials`, `/homework`, `/feedback`, `/profile`. Sidebar nav becomes `<NavLink>`s.
+- **Public/SEO routes** (dictionary entries, articles, test/landing pages as the product grows)
+  are server-rendered, or **prerendered at build time** where fully static.
+- Authed app routes stay as interactive as today — SSR the shell, hydrate, and keep client-side
+  navigation between screens.
+
+### Phase 3 — State & data layer: loaders + actions
+- Replace the single-snapshot store context with **per-route RR7 loaders** (server-side reads,
+  straight from D1 — no client fetch waterfall) and **actions** for mutations with automatic
+  revalidation.
+- Optimistic UI where it matters (homework check-off, calendar drag-to-reschedule) via
+  `useFetcher` — the same semantics `store.js` hand-rolls today, without the whole-app re-render.
 - Keep a thin `useStore()`-compatible facade during migration so screens can move one at a time.
-- This structurally eliminates the remount-bug class from `CLAUDE.md`: screens subscribe only to
-  the collections they read.
+- This structurally eliminates the remount-bug class from `CLAUDE.md`: each screen gets only the
+  data its route loads.
+- As screens migrate, their `/api/*` endpoints retire; the JSON API remains only where a
+  non-browser client needs it.
 
 ### Phase 4 — Real auth (the security fix; backend + frontend)
-- Worker: adopt **Hono** for routing/middleware and **zod** for request validation (both are the
-  standard, Workers-native picks; the hand-rolled router is at its complexity limit).
 - Implement against the existing `accounts`/`sessions` tables: signup/login with **PBKDF2 via
-  WebCrypto** (built into Workers), HttpOnly secure session cookie, "remember me" = session TTL,
-  invite-code redemption marks the invite used and creates the account, password reset flow.
-- **Session middleware on all `/api/*` routes** — closes the open-API hole. This is the one item
-  I'd promote to "do immediately after Phase 0" if the app has real users today.
-- Frontend `auth.js`: replace the mock `doLogin` with real API calls; session comes from the
-  cookie (`GET /api/me`), not `localStorage`.
+  WebCrypto** (built into Workers), HttpOnly secure session cookie (RR7's cookie-session
+  utilities), "remember me" = session TTL, invite-code redemption marks the invite used and
+  creates the account, password reset flow.
+- **Session check in every loader/action** (via the authed layout route) **and on any surviving
+  `/api/*` routes** — closes the open-API hole. This is the one item I'd promote to "do
+  immediately after Phase 0" if the app has real users today. Validate request payloads with
+  **zod** in actions; if the JSON API outlives the migration, front it with **Hono** + the same
+  session middleware.
+- Frontend `auth.js`: replace the mock `doLogin` with a login action; unauthenticated users get a
+  server-side redirect to `/login` — no client-side auth gate, no user JSON in `localStorage`.
 
-### Phase 5 — Backend hardening (small, after Hono is in)
+### Phase 5 — Backend hardening (small)
 - Use `env.DB.batch()` for join-table rewrites and multi-statement deletes (currently sequential
   awaited runs — non-atomic).
 - Turn on `PRAGMA foreign_keys` / defined FK behavior instead of manual cleanup where possible.
@@ -109,7 +138,8 @@ docs already call "next steps".
   drifted between README and worker).
 
 ### Explicitly out of scope / don't do
-- No framework migration (Next.js, Remix, Astro) — nothing here needs SSR.
+- No move to Next.js or Astro — React Router v7 covers SSR/prerendering while keeping the existing
+  React code and design system (see Phase 2 rationale).
 - No CSS overhaul — the DS tokens are the binding contract; keep the BEM layer.
 - No redesign of `design/` reference files; optionally exclude them from any tooling globs.
 - Parent portal stays in the backlog.
@@ -120,8 +150,8 @@ docs already call "next steps".
 |---|---|---|---|
 | 0 Safety net | none | — | yes |
 | 1 Module graph + JSX | low (mechanical, test-guarded) | 0 | yes |
-| 2 Routing | low | 1 | yes |
-| 3 TanStack Query | medium | 1 (2 helpful) | yes, screen-by-screen |
-| 4 Real auth | medium (touches every request) | 0; ideally 3 | yes |
-| 5 Backend hardening | low | 4 (Hono) | yes |
+| 2 RR7 framework mode (SSR) | medium (new server entry, hydration) | 1 | yes |
+| 3 Loaders/actions data layer | medium | 2 | yes, screen-by-screen |
+| 4 Real auth | medium (touches every request) | 0; ideally 2–3 | yes |
+| 5 Backend hardening | low | 4 | yes |
 | 6 TypeScript | low, incremental | 1 | yes, file-by-file |
