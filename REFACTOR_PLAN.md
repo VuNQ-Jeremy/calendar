@@ -9,6 +9,28 @@ content/dictionary/test pages that must be crawlable and fast for SEO, plus an i
 logged-in app). Phases 2–3 now adopt **React Router v7 framework mode (SSR) on Cloudflare
 Workers** instead of client-side routing + TanStack Query._
 
+_Also decided: **backend logic lives in the Worker, written in TypeScript from Phase 2 onward**
+(not the optional Phase 6 it was). DB access via **Drizzle ORM**; the web app talks to the server
+**exclusively through RR7 loaders/actions** — the hand-rolled JSON `/api/*` surface retires. See
+"Server architecture" below._
+
+## Server architecture (decided)
+
+```
+app/routes/**            RR7 routes — thin: parse request, call service, return
+server/services/*.ts     domain logic: auth, invites, events, homework, (later) scoring
+server/db/               Drizzle schema (TS = single typed source of truth) + queries
+shared/schemas.ts        zod schemas — actions validate with them, client forms and
+                         types infer from them (kills client/server shape drift)
+```
+
+Logic that must move **out of the frontend** and into `server/`: invite-code generation and
+validation (currently mintable in the browser), login/session checks, all write validation,
+derived data (badge counts, dashboard aggregation — today computed by shipping the whole DB to the
+client). Logic that stays client-side: presentation only — calendar grid layout, drag
+interactions, recurrence expansion *for display*, theme. Rule of thumb: trust/scores/persistence →
+server; pixels → client.
+
 ---
 
 ## 1. Current stack (what's actually here)
@@ -92,6 +114,9 @@ buys nothing here.
 
 - Adopt **React Router v7 framework mode** with `@react-router/cloudflare`; the RR7 server handler
   becomes the Worker entry, with the existing `/api/*` handler mounted alongside during migration.
+- The scaffold is **TypeScript** — all new server code (loaders, actions, `server/services`,
+  `shared/schemas`) is TS from here on; existing screens stay `.jsx` via `allowJs` and convert
+  opportunistically (Phase 6). Run `wrangler types` to type the D1/R2/ASSETS bindings.
 - Routes: `/login`, and an authed layout route wrapping `/dashboard`, `/calendar`, `/classes`,
   `/people`, `/materials`, `/homework`, `/feedback`, `/profile`. Sidebar nav becomes `<NavLink>`s.
 - **Public/SEO routes** (dictionary entries, articles, test/landing pages as the product grows)
@@ -99,28 +124,32 @@ buys nothing here.
 - Authed app routes stay as interactive as today — SSR the shell, hydrate, and keep client-side
   navigation between screens.
 
-### Phase 3 — State & data layer: loaders + actions
+### Phase 3 — State & data layer: loaders + actions + Drizzle
+- Introduce **Drizzle ORM**: define the existing schema in `server/db/schema.ts` (matching the
+  current migrations as baseline), adopt **drizzle-kit** for migrations going forward, and build
+  `server/services/*` on typed Drizzle queries — replacing the Worker's string-concatenated SQL.
 - Replace the single-snapshot store context with **per-route RR7 loaders** (server-side reads,
   straight from D1 — no client fetch waterfall) and **actions** for mutations with automatic
-  revalidation.
+  revalidation, validated against the `shared/schemas.ts` zod schemas.
 - Optimistic UI where it matters (homework check-off, calendar drag-to-reschedule) via
   `useFetcher` — the same semantics `store.js` hand-rolls today, without the whole-app re-render.
 - Keep a thin `useStore()`-compatible facade during migration so screens can move one at a time.
 - This structurally eliminates the remount-bug class from `CLAUDE.md`: each screen gets only the
   data its route loads.
-- As screens migrate, their `/api/*` endpoints retire; the JSON API remains only where a
-  non-browser client needs it.
+- As screens migrate, their `/api/*` endpoints retire. **Decided: no long-term JSON API** — the
+  web app talks to the server exclusively through loaders/actions. A versioned public API can be
+  added later (thin routes over the same `server/services` layer) if a mobile app or integration
+  materializes.
 
 ### Phase 4 — Real auth (the security fix; backend + frontend)
 - Implement against the existing `accounts`/`sessions` tables: signup/login with **PBKDF2 via
   WebCrypto** (built into Workers), HttpOnly secure session cookie (RR7's cookie-session
   utilities), "remember me" = session TTL, invite-code redemption marks the invite used and
   creates the account, password reset flow.
-- **Session check in every loader/action** (via the authed layout route) **and on any surviving
-  `/api/*` routes** — closes the open-API hole. This is the one item I'd promote to "do
-  immediately after Phase 0" if the app has real users today. Validate request payloads with
-  **zod** in actions; if the JSON API outlives the migration, front it with **Hono** + the same
-  session middleware.
+- **Session check in every loader/action** (via the authed layout route) **and on the legacy
+  `/api/*` routes until they finish retiring** — closes the open-API hole. This is the one item
+  I'd promote to "do immediately after Phase 0" if the app has real users today. Request payloads
+  validate against the `shared/schemas.ts` zod schemas in actions.
 - Frontend `auth.js`: replace the mock `doLogin` with a login action; unauthenticated users get a
   server-side redirect to `/login` — no client-side auth gate, no user JSON in `localStorage`.
 
@@ -131,11 +160,10 @@ buys nothing here.
 - Store material files in **R2** (presigned or Worker-proxied upload/download) instead of
   discarding bytes; keep D1 row = metadata + R2 key. Fixes the broken re-download.
 
-### Phase 6 — TypeScript (optional but recommended, incremental)
-- `tsconfig` with `allowJs`; convert in dependency order: `lib/` → `store`/queries → worker →
-  screens. Put the collection shapes in a **`shared/types.ts` used by both the Worker and the
-  client** — the two currently agree by convention only (e.g. `recur` vs `recurrence` already
-  drifted between README and worker).
+### Phase 6 — TypeScript on the frontend (incremental)
+- The backend is TS from Phase 2; this phase is only the remaining `.jsx` screens. Convert
+  opportunistically as screens are touched, in dependency order: `lib/` → shared UI → screens.
+  Types come from `shared/schemas.ts` (zod inference) — no hand-maintained duplicates.
 
 ### Explicitly out of scope / don't do
 - No move to Next.js or Astro — React Router v7 covers SSR/prerendering while keeping the existing
@@ -150,8 +178,8 @@ buys nothing here.
 |---|---|---|---|
 | 0 Safety net | none | — | yes |
 | 1 Module graph + JSX | low (mechanical, test-guarded) | 0 | yes |
-| 2 RR7 framework mode (SSR) | medium (new server entry, hydration) | 1 | yes |
-| 3 Loaders/actions data layer | medium | 2 | yes, screen-by-screen |
+| 2 RR7 framework mode (SSR), TS server | medium (new server entry, hydration) | 1 | yes |
+| 3 Loaders/actions + Drizzle data layer | medium | 2 | yes, screen-by-screen |
 | 4 Real auth | medium (touches every request) | 0; ideally 2–3 | yes |
 | 5 Backend hardening | low | 4 | yes |
-| 6 TypeScript | low, incremental | 1 | yes, file-by-file |
+| 6 TypeScript frontend | low, incremental | 2 | yes, file-by-file |
