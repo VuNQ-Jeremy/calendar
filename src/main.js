@@ -19,7 +19,7 @@ import ReactDOM from 'react-dom/client';
 import { LanguageProvider } from './lib/i18n.js';
 import { StoreProvider } from './store.js';
 import { AppShell } from './shell.js';
-import { AuthScreen } from './auth.js';
+import { AuthScreen } from './auth.jsx';
 
 const SESSION_KEY = 'mochi_session_v1';
 

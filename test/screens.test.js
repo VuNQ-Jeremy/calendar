@@ -7,7 +7,7 @@ import { DashboardScreen, HomeworkScreen } from '../src/screens-core.js';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.js';
 import { ClassesScreen, StudentsScreen } from '../src/screens-manage.js';
 import { FeedbackScreen } from '../src/feedback.js';
-import { AuthScreen } from '../src/auth.js';
+import { AuthScreen } from '../src/auth.jsx';
 import { CalendarScreen } from '../src/calendar.js';
 
 const TEST_USER = {
