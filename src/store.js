@@ -12,13 +12,26 @@
 import { React } from './lib/globals.js';
 
 const DEFAULT_THEME = {
-  bg: '#FFFCF8', gridLine: '#ECE0CF', today: '#FFE7D1', header: '#FDF6EC', bgImage: '', bgOpacity: 0.12,
+  bg: '#FFFCF8',
+  gridLine: '#ECE0CF',
+  today: '#FFE7D1',
+  header: '#FDF6EC',
+  bgImage: '',
+  bgOpacity: 0.12,
 };
 
 // Shape rendered before the first load resolves (keeps screens crash-free).
 const EMPTY = {
-  classes: [], students: [], users: [], parents: [], events: [],
-  homework: [], materials: [], invites: [], feedback: [], theme: DEFAULT_THEME,
+  classes: [],
+  students: [],
+  users: [],
+  parents: [],
+  events: [],
+  homework: [],
+  materials: [],
+  invites: [],
+  feedback: [],
+  theme: DEFAULT_THEME,
 };
 
 async function api(path, method = 'GET', body) {
@@ -40,37 +53,70 @@ export function StoreProvider({ children }) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
-  const refresh = React.useCallback(() =>
-    api('/state')
-      .then((s) => { setData(s); setError(null); })
-      .catch((e) => { console.error('Failed to load /api/state:', e); setError(e); }), []);
+  const refresh = React.useCallback(
+    () =>
+      api('/state')
+        .then((s) => {
+          setData(s);
+          setError(null);
+        })
+        .catch((e) => {
+          console.error('Failed to load /api/state:', e);
+          setError(e);
+        }),
+    [],
+  );
 
   React.useEffect(() => {
     let alive = true;
     api('/state')
-      .then((s) => { if (alive) setData(s); })
-      .catch((e) => { if (alive) { console.error('Failed to load /api/state:', e); setError(e); } })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+      .then((s) => {
+        if (alive) setData(s);
+      })
+      .catch((e) => {
+        if (alive) {
+          console.error('Failed to load /api/state:', e);
+          setError(e);
+        }
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const apiMethods = React.useMemo(() => {
     // Each mutation updates local state optimistically, then persists to D1.
     // If the request fails we re-sync from the source of truth.
-    const fail = (e) => { console.error(e); refresh(); };
+    const fail = (e) => {
+      console.error(e);
+      refresh();
+    };
     return {
       add(key, item) {
         const optimistic = { id: uid(key[0]), ...item };
         setData((d) => ({ ...d, [key]: [...d[key], optimistic] }));
         api('/' + key, 'POST', optimistic)
-          .then((saved) => setData((d) => ({ ...d, [key]: d[key].map((x) => (x.id === optimistic.id ? saved : x)) })))
+          .then((saved) =>
+            setData((d) => ({
+              ...d,
+              [key]: d[key].map((x) => (x.id === optimistic.id ? saved : x)),
+            })),
+          )
           .catch(fail);
         return optimistic;
       },
       update(key, id, patch) {
-        setData((d) => ({ ...d, [key]: d[key].map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+        setData((d) => ({
+          ...d,
+          [key]: d[key].map((x) => (x.id === id ? { ...x, ...patch } : x)),
+        }));
         api('/' + key + '/' + id, 'PATCH', patch)
-          .then((saved) => setData((d) => ({ ...d, [key]: d[key].map((x) => (x.id === id ? saved : x)) })))
+          .then((saved) =>
+            setData((d) => ({ ...d, [key]: d[key].map((x) => (x.id === id ? saved : x)) })),
+          )
           .catch(fail);
       },
       remove(key, id) {
@@ -88,7 +134,11 @@ export function StoreProvider({ children }) {
     };
   }, [refresh]);
 
-  return React.createElement(StoreCtx.Provider, { value: { data, loading, error, ...apiMethods } }, children);
+  return React.createElement(
+    StoreCtx.Provider,
+    { value: { data, loading, error, ...apiMethods } },
+    children,
+  );
 }
 
 export function useStore() {

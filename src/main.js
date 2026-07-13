@@ -20,24 +20,56 @@ const TWEAKS = {
 
 function Root() {
   const [user, setUser] = React.useState(() => {
-    try { const r = localStorage.getItem(SESSION_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; }
+    try {
+      const r = localStorage.getItem(SESSION_KEY);
+      return r ? JSON.parse(r) : null;
+    } catch {
+      return null;
+    }
   });
 
   const login = (u, remember) => {
     setUser(u);
-    if (remember) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(u)); } catch (e) { /* storage unavailable */ } }
+    if (remember) {
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(u));
+      } catch {
+        /* storage unavailable */
+      }
+    }
   };
-  const logout = () => { setUser(null); try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* storage unavailable */ } };
-  const updateUser = (patch) => setUser((u) => {
-    const nu = { ...u, ...patch };
-    try { localStorage.setItem(SESSION_KEY, JSON.stringify(nu)); } catch (e) { /* storage unavailable */ }
-    return nu;
-  });
+  const logout = () => {
+    setUser(null);
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  const updateUser = (patch) =>
+    setUser((u) => {
+      const nu = { ...u, ...patch };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(nu));
+      } catch {
+        /* storage unavailable */
+      }
+      return nu;
+    });
 
-  return React.createElement(LanguageProvider, null,
-    React.createElement(StoreProvider, null,
+  return React.createElement(
+    LanguageProvider,
+    null,
+    React.createElement(
+      StoreProvider,
+      null,
       user
-        ? React.createElement(AppShell, { user, onLogout: logout, onUpdateUser: updateUser, tweaks: TWEAKS })
+        ? React.createElement(AppShell, {
+            user,
+            onLogout: logout,
+            onUpdateUser: updateUser,
+            tweaks: TWEAKS,
+          })
         : React.createElement(AuthScreen, { onLogin: login }),
     ),
   );

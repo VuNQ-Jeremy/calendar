@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": { "correctness": "error", "suspicious": "warn" },
+  "rules": {
+    "no-unused-expressions": "off",
+    "unicorn/no-invalid-fetch-options": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/prefer-add-event-listener": "off",
+    "unicorn/consistent-function-scoping": "off"
+  },
+  "ignorePatterns": ["design/**", "public/**", "dist/**", "node_modules/**"]
+}
