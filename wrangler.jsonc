@@ -1,8 +1,9 @@
 {
   // Cloudflare Workers config for Mochi.
   //
-  // The Worker (worker/index.js) serves the built SPA via the ASSETS binding and
-  // a JSON API at /api/* backed by D1 (the DB binding).
+  // The Worker (workers/app.ts) is the RR7 SSR entry. It serves server-rendered
+  // pages via React Router and a legacy JSON API at /api/* backed by D1 (the DB
+  // binding). Client assets are served from the build/client directory.
   //
   // The D1 database is provisioned. To apply the schema to it, run:
   //   npm run db:migrate         (remote)   /   npm run db:migrate:local
@@ -10,11 +11,10 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "calendar",
   "compatibility_date": "2026-06-23",
-  "main": "worker/index.js",
+  "main": "./workers/app.ts",
   "assets": {
-    "directory": "./dist",
+    "directory": "./build/client",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
   },
   "d1_databases": [
     {
