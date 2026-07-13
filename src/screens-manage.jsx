@@ -1,10 +1,10 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.js';
+import { useStore } from './store.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from './ui.jsx';
 import { colorOf, iso, TODAY, makeCode } from './lib/core.js';
-import { useLang } from './lib/i18n.js';
+import { useLang } from './lib/i18n.jsx';
 
 // app/screens-manage.jsx — Classes, Students/Users (with invite codes)
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv } = DS;

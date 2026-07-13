@@ -1,8 +1,8 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.js';
-import { useLang } from './lib/i18n.js';
+import { useStore } from './store.jsx';
+import { useLang } from './lib/i18n.jsx';
 
 // app/auth.jsx — login / signup / forgot password / onboarding via one-time code
 const { Button: AButton, Switch: ASwitch, Tag: ATag } = DS;

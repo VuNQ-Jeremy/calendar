@@ -16,8 +16,8 @@ import './ds/styles/styles.css';
 import './styles/app.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { LanguageProvider } from './lib/i18n.js';
-import { StoreProvider } from './store.js';
+import { LanguageProvider } from './lib/i18n.jsx';
+import { StoreProvider } from './store.jsx';
 import { AppShell } from './shell.jsx';
 import { AuthScreen } from './auth.jsx';
 

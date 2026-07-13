@@ -1,10 +1,10 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.js';
+import { useStore } from './store.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.jsx';
 import { iso, TODAY, ICON_TINT } from './lib/core.js';
-import { useLang } from './lib/i18n.js';
+import { useLang } from './lib/i18n.jsx';
 
 // app/screens-extra.jsx — Materials (with download) + reusable Calendar theme panel + Profile page
 const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Switch: XSw, Avatar: XAvatar } = DS;

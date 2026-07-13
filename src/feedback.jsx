@@ -2,10 +2,10 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.js';
+import { useStore } from './store.jsx';
 import { Modal, MSelect, PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, TODAY } from './lib/core.js';
-import { useLang } from './lib/i18n.js';
+import { useLang } from './lib/i18n.jsx';
 
 const { Card: FC, Button: FBtn, IconButton: FIB, Tag: FTag, Badge: FBadge } = DS;
 

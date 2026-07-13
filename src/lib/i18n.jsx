@@ -816,7 +816,7 @@ export function LanguageProvider({ children }) {
     [lang],
   );
   const value = React.useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
-  return React.createElement(LangCtx.Provider, { value }, children);
+  return <LangCtx.Provider value={value}>{children}</LangCtx.Provider>;
 }
 
 export function useLang() {
@@ -827,20 +827,18 @@ export function useLang() {
 
 export function LanguageToggle() {
   const { lang, setLang } = useLang();
-  return React.createElement(
-    'div',
-    { className: 'lang-toggle' },
-    LANGUAGES.map((l) =>
-      React.createElement(
-        'button',
-        {
-          key: l.id,
-          type: 'button',
-          className: 'lang-opt' + (lang === l.id ? ' is-active' : ''),
-          onClick: () => setLang(l.id),
-        },
-        l.label,
-      ),
-    ),
+  return (
+    <div className="lang-toggle">
+      {LANGUAGES.map((l) => (
+        <button
+          key={l.id}
+          type="button"
+          className={'lang-opt' + (lang === l.id ? ' is-active' : '')}
+          onClick={() => setLang(l.id)}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
   );
 }

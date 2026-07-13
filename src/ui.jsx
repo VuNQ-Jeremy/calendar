@@ -2,7 +2,7 @@ import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PALETTE } from './lib/core.js';
-import { useLang } from './lib/i18n.js';
+import { useLang } from './lib/i18n.jsx';
 
 // app/ui.jsx — shared UI helpers (Modal, Select, ColorPicker, PageHeader, Empty, Field)
 const { Button, IconButton } = DS;

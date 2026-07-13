@@ -1,7 +1,7 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.js';
+import { useStore } from './store.jsx';
 import { iso, TODAY } from './lib/core.js';
 import { DashboardScreen, HomeworkScreen } from './screens-core.jsx';
 import { CalendarScreen } from './calendar.jsx';
@@ -9,7 +9,7 @@ import { ClassesScreen, StudentsScreen } from './screens-manage.jsx';
 import { MaterialsScreen, ProfileScreen } from './screens-extra.jsx';
 import { FeedbackScreen, FeedbackModal, newFeedbackDraft } from './feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from './instructions.jsx';
-import { useLang, LanguageToggle } from './lib/i18n.js';
+import { useLang, LanguageToggle } from './lib/i18n.jsx';
 
 // app/shell.jsx — app shell: sidebar nav, topbar, routing, profile entry
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB } = DS;

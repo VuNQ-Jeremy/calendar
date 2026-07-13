@@ -1,11 +1,11 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.js';
+import { useStore } from './store.jsx';
 import { PageHeader, Empty, Modal, MSelect } from './ui.jsx';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar.jsx';
-import { useLang, locale } from './lib/i18n.js';
+import { useLang, locale } from './lib/i18n.jsx';
 
 // app/screens-core.jsx — Dashboard (Today) + Homework
 const {

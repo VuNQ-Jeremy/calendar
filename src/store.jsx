@@ -134,10 +134,10 @@ export function StoreProvider({ children }) {
     };
   }, [refresh]);
 
-  return React.createElement(
-    StoreCtx.Provider,
-    { value: { data, loading, error, ...apiMethods } },
-    children,
+  return (
+    <StoreCtx.Provider value={{ data, loading, error, ...apiMethods }}>
+      {children}
+    </StoreCtx.Provider>
   );
 }
 

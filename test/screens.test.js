@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { LanguageProvider } from '../src/lib/i18n.js';
-import { StoreProvider } from '../src/store.js';
+import { LanguageProvider } from '../src/lib/i18n.jsx';
+import { StoreProvider } from '../src/store.jsx';
 import { DashboardScreen, HomeworkScreen } from '../src/screens-core.jsx';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.jsx';
 import { ClassesScreen, StudentsScreen } from '../src/screens-manage.jsx';
