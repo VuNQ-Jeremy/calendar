@@ -335,6 +335,7 @@ body {
   background: transparent;
   text-align: left;
   width: 100%;
+  text-decoration: none;
   transition: background var(--dur-fast) var(--ease-out);
 }
 .sb__item.is-active {
@@ -392,6 +393,7 @@ body {
   cursor: pointer;
   text-align: left;
   font-family: inherit;
+  text-decoration: none;
   transition:
     border-color var(--dur-fast),
     background var(--dur-fast);

@@ -789,16 +789,20 @@ export const STRINGS = {
   },
 };
 
+/** @type {React.Context<any>} */
 const LangCtx = React.createContext(null);
 
 export function LanguageProvider({ children }) {
-  const [lang, setLangState] = React.useState(() => {
+  // Initialize to 'en' (SSR-safe); hydrate from localStorage after mount.
+  const [lang, setLangState] = React.useState('en');
+  React.useEffect(() => {
     try {
-      return localStorage.getItem(LANG_KEY) || 'en';
+      const stored = localStorage.getItem(LANG_KEY);
+      if (stored) setLangState(stored);
     } catch {
-      return 'en';
+      /* storage unavailable */
     }
-  });
+  }, []);
   const setLang = React.useCallback((l) => {
     setLangState(l);
     try {

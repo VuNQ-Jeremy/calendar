@@ -46,6 +46,7 @@ async function api(path, method = 'GET', body) {
 
 const uid = (p) => p + Math.random().toString(36).slice(2, 8);
 
+/** @type {React.Context<any>} */
 const StoreCtx = React.createContext(null);
 
 export function StoreProvider({ children }) {
