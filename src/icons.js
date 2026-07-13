@@ -1,6 +1,6 @@
 // src/icons.js — extended Lucide-style icon set (24x24, 2px round stroke).
 // In a fuller build these map 1:1 to lucide-react names.
-import { React } from './lib/globals.js';
+import React from 'react';
 
 const M_ICONS = {
   home: '<path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v6"/>',

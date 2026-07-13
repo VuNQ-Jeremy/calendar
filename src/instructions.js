@@ -1,7 +1,8 @@
 // src/instructions.js — welcome / how-to-use modal, organized by feature and
 // translated. Shown automatically on a user's first visit (flag in localStorage)
 // and reopenable from the help (?) button in the sidebar.
-import { React, DS } from './lib/globals.js';
+import React from 'react';
+import { DS } from './ds/index.js';
 import { MIcon } from './icons.js';
 import { Modal } from './ui.js';
 import { ICON_TINT } from './lib/core.js';

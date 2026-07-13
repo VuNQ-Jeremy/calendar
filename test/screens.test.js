@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../src/lib/i18n.js';
@@ -8,8 +9,6 @@ import { ClassesScreen, StudentsScreen } from '../src/screens-manage.js';
 import { FeedbackScreen } from '../src/feedback.js';
 import { AuthScreen } from '../src/auth.js';
 import { CalendarScreen } from '../src/calendar.js';
-
-const React = window.React;
 
 const TEST_USER = {
   id: 'u1',

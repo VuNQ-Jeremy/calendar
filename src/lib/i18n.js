@@ -4,7 +4,7 @@
 // Missing keys fall back to English, then to the key itself. `getCal(lang)`
 // gives localized month/weekday names for the calendar; `locale(lang)` maps to
 // an Intl locale for date formatting.
-import { React } from './globals.js';
+import React from 'react';
 
 export const LANG_KEY = 'mochi_lang_v1';
 export const LANGUAGES = [

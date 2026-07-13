@@ -9,7 +9,7 @@
 // Local dev note: the API is served by the Worker, so run `npm run cf:dev`
 // (wrangler + local D1). Plain `vite` has no /api and will show an empty app.
 
-import { React } from './lib/globals.js';
+import React from 'react';
 
 const DEFAULT_THEME = {
   bg: '#FFFCF8',

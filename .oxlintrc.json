@@ -8,5 +8,5 @@
     "unicorn/prefer-add-event-listener": "off",
     "unicorn/consistent-function-scoping": "off"
   },
-  "ignorePatterns": ["design/**", "public/**", "dist/**", "node_modules/**"]
+  "ignorePatterns": ["design/**", "public/**", "dist/**", "node_modules/**", "src/ds/**"]
 }

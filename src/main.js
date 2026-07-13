@@ -1,7 +1,21 @@
 // src/main.js — application root: auth gate, session persistence, app-shell mount.
 
+import '@fontsource/fredoka/400.css';
+import '@fontsource/fredoka/500.css';
+import '@fontsource/fredoka/600.css';
+import '@fontsource/fredoka/700.css';
+import '@fontsource/nunito-sans/400.css';
+import '@fontsource/nunito-sans/400-italic.css';
+import '@fontsource/nunito-sans/500.css';
+import '@fontsource/nunito-sans/600.css';
+import '@fontsource/nunito-sans/700.css';
+import '@fontsource/nunito-sans/800.css';
+import '@fontsource/dm-mono/400.css';
+import '@fontsource/dm-mono/500.css';
+import './ds/styles/styles.css';
 import './styles/app.css';
-import { React, ReactDOM } from './lib/globals.js';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 import { LanguageProvider } from './lib/i18n.js';
 import { StoreProvider } from './store.js';
 import { AppShell } from './shell.js';

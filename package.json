@@ -22,6 +22,13 @@
     "test:watch": "vitest",
     "test:worker": "vitest run --config vitest.workers.config.js"
   },
+  "dependencies": {
+    "@fontsource/dm-mono": "^5.2.7",
+    "@fontsource/fredoka": "^5.2.10",
+    "@fontsource/nunito-sans": "^5.2.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.18.4",
     "@testing-library/jest-dom": "^6.9.1",
@@ -29,8 +36,6 @@
     "jsdom": "^29.1.1",
     "oxlint": "^1.73.0",
     "prettier": "^3.9.5",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "vite": "^6.0.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.103.0"

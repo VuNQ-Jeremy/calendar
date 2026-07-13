@@ -1,4 +1,5 @@
-import { React, DS } from './lib/globals.js';
+import React from 'react';
+import { DS } from './ds/index.js';
 import { MIcon } from './icons.js';
 import { PALETTE } from './lib/core.js';
 import { useLang } from './lib/i18n.js';
