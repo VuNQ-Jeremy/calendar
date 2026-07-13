@@ -1,0 +1,160 @@
+import React from 'react';
+import { colorOf, iso, TODAY } from '../lib/core.js';
+import { useLang, getCal } from '../lib/i18n.jsx';
+import { expandEvents, toMin, fmtTime, addMin, HOURS, HR_H } from './utils.js';
+
+export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMove }) {
+  const { lang } = useLang();
+  const { dow, dowMon } = getCal(lang);
+  const dayList = days;
+  const rangeStart = dayList[0];
+  const rangeEnd = dayList[dayList.length - 1];
+  const all = expandEvents(events, rangeStart, rangeEnd);
+  const today = iso(TODAY);
+  const gridTpl = `64px repeat(${dayList.length}, 1fr)`;
+  const dayStart = HOURS[0] * 60;
+  const [drag, setDrag] = React.useState(null);
+  const bodyRef = React.useRef(null);
+
+  const yFor = (min) => ((min - dayStart) / 60) * HR_H;
+
+  // now-line
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const showNow = nowMin >= dayStart && nowMin <= (HOURS[HOURS.length - 1] + 1) * 60;
+
+  const onColDown = (e, dk) => {
+    // click on empty space → create at that hour
+    if (e.target.closest('.tev')) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const min = dayStart + Math.floor(y / HR_H) * 60;
+    onCreate(dk, addMin('00:00', min));
+  };
+
+  const startDrag = (e, ev) => {
+    e.stopPropagation();
+    const rect = bodyRef.current.getBoundingClientRect();
+    setDrag({
+      ev,
+      offY: e.clientY,
+      origStart: ev.start,
+      origEnd: ev.end,
+      colW: (rect.width - 64) / dayList.length,
+      rectLeft: rect.left,
+      preview: null,
+    });
+  };
+
+  React.useEffect(() => {
+    if (!drag) return;
+    const onMoveE = (e) => {
+      const dyMin = Math.round((((e.clientY - drag.offY) / HR_H) * 60) / 15) * 15;
+      const colIdx = Math.max(
+        0,
+        Math.min(dayList.length - 1, Math.floor((e.clientX - drag.rectLeft - 64) / drag.colW)),
+      );
+      setDrag((d) => ({ ...d, preview: { dyMin, colIdx } }));
+    };
+    const onUp = () => {
+      setDrag((d) => {
+        if (d && d.preview) {
+          const dur = toMin(d.origEnd) - toMin(d.origStart);
+          const ns = addMin(d.origStart, d.preview.dyMin);
+          const ne = addMin(ns, dur);
+          onMove(d.ev, iso(dayList[d.preview.colIdx]), ns, ne);
+        }
+        return null;
+      });
+    };
+    window.addEventListener('mousemove', onMoveE);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMoveE);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [drag, dayList, onMove]);
+
+  return (
+    <div className="tgrid" style={{ '--hr-h': HR_H + 'px' }}>
+      <div className="tgrid__head" style={{ gridTemplateColumns: gridTpl }}>
+        <div className="tgrid__corner" />
+        {dayList.map((d, i) => {
+          const isToday = iso(d) === today;
+          return (
+            <div key={i} className={'tgrid__dayhd' + (isToday ? ' is-today' : '')}>
+              <div className="w">{dayList.length > 1 ? dowMon[i % 7] : dow[d.getDay()]}</div>
+              {isToday ? (
+                <div className="ddot">{d.getDate()}</div>
+              ) : (
+                <div className="d">{d.getDate()}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="tgrid__body" style={{ gridTemplateColumns: gridTpl }} ref={bodyRef}>
+        <div className="tgrid__times">
+          {HOURS.map((h) => (
+            <div key={h} className="tgrid__timelabel">
+              {fmtTime(`${h}:00`)}
+            </div>
+          ))}
+        </div>
+        {dayList.map((d, ci) => {
+          const dk = iso(d);
+          const isToday = dk === today;
+          const dayEvents = all.filter((e) => e.date === dk);
+          return (
+            <div
+              key={ci}
+              className={'tgrid__col' + (isToday ? ' is-today' : '')}
+              onMouseDown={(e) => onColDown(e, dk)}
+            >
+              {HOURS.map((h) => (
+                <div key={h} className="tgrid__hourline" />
+              ))}
+              {showNow && isToday && (
+                <div className="tgrid__nowline" style={{ top: yFor(nowMin) }} />
+              )}
+              {dayEvents.map((e, j) => {
+                const c = colorOf(e.color);
+                let top = yFor(toMin(e.start));
+                let height = ((toMin(e.end) - toMin(e.start)) / 60) * HR_H - 3;
+                const isDragging = drag && drag.ev.id === e.id && drag.ev.date === e.date;
+                if (isDragging && drag.preview) {
+                  top = yFor(toMin(addMin(drag.origStart, drag.preview.dyMin)));
+                }
+                if (isDragging && drag.preview && drag.preview.colIdx !== ci) return null;
+                return (
+                  <div
+                    key={j}
+                    className={'tev' + (isDragging ? ' is-dragging' : '')}
+                    style={{
+                      top,
+                      height: Math.max(height, 24),
+                      background: c.soft,
+                      borderLeftColor: c.base,
+                    }}
+                    onMouseDown={(ev) => startDrag(ev, e)}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      if (!drag) onPick(e);
+                    }}
+                  >
+                    <div className="tev__t">{e.title}</div>
+                    {height > 34 && (
+                      <div className="tev__time" style={{ color: c.ink }}>
+                        {`${fmtTime(e.start)} – ${fmtTime(e.end)}`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandEvents } from '../src/calendar.jsx';
+import { expandEvents } from '../src/calendar/index.jsx';
 
 // 2026-01-05 is a Monday
 const MON_2026_01_05 = new Date(2026, 0, 5);
