@@ -9,6 +9,7 @@
     "build": "react-router build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
+    "cf:deploy": "wrangler deploy",
     "typecheck": "react-router typegen && tsc --noEmit",
     "cf-typegen": "wrangler types",
     "db:create": "wrangler d1 create mochi-class",
