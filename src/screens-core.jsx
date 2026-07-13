@@ -60,18 +60,8 @@ function DashboardScreen({ user, onNav }) {
       />
       <div className="m-grid cols-4">
         <StatCard icon="book" color="green" num={data.classes.length} label={t('stat_classes')} />
-        <StatCard
-          icon="users"
-          color="blue"
-          num={data.students.length}
-          label={t('stat_students')}
-        />
-        <StatCard
-          icon="clipboard"
-          color="orange"
-          num={pending.length}
-          label={t('stat_homework')}
-        />
+        <StatCard icon="users" color="blue" num={data.students.length} label={t('stat_students')} />
+        <StatCard icon="clipboard" color="orange" num={pending.length} label={t('stat_homework')} />
         <StatCard
           icon="folder"
           color="violet"
@@ -168,9 +158,7 @@ function DashboardScreen({ user, onNav }) {
                         {className(h.classId)}
                       </div>
                     </div>
-                    <span
-                      style={{ width: 10, height: 10, borderRadius: 9, background: c.base }}
-                    />
+                    <span style={{ width: 10, height: 10, borderRadius: 9, background: c.base }} />
                   </div>
                 );
               })}

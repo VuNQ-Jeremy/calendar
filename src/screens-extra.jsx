@@ -106,7 +106,11 @@ function MaterialsScreen() {
           />
         </div>
         <span style={{ flex: 1 }} />
-        <XSw checked={favOnly} onChange={(e) => setFavOnly(e.target.checked)} label={t('mat_fav_only')} />
+        <XSw
+          checked={favOnly}
+          onChange={(e) => setFavOnly(e.target.checked)}
+          label={t('mat_fav_only')}
+        />
       </div>
       {list.length ? (
         <div className="m-grid cols-3">
@@ -115,10 +119,7 @@ function MaterialsScreen() {
             const isLink = m.type === 'link' || m.type === 'video';
             return (
               <XC key={m.id} interactive>
-                <div
-                  className="m-spread"
-                  style={{ alignItems: 'flex-start', marginBottom: 12 }}
-                >
+                <div className="m-spread" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
                   <div
                     className="iconwrap"
                     style={{ width: 44, height: 44, ...ICON_TINT(mt.color) }}
@@ -606,9 +607,7 @@ function ProfileScreen({ user, onSave, onLogout }) {
               </XBtn>
             </div>
           )}
-          <div
-            style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-lg)' }}
-          >
+          <div style={{ fontWeight: 800, color: 'var(--text-strong)', fontSize: 'var(--text-lg)' }}>
             {f.name}
           </div>
           <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>

@@ -101,10 +101,7 @@ function ClassesScreen() {
                       <MAv key={s.id} name={s.name} color={s.color} size="sm" />
                     ))}
                   </div>
-                  <span
-                    className="m-muted"
-                    style={{ fontSize: 'var(--text-xs)', fontWeight: 700 }}
-                  >
+                  <span className="m-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 700 }}>
                     {t('cls_students_n', { n: roster.length })}
                   </span>
                 </div>
@@ -214,10 +211,7 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
         {t('cls_roster_n', { n: roster.length })}
       </div>
       {roster.length ? (
-        <div
-          className="m-grid cols-2"
-          style={{ gap: 8, marginBottom: materials.length ? 20 : 0 }}
-        >
+        <div className="m-grid cols-2" style={{ gap: 8, marginBottom: materials.length ? 20 : 0 }}>
           {roster.map((s) => (
             <div key={s.id} className="m-row" style={{ gap: 10, padding: '6px 4px' }}>
               <MAv name={s.name} color={s.color} size="sm" />
@@ -447,11 +441,7 @@ function StudentsScreen() {
               {t('ppl_gen_invite')}
             </MBtn>
             {tab === 'students' && (
-              <MBtn
-                variant="primary"
-                iconLeft={<MIcon name="plus" size={18} />}
-                onClick={openNew}
-              >
+              <MBtn variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openNew}>
                 {t('ppl_add_student')}
               </MBtn>
             )}
@@ -507,10 +497,7 @@ function StudentsScreen() {
                   )}
                 </div>
               </div>
-              <div
-                className="tablebar"
-                style={{ maxWidth: 320, justifyContent: 'flex-end' }}
-              >
+              <div className="tablebar" style={{ maxWidth: 320, justifyContent: 'flex-end' }}>
                 {classNames(s.classIds)
                   .slice(0, 3)
                   .map((n, i) => (
@@ -598,21 +585,17 @@ function StudentsScreen() {
                 </div>
                 <div className="tablebar" style={{ maxWidth: 320, justifyContent: 'flex-end' }}>
                   {kids.length ? (
-                    kids
-                      .slice(0, 3)
-                      .map((s) => (
-                        <MTag key={s.id} color={s.color}>
-                          {s.name}
-                        </MTag>
-                      ))
+                    kids.slice(0, 3).map((s) => (
+                      <MTag key={s.id} color={s.color}>
+                        {s.name}
+                      </MTag>
+                    ))
                   ) : (
                     <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
                       {t('ppl_no_children')}
                     </span>
                   )}
-                  {kids.length > 3 && (
-                    <span className="mchip">{`+${kids.length - 3}`}</span>
-                  )}
+                  {kids.length > 3 && <span className="mchip">{`+${kids.length - 3}`}</span>}
                 </div>
                 <MBadge color="green">{relLabel(p.relation)}</MBadge>
                 <div className="lrow__actions">
@@ -888,10 +871,7 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
                 className="tokensearch__opt"
                 onClick={() => pick(i.id)}
               >
-                <span
-                  className="tokensearch__dot"
-                  style={{ background: colorOf(i.color).base }}
-                />
+                <span className="tokensearch__dot" style={{ background: colorOf(i.color).base }} />
                 <span style={{ flex: 1, textAlign: 'left' }}>{i.name}</span>
                 <MIcon name="plus" size={14} />
               </button>
@@ -1104,11 +1084,7 @@ function InviteModal({ onClose }) {
             <MBtn variant="secondary" onClick={onClose}>
               {t('cancel')}
             </MBtn>
-            <MBtn
-              variant="primary"
-              iconLeft={<MIcon name="sparkle" size={16} />}
-              onClick={gen}
-            >
+            <MBtn variant="primary" iconLeft={<MIcon name="sparkle" size={16} />} onClick={gen}>
               {t('invm_generate')}
             </MBtn>
           </>

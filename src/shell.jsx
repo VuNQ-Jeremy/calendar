@@ -110,7 +110,11 @@ function Sidebar({ active, onNav, user, onFeedback, onHelp }) {
           <div className="nm">{user.name}</div>
           <div className="sub">{user.role}</div>
         </div>
-        <MIcon name="chevronRight" size={18} style={{ marginLeft: 'auto', color: 'var(--taupe-400)' }} />
+        <MIcon
+          name="chevronRight"
+          size={18}
+          style={{ marginLeft: 'auto', color: 'var(--taupe-400)' }}
+        />
       </button>
     </aside>
   );
