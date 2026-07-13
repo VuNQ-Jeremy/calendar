@@ -183,11 +183,19 @@ function toDb(field: string, value: unknown, cfg: CollectionConfig): unknown {
 }
 
 const rows = async (env: Env, sql: string, ...binds: unknown[]) =>
-  (await env.DB.prepare(sql).bind(...binds).all()).results || [];
+  (
+    await env.DB.prepare(sql)
+      .bind(...binds)
+      .all()
+  ).results || [];
 const one = (env: Env, sql: string, ...binds: unknown[]) =>
-  env.DB.prepare(sql).bind(...binds).first();
+  env.DB.prepare(sql)
+    .bind(...binds)
+    .first();
 const run = (env: Env, sql: string, ...binds: unknown[]) =>
-  env.DB.prepare(sql).bind(...binds).run();
+  env.DB.prepare(sql)
+    .bind(...binds)
+    .run();
 
 // ---- reads ------------------------------------------------------------------
 

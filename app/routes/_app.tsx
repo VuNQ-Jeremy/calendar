@@ -255,13 +255,14 @@ export default function AppLayout() {
     <div className="app" style={shellStyle} data-density={TWEAKS.density}>
       <Sidebar user={user} onFeedback={openFeedback} onHelp={() => setIntroOpen(true)} />
       <div className="main">
-        {mounted && (
-          user ? (
-            <Outlet context={{ user, onUpdateUser: updateUser, onLogout: logout } satisfies AppContext} />
+        {mounted &&
+          (user ? (
+            <Outlet
+              context={{ user, onUpdateUser: updateUser, onLogout: logout } satisfies AppContext}
+            />
           ) : (
             <AuthScreen onLogin={login} />
-          )
-        )}
+          ))}
       </div>
       {feedbackDraft && (
         <FeedbackModal
