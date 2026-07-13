@@ -46,96 +46,73 @@ function Sidebar({ active, onNav, user, onFeedback, onHelp }) {
     students: data.invites.filter((i) => !i.used).length,
     feedback: newFeedback,
   };
-  return React.createElement(
-    'aside',
-    { className: 'sb' },
-    React.createElement(
-      'div',
-      { className: 'sb__brand' },
-      React.createElement(
-        'span',
-        { className: 'sb__brand-mark' },
-        React.createElement(MIcon, { name: 'paw', size: 20 }),
-      ),
-      'Mochi',
-      React.createElement(
-        'span',
-        { className: 'sb__help' },
-        React.createElement(
-          ShIB,
-          { label: t('help_label'), size: 'sm', onClick: onHelp },
-          React.createElement(MIcon, { name: 'help', size: 18 }),
-        ),
-      ),
-    ),
-    NAV.map((sec) =>
-      React.createElement(
-        'div',
-        { key: sec.tk },
-        React.createElement('div', { className: 'sb__section' }, t(sec.tk)),
-        sec.items.map((n) =>
-          React.createElement(
-            'button',
-            {
-              key: n.id,
-              className: 'sb__item' + (active === n.id ? ' is-active' : ''),
-              onClick: () => onNav(n.id),
-            },
-            React.createElement(MIcon, { name: n.icon, size: 20 }),
-            React.createElement('span', null, t(n.tk)),
-            counts[n.id] > 0 &&
-              React.createElement(
-                'span',
-                { className: 'count' },
-                React.createElement(ShBadge, { color: 'brand' }, counts[n.id]),
-              ),
-          ),
-        ),
-      ),
-    ),
-    React.createElement(
-      'div',
-      { className: 'sb__langbar' },
-      React.createElement(LanguageToggle, null),
-    ),
-    React.createElement(
-      'button',
-      { className: 'sb__cta', onClick: onFeedback, title: t('cta_feedback') },
-      React.createElement(MIcon, { name: 'message', size: 18 }),
-      React.createElement('span', null, t('cta_feedback')),
-    ),
-    React.createElement(
-      'button',
-      {
-        className: 'sb__foot' + (active === 'profile' ? ' is-active' : ''),
-        onClick: () => onNav('profile'),
-        title: 'Manage your profile',
-      },
-      user.avatar
-        ? React.createElement('img', {
-            src: user.avatar,
-            alt: user.name,
-            style: {
+  return (
+    <aside className="sb">
+      <div className="sb__brand">
+        <span className="sb__brand-mark">
+          <MIcon name="paw" size={20} />
+        </span>
+        Mochi
+        <span className="sb__help">
+          <ShIB label={t('help_label')} size="sm" onClick={onHelp}>
+            <MIcon name="help" size={18} />
+          </ShIB>
+        </span>
+      </div>
+      {NAV.map((sec) => (
+        <div key={sec.tk}>
+          <div className="sb__section">{t(sec.tk)}</div>
+          {sec.items.map((n) => (
+            <button
+              key={n.id}
+              className={'sb__item' + (active === n.id ? ' is-active' : '')}
+              onClick={() => onNav(n.id)}
+            >
+              <MIcon name={n.icon} size={20} />
+              <span>{t(n.tk)}</span>
+              {counts[n.id] > 0 && (
+                <span className="count">
+                  <ShBadge color="brand">{counts[n.id]}</ShBadge>
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      ))}
+      <div className="sb__langbar">
+        <LanguageToggle />
+      </div>
+      <button className="sb__cta" onClick={onFeedback} title={t('cta_feedback')}>
+        <MIcon name="message" size={18} />
+        <span>{t('cta_feedback')}</span>
+      </button>
+      <button
+        className={'sb__foot' + (active === 'profile' ? ' is-active' : '')}
+        onClick={() => onNav('profile')}
+        title="Manage your profile"
+      >
+        {user.avatar ? (
+          <img
+            src={user.avatar}
+            alt={user.name}
+            style={{
               width: 40,
               height: 40,
               borderRadius: '50%',
               objectFit: 'cover',
               flexShrink: 0,
-            },
-          })
-        : React.createElement(ShAv, { name: user.name, color: user.color, size: 'md' }),
-      React.createElement(
-        'div',
-        { style: { minWidth: 0, textAlign: 'left' } },
-        React.createElement('div', { className: 'nm' }, user.name),
-        React.createElement('div', { className: 'sub' }, user.role),
-      ),
-      React.createElement(MIcon, {
-        name: 'chevronRight',
-        size: 18,
-        style: { marginLeft: 'auto', color: 'var(--taupe-400)' },
-      }),
-    ),
+            }}
+          />
+        ) : (
+          <ShAv name={user.name} color={user.color} size="md" />
+        )}
+        <div style={{ minWidth: 0, textAlign: 'left' }}>
+          <div className="nm">{user.name}</div>
+          <div className="sub">{user.role}</div>
+        </div>
+        <MIcon name="chevronRight" size={18} style={{ marginLeft: 'auto', color: 'var(--taupe-400)' }} />
+      </button>
+    </aside>
   );
 }
 
@@ -178,14 +155,14 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
   // React.createElement would remount the screen on every AppShell re-render
   // (e.g. when the store updates), wiping local screen state like open drawers.
   const screen = {
-    dashboard: () => React.createElement(DashboardScreen, { user, onNav: setActive }),
-    calendar: () => React.createElement(CalendarScreen, null),
-    classes: () => React.createElement(ClassesScreen, null),
-    students: () => React.createElement(StudentsScreen, null),
-    materials: () => React.createElement(MaterialsScreen, null),
-    homework: () => React.createElement(HomeworkScreen, null),
-    feedback: () => React.createElement(FeedbackScreen, { user }),
-    profile: () => React.createElement(ProfileScreen, { user, onSave: onUpdateUser, onLogout }),
+    dashboard: () => <DashboardScreen user={user} onNav={setActive} />,
+    calendar: () => <CalendarScreen />,
+    classes: () => <ClassesScreen />,
+    students: () => <StudentsScreen />,
+    materials: () => <MaterialsScreen />,
+    homework: () => <HomeworkScreen />,
+    feedback: () => <FeedbackScreen user={user} />,
+    profile: () => <ProfileScreen user={user} onSave={onUpdateUser} onLogout={onLogout} />,
   }[active];
 
   const shellStyle = {
@@ -201,25 +178,26 @@ function AppShell({ user, onLogout, onUpdateUser, tweaks }) {
     fontFamily: 'var(--font-body)',
   };
 
-  return React.createElement(
-    'div',
-    { className: 'app', style: shellStyle, 'data-density': tweaks.density },
-    React.createElement(Sidebar, {
-      active,
-      onNav: setActive,
-      user,
-      onFeedback: openFeedback,
-      onHelp: () => setIntroOpen(true),
-    }),
-    React.createElement('div', { className: 'main' }, screen()),
-    feedbackDraft &&
-      React.createElement(FeedbackModal, {
-        draft: feedbackDraft,
-        setDraft: setFeedbackDraft,
-        onClose: () => setFeedbackDraft(null),
-        onSave: saveFeedback,
-      }),
-    introOpen && React.createElement(InstructionsModal, { onClose: closeIntro }),
+  return (
+    <div className="app" style={shellStyle} data-density={tweaks.density}>
+      <Sidebar
+        active={active}
+        onNav={setActive}
+        user={user}
+        onFeedback={openFeedback}
+        onHelp={() => setIntroOpen(true)}
+      />
+      <div className="main">{screen()}</div>
+      {feedbackDraft && (
+        <FeedbackModal
+          draft={feedbackDraft}
+          setDraft={setFeedbackDraft}
+          onClose={() => setFeedbackDraft(null)}
+          onSave={saveFeedback}
+        />
+      )}
+      {introOpen && <InstructionsModal onClose={closeIntro} />}
+    </div>
   );
 }
 
