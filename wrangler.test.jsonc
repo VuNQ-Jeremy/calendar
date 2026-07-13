@@ -1,0 +1,15 @@
+{
+  // Minimal wrangler config for worker tests — no ASSETS binding needed.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "calendar",
+  "compatibility_date": "2026-06-23",
+  "main": "worker/index.js",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mochi-class",
+      "database_id": "26f4f6f7-0fce-4b33-b02a-38722c780c5e",
+      "migrations_dir": "migrations",
+    },
+  ],
+}

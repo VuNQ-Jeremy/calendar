@@ -1,0 +1,6 @@
+design/
+public/
+dist/
+src/ds/
+package-lock.json
+*.md

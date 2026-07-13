@@ -1,26 +1,12 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mochi — School OS</title>
-
-<!-- Fonts: Fredoka (headings/numbers), Nunito Sans (UI/body), DM Mono (times/dates/codes) -->
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,500;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&family=DM+Mono:wght@400;500&display=swap" />
-
-<!-- Mochi Design System tokens + base styles (binding visual contract) -->
-<link rel="stylesheet" href="/_ds/mochi-design-system-472b365a-31b5-44c2-8b48-4d5ab7945e52/styles.css" />
-
-<!-- React + the DS component bundle as globals (shared single React instance).
-     Loaded as classic scripts so they run before the deferred app module graph. -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-<script src="/_ds/mochi-design-system-472b365a-31b5-44c2-8b48-4d5ab7945e52/_ds_bundle.js"></script>
-</head>
-<body>
-<div id="root"></div>
-<script type="module" src="/src/main.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mochi — School OS</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
