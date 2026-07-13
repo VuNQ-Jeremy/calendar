@@ -3,7 +3,7 @@
 // and reopenable from the help (?) button in the sidebar.
 import React from 'react';
 import { DS } from './ds/index.js';
-import { MIcon } from './icons.js';
+import { MIcon } from './icons.jsx';
 import { Modal } from './ui.js';
 import { ICON_TINT } from './lib/core.js';
 import { useLang } from './lib/i18n.js';

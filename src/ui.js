@@ -1,6 +1,6 @@
 import React from 'react';
 import { DS } from './ds/index.js';
-import { MIcon } from './icons.js';
+import { MIcon } from './icons.jsx';
 import { PALETTE } from './lib/core.js';
 import { useLang } from './lib/i18n.js';
 

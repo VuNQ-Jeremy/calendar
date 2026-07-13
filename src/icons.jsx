@@ -1,4 +1,4 @@
-// src/icons.js — extended Lucide-style icon set (24x24, 2px round stroke).
+// src/icons.jsx — extended Lucide-style icon set (24x24, 2px round stroke).
 // In a fuller build these map 1:1 to lucide-react names.
 import React from 'react';
 
@@ -68,18 +68,20 @@ const M_ICONS = {
 };
 
 export function MIcon({ name, size = 20, className = '', style = {} }) {
-  return React.createElement('svg', {
-    width: size,
-    height: size,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 2,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    className,
-    style,
-    'aria-hidden': 'true',
-    dangerouslySetInnerHTML: { __html: M_ICONS[name] || '' },
-  });
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={style}
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: M_ICONS[name] || '' }}
+    />
+  );
 }

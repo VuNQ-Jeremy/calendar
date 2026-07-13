@@ -1,6 +1,6 @@
 import React from 'react';
 import { DS } from './ds/index.js';
-import { MIcon } from './icons.js';
+import { MIcon } from './icons.jsx';
 import { useStore } from './store.js';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from './ui.js';
 import { colorOf, iso, TODAY, makeCode } from './lib/core.js';

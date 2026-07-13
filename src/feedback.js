@@ -1,7 +1,7 @@
 // src/feedback.js — Feedback: a log of submitted feedback + the shared submit modal.
 import React from 'react';
 import { DS } from './ds/index.js';
-import { MIcon } from './icons.js';
+import { MIcon } from './icons.jsx';
 import { useStore } from './store.js';
 import { Modal, MSelect, PageHeader, Empty } from './ui.js';
 import { colorOf, iso, TODAY } from './lib/core.js';
