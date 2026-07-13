@@ -153,7 +153,10 @@ export function FeedbackScreen({ user }) {
             const st = STATUS[f.status] || STATUS.new;
             return (
               <div key={f.id} className="lrow" style={{ alignItems: 'flex-start' }}>
-                <div className="iconwrap" style={{ width: 40, height: 40, ...ICON_TINT(cat.color) }}>
+                <div
+                  className="iconwrap"
+                  style={{ width: 40, height: 40, ...ICON_TINT(cat.color) }}
+                >
                   <MIcon name={cat.icon} size={18} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

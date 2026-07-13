@@ -26,7 +26,17 @@ export const SEEN_INTRO_KEY = 'mochi_seen_intro_v1';
 export function InstructionsModal({ onClose }) {
   const { t } = useLang();
   return (
-    <Modal open={true} onClose={onClose} title={t('intro_title')} width={580} footer={<Button variant="primary" onClick={onClose}>{t('intro_get_started')}</Button>}>
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={t('intro_title')}
+      width={580}
+      footer={
+        <Button variant="primary" onClick={onClose}>
+          {t('intro_get_started')}
+        </Button>
+      }
+    >
       <p className="m-muted" style={{ marginTop: 0, fontSize: 'var(--text-sm)' }}>
         {t('intro_lead')}
       </p>

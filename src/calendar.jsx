@@ -231,9 +231,7 @@ function MonthView({ cursor, events, onPick, onCreate }) {
           return (
             <div
               key={i}
-              className={
-                'month__cell' + (out ? ' is-out' : '') + (dk === today ? ' is-today' : '')
-              }
+              className={'month__cell' + (out ? ' is-out' : '') + (dk === today ? ' is-today' : '')}
               onClick={() => onCreate(dk)}
             >
               <div className="month__date">{d.getDate()}</div>
@@ -447,13 +445,7 @@ function AgendaView({ cursor: _cursor, events, onPick }) {
     if (list.length) days.push({ d, dk, list });
   }
   if (!days.length)
-    return (
-      <Empty
-        icon="calendar"
-        title={t('agenda_empty_title')}
-        sub={t('agenda_empty_sub')}
-      />
-    );
+    return <Empty icon="calendar" title={t('agenda_empty_title')} sub={t('agenda_empty_sub')} />;
   return (
     <div className="agenda">
       {days.map(({ d, dk, list }) => (
@@ -689,9 +681,7 @@ function CalendarScreen() {
             onMove={move}
           />
         )}
-        {view === 'agenda' && (
-          <AgendaView cursor={cursor} events={data.events} onPick={openEdit} />
-        )}
+        {view === 'agenda' && <AgendaView cursor={cursor} events={data.events} onPick={openEdit} />}
       </div>
       <div className="legend">
         {data.classes.map((c) => {
