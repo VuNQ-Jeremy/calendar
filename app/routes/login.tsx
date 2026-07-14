@@ -56,9 +56,17 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const email = (formData.get('email') as string) ?? '';
     const password = (formData.get('password') as string) ?? '';
     const remember = formData.get('remember') === 'on';
-    const result = await login(db, email, password);
-    if (!result) {
+    if (!email || !password) {
       return Response.json({ intent, error: 'auth_enter_both' }, { status: 400 });
+    }
+    let result: { accountId: string } | null;
+    try {
+      result = await login(db, email, password);
+    } catch {
+      return Response.json({ intent, error: 'auth_wrong_creds' }, { status: 400 });
+    }
+    if (!result) {
+      return Response.json({ intent, error: 'auth_wrong_creds' }, { status: 400 });
     }
     const token = await createSession(db, result.accountId, remember);
     const cookieOpts = remember ? { maxAge: 30 * 24 * 3600 } : undefined;
