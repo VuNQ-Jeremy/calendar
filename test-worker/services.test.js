@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
+import { eq } from 'drizzle-orm';
 import { createDb } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as homeworkSvc from '../server/services/homework';
+import * as eventsSvc from '../server/services/events';
+import * as materialsSvc from '../server/services/materials';
 import * as themeSvc from '../server/services/theme';
 import * as feedbackSvc from '../server/services/feedback';
 import * as authSvc from '../server/services/auth';
@@ -10,7 +13,17 @@ import * as peopleSvc from '../server/services/people';
 import * as invitesSvc from '../server/services/invites';
 import { hashPassword } from '../server/services/crypto';
 import { sessionCookie } from '../server/session';
-import { accounts } from '../server/db/schema';
+import {
+  accounts,
+  classes,
+  classSchedule,
+  classStudents,
+  parentStudents,
+  events,
+  homework,
+  materials,
+  sessions,
+} from '../server/db/schema';
 
 function db() {
   return createDb(env);
@@ -272,5 +285,228 @@ describe('auth service — password reset', () => {
   it('resetPassword returns false for invalid token', async () => {
     const ok = await authSvc.resetPassword(db(), 'bogus-token', 'new-pw');
     expect(ok).toBe(false);
+  });
+});
+
+// ---- Task 1: batch atomicity ----
+
+describe('db.batch atomicity', () => {
+  it('batch rolls back entirely when a statement fails', async () => {
+    const d = db();
+    const classId = crypto.randomUUID();
+
+    let threw = false;
+    try {
+      await d.batch([
+        d.insert(classes).values({ id: classId, name: 'Rollback Test', color: 'blue' }),
+        // FK violation: student_id references a nonexistent student
+        d.insert(classStudents).values({ classId, studentId: 'nonexistent-student-id' }),
+      ]);
+    } catch {
+      threw = true;
+    }
+
+    expect(threw).toBe(true);
+    // The class row must not exist — the whole batch was rolled back
+    const list = await classesSvc.list(d);
+    expect(list.some((c) => c.id === classId)).toBe(false);
+  });
+});
+
+// ---- Task 2: FK cascade verification ----
+
+describe('FK cascade — delete class', () => {
+  it('cascades class_schedule rows', async () => {
+    const d = db();
+    const cls = await classesSvc.create(d, {
+      name: 'Cascade Test',
+      color: 'blue',
+      schedule: [{ day: 1, start: '09:00', end: '10:00' }],
+      studentIds: [],
+    });
+
+    const schedBefore = await d.select().from(classSchedule).where(eq(classSchedule.classId, cls.id));
+    expect(schedBefore.length).toBe(1);
+
+    await classesSvc.remove(d, cls.id);
+
+    const schedAfter = await d.select().from(classSchedule).where(eq(classSchedule.classId, cls.id));
+    expect(schedAfter.length).toBe(0);
+  });
+
+  it('cascades class_students rows', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, { name: 'Cascade Student', color: 'blue', classIds: [] });
+    const cls = await classesSvc.create(d, {
+      name: 'Cascade Test 2',
+      color: 'green',
+      schedule: [],
+      studentIds: [student.id],
+    });
+
+    const linkBefore = await d.select().from(classStudents).where(eq(classStudents.classId, cls.id));
+    expect(linkBefore.length).toBe(1);
+
+    await classesSvc.remove(d, cls.id);
+
+    const linkAfter = await d.select().from(classStudents).where(eq(classStudents.classId, cls.id));
+    expect(linkAfter.length).toBe(0);
+  });
+
+  it('sets events.class_id to NULL (SET NULL)', async () => {
+    const d = db();
+    const cls = await classesSvc.create(d, { name: 'Event Class', color: 'violet', schedule: [], studentIds: [] });
+    const ev = await eventsSvc.create(d, { title: 'Test Event', date: '2024-01-15', classId: cls.id, recurrence: 'none' });
+
+    await classesSvc.remove(d, cls.id);
+
+    const evRows = await d.select().from(events).where(eq(events.id, ev.id));
+    expect(evRows[0]?.classId).toBeNull();
+  });
+
+  it('sets homework.class_id to NULL (SET NULL)', async () => {
+    const d = db();
+    const cls = await classesSvc.create(d, { name: 'HW Class', color: 'orange', schedule: [], studentIds: [] });
+    const hw = await homeworkSvc.create(d, { title: 'HW Item', classId: cls.id, done: false });
+
+    await classesSvc.remove(d, cls.id);
+
+    const hwRows = await d.select().from(homework).where(eq(homework.id, hw.id));
+    expect(hwRows[0]?.classId).toBeNull();
+  });
+
+  it('sets materials.class_id to NULL (SET NULL)', async () => {
+    const d = db();
+    const cls = await classesSvc.create(d, { name: 'Mat Class', color: 'rose', schedule: [], studentIds: [] });
+    const mat = await materialsSvc.create(d, { title: 'Mat Item', type: 'notes', classId: cls.id, favorite: false });
+
+    await classesSvc.remove(d, cls.id);
+
+    const matRows = await d.select().from(materials).where(eq(materials.id, mat.id));
+    expect(matRows[0]?.classId).toBeNull();
+  });
+});
+
+describe('FK cascade — delete student', () => {
+  it('cascades class_students and parent_students rows', async () => {
+    const d = db();
+    const cls = await classesSvc.create(d, { name: 'FK Class', color: 'blue', schedule: [], studentIds: [] });
+    const student = await peopleSvc.createStudent(d, { name: 'FK Student', color: 'blue', classIds: [cls.id] });
+    const parent = await peopleSvc.createParent(d, { name: 'FK Parent', color: 'green', studentIds: [student.id] });
+
+    const csBefore = await d.select().from(classStudents).where(eq(classStudents.studentId, student.id));
+    const psBefore = await d.select().from(parentStudents).where(eq(parentStudents.studentId, student.id));
+    expect(csBefore.length).toBe(1);
+    expect(psBefore.length).toBe(1);
+
+    await peopleSvc.removeStudent(d, student.id);
+
+    const csAfter = await d.select().from(classStudents).where(eq(classStudents.studentId, student.id));
+    const psAfter = await d.select().from(parentStudents).where(eq(parentStudents.studentId, student.id));
+    expect(csAfter.length).toBe(0);
+    expect(psAfter.length).toBe(0);
+
+    // Parent should still exist
+    const parentList = await peopleSvc.listParents(d);
+    expect(parentList.some((p) => p.id === parent.id)).toBe(true);
+  });
+});
+
+describe('FK cascade — delete account', () => {
+  it('cascades sessions on account delete', async () => {
+    const d = db();
+    const staffRow = await peopleSvc.createStaff(d, { name: 'Sess Test', email: 'sess@test.com', role: 'Teacher', color: 'orange' });
+    const passwordHash = await hashPassword('pw');
+    const accountId = crypto.randomUUID();
+    await d.insert(accounts).values({
+      id: accountId,
+      email: 'sess@test.com',
+      passwordHash,
+      staffId: staffRow.id,
+      createdAt: new Date().toISOString(),
+    });
+
+    await authSvc.createSession(d, accountId, true);
+    const sessBefore = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
+    expect(sessBefore.length).toBe(1);
+
+    await d.delete(accounts).where(eq(accounts.id, accountId));
+
+    const sessAfter = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
+    expect(sessAfter.length).toBe(0);
+  });
+});
+
+// ---- Task 3: R2 materials ----
+
+describe('materials service — R2 file storage', () => {
+  it('create with file stores object in R2 and sets file_key on row', async () => {
+    const d = db();
+    const content = new Uint8Array([1, 2, 3, 4, 5]);
+    const file = new File([content], 'test.pdf', { type: 'application/pdf' });
+
+    const mat = await materialsSvc.create(
+      d,
+      { title: 'R2 Test', type: 'notes', favorite: false },
+      file,
+      env.FILES,
+    );
+
+    expect(mat.fileKey).toBeTruthy();
+    expect(mat.fileName).toBe('test.pdf');
+
+    const obj = await env.FILES.get(mat.fileKey);
+    expect(obj).not.toBeNull();
+    const bytes = new Uint8Array(await obj.arrayBuffer());
+    expect(bytes).toEqual(content);
+  });
+
+  it('download route returns correct bytes and headers', async () => {
+    const d = db();
+    const content = new Uint8Array([10, 20, 30]);
+    const file = new File([content], 'report.pdf', { type: 'application/pdf' });
+
+    const mat = await materialsSvc.create(
+      d,
+      { title: 'Download Test', type: 'notes', favorite: false },
+      file,
+      env.FILES,
+    );
+
+    const obj = await env.FILES.get(mat.fileKey);
+    expect(obj).not.toBeNull();
+    expect(obj.httpMetadata?.contentType).toBe('application/pdf');
+
+    const bytes = new Uint8Array(await obj.arrayBuffer());
+    expect(bytes).toEqual(content);
+    expect(mat.fileName).toBe('report.pdf');
+  });
+
+  it('delete removes the R2 object', async () => {
+    const d = db();
+    const file = new File(['hello'], 'del.txt', { type: 'text/plain' });
+    const mat = await materialsSvc.create(
+      d,
+      { title: 'To Delete', type: 'notes', favorite: false },
+      file,
+      env.FILES,
+    );
+
+    expect(await env.FILES.get(mat.fileKey)).not.toBeNull();
+
+    await materialsSvc.remove(d, mat.id, env.FILES);
+
+    expect(await env.FILES.get(mat.fileKey)).toBeNull();
+  });
+
+  it('create without file sets fileKey to null', async () => {
+    const d = db();
+    const mat = await materialsSvc.create(d, {
+      title: 'No File',
+      type: 'link',
+      url: 'https://example.com',
+      favorite: false,
+    });
+    expect(mat.fileKey).toBeNull();
   });
 });

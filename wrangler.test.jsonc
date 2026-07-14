@@ -12,4 +12,10 @@
       "migrations_dir": "migrations",
     },
   ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "mochi-files",
+    },
+  ],
 }

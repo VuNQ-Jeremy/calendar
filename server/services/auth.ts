@@ -221,9 +221,7 @@ export async function requestReset(db: Db, email: string): Promise<{ devUrl?: st
     .values({ tokenHash: hash, accountId: account.id, expiresAt, used: 0 });
 
   if (import.meta.env.DEV) {
-    const url = `/login?mode=reset&token=${token}`;
-    console.log('[dev] Password reset URL:', url);
-    return { devUrl: url };
+    return { devUrl: `/login?mode=reset&token=${token}` };
   }
 
   // TODO: send via email provider

@@ -4,9 +4,23 @@ The app ships with a Cloudflare Worker (`worker/index.js`) that serves the built
 SPA and a JSON API backed by **Cloudflare D1** (SQLite). This is the first step
 of replacing the in-browser `localStorage` store with a real database.
 
-> Status: **Phase 4 complete.** Real PBKDF2 authentication, server-side HttpOnly
-> cookie sessions, invite redemption, and password reset are all implemented.
-> Every loader and action is guarded by `requireUser`.
+> Status: **Phase 5 complete.** `db.batch` atomicity verified across all multi-write
+> paths. FK cascade behavior confirmed via miniflare tests; manual join-table cleanup
+> removed from `removeStudent` and `removeParent`. R2 bucket `mochi-files` (binding
+> `FILES`) stores material file uploads; download streams via `/materials/:id/download`.
+> Typed errors (`NotFoundError`, `ValidationError`) in `server/errors.ts`; bilingual
+> `ErrorBoundary` on the app layout catches unexpected failures.
+>
+> **Bucket provisioning:** Run `npx wrangler r2 bucket create mochi-files` once against
+> the production account before deploying. The test environment uses an in-memory
+> miniflare R2 simulation — no bucket creation needed for `npm test`.
+>
+> **Orphan sweep (future work):** If a material's R2 object upload succeeds but the D1
+> insert fails, the orphan is cleaned up synchronously in the service. However, a failed
+> Worker or network partition after upload could still leave orphans. A weekly Cron
+> Trigger that lists all R2 keys under `materials/`, cross-references them against
+> `SELECT file_key FROM materials WHERE file_key IS NOT NULL`, and deletes any unmatched
+> keys is recommended for production hardening.
 
 ## Data model
 

@@ -337,8 +337,8 @@ export const STRINGS = {
     mat_url: 'URL',
     mat_file: 'File',
     mat_choose_file: 'Choose a file to upload',
-    mat_stored: 'Stored — available to download.',
-    mat_too_large: 'Name saved (file too large to store in the demo).',
+    mat_stored: 'File saved — available to download.',
+    mat_too_large: 'File exceeds 20 MB limit.',
     mat_untitled: 'Untitled material',
     mat_title_lbl: 'Title',
 
@@ -433,6 +433,14 @@ export const STRINGS = {
     auth_choose_pw: 'Choose a password',
     auth_join: 'Join Mochi',
     auth_add_name_pw: 'Add your name and a password to finish.',
+    // errors
+    err_generic_title: 'Something went wrong',
+    err_generic_msg: 'An unexpected error occurred. Please try again.',
+    err_not_found_title: 'Page not found',
+    err_not_found_msg: "The page you're looking for doesn't exist.",
+    err_bad_request_title: 'Bad request',
+    err_bad_request_msg: 'The request could not be processed.',
+    err_go_home: 'Go to dashboard',
   },
   vi: {
     language: 'Ngôn ngữ',
@@ -693,8 +701,8 @@ export const STRINGS = {
     mat_url: 'URL',
     mat_file: 'Tệp',
     mat_choose_file: 'Chọn tệp để tải lên',
-    mat_stored: 'Đã lưu — có thể tải xuống.',
-    mat_too_large: 'Đã lưu tên (tệp quá lớn để lưu trong bản demo).',
+    mat_stored: 'Đã lưu tệp — có thể tải xuống.',
+    mat_too_large: 'Tệp vượt quá giới hạn 20 MB.',
     mat_untitled: 'Tài liệu chưa đặt tên',
     mat_title_lbl: 'Tiêu đề',
 
@@ -786,6 +794,14 @@ export const STRINGS = {
     auth_choose_pw: 'Chọn mật khẩu',
     auth_join: 'Tham gia Mochi',
     auth_add_name_pw: 'Thêm tên và mật khẩu để hoàn tất.',
+    // errors
+    err_generic_title: 'Đã xảy ra lỗi',
+    err_generic_msg: 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.',
+    err_not_found_title: 'Không tìm thấy trang',
+    err_not_found_msg: 'Trang bạn đang tìm kiếm không tồn tại.',
+    err_bad_request_title: 'Yêu cầu không hợp lệ',
+    err_bad_request_msg: 'Yêu cầu không thể được xử lý.',
+    err_go_home: 'Về trang tổng quan',
   },
 };
 
