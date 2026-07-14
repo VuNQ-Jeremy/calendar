@@ -51,9 +51,7 @@ function AuthScreen({ onLogin, invites = [] }) {
   };
   const checkCode = () => {
     const norm = code.trim().toUpperCase().replace(/\s/g, '');
-    const match = invites.find(
-      (i) => i.code.replace('-', '') === norm.replace('-', '') && !i.used,
-    );
+    const match = invites.find((i) => i.code.replace('-', '') === norm.replace('-', '') && !i.used);
     if (match) {
       setCodeOk(match);
       setError('');

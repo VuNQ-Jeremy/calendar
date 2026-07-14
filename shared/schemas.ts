@@ -5,8 +5,14 @@ export const ColorId = z.enum(['violet', 'green', 'blue', 'orange', 'cocoa', 'ro
 export const EventInput = z.object({
   title: z.string().trim().min(1).max(200),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  start: z.string().regex(/^\d{2}:\d{2}$/).nullish(),
-  end: z.string().regex(/^\d{2}:\d{2}$/).nullish(),
+  start: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullish(),
+  end: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullish(),
   color: ColorId.nullish(),
   classId: z.string().nullish(),
   location: z.string().max(200).nullish(),

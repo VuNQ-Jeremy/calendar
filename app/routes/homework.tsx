@@ -7,10 +7,7 @@ import { HomeworkInput } from '../../shared/schemas';
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = createDb(context.cloudflare.env);
-  const [homework, classes] = await Promise.all([
-    homeworkSvc.list(db),
-    classesSvc.listLite(db),
-  ]);
+  const [homework, classes] = await Promise.all([homeworkSvc.list(db), classesSvc.listLite(db)]);
   return { homework, classes };
 }
 

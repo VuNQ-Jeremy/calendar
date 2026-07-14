@@ -57,10 +57,7 @@ describe('DashboardScreen', () => {
 
 describe('CalendarScreen', () => {
   it('renders calendar title and view buttons', async () => {
-    const Stub = makeStub(
-      { events: [], classes: [], theme: DEFAULT_THEME },
-      CalendarScreen,
-    );
+    const Stub = makeStub({ events: [], classes: [], theme: DEFAULT_THEME }, CalendarScreen);
     await renderStub(Stub);
     expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
     expect(screen.getByText('Month')).toBeInTheDocument();

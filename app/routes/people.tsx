@@ -38,14 +38,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     };
     if (intent === 'create') {
       const parsed = StudentInput.safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.createStudent(db, parsed.data);
       return { ok: true };
     }
     if (intent === 'update') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
       const parsed = StudentInput.partial().safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.updateStudent(db, id, parsed.data);
       return { ok: true };
     }
@@ -60,14 +62,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const raw = Object.fromEntries(formData);
     if (intent === 'create') {
       const parsed = StaffInput.safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.createStaff(db, parsed.data);
       return { ok: true };
     }
     if (intent === 'update') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
       const parsed = StaffInput.partial().safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.updateStaff(db, id, parsed.data);
       return { ok: true };
     }
@@ -86,14 +90,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     };
     if (intent === 'create') {
       const parsed = ParentInput.safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.createParent(db, parsed.data);
       return { ok: true };
     }
     if (intent === 'update') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
       const parsed = ParentInput.partial().safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.updateParent(db, id, parsed.data);
       return { ok: true };
     }
@@ -108,7 +114,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (intent === 'create') {
       const raw = Object.fromEntries(formData);
       const parsed = InviteInput.safeParse(raw);
-      if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success)
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await invitesSvc.create(db, parsed.data);
       return { ok: true };
     }

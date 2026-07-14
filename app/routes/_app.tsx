@@ -78,8 +78,7 @@ function Sidebar({
   onFeedback: () => void;
   onHelp: () => void;
 }) {
-  const { homeworkDueCount, unusedInviteCount, newFeedbackCount } =
-    useLoaderData<typeof loader>();
+  const { homeworkDueCount, unusedInviteCount, newFeedbackCount } = useLoaderData<typeof loader>();
   const { t } = useLang();
   const counts: Record<string, number> = {
     homework: homeworkDueCount,

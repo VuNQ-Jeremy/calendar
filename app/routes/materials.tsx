@@ -7,10 +7,7 @@ import { MaterialInput } from '../../shared/schemas';
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = createDb(context.cloudflare.env);
-  const [materials, classes] = await Promise.all([
-    materialsSvc.list(db),
-    classesSvc.listLite(db),
-  ]);
+  const [materials, classes] = await Promise.all([materialsSvc.list(db), classesSvc.listLite(db)]);
   return { materials, classes };
 }
 
