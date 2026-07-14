@@ -2,7 +2,15 @@ import { eq, and, lt } from 'drizzle-orm';
 import { redirect } from 'react-router';
 import { createDb } from '../db';
 import type { Db } from '../db';
-import { accounts, sessions, invites, staff, students, parents, passwordResets } from '../db/schema';
+import {
+  accounts,
+  sessions,
+  invites,
+  staff,
+  students,
+  parents,
+  passwordResets,
+} from '../db/schema';
 import { hashPassword, verifyPassword, newToken, hashToken } from './crypto';
 import { sessionCookie } from '../session';
 
@@ -24,11 +32,7 @@ export type SessionUser = {
 
 // ---- Session management ----
 
-export async function createSession(
-  db: Db,
-  accountId: string,
-  remember: boolean,
-): Promise<string> {
+export async function createSession(db: Db, accountId: string, remember: boolean): Promise<string> {
   const { token, hash } = await newToken();
   const expiresAt = remember
     ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -123,9 +127,7 @@ export async function redeemInvite(
 ): Promise<{ accountId: string } | null> {
   const norm = code.trim().toUpperCase().replace(/[-\s]/g, '');
   const allInvites = await db.select().from(invites);
-  const invite = allInvites.find(
-    (i) => i.code.replace('-', '').toUpperCase() === norm && !i.used,
-  );
+  const invite = allInvites.find((i) => i.code.replace('-', '').toUpperCase() === norm && !i.used);
   if (!invite) return null;
 
   const accountId = crypto.randomUUID();
@@ -204,10 +206,7 @@ export async function redeemInvite(
   return { accountId };
 }
 
-export async function requestReset(
-  db: Db,
-  email: string,
-): Promise<{ devUrl?: string }> {
+export async function requestReset(db: Db, email: string): Promise<{ devUrl?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   const account = await db.query.accounts.findFirst({
     where: eq(accounts.email, normalizedEmail),
@@ -231,11 +230,7 @@ export async function requestReset(
   return {};
 }
 
-export async function resetPassword(
-  db: Db,
-  token: string,
-  newPassword: string,
-): Promise<boolean> {
+export async function resetPassword(db: Db, token: string, newPassword: string): Promise<boolean> {
   const tokenHash = await hashToken(token);
   const resetRow = await db.query.passwordResets.findFirst({
     where: eq(passwordResets.tokenHash, tokenHash),
@@ -248,10 +243,7 @@ export async function resetPassword(
   const passwordHash = await hashPassword(newPassword);
   await db.batch([
     db.update(accounts).set({ passwordHash }).where(eq(accounts.id, resetRow.accountId)),
-    db
-      .update(passwordResets)
-      .set({ used: 1 })
-      .where(eq(passwordResets.tokenHash, tokenHash)),
+    db.update(passwordResets).set({ used: 1 }).where(eq(passwordResets.tokenHash, tokenHash)),
     db.delete(sessions).where(eq(sessions.accountId, resetRow.accountId)),
   ]);
 

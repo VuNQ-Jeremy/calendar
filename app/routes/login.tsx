@@ -137,8 +137,13 @@ function AuthField({
 // ---- Default export ----
 
 export default function Login() {
-  const { next, mode: urlMode, resetToken, resetDone, sampleInvite } =
-    useLoaderData<typeof loader>();
+  const {
+    next,
+    mode: urlMode,
+    resetToken,
+    resetDone,
+    sampleInvite,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { t } = useLang();
   const checkFetcher = useFetcher<typeof action>();
@@ -151,8 +156,7 @@ export default function Login() {
 
   // When redeem-check fetcher succeeds, advance to onboarding form.
   const checkData = checkFetcher.data as
-    | { intent?: string; invite?: InviteRow; error?: string }
-    | undefined;
+    { intent?: string; invite?: InviteRow; error?: string } | undefined;
   const checkedInvite =
     checkData?.intent === 'redeem-check' && checkData?.invite ? checkData.invite : null;
 
@@ -338,17 +342,11 @@ export default function Login() {
         <input type="hidden" name="code" value={codeValue} />
         <h2 className="auth-title">{t('auth_invited_title')}</h2>
         <p className="auth-sub">
-          {t('auth_joining_as')}{' '}
-          <strong>{roleLabel(checkedInvite.role).toLowerCase()}</strong>
+          {t('auth_joining_as')} <strong>{roleLabel(checkedInvite.role).toLowerCase()}</strong>
           {checkedInvite.name ? ` · ${checkedInvite.name}` : ''}
         </p>
         <AuthField icon="users" name="name" placeholder={t('auth_your_name')} />
-        <AuthField
-          icon="mail"
-          type="email"
-          name="email"
-          placeholder={t('auth_email_optional')}
-        />
+        <AuthField icon="mail" type="email" name="email" placeholder={t('auth_email_optional')} />
         <AuthField icon="lock" type="password" name="password" placeholder={t('auth_choose_pw')} />
         {navError && <div className="auth-error">{navError}</div>}
         <LBtn type="submit" variant="primary" block={true}>

@@ -101,7 +101,12 @@ describe('feedback service', () => {
 // ---- Auth integration tests ----
 
 async function seedStaffAccount(db, { email, password, name = 'Test User' } = {}) {
-  const staffRow = await peopleSvc.createStaff(db, { name, email, role: 'Teacher', color: 'orange' });
+  const staffRow = await peopleSvc.createStaff(db, {
+    name,
+    email,
+    role: 'Teacher',
+    color: 'orange',
+  });
   const passwordHash = await hashPassword(password);
   const accountId = crypto.randomUUID();
   await db.insert(accounts).values({
