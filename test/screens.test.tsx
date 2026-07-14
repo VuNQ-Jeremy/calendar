@@ -9,8 +9,9 @@ import { ClassesScreen, StudentsScreen } from '../src/screens-manage/index.jsx';
 import { FeedbackScreen } from '../src/feedback.jsx';
 import { AuthScreen } from '../src/auth.jsx';
 import { CalendarScreen } from '../src/calendar/index.jsx';
+import type { AppUser } from '../src/screens-core.jsx';
 
-const TEST_USER = {
+const TEST_USER: AppUser = {
   id: 'u1',
   name: 'Test',
   email: 't@t.t',
@@ -27,16 +28,20 @@ const DEFAULT_THEME = {
   bgOpacity: 0.12,
 };
 
-function withLang(element) {
+function withLang(element: React.ReactElement): React.ReactElement {
   return React.createElement(LanguageProvider, null, element);
 }
 
-function makeStub(loaderData, Comp, props = {}) {
+function makeStub<P extends object>(
+  loaderData: unknown,
+  Comp: React.ComponentType<P>,
+  props: P = {} as P,
+) {
   const Wrapper = () => React.createElement(Comp, props);
   return createRoutesStub([{ path: '/', Component: Wrapper, loader: () => loaderData }]);
 }
 
-async function renderStub(Stub) {
+async function renderStub(Stub: ReturnType<typeof createRoutesStub>) {
   await act(async () => {
     render(withLang(React.createElement(Stub, { initialEntries: ['/'] })));
   });

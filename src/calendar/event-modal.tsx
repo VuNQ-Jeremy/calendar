@@ -3,17 +3,31 @@ import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { Modal, MSelect, ColorPicker } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
+import type { ClassLite } from '../../server/services/classes.js';
+import type { EventRow } from '../../server/services/events.js';
 
 const { Button: CBtn } = DS;
 
-export function EventModal({ open, onClose, draft, onSave, onDelete, classes }) {
+type EventDraft = Partial<EventRow> & { recurrence?: string };
+
+interface EventModalProps {
+  open: boolean;
+  onClose: () => void;
+  draft: EventDraft | null;
+  onSave: (f: EventDraft) => void;
+  onDelete: (id: string) => void;
+  classes: ClassLite[];
+}
+
+export function EventModal({ open, onClose, draft, onSave, onDelete, classes }: EventModalProps) {
   const { t } = useLang();
-  const [f, setF] = React.useState(draft || {});
+  const [f, setF] = React.useState<EventDraft>(draft || {});
   React.useEffect(() => {
     setF(draft || {});
   }, [draft, open]);
   if (!open) return null;
-  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const set = <K extends keyof EventDraft>(k: K, v: EventDraft[K]) =>
+    setF((p) => ({ ...p, [k]: v }));
   const isNew = !f.id;
   const classOpts = [
     { value: '', label: t('ev_class_personal') },
@@ -31,7 +45,7 @@ export function EventModal({ open, onClose, draft, onSave, onDelete, classes }) 
           {!isNew && (
             <CBtn
               variant="danger"
-              onClick={() => onDelete(f.id)}
+              onClick={() => onDelete(f.id!)}
               iconLeft={<MIcon name="trash" size={16} />}
             >
               {t('delete')}

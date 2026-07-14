@@ -4,6 +4,7 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
 import { Form, useLoaderData, useActionData } from 'react-router';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
+import type { IconName } from '../../src/icons.jsx';
 import { useLang } from '../../src/lib/i18n.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
@@ -125,7 +126,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 function AuthField({
   icon,
   ...props
-}: { icon: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+}: { icon: IconName } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className="auth-field">
       <MIcon name={icon} size={18} className="auth-field__icon" />

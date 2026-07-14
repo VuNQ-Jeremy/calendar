@@ -1,4 +1,3 @@
-// src/feedback.jsx — Feedback: a log of submitted feedback + the shared submit modal.
 import React from 'react';
 import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
@@ -6,29 +5,44 @@ import { MIcon } from './icons.jsx';
 import { Modal, MSelect, PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, TODAY } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
+import type { FeedbackRow } from '../server/services/feedback.js';
 
 const { Card: FC, Button: FBtn, IconButton: FIB, Tag: FTag, Badge: FBadge } = DS;
 
-// Category + status metadata; labels are translated at render via t().
-export const FEEDBACK_CATEGORIES = {
+interface FeedbackCategory {
+  tk: string;
+  icon: import('./icons.jsx').IconName;
+  color: string;
+}
+
+export const FEEDBACK_CATEGORIES: Record<string, FeedbackCategory> = {
   idea: { tk: 'cat_idea', icon: 'sparkle', color: 'blue' },
   bug: { tk: 'cat_bug', icon: 'flag', color: 'rose' },
   praise: { tk: 'cat_praise', icon: 'star', color: 'green' },
   other: { tk: 'cat_other', icon: 'message', color: 'cocoa' },
 };
 
-const STATUS = {
+const STATUS: Record<string, { tk: string; badge: string }> = {
   new: { tk: 'st_new', badge: 'brand' },
   reviewed: { tk: 'st_reviewed', badge: 'blue' },
   done: { tk: 'st_done', badge: 'green' },
 };
 
-const ICON_TINT = (color) => {
+const ICON_TINT = (color: string) => {
   const c = colorOf(color);
   return { background: c.soft, color: c.ink };
 };
 
-export const newFeedbackDraft = (user) => ({
+export interface FeedbackDraft {
+  id?: string;
+  message: string;
+  category: string;
+  author: string | null;
+  status: string;
+  createdAt?: string | null;
+}
+
+export const newFeedbackDraft = (user: { name?: string } | null | undefined): FeedbackDraft => ({
   message: '',
   category: 'idea',
   author: (user && user.name) || '',
@@ -36,9 +50,17 @@ export const newFeedbackDraft = (user) => ({
   createdAt: iso(TODAY),
 });
 
-export function FeedbackModal({ draft, setDraft, onClose, onSave }) {
+interface FeedbackModalProps {
+  draft: FeedbackDraft;
+  setDraft: React.Dispatch<React.SetStateAction<FeedbackDraft | null>>;
+  onClose: () => void;
+  onSave: (f: FeedbackDraft) => void;
+}
+
+export function FeedbackModal({ draft, setDraft, onClose, onSave }: FeedbackModalProps) {
   const { t } = useLang();
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const set = <K extends keyof FeedbackDraft>(k: K, v: FeedbackDraft[K]) =>
+    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
   return (
     <Modal
       open={true}
@@ -100,12 +122,16 @@ export function FeedbackModal({ draft, setDraft, onClose, onSave }) {
   );
 }
 
-export function FeedbackScreen({ user }) {
-  const { feedback: list } = useLoaderData();
+interface FeedbackScreenProps {
+  user: { name?: string } | null;
+}
+
+export function FeedbackScreen({ user }: FeedbackScreenProps) {
+  const { feedback: list } = useLoaderData() as { feedback: FeedbackRow[] };
   const fetcher = useFetcher();
   const { t } = useLang();
   const [filter, setFilter] = React.useState('all');
-  const [modal, setModal] = React.useState(null);
+  const [modal, setModal] = React.useState<FeedbackDraft | null>(null);
 
   const shown = list.filter((f) => (filter === 'all' ? true : f.status === filter));
   const counts = {
@@ -117,7 +143,7 @@ export function FeedbackScreen({ user }) {
 
   const openNew = () => setModal(newFeedbackDraft(user));
 
-  const save = (f) => {
+  const save = (f: FeedbackDraft) => {
     if (!f.message.trim()) return;
     const fd = new FormData();
     if (f.id) {
@@ -139,7 +165,7 @@ export function FeedbackScreen({ user }) {
     setModal(null);
   };
 
-  const toggleDone = (f) => {
+  const toggleDone = (f: FeedbackRow) => {
     const fd = new FormData();
     fd.set('intent', 'update');
     fd.set('id', f.id);
@@ -147,7 +173,7 @@ export function FeedbackScreen({ user }) {
     fetcher.submit(fd, { action: '/feedback', method: 'post' });
   };
 
-  const removeFeedback = (id) => {
+  const removeFeedback = (id: string) => {
     const fd = new FormData();
     fd.set('intent', 'delete');
     fd.set('id', id);
@@ -178,8 +204,8 @@ export function FeedbackScreen({ user }) {
       {shown.length ? (
         <div className="m-stack">
           {shown.map((f) => {
-            const cat = FEEDBACK_CATEGORIES[f.category] || FEEDBACK_CATEGORIES.other;
-            const st = STATUS[f.status] || STATUS.new;
+            const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
+            const st = STATUS[f.status] ?? STATUS.new;
             return (
               <div key={f.id} className="lrow" style={{ alignItems: 'flex-start' }}>
                 <div
@@ -194,13 +220,13 @@ export function FeedbackScreen({ user }) {
                       fontWeight: 700,
                       color: 'var(--text-strong)',
                       fontSize: 'var(--text-md)',
-                      textWrap: 'pretty',
+                      textWrap: 'pretty' as React.CSSProperties['textWrap'],
                     }}
                   >
                     {f.message}
                   </div>
                   <div className="lrow__meta">
-                    <FTag color={cat.color}>{t(cat.tk)}</FTag>
+                    <FTag color={cat.color as 'blue'}>{t(cat.tk)}</FTag>
                     {f.author && (
                       <span className="m-row" style={{ gap: 5 }}>
                         <MIcon name="users" size={13} />
@@ -218,7 +244,7 @@ export function FeedbackScreen({ user }) {
                     )}
                   </div>
                 </div>
-                <FBadge color={st.badge}>{t(st.tk)}</FBadge>
+                <FBadge color={st.badge as 'brand'}>{t(st.tk)}</FBadge>
                 <div className="lrow__actions">
                   <FIB
                     label={f.status === 'done' ? t('fb_reopen') : t('fb_resolve')}
@@ -247,7 +273,7 @@ export function FeedbackScreen({ user }) {
       {modal && (
         <FeedbackModal
           draft={modal}
-          setDraft={setModal}
+          setDraft={setModal as React.Dispatch<React.SetStateAction<FeedbackDraft | null>>}
           onClose={() => setModal(null)}
           onSave={save}
         />

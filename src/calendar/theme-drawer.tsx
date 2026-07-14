@@ -6,12 +6,14 @@ import { CalendarThemePanel } from '../screens-extra.jsx';
 
 const { Button: CBtn, IconButton: CIBtn } = DS;
 
-// Renders the theme editor as a right-hand drawer so internal clicks never
-// risk dismissing it. Closes only via the X button, the backdrop, or Escape.
-export function CalendarThemeDrawer({ onClose }) {
+interface CalendarThemeDrawerProps {
+  onClose: () => void;
+}
+
+export function CalendarThemeDrawer({ onClose }: CalendarThemeDrawerProps) {
   const { t } = useLang();
   React.useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);

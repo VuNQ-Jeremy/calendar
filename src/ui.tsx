@@ -4,16 +4,23 @@ import { MIcon } from './icons.jsx';
 import { PALETTE } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 
-// app/ui.jsx — shared UI helpers (Modal, Select, ColorPicker, PageHeader, Empty, Field)
 const { Button, IconButton } = DS;
 
-// ---- Modal / dialog ----
-function Modal({ open, onClose, title, children, footer, width = 520 }) {
+interface ModalProps {
+  open: boolean;
+  onClose?: () => void;
+  title: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  width?: number;
+}
+
+function Modal({ open, onClose, title, children, footer, width = 520 }: ModalProps) {
   const { t } = useLang();
 
   React.useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose && onClose();
     };
     window.addEventListener('keydown', onKey);
@@ -43,8 +50,20 @@ function Modal({ open, onClose, title, children, footer, width = 520 }) {
   );
 }
 
-// ---- Labeled select ----
-function Select({ label, value, onChange, options, hint }) {
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+interface SelectProps {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: (string | SelectOption)[];
+  hint?: string;
+}
+
+function Select({ label, value, onChange, options, hint }: SelectProps) {
   return (
     <div className="mochi-field">
       {label && <label className="mochi-field__label">{label}</label>}
@@ -67,8 +86,13 @@ function Select({ label, value, onChange, options, hint }) {
   );
 }
 
-// ---- Category color picker (swatch grid) ----
-function ColorPicker({ value, onChange, label }) {
+interface ColorPickerProps {
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+}
+
+function ColorPicker({ value, onChange, label }: ColorPickerProps) {
   return (
     <div className="mochi-field">
       {label && <label className="mochi-field__label">{label}</label>}
@@ -90,8 +114,13 @@ function ColorPicker({ value, onChange, label }) {
   );
 }
 
-// ---- Page header (title + subtitle + actions) ----
-function PageHeader({ title, subtitle, actions }) {
+interface PageHeaderProps {
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  actions?: React.ReactNode;
+}
+
+function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (
     <div className="m-pagehead">
       <div>
@@ -103,8 +132,14 @@ function PageHeader({ title, subtitle, actions }) {
   );
 }
 
-// ---- Empty state ----
-function Empty({ icon = 'sparkle', title, sub, action }) {
+interface EmptyProps {
+  icon?: import('./icons.jsx').IconName;
+  title: React.ReactNode;
+  sub?: React.ReactNode;
+  action?: React.ReactNode;
+}
+
+function Empty({ icon = 'sparkle', title, sub, action }: EmptyProps) {
   return (
     <div className="m-empty">
       <div className="m-empty__icon">
@@ -117,15 +152,24 @@ function Empty({ icon = 'sparkle', title, sub, action }) {
   );
 }
 
-// ---- Confirm dialog hook ----
-function useConfirm() {
+interface ConfirmOpts {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+}
+
+function useConfirm(): [
+  (opts: ConfirmOpts) => Promise<boolean>,
+  React.ReactElement | null,
+] {
   const { t } = useLang();
-  const [state, setState] = React.useState(null);
-  const confirm = (opts) =>
-    new Promise((resolve) => {
+  const [state, setState] = React.useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(null);
+  const confirm = (opts: ConfirmOpts) =>
+    new Promise<boolean>((resolve) => {
       setState({ ...opts, resolve });
     });
-  const node = state && (
+  const node = state ? (
     <Modal
       open={true}
       onClose={() => {
@@ -159,7 +203,7 @@ function useConfirm() {
     >
       <p style={{ margin: 0, color: 'var(--text-body)' }}>{state.message}</p>
     </Modal>
-  );
+  ) : null;
   return [confirm, node];
 }
 

@@ -10,6 +10,7 @@ import {
 import type { LoaderFunctionArgs } from 'react-router';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
+import type { IconName } from '../../src/icons.jsx';
 import { iso, TODAY } from '../../src/lib/core.js';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
@@ -106,7 +107,7 @@ function Sidebar({
               to={n.path}
               className={({ isActive }) => 'sb__item' + (isActive ? ' is-active' : '')}
             >
-              <MIcon name={n.icon} size={20} />
+              <MIcon name={n.icon as IconName} size={20} />
               <span>{t(n.tk)}</span>
               {counts[n.id] > 0 && (
                 <span className="count">

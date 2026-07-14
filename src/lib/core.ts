@@ -1,7 +1,3 @@
-// src/lib/core.js — shared domain primitives: the category palette, date helpers,
-// invite-code generation, and the icon tint used across screens.
-
-// ---- Category color palette (maps to DS category hues) ----
 export const PALETTE = [
   {
     id: 'violet',
@@ -37,33 +33,33 @@ export const PALETTE = [
   },
   { id: 'cocoa', label: 'Cocoa', soft: '#F2E5DA', base: '#A9744F', ink: '#6E472C', hex: '#A9744F' },
   { id: 'rose', label: 'Rose', soft: '#FBE3DD', base: '#DC6A52', ink: '#a23a25', hex: '#DC6A52' },
-];
+] as const;
 
-export const colorOf = (id) => PALETTE.find((p) => p.id === id) || PALETTE[0];
+export type PaletteEntry = (typeof PALETTE)[number];
 
-// Soft background + ink foreground for tinted icon chips.
-export const ICON_TINT = (color) => {
+export const colorOf = (id: string | null | undefined): PaletteEntry =>
+  (PALETTE.find((p) => p.id === id) as PaletteEntry | undefined) ?? PALETTE[0];
+
+export const ICON_TINT = (color: string | null | undefined): { background: string; color: string } => {
   const c = colorOf(color);
   return { background: c.soft, color: c.ink };
 };
 
-// ---- Date helpers (anchored to "today" for a stable demo) ----
 export const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 
-export const iso = (d) => {
+export const iso = (d: Date | string | number): string => {
   const x = new Date(d);
   return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
 };
 
-export const addDays = (d, n) => {
+export const addDays = (d: Date | string | number, n: number): Date => {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
   return x;
 };
 
-// ---- One-time invite codes (XXX-XXX, no ambiguous chars) ----
-export function makeCode() {
+export function makeCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
   for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];

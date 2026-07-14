@@ -5,28 +5,71 @@ import { MIcon } from '../icons.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from '../ui.jsx';
 import { colorOf, iso, TODAY, makeCode } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
+import type { ClassLite } from '../../server/services/classes.js';
+import type { StudentRow, StaffRow, ParentRow } from '../../server/services/people.js';
+import type { InviteRow } from '../../server/services/invites.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv } = DS;
 
+interface PeopleLoaderData {
+  students: StudentRow[];
+  staff: StaffRow[];
+  parents: ParentRow[];
+  invites: InviteRow[];
+  classes: ClassLite[];
+}
+
+type StudentDraft = {
+  id?: string;
+  name: string;
+  grade?: string | null;
+  guardian?: string | null;
+  email?: string | null;
+  color: string;
+  classIds: string[];
+};
+
+type StaffDraft = {
+  id?: string;
+  name: string;
+  email?: string | null;
+  role: string;
+  color: string;
+  phone?: string | null;
+};
+
+type ParentDraft = {
+  id?: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  relation?: string | null;
+  color: string;
+  studentIds: string[];
+};
+
 export function StudentsScreen() {
-  const { students, staff, parents, invites, classes } = useLoaderData();
+  const { students, staff, parents, invites, classes } = useLoaderData() as PeopleLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
-  const relLabel = (r) => t('rel_' + String(r || 'guardian').toLowerCase());
-  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
+  const relLabel = (r: string | null | undefined) =>
+    t('rel_' + String(r || 'guardian').toLowerCase());
+  const roleLabel = (r: string | null | undefined) =>
+    t('role_' + String(r || '').toLowerCase());
   const [tab, setTab] = React.useState('students');
-  const [modal, setModal] = React.useState(null);
-  const [staffModal, setStaffModal] = React.useState(null);
-  const [parentModal, setParentModal] = React.useState(null);
+  const [modal, setModal] = React.useState<StudentDraft | null>(null);
+  const [staffModal, setStaffModal] = React.useState<StaffDraft | null>(null);
+  const [parentModal, setParentModal] = React.useState<ParentDraft | null>(null);
   const [inviteModal, setInviteModal] = React.useState(false);
   const [confirm, confirmNode] = useConfirm();
 
-  const classNames = (ids) => classes.filter((c) => ids.includes(c.id)).map((c) => c.name);
+  const classNames = (ids: string[]) =>
+    classes.filter((c) => ids.includes(c.id)).map((c) => c.name);
 
   const openNew = () =>
     setModal({ name: '', grade: '9', color: 'blue', guardian: '', email: '', classIds: [] });
 
-  const save = (f) => {
+  const save = (f: StudentDraft) => {
     const name = f.name.trim() || t('sm_default_name');
     const fd = new FormData();
     fd.set('entity', 'student');
@@ -42,7 +85,7 @@ export function StudentsScreen() {
     setModal(null);
   };
 
-  const del = async (s) => {
+  const del = async (s: StudentRow) => {
     if (
       await confirm({
         title: t('student_remove_q'),
@@ -62,7 +105,7 @@ export function StudentsScreen() {
   const openNewStaff = () =>
     setStaffModal({ name: '', email: '', role: 'Teacher', color: 'violet', phone: '' });
 
-  const saveStaff = (f) => {
+  const saveStaff = (f: StaffDraft) => {
     const name = f.name.trim() || t('stf_default_name');
     const fd = new FormData();
     fd.set('entity', 'staff');
@@ -77,7 +120,7 @@ export function StudentsScreen() {
     setStaffModal(null);
   };
 
-  const delStaff = async (u) => {
+  const delStaff = async (u: StaffRow) => {
     if (
       await confirm({
         title: t('staff_remove_q'),
@@ -104,7 +147,7 @@ export function StudentsScreen() {
       studentIds: [],
     });
 
-  const saveParent = (f) => {
+  const saveParent = (f: ParentDraft) => {
     const name = f.name.trim() || t('par_default_name');
     const fd = new FormData();
     fd.set('entity', 'parent');
@@ -120,7 +163,7 @@ export function StudentsScreen() {
     setParentModal(null);
   };
 
-  const delParent = async (p) => {
+  const delParent = async (p: ParentRow) => {
     if (
       await confirm({
         title: t('parent_remove_q'),
@@ -199,7 +242,7 @@ export function StudentsScreen() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="lrow__title">{s.name}</div>
                 <div className="lrow__meta">
-                  <span>{t('ppl_grade', { g: s.grade })}</span>
+                  <span>{t('ppl_grade', { g: s.grade ?? '' })}</span>
                   {s.guardian && (
                     <span className="m-row" style={{ gap: 5 }}>
                       <MIcon name="users" size={13} />
@@ -221,7 +264,7 @@ export function StudentsScreen() {
                 )}
               </div>
               <div className="lrow__actions">
-                <MIB label={t('edit')} size="sm" onClick={() => setModal({ ...s })}>
+                <MIB label={t('edit')} size="sm" onClick={() => setModal({ ...s, classIds: s.classIds })}>
                   <MIcon name="edit" size={16} />
                 </MIB>
                 <MIB label={t('delete')} size="sm" onClick={() => del(s)}>
@@ -308,7 +351,7 @@ export function StudentsScreen() {
                 </div>
                 <MBadge color="green">{relLabel(p.relation)}</MBadge>
                 <div className="lrow__actions">
-                  <MIB label="Edit" size="sm" onClick={() => setParentModal({ ...p })}>
+                  <MIB label="Edit" size="sm" onClick={() => setParentModal({ ...p, studentIds: p.studentIds })}>
                     <MIcon name="edit" size={16} />
                   </MIB>
                   <MIB label="Delete" size="sm" onClick={() => delParent(p)}>
@@ -353,10 +396,19 @@ export function StudentsScreen() {
   );
 }
 
-function StudentModal({ draft, setDraft, onClose, onSave, classes }) {
+interface StudentModalProps {
+  draft: StudentDraft;
+  setDraft: React.Dispatch<React.SetStateAction<StudentDraft | null>>;
+  onClose: () => void;
+  onSave: (f: StudentDraft) => void;
+  classes: ClassLite[];
+}
+
+function StudentModal({ draft, setDraft, onClose, onSave, classes }: StudentModalProps) {
   const { t } = useLang();
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-  const toggle = (id) =>
+  const set = <K extends keyof StudentDraft>(k: K, v: StudentDraft[K]) =>
+    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+  const toggle = (id: string) =>
     set(
       'classIds',
       draft.classIds.includes(id)
@@ -394,7 +446,7 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes }) {
           <label className="mochi-field__label">{t('sm_grade')}</label>
           <input
             className="mochi-input"
-            value={draft.grade}
+            value={draft.grade ?? ''}
             onChange={(e) => set('grade', e.target.value)}
           />
         </div>
@@ -405,7 +457,7 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes }) {
           <input
             className="mochi-input"
             placeholder={t('sm_guardian_ph')}
-            value={draft.guardian}
+            value={draft.guardian ?? ''}
             onChange={(e) => set('guardian', e.target.value)}
           />
         </div>
@@ -414,7 +466,7 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes }) {
           <input
             className="mochi-input"
             type="email"
-            value={draft.email}
+            value={draft.email ?? ''}
             onChange={(e) => set('email', e.target.value)}
           />
         </div>
@@ -439,9 +491,17 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes }) {
   );
 }
 
-function StaffModal({ draft, setDraft, onClose, onSave }) {
+interface StaffModalProps {
+  draft: StaffDraft;
+  setDraft: React.Dispatch<React.SetStateAction<StaffDraft | null>>;
+  onClose: () => void;
+  onSave: (f: StaffDraft) => void;
+}
+
+function StaffModal({ draft, setDraft, onClose, onSave }: StaffModalProps) {
   const { t } = useLang();
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const set = <K extends keyof StaffDraft>(k: K, v: StaffDraft[K]) =>
+    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
   return (
     <Modal
       open
@@ -474,7 +534,7 @@ function StaffModal({ draft, setDraft, onClose, onSave }) {
           <input
             className="mochi-input"
             type="email"
-            value={draft.email}
+            value={draft.email ?? ''}
             onChange={(e) => set('email', e.target.value)}
           />
         </div>
@@ -510,14 +570,28 @@ function StaffModal({ draft, setDraft, onClose, onSave }) {
 }
 
 // ---- Reusable token search (type-ahead multi-select) ----
-function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
+interface TokenSearchItem {
+  id: string;
+  name: string;
+  color?: string | null;
+}
+
+interface TokenSearchProps {
+  items: TokenSearchItem[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  placeholder?: string;
+  emptyHint?: string;
+}
+
+function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }: TokenSearchProps) {
   const { t } = useLang();
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
-  const wrapRef = React.useRef(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
-    const onDoc = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -527,7 +601,7 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
   const matches = items.filter(
     (i) => !selectedIds.includes(i.id) && (ql === '' || i.name.toLowerCase().includes(ql)),
   );
-  const pick = (id) => {
+  const pick = (id: string) => {
     onToggle(id);
     setQ('');
     setOpen(true);
@@ -596,10 +670,19 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }) {
   );
 }
 
-function ParentModal({ draft, setDraft, onClose, onSave, students }) {
+interface ParentModalProps {
+  draft: ParentDraft;
+  setDraft: React.Dispatch<React.SetStateAction<ParentDraft | null>>;
+  onClose: () => void;
+  onSave: (f: ParentDraft) => void;
+  students: StudentRow[];
+}
+
+function ParentModal({ draft, setDraft, onClose, onSave, students }: ParentModalProps) {
   const { t } = useLang();
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-  const toggleKid = (id) =>
+  const set = <K extends keyof ParentDraft>(k: K, v: ParentDraft[K]) =>
+    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+  const toggleKid = (id: string) =>
     set(
       'studentIds',
       (draft.studentIds || []).includes(id)
@@ -635,7 +718,7 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }) {
         </div>
         <MSelect
           label={t('par_relation')}
-          value={draft.relation}
+          value={draft.relation ?? ''}
           onChange={(v) => set('relation', v)}
           options={[
             { value: 'Mother', label: t('rel_mother') },
@@ -651,7 +734,7 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }) {
           <input
             className="mochi-input"
             type="email"
-            value={draft.email}
+            value={draft.email ?? ''}
             onChange={(e) => set('email', e.target.value)}
           />
         </div>
@@ -687,18 +770,19 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }) {
 
 // ---- Invites ----
 function InvitesPanel() {
-  const { invites, classes } = useLoaderData();
+  const { invites, classes } = useLoaderData() as PeopleLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
-  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
-  const [copied, setCopied] = React.useState(null);
-  const copy = (code) => {
-    navigator.clipboard && navigator.clipboard.writeText(code);
+  const roleLabel = (r: string | null | undefined) =>
+    t('role_' + String(r || '').toLowerCase());
+  const [copied, setCopied] = React.useState<string | null>(null);
+  const copy = (code: string) => {
+    navigator.clipboard?.writeText(code);
     setCopied(code);
     setTimeout(() => setCopied(null), 1500);
   };
-  const classOf = (id) => (classes.find((c) => c.id === id) || {}).name;
-  const removeInvite = (id) => {
+  const classOf = (id: string | null) => classes.find((c) => c.id === id)?.name;
+  const removeInvite = (id: string) => {
     const fd = new FormData();
     fd.set('entity', 'invite');
     fd.set('intent', 'delete');
@@ -769,14 +853,19 @@ function InvitesPanel() {
   );
 }
 
-function InviteModal({ onClose, classes }) {
+interface InviteModalProps {
+  onClose: () => void;
+  classes: ClassLite[];
+}
+
+function InviteModal({ onClose, classes }: InviteModalProps) {
   const invFetcher = useFetcher();
   const { t } = useLang();
   const [role, setRole] = React.useState('Student');
   const [name, setName] = React.useState('');
   const [classId, setClassId] = React.useState('');
-  const [generated, setGenerated] = React.useState(null);
-  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
+  const [generated, setGenerated] = React.useState<string | null>(null);
+  const roleLabel = (r: string) => t('role_' + String(r || '').toLowerCase());
 
   const gen = () => {
     const code = makeCode();
@@ -793,7 +882,7 @@ function InviteModal({ onClose, classes }) {
     setGenerated(code);
   };
 
-  const copy = () => navigator.clipboard && navigator.clipboard.writeText(generated);
+  const copy = () => navigator.clipboard?.writeText(generated ?? '');
 
   return (
     <Modal

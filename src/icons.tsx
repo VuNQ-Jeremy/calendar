@@ -1,5 +1,3 @@
-// src/icons.jsx — extended Lucide-style icon set (24x24, 2px round stroke).
-// In a fuller build these map 1:1 to lucide-react names.
 import React from 'react';
 
 const M_ICONS = {
@@ -65,9 +63,18 @@ const M_ICONS = {
   flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
   grid: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
   list: '<path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/>',
-};
+} as const;
 
-export function MIcon({ name, size = 20, className = '', style = {} }) {
+export type IconName = keyof typeof M_ICONS;
+
+interface MIconProps {
+  name: IconName;
+  size?: number;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export function MIcon({ name, size = 20, className = '', style = {} }: MIconProps) {
   return (
     <svg
       width={size}
@@ -81,7 +88,7 @@ export function MIcon({ name, size = 20, className = '', style = {} }) {
       className={className}
       style={style}
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: M_ICONS[name] || '' }}
+      dangerouslySetInnerHTML={{ __html: M_ICONS[name] }}
     />
   );
 }

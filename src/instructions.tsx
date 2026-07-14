@@ -1,17 +1,14 @@
-// src/instructions.jsx — welcome / how-to-use modal, organized by feature and
-// translated. Shown automatically on a user's first visit (flag in localStorage)
-// and reopenable from the help (?) button in the sidebar.
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
+import type { IconName } from './icons.jsx';
 import { Modal } from './ui.jsx';
 import { ICON_TINT } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 
 const { Button } = DS;
 
-// One category per feature; titles/text come from the i18n dictionary.
-const FEATURES = [
+const FEATURES: { key: string; icon: IconName; color: string }[] = [
   { key: 'dashboard', icon: 'home', color: 'orange' },
   { key: 'calendar', icon: 'calendar', color: 'blue' },
   { key: 'classes', icon: 'book', color: 'green' },
@@ -23,7 +20,7 @@ const FEATURES = [
 
 export const SEEN_INTRO_KEY = 'mochi_seen_intro_v1';
 
-export function InstructionsModal({ onClose }) {
+export function InstructionsModal({ onClose }: { onClose: () => void }) {
   const { t } = useLang();
   return (
     <Modal
@@ -52,7 +49,7 @@ export function InstructionsModal({ onClose }) {
               </div>
               <div
                 className="m-muted"
-                style={{ fontSize: 'var(--text-sm)', marginTop: 2, textWrap: 'pretty' }}
+                style={{ fontSize: 'var(--text-sm)', marginTop: 2, textWrap: 'pretty' as React.CSSProperties['textWrap'] }}
               >
                 {t('feat_' + f.key + '_text')}
               </div>

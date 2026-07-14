@@ -5,23 +5,44 @@ import { MIcon } from '../icons.jsx';
 import { Modal, ColorPicker, PageHeader, useConfirm } from '../ui.jsx';
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
+import type { IconName } from '../icons.jsx';
+import type { ClassRow } from '../../server/services/classes.js';
+import type { StudentRow } from '../../server/services/people.js';
+import type { MaterialRow } from '../../server/services/materials.js';
+import type { HomeworkRow } from '../../server/services/homework.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Avatar: MAv } = DS;
 
+interface ClassesLoaderData {
+  classes: ClassRow[];
+  students: StudentRow[];
+  materials: MaterialRow[];
+  homework: HomeworkRow[];
+}
+
+type ClassDraft = {
+  id?: string;
+  name: string;
+  subject?: string | null;
+  color: string;
+  room?: string | null;
+  studentIds: string[];
+};
+
 export function ClassesScreen() {
-  const { classes, students, materials, homework } = useLoaderData();
+  const { classes, students, materials, homework } = useLoaderData() as ClassesLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
-  const [modal, setModal] = React.useState(null);
-  const [detail, setDetail] = React.useState(null);
+  const [modal, setModal] = React.useState<ClassDraft | null>(null);
+  const [detail, setDetail] = React.useState<ClassRow | null>(null);
   const [confirm, confirmNode] = useConfirm();
 
-  const studentsOf = (c) => students.filter((s) => c.studentIds.includes(s.id));
+  const studentsOf = (c: ClassRow) => students.filter((s) => c.studentIds.includes(s.id));
 
   const openNew = () =>
     setModal({ name: '', subject: '', color: 'green', room: '', studentIds: [] });
 
-  const save = (f) => {
+  const save = (f: ClassDraft) => {
     const name = f.name.trim() || t('cls_default_name');
     const fd = new FormData();
     fd.set('intent', f.id ? 'update' : 'create');
@@ -35,7 +56,7 @@ export function ClassesScreen() {
     setModal(null);
   };
 
-  const del = async (c) => {
+  const del = async (c: ClassRow) => {
     if (
       await confirm({
         title: t('cls_delete_q'),
@@ -150,14 +171,23 @@ export function ClassesScreen() {
   );
 }
 
-function ClassDetailModal({ cls, students, materials, homework, onClose, onEdit }) {
+interface ClassDetailModalProps {
+  cls: ClassRow;
+  students: StudentRow[];
+  materials: MaterialRow[];
+  homework: HomeworkRow[];
+  onClose: () => void;
+  onEdit: () => void;
+}
+
+function ClassDetailModal({ cls, students, materials, homework, onClose, onEdit }: ClassDetailModalProps) {
   const { t } = useLang();
   const roster = students.filter((s) => cls.studentIds.includes(s.id));
   const clsMaterials = materials.filter((m) => m.classId === cls.id);
   const clsHomework = homework.filter((h) => h.classId === cls.id);
   const openHw = clsHomework.filter((h) => !h.done).length;
 
-  const Stat = (icon, label, val) => (
+  const Stat = (icon: IconName, label: string, val: number) => (
     <div
       style={{
         flex: 1,
@@ -268,10 +298,19 @@ function ClassDetailModal({ cls, students, materials, homework, onClose, onEdit 
   );
 }
 
-function ClassModal({ draft, setDraft, onClose, onSave, students }) {
+interface ClassModalProps {
+  draft: ClassDraft;
+  setDraft: React.Dispatch<React.SetStateAction<ClassDraft | null>>;
+  onClose: () => void;
+  onSave: (f: ClassDraft) => void;
+  students: StudentRow[];
+}
+
+function ClassModal({ draft, setDraft, onClose, onSave, students }: ClassModalProps) {
   const { t } = useLang();
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-  const toggleStudent = (id) =>
+  const set = <K extends keyof ClassDraft>(k: K, v: ClassDraft[K]) =>
+    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+  const toggleStudent = (id: string) =>
     set(
       'studentIds',
       draft.studentIds.includes(id)
@@ -312,7 +351,7 @@ function ClassModal({ draft, setDraft, onClose, onSave, students }) {
           <input
             className="mochi-input"
             placeholder={t('cls_subject_ph')}
-            value={draft.subject}
+            value={draft.subject ?? ''}
             onChange={(e) => set('subject', e.target.value)}
           />
         </div>

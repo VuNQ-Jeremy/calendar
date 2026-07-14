@@ -4,19 +4,28 @@ import { colorOf, iso, addDays, TODAY } from '../lib/core.js';
 import { useLang, getCal } from '../lib/i18n.jsx';
 import { Empty } from '../ui.jsx';
 import { expandEvents, toMin, fmtTime } from './utils.js';
+import type { EventRow } from '../../server/services/events.js';
 
-export function AgendaView({ cursor: _cursor, events, onPick }) {
+interface AgendaViewProps {
+  cursor?: Date;
+  events: EventRow[];
+  onPick: (ev: EventRow) => void;
+}
+
+export function AgendaView({ cursor: _cursor, events, onPick }: AgendaViewProps) {
   const { t, lang } = useLang();
   const { dow, monthsShort } = getCal(lang);
   const start = TODAY;
   const end = addDays(start, 13);
   const all = expandEvents(events, start, end);
   const today = iso(start);
-  const days = [];
+  const days: { d: Date; dk: string; list: typeof all }[] = [];
   for (let i = 0; i < 14; i++) {
     const d = addDays(start, i);
     const dk = iso(d);
-    const list = all.filter((e) => e.date === dk).sort((a, b) => toMin(a.start) - toMin(b.start));
+    const list = all
+      .filter((e) => e.date === dk)
+      .sort((a, b) => toMin(a.start ?? '00:00') - toMin(b.start ?? '00:00'));
     if (list.length) days.push({ d, dk, list });
   }
   if (!days.length)
@@ -42,7 +51,7 @@ export function AgendaView({ cursor: _cursor, events, onPick }) {
                   style={{ background: c.soft, borderLeftColor: c.base }}
                   onClick={() => onPick(e)}
                 >
-                  <div className="aev__time">{fmtTime(e.start)}</div>
+                  <div className="aev__time">{fmtTime(e.start ?? '00:00')}</div>
                   <div style={{ flex: 1 }}>
                     <div className="aev__t">{e.title}</div>
                     {e.location && (

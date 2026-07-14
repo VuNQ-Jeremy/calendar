@@ -11,17 +11,39 @@ import { TimeGrid } from './time-grid.jsx';
 import { AgendaView } from './agenda-view.jsx';
 import { CalendarThemeDrawer } from './theme-drawer.jsx';
 import { startOfWeek, addMin, fmtTime, toMin, MONTHS, DOW, expandEvents } from './utils.js';
+import type { EventRow } from '../../server/services/events.js';
+import type { ClassLite } from '../../server/services/classes.js';
+import type { ExpandedEvent } from './utils.js';
 
 const { Button: CBtn, IconButton: CIBtn, Tabs: CTabs } = DS;
 
+interface Theme {
+  bg: string;
+  gridLine: string;
+  today: string;
+  header: string;
+  bgImage: string | null;
+  bgOpacity: number;
+}
+
+interface CalendarLoaderData {
+  events: EventRow[];
+  classes: ClassLite[];
+  theme: Theme;
+}
+
+type ViewMode = 'day' | 'week' | 'month' | 'agenda';
+
+type EventDraft = Partial<EventRow> & { recurrence?: string };
+
 function CalendarScreen() {
-  const { events, classes, theme } = useLoaderData();
+  const { events, classes, theme } = useLoaderData() as CalendarLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const { months, monthsShort, dow } = getCal(lang);
-  const [view, setView] = React.useState('week');
+  const [view, setView] = React.useState<ViewMode>('week');
   const [cursor, setCursor] = React.useState(() => new Date(TODAY));
-  const [editor, setEditor] = React.useState(null);
+  const [editor, setEditor] = React.useState<EventDraft | null>(null);
   const [themeOpen, setThemeOpen] = React.useState(false);
 
   const weekDays = React.useMemo(() => {
@@ -30,7 +52,7 @@ function CalendarScreen() {
   }, [cursor]);
   const dayDays = React.useMemo(() => [new Date(cursor)], [cursor]);
 
-  const go = (dir) => {
+  const go = (dir: number) => {
     if (view === 'month') setCursor((c) => new Date(c.getFullYear(), c.getMonth() + dir, 1));
     else if (view === 'week') setCursor((c) => addDays(c, dir * 7));
     else setCursor((c) => addDays(c, dir));
@@ -44,7 +66,7 @@ function CalendarScreen() {
           ? `${dow[cursor.getDay()]}, ${months[cursor.getMonth()]} ${cursor.getDate()}`
           : t('cal_next2');
 
-  const openNew = (date, start) =>
+  const openNew = (date?: string, start?: string) =>
     setEditor({
       title: '',
       date: date || iso(TODAY),
@@ -55,15 +77,15 @@ function CalendarScreen() {
       location: '',
       recurrence: 'none',
     });
-  const openEdit = (ev) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
+  const openEdit = (ev: EventRow) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
 
-  const save = (f) => {
-    const evTitle = f.title.trim() || t('ev_untitled');
+  const save = (f: EventDraft) => {
+    const evTitle = (f.title ?? '').trim() || t('ev_untitled');
     const fd = new FormData();
     fd.set('intent', f.id ? 'update' : 'create');
     if (f.id) fd.set('id', f.id);
     fd.set('title', evTitle);
-    fd.set('date', f.date);
+    if (f.date) fd.set('date', f.date);
     if (f.start) fd.set('start', f.start);
     if (f.end) fd.set('end', f.end);
     if (f.color) fd.set('color', f.color);
@@ -74,7 +96,7 @@ function CalendarScreen() {
     setEditor(null);
   };
 
-  const del = (id) => {
+  const del = (id: string) => {
     const fd = new FormData();
     fd.set('intent', 'delete');
     fd.set('id', id);
@@ -82,7 +104,7 @@ function CalendarScreen() {
     setEditor(null);
   };
 
-  const move = (ev, newDate, ns, ne) => {
+  const move = (ev: ExpandedEvent, newDate: string, ns: string, ne: string) => {
     if (!ev.id) return;
     const fd = new FormData();
     fd.set('intent', 'update');
@@ -98,7 +120,7 @@ function CalendarScreen() {
     '--cal-grid': theme.gridLine,
     '--cal-today': theme.today,
     '--cal-header': theme.header,
-  };
+  } as React.CSSProperties;
 
   return (
     <div className="content">
@@ -138,7 +160,7 @@ function CalendarScreen() {
         <span style={{ flex: 1 }} />
         <CTabs
           value={view}
-          onChange={setView}
+          onChange={(v: string) => setView(v as ViewMode)}
           tabs={[
             { id: 'day', label: t('view_day') },
             { id: 'week', label: t('view_week') },

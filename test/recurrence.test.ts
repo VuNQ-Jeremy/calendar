@@ -1,24 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { expandEvents } from '../src/calendar/index.jsx';
+import type { EventRow } from '../server/services/events.js';
 
 // 2026-01-05 is a Monday
-const MON_2026_01_05 = new Date(2026, 0, 5);
-// 4-week window: Jan 5 – Feb 1
 const RANGE_START = new Date(2026, 0, 5);
 const RANGE_END = new Date(2026, 1, 1);
 
-const BASE_EVENT = {
+const BASE_EVENT: Omit<EventRow, 'date' | 'recurrence'> = {
   id: 'ev-1',
   title: 'Weekly Math',
   color: 'blue',
   start: '09:00',
   end: '10:00',
   classId: 'cls-1',
+  location: null,
 };
 
 describe('expandEvents() — weekly recurrence', () => {
   it('expands a weekly event to every Monday within a 4-week window', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
     const result = expandEvents(events, RANGE_START, RANGE_END);
 
     const dates = result.map((e) => e.date).sort();
@@ -26,7 +26,7 @@ describe('expandEvents() — weekly recurrence', () => {
   });
 
   it('produces no instances outside the range', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
     const result = expandEvents(events, RANGE_START, RANGE_END);
 
     for (const ev of result) {
@@ -37,7 +37,7 @@ describe('expandEvents() — weekly recurrence', () => {
   });
 
   it('preserves title, color, and times on instances', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
     const result = expandEvents(events, RANGE_START, RANGE_END);
 
     for (const ev of result) {
@@ -50,11 +50,11 @@ describe('expandEvents() — weekly recurrence', () => {
   });
 
   it('marks generated instances with _instance: true and the original with _instance: false', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly' }];
     const result = expandEvents(events, RANGE_START, RANGE_END);
 
-    const original = result.find((e) => e.date === '2026-01-05');
-    const instance = result.find((e) => e.date === '2026-01-12');
+    const original = result.find((e) => e.date === '2026-01-05')!;
+    const instance = result.find((e) => e.date === '2026-01-12')!;
 
     expect(original._instance).toBe(false);
     expect(instance._instance).toBe(true);
@@ -63,7 +63,7 @@ describe('expandEvents() — weekly recurrence', () => {
 
 describe('expandEvents() — no recurrence', () => {
   it('yields exactly one instance when event date is within range', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-01-10', recurrence: 'none' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-10', recurrence: 'none' }];
     const result = expandEvents(events, RANGE_START, RANGE_END);
 
     expect(result).toHaveLength(1);
@@ -71,7 +71,7 @@ describe('expandEvents() — no recurrence', () => {
   });
 
   it('yields no instances when event date is outside range', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-02-05', recurrence: 'none' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-02-05', recurrence: 'none' }];
     const result = expandEvents(events, RANGE_START, RANGE_END);
 
     expect(result).toHaveLength(0);
@@ -79,12 +79,11 @@ describe('expandEvents() — no recurrence', () => {
 });
 
 describe('expandEvents() — daily recurrence', () => {
-  // small window to keep output manageable
   const dayStart = new Date(2026, 0, 5);
   const dayEnd = new Date(2026, 0, 7);
 
   it('fills every day in the range', () => {
-    const events = [{ ...BASE_EVENT, date: '2026-01-01', recurrence: 'daily' }];
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-01', recurrence: 'daily' }];
     const result = expandEvents(events, dayStart, dayEnd);
 
     const dates = result.map((e) => e.date).sort();

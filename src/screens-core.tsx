@@ -6,8 +6,11 @@ import { PageHeader, Empty, Modal, MSelect } from './ui.jsx';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
 import { useLang, locale } from './lib/i18n.jsx';
+import type { IconName } from './icons.jsx';
+import type { ClassLite } from '../server/services/classes.js';
+import type { HomeworkRow } from '../server/services/homework.js';
+import type { EventRow } from '../server/services/events.js';
 
-// app/screens-core.jsx — Dashboard (Today) + Homework
 const {
   Card: SC,
   Button: SBtn,
@@ -18,8 +21,42 @@ const {
   ProgressBar: SProg,
 } = DS;
 
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+  color: string;
+  phone?: string | null;
+  avatar?: string;
+}
+
+interface DashLoaderData {
+  todayEvents: EventRow[];
+  homework: HomeworkRow[];
+  classes: ClassLite[];
+  studentCount: number;
+  materialCount: number;
+}
+
+interface HwLoaderData {
+  homework: HomeworkRow[];
+  classes: ClassLite[];
+}
+
+type HomeworkDraft = {
+  id?: string;
+  title: string;
+  classId?: string | null;
+  due?: string | null;
+  color?: string | null;
+  done?: boolean;
+  points?: number | string | null;
+  notes?: string | null;
+};
+
 // ---- StatCard ----
-function StatCard({ icon, color, num, label }) {
+function StatCard({ icon, color, num, label }: { icon: IconName; color: string; num: number; label: string }) {
   return (
     <SC interactive style={{ padding: 0 }}>
       <div className="statcard">
@@ -35,12 +72,11 @@ function StatCard({ icon, color, num, label }) {
   );
 }
 
-// Per-item homework checkbox for the dashboard "Due Today" list.
-function DashHwItem({ h, classes }) {
+function DashHwItem({ h, classes }: { h: HomeworkRow; classes: ClassLite[] }) {
   const fetcher = useFetcher();
   const optimisticDone = fetcher.formData ? fetcher.formData.get('done') === 'true' : h.done;
   const c = colorOf(h.color);
-  const clsName = (id) => (classes.find((cl) => cl.id === id) || {}).name;
+  const clsName = (id: string | null) => classes.find((cl) => cl.id === id)?.name;
   const toggle = () => {
     const fd = new FormData();
     fd.set('intent', 'update');
@@ -65,16 +101,17 @@ function DashHwItem({ h, classes }) {
 }
 
 // ---- Dashboard / Today ----
-function DashboardScreen({ user, onNav }) {
-  const { todayEvents, homework, classes, studentCount, materialCount } = useLoaderData();
+function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string) => void }) {
+  const { todayEvents, homework, classes, studentCount, materialCount } =
+    useLoaderData() as DashLoaderData;
   const { t, lang } = useLang();
   const today = iso(TODAY);
   const todays = expandEvents(todayEvents, TODAY, TODAY).sort(
-    (a, b) => toMin(a.start) - toMin(b.start),
+    (a, b) => toMin(a.start ?? '00:00') - toMin(b.start ?? '00:00'),
   );
   const dueToday = homework.filter((h) => h.due === today && !h.done);
   const pending = homework.filter((h) => !h.done);
-  const className = (id) => (classes.find((c) => c.id === id) || {}).name;
+  const className = (id: string | null) => classes.find((c) => c.id === id)?.name;
   const todayStr = new Date(TODAY).toLocaleDateString(locale(lang), {
     weekday: 'long',
     month: 'long',
@@ -122,7 +159,7 @@ function DashboardScreen({ user, onNav }) {
                         color: 'var(--text-body)',
                       }}
                     >
-                      {fmtTime(e.start)}
+                      {fmtTime(e.start ?? '00:00')}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div className="lrow__title" style={{ fontSize: 'var(--text-md)' }}>
@@ -135,7 +172,7 @@ function DashboardScreen({ user, onNav }) {
                       )}
                     </div>
                     {e.classId && (
-                      <STag color={c.tagColor || e.color}>
+                      <STag color={e.color}>
                         {className(e.classId) || t('class')}
                       </STag>
                     )}
@@ -173,12 +210,22 @@ function DashboardScreen({ user, onNav }) {
 }
 
 // ---- Homework ----
-function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }) {
+interface HomeworkItemProps {
+  h: HomeworkRow;
+  classes: ClassLite[];
+  today: string;
+  lang: string;
+  onEdit: () => void;
+  onDelete: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }: HomeworkItemProps) {
   const fetcher = useFetcher();
   const optimisticDone = fetcher.formData ? fetcher.formData.get('done') === 'true' : h.done;
   const c = colorOf(h.color);
   const overdue = !optimisticDone && h.due && h.due < today;
-  const clsName = (id) => (classes.find((cl) => cl.id === id) || {}).name || '—';
+  const clsName = (id: string | null) => classes.find((cl) => cl.id === id)?.name ?? '—';
 
   const toggle = () => {
     const fd = new FormData();
@@ -217,7 +264,7 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }) {
               )}
             </span>
           )}
-          {h.points != null && h.points !== '' && (
+          {h.points != null && (
             <span
               className="mchip"
               style={{ background: 'var(--cream-200)', color: 'var(--text-body)' }}
@@ -230,7 +277,7 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }) {
         {h.notes && (
           <div
             className="m-muted"
-            style={{ fontSize: 'var(--text-sm)', marginTop: 6, textWrap: 'pretty' }}
+            style={{ fontSize: 'var(--text-sm)', marginTop: 6, textWrap: 'pretty' } as React.CSSProperties}
           >
             {h.notes}
           </div>
@@ -249,11 +296,11 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }) {
 }
 
 function HomeworkScreen() {
-  const { homework: allHw, classes } = useLoaderData();
+  const { homework: allHw, classes } = useLoaderData() as HwLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const [filter, setFilter] = React.useState('all');
-  const [modal, setModal] = React.useState(null);
+  const [modal, setModal] = React.useState<HomeworkDraft | null>(null);
   const today = iso(TODAY);
 
   const list = allHw.filter((h) =>
@@ -273,8 +320,8 @@ function HomeworkScreen() {
       notes: '',
     });
 
-  const save = (f) => {
-    const title = f.title.trim() || t('hw_untitled');
+  const save = (f: HomeworkDraft) => {
+    const title = (f.title ?? '').trim() || t('hw_untitled');
     const fd = new FormData();
     fd.set('intent', f.id ? 'update' : 'create');
     if (f.id) fd.set('id', f.id);
@@ -289,7 +336,7 @@ function HomeworkScreen() {
     setModal(null);
   };
 
-  const removeHw = (id) => {
+  const removeHw = (id: string) => {
     const fd = new FormData();
     fd.set('intent', 'delete');
     fd.set('id', id);
@@ -368,16 +415,16 @@ function HomeworkScreen() {
               className="mochi-input"
               autoFocus
               value={modal.title}
-              onChange={(e) => setModal((m) => ({ ...m, title: e.target.value }))}
+              onChange={(e) => setModal((m) => m ? ({ ...m, title: e.target.value }) : m)}
             />
           </div>
           <div className="m-grid cols-2" style={{ gap: 14 }}>
             <MSelect
               label={t('class')}
-              value={modal.classId}
+              value={modal.classId ?? ''}
               onChange={(v) => {
                 const cls = classes.find((x) => x.id === v);
-                setModal((m) => ({ ...m, classId: v, color: cls ? cls.color : m.color }));
+                setModal((m) => m ? ({ ...m, classId: v, color: cls ? cls.color : m.color }) : m);
               }}
               options={classes.map((c) => ({ value: c.id, label: c.name }))}
             />
@@ -387,7 +434,7 @@ function HomeworkScreen() {
                 type="date"
                 className="mochi-input"
                 value={modal.due || ''}
-                onChange={(e) => setModal((m) => ({ ...m, due: e.target.value }))}
+                onChange={(e) => setModal((m) => m ? ({ ...m, due: e.target.value }) : m)}
               />
             </div>
           </div>
@@ -399,10 +446,12 @@ function HomeworkScreen() {
               className="mochi-input"
               value={modal.points ?? ''}
               onChange={(e) =>
-                setModal((m) => ({
-                  ...m,
-                  points: e.target.value === '' ? '' : Number(e.target.value),
-                }))
+                setModal((m) =>
+                  m ? ({
+                    ...m,
+                    points: e.target.value === '' ? '' : Number(e.target.value),
+                  }) : m,
+                )
               }
             />
           </div>
@@ -414,7 +463,7 @@ function HomeworkScreen() {
               style={{ resize: 'vertical', minHeight: 72, paddingTop: 10 }}
               placeholder={t('hw_notes_ph')}
               value={modal.notes || ''}
-              onChange={(e) => setModal((m) => ({ ...m, notes: e.target.value }))}
+              onChange={(e) => setModal((m) => m ? ({ ...m, notes: e.target.value }) : m)}
             />
           </div>
         </Modal>

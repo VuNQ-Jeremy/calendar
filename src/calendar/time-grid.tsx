@@ -2,8 +2,29 @@ import React from 'react';
 import { colorOf, iso, TODAY } from '../lib/core.js';
 import { useLang, getCal } from '../lib/i18n.jsx';
 import { expandEvents, toMin, fmtTime, addMin, HOURS, HR_H } from './utils.js';
+import type { EventRow } from '../../server/services/events.js';
+import type { ExpandedEvent } from './utils.js';
 
-export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMove }) {
+interface DragState {
+  ev: ExpandedEvent;
+  offY: number;
+  origStart: string;
+  origEnd: string;
+  colW: number;
+  rectLeft: number;
+  preview: { dyMin: number; colIdx: number } | null;
+}
+
+interface TimeGridProps {
+  cursor?: Date;
+  days: Date[];
+  events: EventRow[];
+  onPick: (ev: ExpandedEvent) => void;
+  onCreate: (dk: string, start: string) => void;
+  onMove: (ev: ExpandedEvent, newDate: string, ns: string, ne: string) => void;
+}
+
+export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMove }: TimeGridProps) {
   const { lang } = useLang();
   const { dow, dowMon } = getCal(lang);
   const dayList = days;
@@ -13,33 +34,31 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
   const today = iso(TODAY);
   const gridTpl = `64px repeat(${dayList.length}, 1fr)`;
   const dayStart = HOURS[0] * 60;
-  const [drag, setDrag] = React.useState(null);
-  const bodyRef = React.useRef(null);
+  const [drag, setDrag] = React.useState<DragState | null>(null);
+  const bodyRef = React.useRef<HTMLDivElement>(null);
 
-  const yFor = (min) => ((min - dayStart) / 60) * HR_H;
+  const yFor = (min: number) => ((min - dayStart) / 60) * HR_H;
 
-  // now-line
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const showNow = nowMin >= dayStart && nowMin <= (HOURS[HOURS.length - 1] + 1) * 60;
 
-  const onColDown = (e, dk) => {
-    // click on empty space → create at that hour
-    if (e.target.closest('.tev')) return;
+  const onColDown = (e: React.MouseEvent<HTMLDivElement>, dk: string) => {
+    if ((e.target as Element).closest('.tev')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const min = dayStart + Math.floor(y / HR_H) * 60;
     onCreate(dk, addMin('00:00', min));
   };
 
-  const startDrag = (e, ev) => {
+  const startDrag = (e: React.MouseEvent, ev: ExpandedEvent) => {
     e.stopPropagation();
-    const rect = bodyRef.current.getBoundingClientRect();
+    const rect = bodyRef.current!.getBoundingClientRect();
     setDrag({
       ev,
       offY: e.clientY,
-      origStart: ev.start,
-      origEnd: ev.end,
+      origStart: ev.start ?? '00:00',
+      origEnd: ev.end ?? '01:00',
       colW: (rect.width - 64) / dayList.length,
       rectLeft: rect.left,
       preview: null,
@@ -48,13 +67,13 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
 
   React.useEffect(() => {
     if (!drag) return;
-    const onMoveE = (e) => {
+    const onMoveE = (e: MouseEvent) => {
       const dyMin = Math.round((((e.clientY - drag.offY) / HR_H) * 60) / 15) * 15;
       const colIdx = Math.max(
         0,
         Math.min(dayList.length - 1, Math.floor((e.clientX - drag.rectLeft - 64) / drag.colW)),
       );
-      setDrag((d) => ({ ...d, preview: { dyMin, colIdx } }));
+      setDrag((d) => d ? ({ ...d, preview: { dyMin, colIdx } }) : d);
     };
     const onUp = () => {
       setDrag((d) => {
@@ -76,7 +95,7 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
   }, [drag, dayList, onMove]);
 
   return (
-    <div className="tgrid" style={{ '--hr-h': HR_H + 'px' }}>
+    <div className="tgrid" style={{ '--hr-h': HR_H + 'px' } as React.CSSProperties}>
       <div className="tgrid__head" style={{ gridTemplateColumns: gridTpl }}>
         <div className="tgrid__corner" />
         {dayList.map((d, i) => {
@@ -119,8 +138,8 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
               )}
               {dayEvents.map((e, j) => {
                 const c = colorOf(e.color);
-                let top = yFor(toMin(e.start));
-                let height = ((toMin(e.end) - toMin(e.start)) / 60) * HR_H - 3;
+                let top = yFor(toMin(e.start ?? '00:00'));
+                let height = ((toMin(e.end ?? '01:00') - toMin(e.start ?? '00:00')) / 60) * HR_H - 3;
                 const isDragging = drag && drag.ev.id === e.id && drag.ev.date === e.date;
                 if (isDragging && drag.preview) {
                   top = yFor(toMin(addMin(drag.origStart, drag.preview.dyMin)));
@@ -145,7 +164,7 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
                     <div className="tev__t">{e.title}</div>
                     {height > 34 && (
                       <div className="tev__time" style={{ color: c.ink }}>
-                        {`${fmtTime(e.start)} – ${fmtTime(e.end)}`}
+                        {`${fmtTime(e.start ?? '00:00')} – ${fmtTime(e.end ?? '01:00')}`}
                       </div>
                     )}
                   </div>

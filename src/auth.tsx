@@ -2,11 +2,15 @@ import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { useLang } from './lib/i18n.jsx';
+import type { InviteRow } from '../server/services/invites.js';
 
-// app/auth.jsx — login / signup / forgot password / onboarding via one-time code
 const { Button: AButton, Switch: ASwitch, Tag: ATag } = DS;
 
-function AuthField({ icon, ...props }) {
+interface AuthFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  icon: import('./icons.jsx').IconName;
+}
+
+function AuthField({ icon, ...props }: AuthFieldProps) {
   return (
     <div className="auth-field">
       <MIcon name={icon} size={18} className="auth-field__icon" />
@@ -15,11 +19,24 @@ function AuthField({ icon, ...props }) {
   );
 }
 
-/** @param {{ onLogin: Function, invites: import('../server/services/invites').InviteRow[] }} props */
-function AuthScreen({ onLogin, invites = [] }) {
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+  color: string;
+  [key: string]: unknown;
+}
+
+interface AuthScreenProps {
+  onLogin: (user: AuthUser, remember: boolean) => void;
+  invites?: InviteRow[];
+}
+
+function AuthScreen({ onLogin, invites = [] }: AuthScreenProps) {
   const { t } = useLang();
-  const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
-  const [mode, setMode] = React.useState('login'); // login | code
+  const roleLabel = (r: string | null | undefined) => t('role_' + String(r || '').toLowerCase());
+  const [mode, setMode] = React.useState<'login' | 'code'>('login');
   const [email, setEmail] = React.useState('');
   const [pw, setPw] = React.useState('');
   const [name, setName] = React.useState('');
@@ -27,7 +44,7 @@ function AuthScreen({ onLogin, invites = [] }) {
   const [showPw, setShowPw] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [error, setError] = React.useState('');
-  const [codeOk, setCodeOk] = React.useState(null); // matched invite
+  const [codeOk, setCodeOk] = React.useState<InviteRow | null>(null);
 
   const reset = () => {
     setError('');
@@ -50,6 +67,7 @@ function AuthScreen({ onLogin, invites = [] }) {
       remember,
     );
   };
+
   const checkCode = () => {
     const norm = code.trim().toUpperCase().replace(/\s/g, '');
     const match = invites.find((i) => i.code.replace('-', '') === norm.replace('-', '') && !i.used);
@@ -61,6 +79,7 @@ function AuthScreen({ onLogin, invites = [] }) {
       setCodeOk(null);
     }
   };
+
   const finishOnboard = () => {
     if (!name || !pw) {
       setError(t('auth_add_name_pw'));
@@ -70,8 +89,8 @@ function AuthScreen({ onLogin, invites = [] }) {
       {
         id: 'invited',
         name,
-        email: email || codeOk.name,
-        role: codeOk.role,
+        email: email || codeOk?.name || null,
+        role: codeOk?.role ?? 'student',
         color: 'green',
         invited: true,
       },
@@ -81,7 +100,6 @@ function AuthScreen({ onLogin, invites = [] }) {
 
   const sampleInvite = invites.find((i) => !i.used);
 
-  // ---- panels ----
   const Brand = (
     <div className="auth-brand">
       <div className="auth-brand__mark">
@@ -103,7 +121,7 @@ function AuthScreen({ onLogin, invites = [] }) {
     </div>
   );
 
-  let form;
+  let form: React.ReactNode;
   if (mode === 'login') {
     form = (
       <>

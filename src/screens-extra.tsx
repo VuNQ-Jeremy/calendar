@@ -5,24 +5,56 @@ import { MIcon } from './icons.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.jsx';
 import { iso, TODAY, ICON_TINT } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
+import type { IconName } from './icons.jsx';
+import type { ClassLite } from '../server/services/classes.js';
+import type { MaterialRow } from '../server/services/materials.js';
+import type { AppUser } from './screens-core.jsx';
 
-// app/screens-extra.jsx — Materials (with download) + reusable Calendar theme panel + Profile page
 const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Switch: XSw, Avatar: XAvatar } = DS;
 
-const MAT_TYPES = {
+interface MatType {
+  icon: IconName;
+  tk: string;
+  color: string;
+}
+
+const MAT_TYPES: Record<string, MatType> = {
   notes: { icon: 'file', tk: 'type_notes', color: 'blue' },
   worksheet: { icon: 'clipboard', tk: 'type_worksheet', color: 'green' },
   video: { icon: 'video', tk: 'type_video', color: 'violet' },
   link: { icon: 'link', tk: 'type_link', color: 'orange' },
 };
 
+interface MaterialLoaderData {
+  materials: MaterialRow[];
+  classes: ClassLite[];
+}
+
+type MaterialDraft = Partial<MaterialRow> & {
+  title: string;
+  type: string;
+  classId: string;
+  url: string;
+  fileName: string;
+  favorite: boolean;
+  fileField?: File;
+};
+
 // ============================================================ MATERIALS ============================================================
-function MaterialCard({ m, classes, onEdit, onDelete, t }) {
+interface MaterialCardProps {
+  m: MaterialRow;
+  classes: ClassLite[];
+  onEdit: () => void;
+  onDelete: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
   const favFetcher = useFetcher();
   const optimisticFav = favFetcher.formData
     ? favFetcher.formData.get('favorite') === 'true'
     : m.favorite;
-  const mt = MAT_TYPES[m.type] || MAT_TYPES.notes;
+  const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
   const isLink = m.type === 'link' || m.type === 'video';
   const cls = classes.find((c) => c.id === m.classId);
 
@@ -92,13 +124,13 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }) {
 }
 
 function MaterialsScreen() {
-  const { materials: matList, classes } = useLoaderData();
+  const { materials: matList, classes } = useLoaderData() as MaterialLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
   const [filterClass, setFilterClass] = React.useState('all');
   const [filterType, setFilterType] = React.useState('all');
   const [favOnly, setFavOnly] = React.useState(false);
-  const [modal, setModal] = React.useState(null);
+  const [modal, setModal] = React.useState<MaterialDraft | null>(null);
 
   let list = matList;
   if (filterClass !== 'all') list = list.filter((m) => m.classId === filterClass);
@@ -116,7 +148,7 @@ function MaterialsScreen() {
       addedAt: iso(TODAY),
     });
 
-  const save = (f) => {
+  const save = (f: MaterialDraft) => {
     const title = f.title.trim() || t('mat_untitled');
     const fd = new FormData();
     fd.set('intent', f.id ? 'update' : 'create');
@@ -136,7 +168,7 @@ function MaterialsScreen() {
     setModal(null);
   };
 
-  const removeMat = (id) => {
+  const removeMat = (id: string) => {
     const fd = new FormData();
     fd.set('intent', 'delete');
     fd.set('id', id);
@@ -189,7 +221,7 @@ function MaterialsScreen() {
               key={m.id}
               m={m}
               classes={classes}
-              onEdit={() => setModal({ ...m })}
+              onEdit={() => setModal({ ...m, title: m.title, type: m.type, classId: m.classId ?? '', url: m.url ?? '', fileName: m.fileName ?? '', favorite: m.favorite })}
               onDelete={() => removeMat(m.id)}
               t={t}
             />
@@ -214,21 +246,30 @@ function MaterialsScreen() {
   );
 }
 
-function MaterialModal({ draft, setDraft, onClose, onSave, classes }) {
+interface MaterialModalProps {
+  draft: MaterialDraft;
+  setDraft: React.Dispatch<React.SetStateAction<MaterialDraft | null>>;
+  onClose: () => void;
+  onSave: (f: MaterialDraft) => void;
+  classes: ClassLite[];
+}
+
+function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialModalProps) {
   const { t } = useLang();
-  const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+  const set = <K extends keyof MaterialDraft>(k: K, v: MaterialDraft[K]) =>
+    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
   const isLink = draft.type === 'link' || draft.type === 'video';
   const [fileSizeError, setFileSizeError] = React.useState(false);
   const MAX_UPLOAD = 20 * 1024 * 1024;
-  const onFile = (e) => {
-    const f = e.target.files[0];
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > MAX_UPLOAD) {
       setFileSizeError(true);
       return;
     }
     setFileSizeError(false);
-    setDraft((d) => ({ ...d, fileName: f.name, fileField: f }));
+    setDraft((d) => d ? ({ ...d, fileName: f.name, fileField: f }) : d);
   };
   return (
     <Modal
@@ -321,7 +362,16 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }) {
 }
 
 // ============================================================ CALENDAR THEME (reusable) ============================================================
-const PRESETS = {
+interface Preset {
+  tk: string;
+  bg: string;
+  gridLine: string;
+  today: string;
+  header: string;
+  swatches: string[];
+}
+
+const PRESETS: Record<string, Preset> = {
   cream: {
     tk: 'preset_cream',
     bg: '#FFFCF8',
@@ -364,9 +414,15 @@ const PRESETS = {
   },
 };
 
-// A single color row. Defined at module scope (stable identity) so live theme
-// updates re-render via props instead of remounting the <input type=color>.
-function ThemeColorRow({ value, label, sub, onChange, onCommit }) {
+interface ThemeColorRowProps {
+  value: string;
+  label: string;
+  sub: string;
+  onChange: (v: string) => void;
+  onCommit?: (v: string) => void;
+}
+
+function ThemeColorRow({ value, label, sub, onChange, onCommit }: ThemeColorRowProps) {
   return (
     <div className="colorrow">
       <input
@@ -386,22 +442,28 @@ function ThemeColorRow({ value, label, sub, onChange, onCommit }) {
   );
 }
 
-// Renders the full theme editor body (presets + color pickers + background image). Used inside the Calendar "Customize" modal.
-function CalendarThemePanel() {
-  const { theme } = useLoaderData();
+interface Theme {
+  bg: string;
+  gridLine: string;
+  today: string;
+  header: string;
+  bgImage: string;
+  bgOpacity: number;
+}
+
+export function CalendarThemePanel() {
+  const { theme } = useLoaderData() as { theme: Theme };
   const fetcher = useFetcher();
   const { t } = useLang();
-  // Local draft for live preview. Initialized once from loader; not re-synced on
-  // revalidation so in-progress edits are not clobbered by the server round-trip.
-  const draftRef = React.useRef({ ...theme });
-  const [draft, setDraftState] = React.useState(() => ({ ...theme }));
+  const draftRef = React.useRef<Theme>({ ...theme });
+  const [draft, setDraftState] = React.useState<Theme>(() => ({ ...theme }));
 
-  const setField = (key, value) => {
+  const setField = <K extends keyof Theme>(key: K, value: Theme[K]) => {
     draftRef.current = { ...draftRef.current, [key]: value };
     setDraftState({ ...draftRef.current });
   };
 
-  const submitNow = (patch = {}) => {
+  const submitNow = (patch: Partial<Theme> = {}) => {
     const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
     setDraftState(next);
@@ -417,7 +479,7 @@ function CalendarThemePanel() {
     ([, p]) => p.bg === draft.bg && p.gridLine === draft.gridLine && p.today === draft.today,
   )?.[0];
 
-  const applyPreset = (key) => {
+  const applyPreset = (key: string) => {
     const p = PRESETS[key];
     submitNow({ bg: p.bg, gridLine: p.gridLine, today: p.today, header: p.header });
   };
@@ -507,14 +569,12 @@ function CalendarThemePanel() {
           accept="image/*"
           style={{ display: 'none' }}
           onChange={(e) => {
-            const f = e.target.files[0];
+            const f = e.target.files?.[0];
             if (f) {
               const r = new FileReader();
-              // Bump opacity to a clearly visible level on upload if it's still at
-              // the subtle default, so the image is actually seen (not washed out).
               r.onload = () =>
                 submitNow({
-                  bgImage: r.result,
+                  bgImage: r.result as string,
                   ...(draftRef.current.bgOpacity <= 0.15 ? { bgOpacity: 0.6 } : {}),
                 });
               r.readAsDataURL(f);
@@ -539,7 +599,7 @@ function CalendarThemePanel() {
           step={0.02}
           value={draft.bgOpacity}
           onChange={(e) => setField('bgOpacity', Number(e.target.value))}
-          onPointerUp={(e) => submitNow({ bgOpacity: Number(e.target.value) })}
+          onPointerUp={(e) => submitNow({ bgOpacity: Number((e.target as HTMLInputElement).value) })}
           style={{ width: '100%', accentColor: 'var(--brand)' }}
         />
       </div>
@@ -558,16 +618,29 @@ function CalendarThemePanel() {
 }
 
 // ============================================================ PROFILE ============================================================
-function ProfileScreen({ user, onSave, onLogout }) {
+interface ProfileFields {
+  name: string;
+  email: string;
+  phone: string;
+  color: string;
+}
+
+interface ProfileScreenProps {
+  user: AppUser;
+  onSave: (updates: Partial<AppUser> & Record<string, unknown>) => void;
+  onLogout: () => void;
+}
+
+function ProfileScreen({ user, onSave, onLogout }: ProfileScreenProps) {
   const { t } = useLang();
-  const [f, setF] = React.useState(() => ({
+  const [f, setF] = React.useState<ProfileFields>(() => ({
     name: user.name,
     email: user.email || '',
     phone: user.phone || '',
     color: user.color || 'orange',
   }));
   const [saved, setSaved] = React.useState(false);
-  const set = (k, v) => {
+  const set = <K extends keyof ProfileFields>(k: K, v: ProfileFields[K]) => {
     setF((p) => ({ ...p, [k]: v }));
     setSaved(false);
   };
@@ -630,11 +703,11 @@ function ProfileScreen({ user, onSave, onLogout }) {
                   accept="image/*"
                   style={{ display: 'none' }}
                   onChange={(e) => {
-                    const file = e.target.files[0];
+                    const file = e.target.files?.[0];
                     if (!file) return;
                     const r = new FileReader();
                     r.onload = () => {
-                      onSave({ avatar: r.result });
+                      onSave({ avatar: r.result as string });
                     };
                     r.readAsDataURL(file);
                     e.target.value = '';
@@ -728,4 +801,4 @@ function ProfileScreen({ user, onSave, onLogout }) {
   );
 }
 
-export { MaterialsScreen, CalendarThemePanel, ProfileScreen };
+export { MaterialsScreen, ProfileScreen };
