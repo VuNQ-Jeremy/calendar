@@ -7,6 +7,8 @@ import * as materialsSvc from '../../server/services/materials';
 import * as classesSvc from '../../server/services/classes';
 import { MaterialInput } from '../../shared/schemas';
 
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireUser(request, env);
@@ -31,16 +33,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    await materialsSvc.remove(db, id);
+    await materialsSvc.remove(db, id, env.FILES);
     return { ok: true };
   }
 
+  // Extract file upload if present
+  const fileRaw = formData.get('file');
+  const file = fileRaw instanceof File && fileRaw.size > 0 ? fileRaw : undefined;
+
+  if (file && file.size > MAX_FILE_SIZE) {
+    return Response.json(
+      { errors: { fieldErrors: { file: ['File exceeds 20 MB limit'] } } },
+      { status: 400 },
+    );
+  }
+
   const raw = preprocessMatRaw(Object.fromEntries(formData) as Record<string, unknown>);
+  // Remove the file entry from raw so it doesn't interfere with schema validation
+  delete (raw as Record<string, unknown>).file;
 
   if (intent === 'create') {
     const parsed = MaterialInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await materialsSvc.create(db, parsed.data);
+    await materialsSvc.create(db, parsed.data, file, env.FILES);
     return { ok: true };
   }
 
@@ -48,7 +63,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     const parsed = MaterialInput.partial().safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await materialsSvc.update(db, id, parsed.data);
+    await materialsSvc.update(db, id, parsed.data, file, env.FILES);
     return { ok: true };
   }
 

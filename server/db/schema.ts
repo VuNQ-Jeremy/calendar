@@ -115,6 +115,7 @@ export const materials = sqliteTable('materials', {
   classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
   url: text('url'),
   fileName: text('file_name'),
+  fileKey: text('file_key'),
   favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
   addedAt: text('added_at'),
 });

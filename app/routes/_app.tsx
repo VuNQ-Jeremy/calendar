@@ -1,5 +1,12 @@
 import React from 'react';
-import { NavLink, Outlet, useLoaderData, useFetcher } from 'react-router';
+import {
+  NavLink,
+  Outlet,
+  useLoaderData,
+  useFetcher,
+  isRouteErrorResponse,
+  useRouteError,
+} from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
@@ -214,6 +221,51 @@ export default function AppLayout() {
         />
       )}
       {introOpen && <InstructionsModal onClose={closeIntro} />}
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const { t } = useLang();
+
+  let status = 500;
+  let title = t('err_generic_title');
+  let message = t('err_generic_msg');
+
+  if (isRouteErrorResponse(error)) {
+    status = error.status;
+    if (status === 404) {
+      title = t('err_not_found_title');
+      message = t('err_not_found_msg');
+    } else if (status === 400) {
+      title = t('err_bad_request_title');
+      message = t('err_bad_request_msg');
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        gap: 12,
+        padding: '40px 24px',
+        fontFamily: 'var(--font-body)',
+        textAlign: 'center',
+      }}
+    >
+      <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1 }}>
+        {status}
+      </div>
+      <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>{title}</h2>
+      <p style={{ margin: 0, color: 'var(--text-muted)', maxWidth: 360 }}>{message}</p>
+      <a href="/dashboard" style={{ marginTop: 8, color: 'var(--text-link)', fontWeight: 600 }}>
+        {t('err_go_home')}
+      </a>
     </div>
   );
 }

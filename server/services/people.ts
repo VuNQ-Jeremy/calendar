@@ -152,11 +152,9 @@ export async function updateStudent(
 }
 
 export async function removeStudent(db: Db, id: string): Promise<void> {
-  await db.batch([
-    db.delete(classStudents).where(eq(classStudents.studentId, id)),
-    db.delete(parentStudents).where(eq(parentStudents.studentId, id)),
-    db.delete(students).where(eq(students.id, id)),
-  ]);
+  // ON DELETE CASCADE on class_students.student_id and parent_students.student_id
+  // handles join-table cleanup automatically.
+  await db.delete(students).where(eq(students.id, id));
 }
 
 // ---- Parents ----
@@ -253,8 +251,6 @@ export async function updateParent(
 }
 
 export async function removeParent(db: Db, id: string): Promise<void> {
-  await db.batch([
-    db.delete(parentStudents).where(eq(parentStudents.parentId, id)),
-    db.delete(parents).where(eq(parents.id, id)),
-  ]);
+  // ON DELETE CASCADE on parent_students.parent_id handles join-table cleanup.
+  await db.delete(parents).where(eq(parents.id, id));
 }

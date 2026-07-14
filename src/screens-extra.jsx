@@ -16,30 +16,6 @@ const MAT_TYPES = {
   link: { icon: 'link', tk: 'type_link', color: 'orange' },
 };
 
-function downloadMaterial(m) {
-  let href = m.fileData;
-  let revoke = false;
-  let name = m.fileName || (m.title || 'material').replace(/\s+/g, '_');
-  if (!href) {
-    const blob = new Blob(
-      [
-        `Mochi material\n\nTitle: ${m.title}\nType: ${m.type}\n\n(This demo did not store the original file bytes. Re-upload the file to download the real document.)`,
-      ],
-      { type: 'text/plain' },
-    );
-    href = URL.createObjectURL(blob);
-    revoke = true;
-    if (!/\.\w+$/.test(name)) name += '.txt';
-  }
-  const a = document.createElement('a');
-  a.href = href;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  if (revoke) setTimeout(() => URL.revokeObjectURL(href), 2000);
-}
-
 // ============================================================ MATERIALS ============================================================
 function MaterialCard({ m, classes, onEdit, onDelete, t }) {
   const favFetcher = useFetcher();
@@ -91,27 +67,17 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }) {
             <MIcon name="link" size={14} />
             {t('mat_open_link')}
           </a>
-        ) : (
-          <button
+        ) : m.fileKey ? (
+          <a
+            href={`/materials/${m.id}/download`}
             className="m-row"
-            style={{
-              gap: 6,
-              fontSize: 'var(--text-sm)',
-              fontWeight: 700,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text-link)',
-              padding: 0,
-              fontFamily: 'inherit',
-            }}
-            onClick={() => downloadMaterial(m)}
+            style={{ gap: 6, fontSize: 'var(--text-sm)', fontWeight: 700 }}
             title={t('mat_download')}
           >
             <MIcon name="download" size={15} />
             {t('mat_download')}
-          </button>
-        )}
+          </a>
+        ) : null}
         <div className="lrow__actions">
           <XIB label={t('edit')} size="sm" onClick={onEdit}>
             <MIcon name="edit" size={15} />
@@ -159,7 +125,11 @@ function MaterialsScreen() {
     fd.set('type', f.type);
     if (f.classId) fd.set('classId', f.classId);
     if (f.url) fd.set('url', f.url);
-    if (f.fileName) fd.set('fileName', f.fileName);
+    if (f.fileField) {
+      fd.set('file', f.fileField, f.fileField.name);
+    } else if (f.fileName) {
+      fd.set('fileName', f.fileName);
+    }
     fd.set('favorite', String(!!f.favorite));
     if (f.addedAt) fd.set('addedAt', f.addedAt);
     fetcher.submit(fd, { action: '/materials', method: 'post' });
@@ -248,16 +218,17 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }) {
   const { t } = useLang();
   const set = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
   const isLink = draft.type === 'link' || draft.type === 'video';
+  const [fileSizeError, setFileSizeError] = React.useState(false);
+  const MAX_UPLOAD = 20 * 1024 * 1024;
   const onFile = (e) => {
     const f = e.target.files[0];
     if (!f) return;
-    if (f.size > 4 * 1024 * 1024) {
-      setDraft((d) => ({ ...d, fileName: f.name, fileData: '' }));
+    if (f.size > MAX_UPLOAD) {
+      setFileSizeError(true);
       return;
     }
-    const r = new FileReader();
-    r.onload = () => setDraft((d) => ({ ...d, fileName: f.name, fileData: r.result }));
-    r.readAsDataURL(f);
+    setFileSizeError(false);
+    setDraft((d) => ({ ...d, fileName: f.name, fileField: f }));
   };
   return (
     <Modal
@@ -335,10 +306,13 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }) {
             </span>
             <input type="file" style={{ display: 'none' }} onChange={onFile} />
           </label>
-          {draft.fileName && (
-            <span className="mochi-field__hint">
-              {draft.fileData ? t('mat_stored') : t('mat_too_large')}
+          {fileSizeError && (
+            <span className="mochi-field__hint" style={{ color: 'var(--color-red-600)' }}>
+              {t('mat_too_large')}
             </span>
+          )}
+          {!fileSizeError && draft.fileField && (
+            <span className="mochi-field__hint">{t('mat_stored')}</span>
           )}
         </div>
       )}
