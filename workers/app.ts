@@ -8,9 +8,9 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/api/')) return handleApi(request, env, url);
-    return requestHandler(request);
+    return requestHandler(request, { cloudflare: { env, ctx } });
   },
 } satisfies ExportedHandler<Env>;
