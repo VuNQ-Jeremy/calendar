@@ -221,7 +221,17 @@ function MaterialsScreen() {
               key={m.id}
               m={m}
               classes={classes}
-              onEdit={() => setModal({ ...m, title: m.title, type: m.type, classId: m.classId ?? '', url: m.url ?? '', fileName: m.fileName ?? '', favorite: m.favorite })}
+              onEdit={() =>
+                setModal({
+                  ...m,
+                  title: m.title,
+                  type: m.type,
+                  classId: m.classId ?? '',
+                  url: m.url ?? '',
+                  fileName: m.fileName ?? '',
+                  favorite: m.favorite,
+                })
+              }
               onDelete={() => removeMat(m.id)}
               t={t}
             />
@@ -257,7 +267,7 @@ interface MaterialModalProps {
 function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialModalProps) {
   const { t } = useLang();
   const set = <K extends keyof MaterialDraft>(k: K, v: MaterialDraft[K]) =>
-    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
   const isLink = draft.type === 'link' || draft.type === 'video';
   const [fileSizeError, setFileSizeError] = React.useState(false);
   const MAX_UPLOAD = 20 * 1024 * 1024;
@@ -269,7 +279,7 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialMo
       return;
     }
     setFileSizeError(false);
-    setDraft((d) => d ? ({ ...d, fileName: f.name, fileField: f }) : d);
+    setDraft((d) => (d ? { ...d, fileName: f.name, fileField: f } : d));
   };
   return (
     <Modal
@@ -599,7 +609,9 @@ export function CalendarThemePanel() {
           step={0.02}
           value={draft.bgOpacity}
           onChange={(e) => setField('bgOpacity', Number(e.target.value))}
-          onPointerUp={(e) => submitNow({ bgOpacity: Number((e.target as HTMLInputElement).value) })}
+          onPointerUp={(e) =>
+            submitNow({ bgOpacity: Number((e.target as HTMLInputElement).value) })
+          }
           style={{ width: '100%', accentColor: 'var(--brand)' }}
         />
       </div>

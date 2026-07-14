@@ -40,7 +40,9 @@ export type PaletteEntry = (typeof PALETTE)[number];
 export const colorOf = (id: string | null | undefined): PaletteEntry =>
   (PALETTE.find((p) => p.id === id) as PaletteEntry | undefined) ?? PALETTE[0];
 
-export const ICON_TINT = (color: string | null | undefined): { background: string; color: string } => {
+export const ICON_TINT = (
+  color: string | null | undefined,
+): { background: string; color: string } => {
   const c = colorOf(color);
   return { background: c.soft, color: c.ink };
 };

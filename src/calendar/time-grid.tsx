@@ -24,7 +24,14 @@ interface TimeGridProps {
   onMove: (ev: ExpandedEvent, newDate: string, ns: string, ne: string) => void;
 }
 
-export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMove }: TimeGridProps) {
+export function TimeGrid({
+  cursor: _cursor,
+  days,
+  events,
+  onPick,
+  onCreate,
+  onMove,
+}: TimeGridProps) {
   const { lang } = useLang();
   const { dow, dowMon } = getCal(lang);
   const dayList = days;
@@ -73,7 +80,7 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
         0,
         Math.min(dayList.length - 1, Math.floor((e.clientX - drag.rectLeft - 64) / drag.colW)),
       );
-      setDrag((d) => d ? ({ ...d, preview: { dyMin, colIdx } }) : d);
+      setDrag((d) => (d ? { ...d, preview: { dyMin, colIdx } } : d));
     };
     const onUp = () => {
       setDrag((d) => {
@@ -139,7 +146,8 @@ export function TimeGrid({ cursor: _cursor, days, events, onPick, onCreate, onMo
               {dayEvents.map((e, j) => {
                 const c = colorOf(e.color);
                 let top = yFor(toMin(e.start ?? '00:00'));
-                let height = ((toMin(e.end ?? '01:00') - toMin(e.start ?? '00:00')) / 60) * HR_H - 3;
+                let height =
+                  ((toMin(e.end ?? '01:00') - toMin(e.start ?? '00:00')) / 60) * HR_H - 3;
                 const isDragging = drag && drag.ev.id === e.id && drag.ev.date === e.date;
                 if (isDragging && drag.preview) {
                   top = yFor(toMin(addMin(drag.origStart, drag.preview.dyMin)));

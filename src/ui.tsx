@@ -159,12 +159,11 @@ interface ConfirmOpts {
   danger?: boolean;
 }
 
-function useConfirm(): [
-  (opts: ConfirmOpts) => Promise<boolean>,
-  React.ReactElement | null,
-] {
+function useConfirm(): [(opts: ConfirmOpts) => Promise<boolean>, React.ReactElement | null] {
   const { t } = useLang();
-  const [state, setState] = React.useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(null);
+  const [state, setState] = React.useState<
+    (ConfirmOpts & { resolve: (v: boolean) => void }) | null
+  >(null);
   const confirm = (opts: ConfirmOpts) =>
     new Promise<boolean>((resolve) => {
       setState({ ...opts, resolve });

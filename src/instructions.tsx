@@ -49,7 +49,11 @@ export function InstructionsModal({ onClose }: { onClose: () => void }) {
               </div>
               <div
                 className="m-muted"
-                style={{ fontSize: 'var(--text-sm)', marginTop: 2, textWrap: 'pretty' as React.CSSProperties['textWrap'] }}
+                style={{
+                  fontSize: 'var(--text-sm)',
+                  marginTop: 2,
+                  textWrap: 'pretty' as React.CSSProperties['textWrap'],
+                }}
               >
                 {t('feat_' + f.key + '_text')}
               </div>

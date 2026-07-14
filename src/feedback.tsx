@@ -60,7 +60,7 @@ interface FeedbackModalProps {
 export function FeedbackModal({ draft, setDraft, onClose, onSave }: FeedbackModalProps) {
   const { t } = useLang();
   const set = <K extends keyof FeedbackDraft>(k: K, v: FeedbackDraft[K]) =>
-    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
   return (
     <Modal
       open={true}

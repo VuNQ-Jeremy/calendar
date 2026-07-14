@@ -180,7 +180,14 @@ interface ClassDetailModalProps {
   onEdit: () => void;
 }
 
-function ClassDetailModal({ cls, students, materials, homework, onClose, onEdit }: ClassDetailModalProps) {
+function ClassDetailModal({
+  cls,
+  students,
+  materials,
+  homework,
+  onClose,
+  onEdit,
+}: ClassDetailModalProps) {
   const { t } = useLang();
   const roster = students.filter((s) => cls.studentIds.includes(s.id));
   const clsMaterials = materials.filter((m) => m.classId === cls.id);
@@ -309,7 +316,7 @@ interface ClassModalProps {
 function ClassModal({ draft, setDraft, onClose, onSave, students }: ClassModalProps) {
   const { t } = useLang();
   const set = <K extends keyof ClassDraft>(k: K, v: ClassDraft[K]) =>
-    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
   const toggleStudent = (id: string) =>
     set(
       'studentIds',

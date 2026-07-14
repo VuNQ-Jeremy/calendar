@@ -54,8 +54,7 @@ export function StudentsScreen() {
   const { t } = useLang();
   const relLabel = (r: string | null | undefined) =>
     t('rel_' + String(r || 'guardian').toLowerCase());
-  const roleLabel = (r: string | null | undefined) =>
-    t('role_' + String(r || '').toLowerCase());
+  const roleLabel = (r: string | null | undefined) => t('role_' + String(r || '').toLowerCase());
   const [tab, setTab] = React.useState('students');
   const [modal, setModal] = React.useState<StudentDraft | null>(null);
   const [staffModal, setStaffModal] = React.useState<StaffDraft | null>(null);
@@ -264,7 +263,11 @@ export function StudentsScreen() {
                 )}
               </div>
               <div className="lrow__actions">
-                <MIB label={t('edit')} size="sm" onClick={() => setModal({ ...s, classIds: s.classIds })}>
+                <MIB
+                  label={t('edit')}
+                  size="sm"
+                  onClick={() => setModal({ ...s, classIds: s.classIds })}
+                >
                   <MIcon name="edit" size={16} />
                 </MIB>
                 <MIB label={t('delete')} size="sm" onClick={() => del(s)}>
@@ -351,7 +354,11 @@ export function StudentsScreen() {
                 </div>
                 <MBadge color="green">{relLabel(p.relation)}</MBadge>
                 <div className="lrow__actions">
-                  <MIB label="Edit" size="sm" onClick={() => setParentModal({ ...p, studentIds: p.studentIds })}>
+                  <MIB
+                    label="Edit"
+                    size="sm"
+                    onClick={() => setParentModal({ ...p, studentIds: p.studentIds })}
+                  >
                     <MIcon name="edit" size={16} />
                   </MIB>
                   <MIB label="Delete" size="sm" onClick={() => delParent(p)}>
@@ -407,7 +414,7 @@ interface StudentModalProps {
 function StudentModal({ draft, setDraft, onClose, onSave, classes }: StudentModalProps) {
   const { t } = useLang();
   const set = <K extends keyof StudentDraft>(k: K, v: StudentDraft[K]) =>
-    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
   const toggle = (id: string) =>
     set(
       'classIds',
@@ -501,7 +508,7 @@ interface StaffModalProps {
 function StaffModal({ draft, setDraft, onClose, onSave }: StaffModalProps) {
   const { t } = useLang();
   const set = <K extends keyof StaffDraft>(k: K, v: StaffDraft[K]) =>
-    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
   return (
     <Modal
       open
@@ -681,7 +688,7 @@ interface ParentModalProps {
 function ParentModal({ draft, setDraft, onClose, onSave, students }: ParentModalProps) {
   const { t } = useLang();
   const set = <K extends keyof ParentDraft>(k: K, v: ParentDraft[K]) =>
-    setDraft((d) => d ? ({ ...d, [k]: v }) : d);
+    setDraft((d) => (d ? { ...d, [k]: v } : d));
   const toggleKid = (id: string) =>
     set(
       'studentIds',
@@ -773,8 +780,7 @@ function InvitesPanel() {
   const { invites, classes } = useLoaderData() as PeopleLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
-  const roleLabel = (r: string | null | undefined) =>
-    t('role_' + String(r || '').toLowerCase());
+  const roleLabel = (r: string | null | undefined) => t('role_' + String(r || '').toLowerCase());
   const [copied, setCopied] = React.useState<string | null>(null);
   const copy = (code: string) => {
     navigator.clipboard?.writeText(code);

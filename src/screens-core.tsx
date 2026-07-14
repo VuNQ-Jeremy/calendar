@@ -56,7 +56,17 @@ type HomeworkDraft = {
 };
 
 // ---- StatCard ----
-function StatCard({ icon, color, num, label }: { icon: IconName; color: string; num: number; label: string }) {
+function StatCard({
+  icon,
+  color,
+  num,
+  label,
+}: {
+  icon: IconName;
+  color: string;
+  num: number;
+  label: string;
+}) {
   return (
     <SC interactive style={{ padding: 0 }}>
       <div className="statcard">
@@ -171,11 +181,7 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
                         </div>
                       )}
                     </div>
-                    {e.classId && (
-                      <STag color={e.color}>
-                        {className(e.classId) || t('class')}
-                      </STag>
-                    )}
+                    {e.classId && <STag color={e.color}>{className(e.classId) || t('class')}</STag>}
                   </div>
                 );
               })}
@@ -277,7 +283,13 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }: Homework
         {h.notes && (
           <div
             className="m-muted"
-            style={{ fontSize: 'var(--text-sm)', marginTop: 6, textWrap: 'pretty' } as React.CSSProperties}
+            style={
+              {
+                fontSize: 'var(--text-sm)',
+                marginTop: 6,
+                textWrap: 'pretty',
+              } as React.CSSProperties
+            }
           >
             {h.notes}
           </div>
@@ -415,7 +427,7 @@ function HomeworkScreen() {
               className="mochi-input"
               autoFocus
               value={modal.title}
-              onChange={(e) => setModal((m) => m ? ({ ...m, title: e.target.value }) : m)}
+              onChange={(e) => setModal((m) => (m ? { ...m, title: e.target.value } : m))}
             />
           </div>
           <div className="m-grid cols-2" style={{ gap: 14 }}>
@@ -424,7 +436,7 @@ function HomeworkScreen() {
               value={modal.classId ?? ''}
               onChange={(v) => {
                 const cls = classes.find((x) => x.id === v);
-                setModal((m) => m ? ({ ...m, classId: v, color: cls ? cls.color : m.color }) : m);
+                setModal((m) => (m ? { ...m, classId: v, color: cls ? cls.color : m.color } : m));
               }}
               options={classes.map((c) => ({ value: c.id, label: c.name }))}
             />
@@ -434,7 +446,7 @@ function HomeworkScreen() {
                 type="date"
                 className="mochi-input"
                 value={modal.due || ''}
-                onChange={(e) => setModal((m) => m ? ({ ...m, due: e.target.value }) : m)}
+                onChange={(e) => setModal((m) => (m ? { ...m, due: e.target.value } : m))}
               />
             </div>
           </div>
@@ -447,10 +459,12 @@ function HomeworkScreen() {
               value={modal.points ?? ''}
               onChange={(e) =>
                 setModal((m) =>
-                  m ? ({
-                    ...m,
-                    points: e.target.value === '' ? '' : Number(e.target.value),
-                  }) : m,
+                  m
+                    ? {
+                        ...m,
+                        points: e.target.value === '' ? '' : Number(e.target.value),
+                      }
+                    : m,
                 )
               }
             />
@@ -463,7 +477,7 @@ function HomeworkScreen() {
               style={{ resize: 'vertical', minHeight: 72, paddingTop: 10 }}
               placeholder={t('hw_notes_ph')}
               value={modal.notes || ''}
-              onChange={(e) => setModal((m) => m ? ({ ...m, notes: e.target.value }) : m)}
+              onChange={(e) => setModal((m) => (m ? { ...m, notes: e.target.value } : m))}
             />
           </div>
         </Modal>
