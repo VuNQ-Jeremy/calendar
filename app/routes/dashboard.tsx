@@ -10,9 +10,12 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import { iso, TODAY } from '../../src/lib/core.js';
+import { requireUser } from '../../server/services/auth';
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const today = iso(TODAY);
   const [todayEvents, homework, classes, students, materials] = await Promise.all([
     eventsSvc.listForToday(db, today),

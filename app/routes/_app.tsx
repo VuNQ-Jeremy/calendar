@@ -7,16 +7,14 @@ import { iso, TODAY } from '../../src/lib/core.js';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
-import { AuthScreen } from '../../src/auth.jsx';
 import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as homeworkSvc from '../../server/services/homework';
 import * as invitesSvc from '../../server/services/invites';
 import { cloudflareCtx } from '../../app/load-context';
+import { requireUser } from '../../server/services/auth';
 
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB } = DS;
-
-const SESSION_KEY = 'mochi_session_v1';
 
 const TWEAKS = {
   accent: '#F79A4E',
@@ -45,36 +43,29 @@ const NAV = [
   },
 ];
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.get(cloudflareCtx).env;
+  const { user } = await requireUser(request, env);
+  const db = createDb(env);
   const today = iso(TODAY);
-  const [homeworkDueCount, unusedInviteCount, newFeedbackCount, invites] = await Promise.all([
+  const [homeworkDueCount, unusedInviteCount, newFeedbackCount] = await Promise.all([
     homeworkSvc.countDue(db, today),
     invitesSvc.countUnused(db),
     feedbackSvc.countNew(db),
-    invitesSvc.list(db),
   ]);
-  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, invites };
+  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, user };
 }
 
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
 
-interface SessionUser {
-  id: string;
-  name: string;
-  role: string;
-  color: string;
-  email?: string;
-  phone?: string;
-  avatar?: string;
-}
+export type SessionUser = AppLoaderData['user'];
 
 function Sidebar({
   user,
   onFeedback,
   onHelp,
 }: {
-  user: SessionUser | null;
+  user: SessionUser;
   onFeedback: () => void;
   onHelp: () => void;
 }) {
@@ -126,53 +117,33 @@ function Sidebar({
         <MIcon name="message" size={18} />
         <span>{t('cta_feedback')}</span>
       </button>
-      {user && (
-        <NavLink
-          to="/profile"
-          className={({ isActive }) => 'sb__foot' + (isActive ? ' is-active' : '')}
-          title="Manage your profile"
-        >
-          {user.avatar ? (
-            <img
-              src={user.avatar}
-              alt={user.name}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                objectFit: 'cover',
-                flexShrink: 0,
-              }}
-            />
-          ) : (
-            <ShAv name={user.name} color={user.color} size="md" />
-          )}
-          <div style={{ minWidth: 0, textAlign: 'left' }}>
-            <div className="nm">{user.name}</div>
-            <div className="sub">{user.role}</div>
-          </div>
-          <MIcon
-            name="chevronRight"
-            size={18}
-            style={{ marginLeft: 'auto', color: 'var(--taupe-400)' }}
-          />
-        </NavLink>
-      )}
+      <NavLink
+        to="/profile"
+        className={({ isActive }) => 'sb__foot' + (isActive ? ' is-active' : '')}
+        title="Manage your profile"
+      >
+        <ShAv name={user.name} color={user.color} size="md" />
+        <div style={{ minWidth: 0, textAlign: 'left' }}>
+          <div className="nm">{user.name}</div>
+          <div className="sub">{user.role}</div>
+        </div>
+        <MIcon
+          name="chevronRight"
+          size={18}
+          style={{ marginLeft: 'auto', color: 'var(--taupe-400)' }}
+        />
+      </NavLink>
     </aside>
   );
 }
 
 export type AppContext = {
   user: SessionUser;
-  onUpdateUser: (patch: Partial<SessionUser>) => void;
-  onLogout: () => void;
 };
 
 export default function AppLayout() {
-  const { invites } = useLoaderData<typeof loader>();
+  const { user } = useLoaderData<typeof loader>();
   const feedbackFetcher = useFetcher();
-  const [user, setUser] = React.useState<SessionUser | null>(null);
-  const [mounted, setMounted] = React.useState(false);
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
     typeof newFeedbackDraft
   > | null>(null);
@@ -180,54 +151,11 @@ export default function AppLayout() {
 
   React.useEffect(() => {
     try {
-      const r = localStorage.getItem(SESSION_KEY);
-      setUser(r ? (JSON.parse(r) as SessionUser) : null);
-    } catch {
-      setUser(null);
-    }
-    setMounted(true);
-  }, []);
-
-  React.useEffect(() => {
-    if (!mounted || !user) return;
-    try {
       if (!localStorage.getItem(SEEN_INTRO_KEY)) setIntroOpen(true);
     } catch {
       /* storage unavailable */
     }
-  }, [mounted, user]);
-
-  const login = (u: SessionUser, remember: boolean) => {
-    setUser(u);
-    if (remember) {
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(u));
-      } catch {
-        /* storage unavailable */
-      }
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    try {
-      localStorage.removeItem(SESSION_KEY);
-    } catch {
-      /* storage unavailable */
-    }
-  };
-
-  const updateUser = (patch: Partial<SessionUser>) =>
-    setUser((u) => {
-      if (!u) return u;
-      const nu = { ...u, ...patch };
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(nu));
-      } catch {
-        /* storage unavailable */
-      }
-      return nu;
-    });
+  }, []);
 
   const closeIntro = () => {
     setIntroOpen(false);
@@ -239,7 +167,7 @@ export default function AppLayout() {
   };
 
   const openFeedback = () => {
-    if (user) setFeedbackDraft(newFeedbackDraft(user));
+    setFeedbackDraft(newFeedbackDraft(user));
   };
 
   const saveFeedback = (f: ReturnType<typeof newFeedbackDraft>) => {
@@ -275,14 +203,7 @@ export default function AppLayout() {
     <div className="app" style={shellStyle} data-density={TWEAKS.density}>
       <Sidebar user={user} onFeedback={openFeedback} onHelp={() => setIntroOpen(true)} />
       <div className="main">
-        {mounted &&
-          (user ? (
-            <Outlet
-              context={{ user, onUpdateUser: updateUser, onLogout: logout } satisfies AppContext}
-            />
-          ) : (
-            <AuthScreen onLogin={login} invites={invites} />
-          ))}
+        <Outlet context={{ user } satisfies AppContext} />
       </div>
       {feedbackDraft && (
         <FeedbackModal
