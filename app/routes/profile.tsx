@@ -7,6 +7,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 import * as peopleSvc from '../../server/services/people';
+import { ColorId } from '../../shared/schemas';
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -19,12 +20,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const name = formData.get('name') as string | null;
     const email = formData.get('email') as string | null;
     const phone = formData.get('phone') as string | null;
-    const color = formData.get('color') as string | null;
+    const colorRaw = formData.get('color') as string | null;
+    const colorParsed = ColorId.safeParse(colorRaw);
     await peopleSvc.updateStaff(db, user.id, {
       ...(name ? { name } : {}),
       ...(email !== null ? { email: email || null } : {}),
       ...(phone !== null ? { phone: phone || null } : {}),
-      ...(color ? { color } : {}),
+      ...(colorParsed.success ? { color: colorParsed.data } : {}),
     });
     return { ok: true };
   }
