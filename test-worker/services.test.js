@@ -325,18 +325,28 @@ describe('FK cascade — delete class', () => {
       studentIds: [],
     });
 
-    const schedBefore = await d.select().from(classSchedule).where(eq(classSchedule.classId, cls.id));
+    const schedBefore = await d
+      .select()
+      .from(classSchedule)
+      .where(eq(classSchedule.classId, cls.id));
     expect(schedBefore.length).toBe(1);
 
     await classesSvc.remove(d, cls.id);
 
-    const schedAfter = await d.select().from(classSchedule).where(eq(classSchedule.classId, cls.id));
+    const schedAfter = await d
+      .select()
+      .from(classSchedule)
+      .where(eq(classSchedule.classId, cls.id));
     expect(schedAfter.length).toBe(0);
   });
 
   it('cascades class_students rows', async () => {
     const d = db();
-    const student = await peopleSvc.createStudent(d, { name: 'Cascade Student', color: 'blue', classIds: [] });
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Cascade Student',
+      color: 'blue',
+      classIds: [],
+    });
     const cls = await classesSvc.create(d, {
       name: 'Cascade Test 2',
       color: 'green',
@@ -344,7 +354,10 @@ describe('FK cascade — delete class', () => {
       studentIds: [student.id],
     });
 
-    const linkBefore = await d.select().from(classStudents).where(eq(classStudents.classId, cls.id));
+    const linkBefore = await d
+      .select()
+      .from(classStudents)
+      .where(eq(classStudents.classId, cls.id));
     expect(linkBefore.length).toBe(1);
 
     await classesSvc.remove(d, cls.id);
@@ -355,8 +368,18 @@ describe('FK cascade — delete class', () => {
 
   it('sets events.class_id to NULL (SET NULL)', async () => {
     const d = db();
-    const cls = await classesSvc.create(d, { name: 'Event Class', color: 'violet', schedule: [], studentIds: [] });
-    const ev = await eventsSvc.create(d, { title: 'Test Event', date: '2024-01-15', classId: cls.id, recurrence: 'none' });
+    const cls = await classesSvc.create(d, {
+      name: 'Event Class',
+      color: 'violet',
+      schedule: [],
+      studentIds: [],
+    });
+    const ev = await eventsSvc.create(d, {
+      title: 'Test Event',
+      date: '2024-01-15',
+      classId: cls.id,
+      recurrence: 'none',
+    });
 
     await classesSvc.remove(d, cls.id);
 
@@ -366,7 +389,12 @@ describe('FK cascade — delete class', () => {
 
   it('sets homework.class_id to NULL (SET NULL)', async () => {
     const d = db();
-    const cls = await classesSvc.create(d, { name: 'HW Class', color: 'orange', schedule: [], studentIds: [] });
+    const cls = await classesSvc.create(d, {
+      name: 'HW Class',
+      color: 'orange',
+      schedule: [],
+      studentIds: [],
+    });
     const hw = await homeworkSvc.create(d, { title: 'HW Item', classId: cls.id, done: false });
 
     await classesSvc.remove(d, cls.id);
@@ -377,8 +405,18 @@ describe('FK cascade — delete class', () => {
 
   it('sets materials.class_id to NULL (SET NULL)', async () => {
     const d = db();
-    const cls = await classesSvc.create(d, { name: 'Mat Class', color: 'rose', schedule: [], studentIds: [] });
-    const mat = await materialsSvc.create(d, { title: 'Mat Item', type: 'notes', classId: cls.id, favorite: false });
+    const cls = await classesSvc.create(d, {
+      name: 'Mat Class',
+      color: 'rose',
+      schedule: [],
+      studentIds: [],
+    });
+    const mat = await materialsSvc.create(d, {
+      title: 'Mat Item',
+      type: 'notes',
+      classId: cls.id,
+      favorite: false,
+    });
 
     await classesSvc.remove(d, cls.id);
 
@@ -390,19 +428,44 @@ describe('FK cascade — delete class', () => {
 describe('FK cascade — delete student', () => {
   it('cascades class_students and parent_students rows', async () => {
     const d = db();
-    const cls = await classesSvc.create(d, { name: 'FK Class', color: 'blue', schedule: [], studentIds: [] });
-    const student = await peopleSvc.createStudent(d, { name: 'FK Student', color: 'blue', classIds: [cls.id] });
-    const parent = await peopleSvc.createParent(d, { name: 'FK Parent', color: 'green', studentIds: [student.id] });
+    const cls = await classesSvc.create(d, {
+      name: 'FK Class',
+      color: 'blue',
+      schedule: [],
+      studentIds: [],
+    });
+    const student = await peopleSvc.createStudent(d, {
+      name: 'FK Student',
+      color: 'blue',
+      classIds: [cls.id],
+    });
+    const parent = await peopleSvc.createParent(d, {
+      name: 'FK Parent',
+      color: 'green',
+      studentIds: [student.id],
+    });
 
-    const csBefore = await d.select().from(classStudents).where(eq(classStudents.studentId, student.id));
-    const psBefore = await d.select().from(parentStudents).where(eq(parentStudents.studentId, student.id));
+    const csBefore = await d
+      .select()
+      .from(classStudents)
+      .where(eq(classStudents.studentId, student.id));
+    const psBefore = await d
+      .select()
+      .from(parentStudents)
+      .where(eq(parentStudents.studentId, student.id));
     expect(csBefore.length).toBe(1);
     expect(psBefore.length).toBe(1);
 
     await peopleSvc.removeStudent(d, student.id);
 
-    const csAfter = await d.select().from(classStudents).where(eq(classStudents.studentId, student.id));
-    const psAfter = await d.select().from(parentStudents).where(eq(parentStudents.studentId, student.id));
+    const csAfter = await d
+      .select()
+      .from(classStudents)
+      .where(eq(classStudents.studentId, student.id));
+    const psAfter = await d
+      .select()
+      .from(parentStudents)
+      .where(eq(parentStudents.studentId, student.id));
     expect(csAfter.length).toBe(0);
     expect(psAfter.length).toBe(0);
 
@@ -415,7 +478,12 @@ describe('FK cascade — delete student', () => {
 describe('FK cascade — delete account', () => {
   it('cascades sessions on account delete', async () => {
     const d = db();
-    const staffRow = await peopleSvc.createStaff(d, { name: 'Sess Test', email: 'sess@test.com', role: 'Teacher', color: 'orange' });
+    const staffRow = await peopleSvc.createStaff(d, {
+      name: 'Sess Test',
+      email: 'sess@test.com',
+      role: 'Teacher',
+      color: 'orange',
+    });
     const passwordHash = await hashPassword('pw');
     const accountId = crypto.randomUUID();
     await d.insert(accounts).values({

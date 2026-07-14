@@ -1,5 +1,12 @@
 import React from 'react';
-import { NavLink, Outlet, useLoaderData, useFetcher, isRouteErrorResponse, useRouteError } from 'react-router';
+import {
+  NavLink,
+  Outlet,
+  useLoaderData,
+  useFetcher,
+  isRouteErrorResponse,
+  useRouteError,
+} from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
@@ -251,9 +258,7 @@ export function ErrorBoundary() {
         textAlign: 'center',
       }}
     >
-      <div
-        style={{ fontSize: 48, fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1 }}
-      >
+      <div style={{ fontSize: 48, fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1 }}>
         {status}
       </div>
       <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>{title}</h2>
