@@ -4,17 +4,22 @@ import { FeedbackScreen } from '../../src/feedback.jsx';
 import type { AppContext } from './_app.js';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
+import { requireUser } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
 import { FeedbackInput } from '../../shared/schemas';
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const feedback = await feedbackSvc.list(db);
   return { feedback };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

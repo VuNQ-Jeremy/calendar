@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
@@ -7,17 +7,19 @@ import { SEEN_INTRO_KEY } from '../src/instructions.jsx';
 import AppLayout from '../app/routes/_app';
 
 const TEST_USER = {
-  id: 'u1',
+  id: 'staff-001',
   name: 'Test Teacher',
   role: 'Teacher',
   color: 'orange',
+  email: 'test@school.edu',
+  phone: null,
 };
 
 const STUB_LOADER_DATA = {
   homeworkDueCount: 0,
   unusedInviteCount: 0,
   newFeedbackCount: 0,
-  invites: [],
+  user: TEST_USER,
 };
 
 function withLang(element: React.ReactElement) {
@@ -25,17 +27,9 @@ function withLang(element: React.ReactElement) {
 }
 
 describe('AppLayout (_app.tsx)', () => {
-  beforeEach(() => {
-    localStorage.setItem('mochi_session_v1', JSON.stringify(TEST_USER));
-    // Suppress the first-run intro modal so it doesn't duplicate nav text in queries.
+  it('renders sidebar navigation items when loader provides user', async () => {
     localStorage.setItem(SEEN_INTRO_KEY, '1');
-  });
 
-  afterEach(() => {
-    localStorage.clear();
-  });
-
-  it('renders sidebar navigation items', async () => {
     const Stub = createRoutesStub([
       {
         path: '/',
@@ -54,14 +48,15 @@ describe('AppLayout (_app.tsx)', () => {
       render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
     });
 
-    // Sidebar nav items are rendered as links
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Calendar' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Classes' })).toBeInTheDocument();
+
+    localStorage.clear();
   });
 
-  it('shows AuthScreen when no session in localStorage', async () => {
-    localStorage.clear();
+  it('renders the user name in the sidebar footer', async () => {
+    localStorage.setItem(SEEN_INTRO_KEY, '1');
 
     const Stub = createRoutesStub([
       {
@@ -81,7 +76,8 @@ describe('AppLayout (_app.tsx)', () => {
       render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
     });
 
-    // Auth screen shown when no session
-    expect(screen.getByText('Welcome back')).toBeInTheDocument();
+    expect(screen.getByText('Test Teacher')).toBeInTheDocument();
+
+    localStorage.clear();
   });
 });

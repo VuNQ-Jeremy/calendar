@@ -4,9 +4,9 @@ The app ships with a Cloudflare Worker (`worker/index.js`) that serves the built
 SPA and a JSON API backed by **Cloudflare D1** (SQLite). This is the first step
 of replacing the in-browser `localStorage` store with a real database.
 
-> Status: the **schema and API are implemented and tested**. The frontend
-> (`src/store.js`) still reads/writes `localStorage` — switching it to call this
-> API is the next step (see below).
+> Status: **Phase 4 complete.** Real PBKDF2 authentication, server-side HttpOnly
+> cookie sessions, invite redemption, and password reset are all implemented.
+> Every loader and action is guarded by `requireUser`.
 
 ## Data model
 
@@ -71,8 +71,52 @@ optionally seeded) for the app to show any data.
 
 > `seed.sql` is **optional** demo data — skip it for a clean, empty database.
 
-## Next step
+## Authentication (Phase 4)
 
-Real auth using the `accounts`/`sessions` tables (login, signup, "remember me",
-password reset, invite-code redemption), replacing the mocked auth in
-`src/auth.js`.
+### Schema migration
+
+`migrations/0004_auth.sql` adds `password_resets`, plus `student_id`/`parent_id`
+on `accounts` and `used_by`/`used_at` on `invites`. Apply it:
+
+```bash
+npm run db:migrate              # remote
+npm run db:migrate:local        # local dev
+```
+
+### Bootstrap the first admin account
+
+1. Hash a password:
+   ```bash
+   node scripts/hash-password.mjs 'YourStrongPassword!'
+   ```
+
+2. Insert a staff row and account into the remote DB (replace values as needed):
+   ```bash
+   STAFF_ID=$(wrangler d1 execute mochi-class --remote \
+     --command "INSERT INTO staff (id, name, role, color) \
+       VALUES ('$(uuidgen)', 'Admin', 'Teacher', 'orange') \
+       RETURNING id;" \
+     --json | jq -r '.[0].results[0].id')
+
+   wrangler d1 execute mochi-class --remote \
+     --command "INSERT INTO accounts (id, email, password_hash, staff_id, created_at) \
+       VALUES ('$(uuidgen)', 'admin@school.edu', '<HASH_FROM_STEP_1>', '${STAFF_ID}', datetime('now'));"
+   ```
+
+3. For local dev use `--local` instead of `--remote`.
+
+### Auth service API
+
+| Export | Purpose |
+|---|---|
+| `login(db, email, pw)` | Returns `{ accountId }` or `null`; timing-safe |
+| `createSession(db, accountId, remember)` | Returns raw cookie token |
+| `getUser(request, env)` | Returns `SessionUser` or `null` |
+| `requireUser(request, env)` | Returns `SessionUser` or throws redirect to `/login` |
+| `logout(db, request)` | Deletes session row |
+| `redeemInvite(db, code, {name, email, password})` | Atomic invite redemption |
+| `requestReset(db, email)` | Creates reset token; returns `devUrl` in DEV mode |
+| `resetPassword(db, token, newPassword)` | Updates hash; invalidates all sessions |
+
+Session cookie: `__mochi_session` — HttpOnly, Secure, SameSite=Lax.
+Password storage: PBKDF2-SHA256, 210 000 iterations, format `pbkdf2$iters$salt$hash`.

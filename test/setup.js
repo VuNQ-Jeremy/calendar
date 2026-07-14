@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
 import { vi, beforeEach, afterEach } from 'vitest';
 
 export const EMPTY_STATE = {
@@ -32,5 +33,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   vi.unstubAllGlobals();
 });

@@ -127,6 +127,8 @@ export const invites = sqliteTable('invites', {
   classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
   createdAt: text('created_at'),
   used: integer('used', { mode: 'boolean' }).notNull().default(false),
+  usedBy: text('used_by').references(() => accounts.id, { onDelete: 'set null' }),
+  usedAt: text('used_at'),
 });
 
 export const settings = sqliteTable('settings', {
@@ -139,6 +141,8 @@ export const accounts = sqliteTable('accounts', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  studentId: text('student_id').references(() => students.id, { onDelete: 'set null' }),
+  parentId: text('parent_id').references(() => parents.id, { onDelete: 'set null' }),
   createdAt: text('created_at'),
 });
 
@@ -153,6 +157,15 @@ export const sessions = sqliteTable(
   },
   (t) => [index('idx_sessions_account').on(t.accountId)],
 );
+
+export const passwordResets = sqliteTable('password_resets', {
+  tokenHash: text('token_hash').primaryKey(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => accounts.id, { onDelete: 'cascade' }),
+  expiresAt: text('expires_at').notNull(),
+  used: integer('used').notNull().default(0),
+});
 
 export const feedback = sqliteTable(
   'feedback',

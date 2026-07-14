@@ -2,12 +2,15 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
 import { HomeworkScreen } from '../../src/screens-core.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
+import { requireUser } from '../../server/services/auth';
 import * as homeworkSvc from '../../server/services/homework';
 import * as classesSvc from '../../server/services/classes';
 import { HomeworkInput } from '../../shared/schemas';
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const [homework, classes] = await Promise.all([homeworkSvc.list(db), classesSvc.listLite(db)]);
   return { homework, classes };
 }
@@ -20,7 +23,9 @@ function preprocessHwRaw(raw: Record<string, unknown>) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

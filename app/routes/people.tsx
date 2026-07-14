@@ -2,13 +2,16 @@ import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
 import { StudentsScreen } from '../../src/screens-manage/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
+import { requireUser } from '../../server/services/auth';
 import * as peopleSvc from '../../server/services/people';
 import * as invitesSvc from '../../server/services/invites';
 import * as classesSvc from '../../server/services/classes';
 import { StudentInput, StaffInput, ParentInput, InviteInput } from '../../shared/schemas';
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const [students, staff, parents, invites, classes] = await Promise.all([
     peopleSvc.listStudents(db),
     peopleSvc.listStaff(db),
@@ -20,7 +23,9 @@ export async function loader({ context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const db = createDb(context.get(cloudflareCtx).env);
+  const env = context.get(cloudflareCtx).env;
+  await requireUser(request, env);
+  const db = createDb(env);
   const formData = await request.formData();
   const entity = formData.get('entity') as string;
   const intent = formData.get('intent') as string;
