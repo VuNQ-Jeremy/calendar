@@ -1,7 +1,7 @@
 import React from 'react';
+import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
-import { useStore } from '../store.jsx';
 import { Modal, ColorPicker, PageHeader, useConfirm } from '../ui.jsx';
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
@@ -9,21 +9,32 @@ import { useLang } from '../lib/i18n.jsx';
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Avatar: MAv } = DS;
 
 export function ClassesScreen() {
-  const { data, add, update, remove } = useStore();
+  const { classes, students, materials, homework } = useLoaderData();
+  const fetcher = useFetcher();
   const { t } = useLang();
   const [modal, setModal] = React.useState(null);
   const [detail, setDetail] = React.useState(null);
   const [confirm, confirmNode] = useConfirm();
-  const studentsOf = (c) => data.students.filter((s) => c.studentIds.includes(s.id));
+
+  const studentsOf = (c) => students.filter((s) => c.studentIds.includes(s.id));
 
   const openNew = () =>
     setModal({ name: '', subject: '', color: 'green', room: '', studentIds: [] });
+
   const save = (f) => {
-    if (!f.name.trim()) f.name = t('cls_default_name');
-    if (f.id) update('classes', f.id, f);
-    else add('classes', f);
+    const name = f.name.trim() || t('cls_default_name');
+    const fd = new FormData();
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('name', name);
+    if (f.subject) fd.set('subject', f.subject);
+    fd.set('color', f.color || 'green');
+    if (f.room) fd.set('room', f.room);
+    fd.set('studentIds', JSON.stringify(f.studentIds || []));
+    fetcher.submit(fd, { action: '/classes', method: 'post' });
     setModal(null);
   };
+
   const del = async (c) => {
     if (
       await confirm({
@@ -32,8 +43,12 @@ export function ClassesScreen() {
         confirmLabel: t('delete'),
         danger: true,
       })
-    )
-      remove('classes', c.id);
+    ) {
+      const fd = new FormData();
+      fd.set('intent', 'delete');
+      fd.set('id', c.id);
+      fetcher.submit(fd, { action: '/classes', method: 'post' });
+    }
   };
 
   return (
@@ -48,7 +63,7 @@ export function ClassesScreen() {
         }
       />
       <div className="m-grid cols-3">
-        {data.classes.map((c) => {
+        {classes.map((c) => {
           const col = colorOf(c.color);
           const roster = studentsOf(c);
           return (
@@ -114,12 +129,15 @@ export function ClassesScreen() {
           setDraft={setModal}
           onClose={() => setModal(null)}
           onSave={save}
-          students={data.students}
+          students={students}
         />
       )}
       {detail && (
         <ClassDetailModal
           cls={detail}
+          students={students}
+          materials={materials}
+          homework={homework}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setModal({ ...detail });
@@ -132,13 +150,12 @@ export function ClassesScreen() {
   );
 }
 
-function ClassDetailModal({ cls, onClose, onEdit }) {
-  const { data } = useStore();
+function ClassDetailModal({ cls, students, materials, homework, onClose, onEdit }) {
   const { t } = useLang();
-  const roster = data.students.filter((s) => cls.studentIds.includes(s.id));
-  const materials = data.materials.filter((m) => m.classId === cls.id);
-  const homework = data.homework.filter((h) => h.classId === cls.id);
-  const openHw = homework.filter((h) => !h.done).length;
+  const roster = students.filter((s) => cls.studentIds.includes(s.id));
+  const clsMaterials = materials.filter((m) => m.classId === cls.id);
+  const clsHomework = homework.filter((h) => h.classId === cls.id);
+  const openHw = clsHomework.filter((h) => !h.done).length;
 
   const Stat = (icon, label, val) => (
     <div
@@ -203,13 +220,16 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
       <div className="m-row" style={{ gap: 10, marginBottom: 20 }}>
         {Stat('users', t('stat_students'), roster.length)}
         {Stat('clipboard', t('cls_stat_openwork'), openHw)}
-        {Stat('folder', t('stat_materials'), materials.length)}
+        {Stat('folder', t('stat_materials'), clsMaterials.length)}
       </div>
       <div className="mochi-eyebrow" style={{ marginBottom: 8 }}>
         {t('cls_roster_n', { n: roster.length })}
       </div>
       {roster.length ? (
-        <div className="m-grid cols-2" style={{ gap: 8, marginBottom: materials.length ? 20 : 0 }}>
+        <div
+          className="m-grid cols-2"
+          style={{ gap: 8, marginBottom: clsMaterials.length ? 20 : 0 }}
+        >
           {roster.map((s) => (
             <div key={s.id} className="m-row" style={{ gap: 10, padding: '6px 4px' }}>
               <MAv name={s.name} color={s.color} size="sm" />
@@ -226,13 +246,13 @@ function ClassDetailModal({ cls, onClose, onEdit }) {
           {t('cls_no_students_assigned')}
         </span>
       )}
-      {materials.length > 0 && (
+      {clsMaterials.length > 0 && (
         <>
           <div className="mochi-eyebrow" style={{ margin: '4px 0 8px' }}>
-            {t('cls_materials_n', { n: materials.length })}
+            {t('cls_materials_n', { n: clsMaterials.length })}
           </div>
           <div className="tablebar">
-            {materials.map((m) => (
+            {clsMaterials.map((m) => (
               <span key={m.id} className="mchip">
                 <MIcon
                   name={m.type === 'link' ? 'link' : m.type === 'video' ? 'video' : 'file'}

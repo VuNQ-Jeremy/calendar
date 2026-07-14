@@ -1,8 +1,8 @@
 // src/feedback.jsx — Feedback: a log of submitted feedback + the shared submit modal.
 import React from 'react';
+import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.jsx';
 import { Modal, MSelect, PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, TODAY } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
@@ -101,9 +101,9 @@ export function FeedbackModal({ draft, setDraft, onClose, onSave }) {
 }
 
 export function FeedbackScreen({ user }) {
-  const { data, add, update, remove } = useStore();
+  const { feedback: list } = useLoaderData();
+  const fetcher = useFetcher();
   const { t } = useLang();
-  const list = data.feedback || [];
   const [filter, setFilter] = React.useState('all');
   const [modal, setModal] = React.useState(null);
 
@@ -116,14 +116,43 @@ export function FeedbackScreen({ user }) {
   };
 
   const openNew = () => setModal(newFeedbackDraft(user));
+
   const save = (f) => {
     if (!f.message.trim()) return;
-    if (f.id) update('feedback', f.id, f);
-    else add('feedback', f);
+    const fd = new FormData();
+    if (f.id) {
+      fd.set('intent', 'update');
+      fd.set('id', f.id);
+      fd.set('message', f.message);
+      fd.set('category', f.category);
+      fd.set('author', f.author || '');
+      fd.set('status', f.status);
+    } else {
+      fd.set('intent', 'create');
+      fd.set('message', f.message);
+      fd.set('category', f.category);
+      fd.set('author', f.author || '');
+      fd.set('status', f.status);
+      fd.set('createdAt', f.createdAt || '');
+    }
+    fetcher.submit(fd, { action: '/feedback', method: 'post' });
     setModal(null);
   };
-  const toggleDone = (f) =>
-    update('feedback', f.id, { status: f.status === 'done' ? 'new' : 'done' });
+
+  const toggleDone = (f) => {
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', f.id);
+    fd.set('status', f.status === 'done' ? 'new' : 'done');
+    fetcher.submit(fd, { action: '/feedback', method: 'post' });
+  };
+
+  const removeFeedback = (id) => {
+    const fd = new FormData();
+    fd.set('intent', 'delete');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/feedback', method: 'post' });
+  };
 
   return (
     <div className="content">
@@ -201,7 +230,7 @@ export function FeedbackScreen({ user }) {
                   <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
                     <MIcon name="edit" size={16} />
                   </FIB>
-                  <FIB label={t('delete')} size="sm" onClick={() => remove('feedback', f.id)}>
+                  <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
                     <MIcon name="trash" size={16} />
                   </FIB>
                 </div>

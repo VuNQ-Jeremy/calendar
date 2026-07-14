@@ -1,19 +1,23 @@
 import React from 'react';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useLoaderData, useFetcher } from 'react-router';
+import type { LoaderFunctionArgs } from 'react-router';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
-import { useStore } from '../../src/store.jsx';
 import { iso, TODAY } from '../../src/lib/core.js';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { AuthScreen } from '../../src/auth.jsx';
+import { createDb } from '../../server/db/index';
+import * as feedbackSvc from '../../server/services/feedback';
+import * as homeworkSvc from '../../server/services/homework';
+import * as invitesSvc from '../../server/services/invites';
+import '../../app/load-context';
 
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB } = DS;
 
 const SESSION_KEY = 'mochi_session_v1';
 
-// Layout/brand defaults surfaced as CSS variables on the app shell.
 const TWEAKS = {
   accent: '#F79A4E',
   sidebar: 'regular',
@@ -33,7 +37,6 @@ const NAV = [
     tk: 'nav_manage',
     items: [
       { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book' },
-      // URL is /people; old internal id was 'students'
       { id: 'people', path: '/people', tk: 'nav_people', icon: 'users' },
       { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder' },
       { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard' },
@@ -41,6 +44,20 @@ const NAV = [
     ],
   },
 ];
+
+export async function loader({ context }: LoaderFunctionArgs) {
+  const db = createDb(context.cloudflare.env);
+  const today = iso(TODAY);
+  const [homeworkDueCount, unusedInviteCount, newFeedbackCount, invites] = await Promise.all([
+    homeworkSvc.countDue(db, today),
+    invitesSvc.countUnused(db),
+    feedbackSvc.countNew(db),
+    invitesSvc.list(db),
+  ]);
+  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, invites };
+}
+
+export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
 
 interface SessionUser {
   id: string;
@@ -61,15 +78,13 @@ function Sidebar({
   onFeedback: () => void;
   onHelp: () => void;
 }) {
-  const { data } = useStore();
+  const { homeworkDueCount, unusedInviteCount, newFeedbackCount } =
+    useLoaderData<typeof loader>();
   const { t } = useLang();
-  const today = iso(TODAY);
-  const dueCount = data.homework.filter((h: any) => !h.done && h.due <= today).length;
-  const newFeedback = (data.feedback || []).filter((f: any) => f.status === 'new').length;
   const counts: Record<string, number> = {
-    homework: dueCount,
-    people: data.invites.filter((i: any) => !i.used).length,
-    feedback: newFeedback,
+    homework: homeworkDueCount,
+    people: unusedInviteCount,
+    feedback: newFeedbackCount,
   };
 
   return (
@@ -155,7 +170,8 @@ export type AppContext = {
 };
 
 export default function AppLayout() {
-  const { add } = useStore();
+  const { invites } = useLoaderData<typeof loader>();
+  const feedbackFetcher = useFetcher();
   const [user, setUser] = React.useState<SessionUser | null>(null);
   const [mounted, setMounted] = React.useState(false);
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
@@ -163,7 +179,6 @@ export default function AppLayout() {
   > | null>(null);
   const [introOpen, setIntroOpen] = React.useState(false);
 
-  // Read session from localStorage after mount to avoid SSR mismatch.
   React.useEffect(() => {
     try {
       const r = localStorage.getItem(SESSION_KEY);
@@ -174,7 +189,6 @@ export default function AppLayout() {
     setMounted(true);
   }, []);
 
-  // Show the welcome guide automatically the first time, once per browser.
   React.useEffect(() => {
     if (!mounted || !user) return;
     try {
@@ -234,7 +248,14 @@ export default function AppLayout() {
       setFeedbackDraft(null);
       return;
     }
-    add('feedback', f);
+    const fd = new FormData();
+    fd.set('intent', 'create');
+    fd.set('message', f.message);
+    fd.set('category', f.category);
+    fd.set('author', f.author || '');
+    fd.set('status', f.status);
+    fd.set('createdAt', f.createdAt || '');
+    feedbackFetcher.submit(fd, { action: '/feedback', method: 'post' });
     setFeedbackDraft(null);
   };
 
@@ -261,7 +282,7 @@ export default function AppLayout() {
               context={{ user, onUpdateUser: updateUser, onLogout: logout } satisfies AppContext}
             />
           ) : (
-            <AuthScreen onLogin={login} />
+            <AuthScreen onLogin={login} invites={invites} />
           ))}
       </div>
       {feedbackDraft && (

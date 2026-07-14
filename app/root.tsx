@@ -1,6 +1,5 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
-import { StoreProvider } from '../src/store.jsx';
 
 import '@fontsource/fredoka/400.css';
 import '@fontsource/fredoka/500.css';
@@ -39,9 +38,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <LanguageProvider>
-      <StoreProvider>
-        <Outlet />
-      </StoreProvider>
+      <Outlet />
     </LanguageProvider>
   );
 }

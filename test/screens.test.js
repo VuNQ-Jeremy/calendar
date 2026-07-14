@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
+import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
-import { StoreProvider } from '../src/store.jsx';
 import { DashboardScreen, HomeworkScreen } from '../src/screens-core.jsx';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.jsx';
 import { ClassesScreen, StudentsScreen } from '../src/screens-manage/index.jsx';
@@ -18,73 +18,97 @@ const TEST_USER = {
   color: 'orange',
 };
 
-function Providers({ children }) {
-  return React.createElement(
-    LanguageProvider,
-    null,
-    React.createElement(StoreProvider, null, children),
-  );
+const DEFAULT_THEME = {
+  bg: '#FFFCF8',
+  gridLine: '#ECE0CF',
+  today: '#FFE7D1',
+  header: '#FDF6EC',
+  bgImage: '',
+  bgOpacity: 0.12,
+};
+
+function withLang(element) {
+  return React.createElement(LanguageProvider, null, element);
+}
+
+function makeStub(loaderData, Comp, props = {}) {
+  const Wrapper = () => React.createElement(Comp, props);
+  return createRoutesStub([{ path: '/', Component: Wrapper, loader: () => loaderData }]);
+}
+
+async function renderStub(Stub) {
+  await act(async () => {
+    render(withLang(React.createElement(Stub, { initialEntries: ['/'] })));
+  });
 }
 
 describe('DashboardScreen', () => {
-  it('renders stat card labels', () => {
-    render(
-      React.createElement(
-        Providers,
-        null,
-        React.createElement(DashboardScreen, { user: TEST_USER, onNav: () => {} }),
-      ),
+  it('renders stat card labels', async () => {
+    const Stub = makeStub(
+      { todayEvents: [], homework: [], classes: [], studentCount: 0, materialCount: 0 },
+      DashboardScreen,
+      { user: TEST_USER, onNav: () => {} },
     );
+    await renderStub(Stub);
     expect(screen.getByText('Active classes')).toBeInTheDocument();
     expect(screen.getByText('Students')).toBeInTheDocument();
   });
 });
 
 describe('CalendarScreen', () => {
-  it('renders calendar title and view buttons', () => {
-    render(React.createElement(Providers, null, React.createElement(CalendarScreen, null)));
+  it('renders calendar title and view buttons', async () => {
+    const Stub = makeStub(
+      { events: [], classes: [], theme: DEFAULT_THEME },
+      CalendarScreen,
+    );
+    await renderStub(Stub);
     expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
     expect(screen.getByText('Month')).toBeInTheDocument();
   });
 });
 
 describe('ClassesScreen', () => {
-  it('renders Classes heading', () => {
-    render(React.createElement(Providers, null, React.createElement(ClassesScreen, null)));
+  it('renders Classes heading', async () => {
+    const Stub = makeStub(
+      { classes: [], students: [], materials: [], homework: [] },
+      ClassesScreen,
+    );
+    await renderStub(Stub);
     expect(screen.getByText('Classes')).toBeInTheDocument();
   });
 });
 
 describe('StudentsScreen', () => {
-  it('renders People heading', () => {
-    render(React.createElement(Providers, null, React.createElement(StudentsScreen, null)));
+  it('renders People heading', async () => {
+    const Stub = makeStub(
+      { students: [], staff: [], parents: [], invites: [], classes: [] },
+      StudentsScreen,
+    );
+    await renderStub(Stub);
     expect(screen.getByText('People')).toBeInTheDocument();
   });
 });
 
 describe('MaterialsScreen', () => {
-  it('renders Materials heading', () => {
-    render(React.createElement(Providers, null, React.createElement(MaterialsScreen, null)));
+  it('renders Materials heading', async () => {
+    const Stub = makeStub({ materials: [], classes: [] }, MaterialsScreen);
+    await renderStub(Stub);
     expect(screen.getByRole('heading', { name: 'Materials' })).toBeInTheDocument();
   });
 });
 
 describe('HomeworkScreen', () => {
-  it('renders Homework heading', () => {
-    render(React.createElement(Providers, null, React.createElement(HomeworkScreen, null)));
+  it('renders Homework heading', async () => {
+    const Stub = makeStub({ homework: [], classes: [] }, HomeworkScreen);
+    await renderStub(Stub);
     expect(screen.getByText('Homework')).toBeInTheDocument();
   });
 });
 
 describe('FeedbackScreen', () => {
-  it('renders Feedback heading', () => {
-    render(
-      React.createElement(
-        Providers,
-        null,
-        React.createElement(FeedbackScreen, { user: TEST_USER }),
-      ),
-    );
+  it('renders Feedback heading', async () => {
+    const Stub = makeStub({ feedback: [] }, FeedbackScreen, { user: TEST_USER });
+    await renderStub(Stub);
     expect(screen.getByText('Feedback')).toBeInTheDocument();
   });
 });
@@ -92,9 +116,7 @@ describe('FeedbackScreen', () => {
 describe('ProfileScreen', () => {
   it('renders Your profile heading', () => {
     render(
-      React.createElement(
-        Providers,
-        null,
+      withLang(
         React.createElement(ProfileScreen, {
           user: TEST_USER,
           onSave: () => {},
@@ -108,9 +130,7 @@ describe('ProfileScreen', () => {
 
 describe('AuthScreen', () => {
   it('renders Welcome back login card', () => {
-    render(
-      React.createElement(Providers, null, React.createElement(AuthScreen, { onLogin: () => {} })),
-    );
+    render(withLang(React.createElement(AuthScreen, { onLogin: () => {}, invites: [] })));
     expect(screen.getByText('Welcome back')).toBeInTheDocument();
     expect(screen.getByText('Sign in')).toBeInTheDocument();
   });

@@ -1,7 +1,7 @@
 import React from 'react';
+import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.jsx';
 import { PageHeader, Empty, Modal, MSelect } from './ui.jsx';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
@@ -35,17 +35,46 @@ function StatCard({ icon, color, num, label }) {
   );
 }
 
+// Per-item homework checkbox for the dashboard "Due Today" list.
+function DashHwItem({ h, classes }) {
+  const fetcher = useFetcher();
+  const optimisticDone = fetcher.formData ? fetcher.formData.get('done') === 'true' : h.done;
+  const c = colorOf(h.color);
+  const clsName = (id) => (classes.find((cl) => cl.id === id) || {}).name;
+  const toggle = () => {
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', h.id);
+    fd.set('done', String(!optimisticDone));
+    fetcher.submit(fd, { action: '/homework', method: 'post' });
+  };
+  return (
+    <div className="m-row" style={{ gap: 12 }}>
+      <SCheck checked={optimisticDone} done onChange={toggle} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>
+          {h.title}
+        </div>
+        <div className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
+          {clsName(h.classId)}
+        </div>
+      </div>
+      <span style={{ width: 10, height: 10, borderRadius: 9, background: c.base }} />
+    </div>
+  );
+}
+
 // ---- Dashboard / Today ----
 function DashboardScreen({ user, onNav }) {
-  const { data, update } = useStore();
+  const { todayEvents, homework, classes, studentCount, materialCount } = useLoaderData();
   const { t, lang } = useLang();
   const today = iso(TODAY);
-  const todays = expandEvents(data.events, TODAY, TODAY).sort(
+  const todays = expandEvents(todayEvents, TODAY, TODAY).sort(
     (a, b) => toMin(a.start) - toMin(b.start),
   );
-  const dueToday = data.homework.filter((h) => h.due === today && !h.done);
-  const pending = data.homework.filter((h) => !h.done);
-  const className = (id) => (data.classes.find((c) => c.id === id) || {}).name;
+  const dueToday = homework.filter((h) => h.due === today && !h.done);
+  const pending = homework.filter((h) => !h.done);
+  const className = (id) => (classes.find((c) => c.id === id) || {}).name;
   const todayStr = new Date(TODAY).toLocaleDateString(locale(lang), {
     weekday: 'long',
     month: 'long',
@@ -59,15 +88,10 @@ function DashboardScreen({ user, onNav }) {
         subtitle={t('dash_sub', { date: todayStr, count: todays.length })}
       />
       <div className="m-grid cols-4">
-        <StatCard icon="book" color="green" num={data.classes.length} label={t('stat_classes')} />
-        <StatCard icon="users" color="blue" num={data.students.length} label={t('stat_students')} />
+        <StatCard icon="book" color="green" num={classes.length} label={t('stat_classes')} />
+        <StatCard icon="users" color="blue" num={studentCount} label={t('stat_students')} />
         <StatCard icon="clipboard" color="orange" num={pending.length} label={t('stat_homework')} />
-        <StatCard
-          icon="folder"
-          color="violet"
-          num={data.materials.length}
-          label={t('stat_materials')}
-        />
+        <StatCard icon="folder" color="violet" num={materialCount} label={t('stat_materials')} />
       </div>
       <div className="m-grid" style={{ gridTemplateColumns: '1.4fr 1fr' }}>
         {/* Today's schedule */}
@@ -135,33 +159,9 @@ function DashboardScreen({ user, onNav }) {
           </div>
           {dueToday.length ? (
             <div className="m-stack">
-              {dueToday.map((h) => {
-                const c = colorOf(h.color);
-                return (
-                  <div key={h.id} className="m-row" style={{ gap: 12 }}>
-                    <SCheck
-                      checked={h.done}
-                      done
-                      onChange={() => update('homework', h.id, { done: !h.done })}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          color: 'var(--text-strong)',
-                          fontSize: 'var(--text-sm)',
-                        }}
-                      >
-                        {h.title}
-                      </div>
-                      <div className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
-                        {className(h.classId)}
-                      </div>
-                    </div>
-                    <span style={{ width: 10, height: 10, borderRadius: 9, background: c.base }} />
-                  </div>
-                );
-              })}
+              {dueToday.map((h) => (
+                <DashHwItem key={h.id} h={h} classes={classes} />
+              ))}
             </div>
           ) : (
             <Empty icon="check" title={t('dash_all_caught')} sub={t('dash_no_hw_today')} />
@@ -173,35 +173,127 @@ function DashboardScreen({ user, onNav }) {
 }
 
 // ---- Homework ----
+function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }) {
+  const fetcher = useFetcher();
+  const optimisticDone = fetcher.formData ? fetcher.formData.get('done') === 'true' : h.done;
+  const c = colorOf(h.color);
+  const overdue = !optimisticDone && h.due && h.due < today;
+  const clsName = (id) => (classes.find((cl) => cl.id === id) || {}).name || '—';
+
+  const toggle = () => {
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', h.id);
+    fd.set('done', String(!optimisticDone));
+    fetcher.submit(fd, { action: '/homework', method: 'post' });
+  };
+
+  return (
+    <div className="lrow">
+      <SCheck checked={optimisticDone} done onChange={toggle} />
+      <div className="lrow__bar" style={{ background: c.base }} />
+      <div style={{ flex: 1 }}>
+        <div
+          className="lrow__title"
+          style={{
+            textDecoration: optimisticDone ? 'line-through' : 'none',
+            opacity: optimisticDone ? 0.55 : 1,
+          }}
+        >
+          {h.title}
+        </div>
+        <div className="lrow__meta">
+          <STag color={h.color}>{clsName(h.classId)}</STag>
+          {h.due && (
+            <span className="m-row" style={{ gap: 5 }}>
+              <MIcon name="clock" size={14} />
+              {overdue ? (
+                <strong style={{ color: 'var(--danger)' }}>{t('hw_overdue')}</strong>
+              ) : (
+                new Date(h.due).toLocaleDateString(locale(lang), {
+                  month: 'short',
+                  day: 'numeric',
+                })
+              )}
+            </span>
+          )}
+          {h.points != null && h.points !== '' && (
+            <span
+              className="mchip"
+              style={{ background: 'var(--cream-200)', color: 'var(--text-body)' }}
+            >
+              <MIcon name="flag" size={12} />
+              {t('hw_pts', { n: h.points })}
+            </span>
+          )}
+        </div>
+        {h.notes && (
+          <div
+            className="m-muted"
+            style={{ fontSize: 'var(--text-sm)', marginTop: 6, textWrap: 'pretty' }}
+          >
+            {h.notes}
+          </div>
+        )}
+      </div>
+      <div className="lrow__actions">
+        <SIB label={t('edit')} size="sm" onClick={onEdit}>
+          <MIcon name="edit" size={16} />
+        </SIB>
+        <SIB label={t('delete')} size="sm" onClick={onDelete}>
+          <MIcon name="trash" size={16} />
+        </SIB>
+      </div>
+    </div>
+  );
+}
+
 function HomeworkScreen() {
-  const { data, add, update, remove } = useStore();
+  const { homework: allHw, classes } = useLoaderData();
+  const fetcher = useFetcher();
   const { t, lang } = useLang();
   const [filter, setFilter] = React.useState('all');
   const [modal, setModal] = React.useState(null);
-  const className = (id) => (data.classes.find((c) => c.id === id) || {}).name || '—';
+  const today = iso(TODAY);
 
-  const list = data.homework.filter((h) =>
+  const list = allHw.filter((h) =>
     filter === 'all' ? true : filter === 'open' ? !h.done : h.done,
   );
-  const done = data.homework.filter((h) => h.done).length;
-  const pct = data.homework.length ? Math.round((done / data.homework.length) * 100) : 0;
-  const today = iso(TODAY);
+  const doneCount = allHw.filter((h) => h.done).length;
+  const pct = allHw.length ? Math.round((doneCount / allHw.length) * 100) : 0;
 
   const openNew = () =>
     setModal({
       title: '',
-      classId: data.classes[0]?.id || '',
+      classId: classes[0]?.id || '',
       due: today,
-      color: data.classes[0]?.color || 'orange',
+      color: classes[0]?.color || 'orange',
       done: false,
       points: 10,
       notes: '',
     });
+
   const save = (f) => {
-    if (!f.title.trim()) f.title = t('hw_untitled');
-    if (f.id) update('homework', f.id, f);
-    else add('homework', f);
+    const title = f.title.trim() || t('hw_untitled');
+    const fd = new FormData();
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('title', title);
+    if (f.classId) fd.set('classId', f.classId);
+    if (f.due) fd.set('due', f.due);
+    if (f.color) fd.set('color', f.color);
+    fd.set('done', String(!!f.done));
+    if (f.points != null && f.points !== '') fd.set('points', String(f.points));
+    if (f.notes) fd.set('notes', f.notes);
+    fetcher.submit(fd, { action: '/homework', method: 'post' });
     setModal(null);
+  };
+
+  const removeHw = (id) => {
+    const fd = new FormData();
+    fd.set('intent', 'delete');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/homework', method: 'post' });
   };
 
   return (
@@ -218,7 +310,7 @@ function HomeworkScreen() {
       <SC style={{ padding: 18 }}>
         <div className="m-spread" style={{ marginBottom: 10 }}>
           <div style={{ fontWeight: 800, color: 'var(--text-strong)' }}>
-            {t('hw_complete', { done, total: data.homework.length })}
+            {t('hw_complete', { done: doneCount, total: allHw.length })}
           </div>
           <div className="m-mono m-muted">{`${pct}%`}</div>
         </div>
@@ -235,70 +327,18 @@ function HomeworkScreen() {
       />
       <div className="m-stack">
         {list.length ? (
-          list.map((h) => {
-            const c = colorOf(h.color);
-            const overdue = !h.done && h.due < today;
-            return (
-              <div key={h.id} className="lrow">
-                <SCheck
-                  checked={h.done}
-                  done
-                  onChange={() => update('homework', h.id, { done: !h.done })}
-                />
-                <div className="lrow__bar" style={{ background: c.base }} />
-                <div style={{ flex: 1 }}>
-                  <div
-                    className="lrow__title"
-                    style={{
-                      textDecoration: h.done ? 'line-through' : 'none',
-                      opacity: h.done ? 0.55 : 1,
-                    }}
-                  >
-                    {h.title}
-                  </div>
-                  <div className="lrow__meta">
-                    <STag color={h.color}>{className(h.classId)}</STag>
-                    <span className="m-row" style={{ gap: 5 }}>
-                      <MIcon name="clock" size={14} />
-                      {overdue ? (
-                        <strong style={{ color: 'var(--danger)' }}>{t('hw_overdue')}</strong>
-                      ) : (
-                        new Date(h.due).toLocaleDateString(locale(lang), {
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      )}
-                    </span>
-                    {h.points != null && h.points !== '' && (
-                      <span
-                        className="mchip"
-                        style={{ background: 'var(--cream-200)', color: 'var(--text-body)' }}
-                      >
-                        <MIcon name="flag" size={12} />
-                        {t('hw_pts', { n: h.points })}
-                      </span>
-                    )}
-                  </div>
-                  {h.notes && (
-                    <div
-                      className="m-muted"
-                      style={{ fontSize: 'var(--text-sm)', marginTop: 6, textWrap: 'pretty' }}
-                    >
-                      {h.notes}
-                    </div>
-                  )}
-                </div>
-                <div className="lrow__actions">
-                  <SIB label={t('edit')} size="sm" onClick={() => setModal({ ...h })}>
-                    <MIcon name="edit" size={16} />
-                  </SIB>
-                  <SIB label={t('delete')} size="sm" onClick={() => remove('homework', h.id)}>
-                    <MIcon name="trash" size={16} />
-                  </SIB>
-                </div>
-              </div>
-            );
-          })
+          list.map((h) => (
+            <HomeworkItem
+              key={h.id}
+              h={h}
+              classes={classes}
+              today={today}
+              lang={lang}
+              onEdit={() => setModal({ ...h })}
+              onDelete={() => removeHw(h.id)}
+              t={t}
+            />
+          ))
         ) : (
           <SC>
             <Empty icon="clipboard" title={t('hw_no_tasks')} sub={t('hw_add_start')} />
@@ -336,17 +376,17 @@ function HomeworkScreen() {
               label={t('class')}
               value={modal.classId}
               onChange={(v) => {
-                const c = data.classes.find((x) => x.id === v);
-                setModal((m) => ({ ...m, classId: v, color: c ? c.color : m.color }));
+                const cls = classes.find((x) => x.id === v);
+                setModal((m) => ({ ...m, classId: v, color: cls ? cls.color : m.color }));
               }}
-              options={data.classes.map((c) => ({ value: c.id, label: c.name }))}
+              options={classes.map((c) => ({ value: c.id, label: c.name }))}
             />
             <div className="mochi-field">
               <label className="mochi-field__label">{t('hw_due')}</label>
               <input
                 type="date"
                 className="mochi-input"
-                value={modal.due}
+                value={modal.due || ''}
                 onChange={(e) => setModal((m) => ({ ...m, due: e.target.value }))}
               />
             </div>
