@@ -1,4 +1,5 @@
 import { eq, inArray } from 'drizzle-orm';
+import type { BatchItem } from 'drizzle-orm/batch';
 import { classes, classSchedule, classStudents } from '../db/schema';
 import type { Db } from '../db/index';
 import type { ClassInput } from '../../shared/schemas';
@@ -59,7 +60,7 @@ export async function get(db: Db, id: string): Promise<ClassRow | null> {
 export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
   const id = crypto.randomUUID();
 
-  const ops: Parameters<typeof db.batch>[0] = [
+  const ops: BatchItem<'sqlite'>[] = [
     db.insert(classes).values({
       id,
       name: input.name,
@@ -90,13 +91,13 @@ export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
     );
   }
 
-  await db.batch(ops as Parameters<typeof db.batch>[0]);
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const result = await get(db, id);
   return result!;
 }
 
 export async function update(db: Db, id: string, input: Partial<ClassInput>): Promise<ClassRow> {
-  const ops: Parameters<typeof db.batch>[0] = [];
+  const ops: BatchItem<'sqlite'>[] = [];
 
   const scalarSet: Partial<typeof classes.$inferInsert> = {};
   if (input.name !== undefined) scalarSet.name = input.name;
@@ -134,7 +135,7 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
     }
   }
 
-  if (ops.length > 0) await db.batch(ops as Parameters<typeof db.batch>[0]);
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const result = await get(db, id);
   return result!;
 }

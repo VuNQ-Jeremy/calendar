@@ -41,7 +41,7 @@ export async function create(db: Db, input: MaterialInput): Promise<MaterialRow>
     classId: input.classId ?? null,
     url: input.url ?? null,
     fileName: input.fileName ?? null,
-    favorite: input.favorite ? 1 : (0 as unknown as boolean),
+    favorite: input.favorite,
     addedAt: input.addedAt ?? null,
   });
   const rows = await db.select().from(materials).where(eq(materials.id, id));
@@ -59,7 +59,7 @@ export async function update(
   if (patch.classId !== undefined) set.classId = patch.classId ?? null;
   if (patch.url !== undefined) set.url = patch.url ?? null;
   if (patch.fileName !== undefined) set.fileName = patch.fileName ?? null;
-  if (patch.favorite !== undefined) set.favorite = patch.favorite ? 1 : (0 as unknown as boolean);
+  if (patch.favorite !== undefined) set.favorite = patch.favorite;
   if (patch.addedAt !== undefined) set.addedAt = patch.addedAt ?? null;
   if (Object.keys(set).length) {
     await db.update(materials).set(set).where(eq(materials.id, id));

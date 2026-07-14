@@ -3,6 +3,7 @@ import { useOutletContext, useNavigate } from 'react-router';
 import { DashboardScreen } from '../../src/screens-core.jsx';
 import type { AppContext } from './_app.js';
 import { createDb } from '../../server/db/index';
+import { cloudflareCtx } from '../../app/load-context';
 import * as eventsSvc from '../../server/services/events';
 import * as homeworkSvc from '../../server/services/homework';
 import * as classesSvc from '../../server/services/classes';
@@ -11,7 +12,7 @@ import * as materialsSvc from '../../server/services/materials';
 import { iso, TODAY } from '../../src/lib/core.js';
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.cloudflare.env);
+  const db = createDb(context.get(cloudflareCtx).env);
   const today = iso(TODAY);
   const [todayEvents, homework, classes, students, materials] = await Promise.all([
     eventsSvc.listForToday(db, today),

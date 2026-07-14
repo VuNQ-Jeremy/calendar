@@ -1,9 +1,3 @@
-import type { PlatformProxy } from 'wrangler';
+import { createContext } from 'react-router';
 
-type Cloudflare = Omit<PlatformProxy<Env>, 'dispose'>;
-
-declare module 'react-router' {
-  interface AppLoadContext {
-    cloudflare: Cloudflare;
-  }
-}
+export const cloudflareCtx = createContext<{ env: Env; ctx: ExecutionContext }>();

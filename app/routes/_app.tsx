@@ -12,7 +12,7 @@ import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as homeworkSvc from '../../server/services/homework';
 import * as invitesSvc from '../../server/services/invites';
-import '../../app/load-context';
+import { cloudflareCtx } from '../../app/load-context';
 
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB } = DS;
 
@@ -46,7 +46,7 @@ const NAV = [
 ];
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = createDb(context.cloudflare.env);
+  const db = createDb(context.get(cloudflareCtx).env);
   const today = iso(TODAY);
   const [homeworkDueCount, unusedInviteCount, newFeedbackCount, invites] = await Promise.all([
     homeworkSvc.countDue(db, today),

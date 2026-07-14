@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import type { BatchItem } from 'drizzle-orm/batch';
 import { staff, students, parents, classStudents, parentStudents } from '../db/schema';
 import type { Db } from '../db/index';
 import type { StudentInput, StaffInput, ParentInput } from '../../shared/schemas';
@@ -94,7 +95,7 @@ export async function listStudents(db: Db): Promise<StudentRow[]> {
 
 export async function createStudent(db: Db, input: StudentInput): Promise<StudentRow> {
   const id = crypto.randomUUID();
-  const ops: Parameters<typeof db.batch>[0] = [
+  const ops: BatchItem<'sqlite'>[] = [
     db.insert(students).values({
       id,
       name: input.name,
@@ -111,7 +112,7 @@ export async function createStudent(db: Db, input: StudentInput): Promise<Studen
         .values(input.classIds.map((cid) => ({ classId: cid, studentId: id }))),
     );
   }
-  await db.batch(ops as Parameters<typeof db.batch>[0]);
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const [sRows, csRows] = await db.batch([
     db.select().from(students).where(eq(students.id, id)),
     db.select().from(classStudents).where(eq(classStudents.studentId, id)),
@@ -124,7 +125,7 @@ export async function updateStudent(
   id: string,
   patch: Partial<StudentInput>,
 ): Promise<StudentRow> {
-  const ops: Parameters<typeof db.batch>[0] = [];
+  const ops: BatchItem<'sqlite'>[] = [];
   const set: Partial<typeof students.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.grade !== undefined) set.grade = patch.grade ?? null;
@@ -142,7 +143,7 @@ export async function updateStudent(
       );
     }
   }
-  if (ops.length > 0) await db.batch(ops as Parameters<typeof db.batch>[0]);
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const [sRows, csRows] = await db.batch([
     db.select().from(students).where(eq(students.id, id)),
     db.select().from(classStudents).where(eq(classStudents.studentId, id)),
@@ -195,7 +196,7 @@ export async function listParents(db: Db): Promise<ParentRow[]> {
 
 export async function createParent(db: Db, input: ParentInput): Promise<ParentRow> {
   const id = crypto.randomUUID();
-  const ops: Parameters<typeof db.batch>[0] = [
+  const ops: BatchItem<'sqlite'>[] = [
     db.insert(parents).values({
       id,
       name: input.name,
@@ -212,7 +213,7 @@ export async function createParent(db: Db, input: ParentInput): Promise<ParentRo
         .values(input.studentIds.map((sid) => ({ parentId: id, studentId: sid }))),
     );
   }
-  await db.batch(ops as Parameters<typeof db.batch>[0]);
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const [pRows, psRows] = await db.batch([
     db.select().from(parents).where(eq(parents.id, id)),
     db.select().from(parentStudents).where(eq(parentStudents.parentId, id)),
@@ -225,7 +226,7 @@ export async function updateParent(
   id: string,
   patch: Partial<ParentInput>,
 ): Promise<ParentRow> {
-  const ops: Parameters<typeof db.batch>[0] = [];
+  const ops: BatchItem<'sqlite'>[] = [];
   const set: Partial<typeof parents.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.email !== undefined) set.email = patch.email ?? null;
@@ -243,7 +244,7 @@ export async function updateParent(
       );
     }
   }
-  if (ops.length > 0) await db.batch(ops as Parameters<typeof db.batch>[0]);
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const [pRows, psRows] = await db.batch([
     db.select().from(parents).where(eq(parents.id, id)),
     db.select().from(parentStudents).where(eq(parentStudents.parentId, id)),

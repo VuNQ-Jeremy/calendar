@@ -1,4 +1,4 @@
-import { eq, and, lte, or, ne } from 'drizzle-orm';
+import { eq, and, gte, lte, or, ne } from 'drizzle-orm';
 import { events } from '../db/schema';
 import type { Db } from '../db/index';
 import type { EventInput } from '../../shared/schemas';
@@ -42,7 +42,7 @@ export async function listRange(db: Db, fromIso: string, toIso: string): Promise
     .where(
       and(
         lte(events.date, toIso),
-        or(ne(events.recurrence, 'none'), and(lte(fromIso, events.date))),
+        or(ne(events.recurrence, 'none'), and(gte(events.date, fromIso))),
       ),
     );
   return rows.map(map);

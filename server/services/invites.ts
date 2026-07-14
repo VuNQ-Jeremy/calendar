@@ -39,7 +39,7 @@ export async function create(db: Db, input: InviteInput): Promise<InviteRow> {
     name: input.name ?? null,
     classId: input.classId ?? null,
     createdAt: input.createdAt ?? null,
-    used: input.used ? 1 : (0 as unknown as boolean),
+    used: input.used,
   });
   const rows = await db.select().from(invites).where(eq(invites.id, id));
   return map(rows[0]);
@@ -50,9 +50,6 @@ export async function remove(db: Db, id: string): Promise<void> {
 }
 
 export async function countUnused(db: Db): Promise<number> {
-  const rows = await db
-    .select()
-    .from(invites)
-    .where(eq(invites.used, false as unknown as boolean));
+  const rows = await db.select().from(invites).where(eq(invites.used, false));
   return rows.length;
 }

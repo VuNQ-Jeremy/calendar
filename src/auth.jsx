@@ -15,6 +15,7 @@ function AuthField({ icon, ...props }) {
   );
 }
 
+/** @param {{ onLogin: Function, invites: import('../server/services/invites').InviteRow[] }} props */
 function AuthScreen({ onLogin, invites = [] }) {
   const { t } = useLang();
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
