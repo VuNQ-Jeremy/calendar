@@ -1,7 +1,7 @@
 import React from 'react';
+import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.jsx';
 import { iso, TODAY, ICON_TINT } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
@@ -41,16 +41,100 @@ function downloadMaterial(m) {
 }
 
 // ============================================================ MATERIALS ============================================================
+function MaterialCard({ m, classes, onEdit, onDelete, t }) {
+  const favFetcher = useFetcher();
+  const optimisticFav = favFetcher.formData
+    ? favFetcher.formData.get('favorite') === 'true'
+    : m.favorite;
+  const mt = MAT_TYPES[m.type] || MAT_TYPES.notes;
+  const isLink = m.type === 'link' || m.type === 'video';
+  const cls = classes.find((c) => c.id === m.classId);
+
+  const toggleFav = () => {
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', m.id);
+    fd.set('favorite', String(!optimisticFav));
+    favFetcher.submit(fd, { action: '/materials', method: 'post' });
+  };
+
+  return (
+    <XC interactive>
+      <div className="m-spread" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
+        <div className="iconwrap" style={{ width: 44, height: 44, ...ICON_TINT(mt.color) }}>
+          <MIcon name={mt.icon} size={20} />
+        </div>
+        <button
+          className={'starbtn' + (optimisticFav ? ' is-on' : '')}
+          onClick={toggleFav}
+          title={t('mat_fav_only')}
+        >
+          <MIcon name={optimisticFav ? 'starFill' : 'star'} size={18} />
+        </button>
+      </div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-md)' }}>{m.title}</h3>
+      <div className="lrow__meta" style={{ marginBottom: 14 }}>
+        <span className="mchip">{t(mt.tk)}</span>
+        <XTag dot color={cls?.color || 'neutral'}>
+          {cls?.name || t('mat_unfiled')}
+        </XTag>
+      </div>
+      <div className="m-spread">
+        {isLink ? (
+          <a
+            href={m.url || '#'}
+            target="_blank"
+            rel="noreferrer"
+            className="m-row"
+            style={{ gap: 6, fontSize: 'var(--text-sm)', fontWeight: 700 }}
+          >
+            <MIcon name="link" size={14} />
+            {t('mat_open_link')}
+          </a>
+        ) : (
+          <button
+            className="m-row"
+            style={{
+              gap: 6,
+              fontSize: 'var(--text-sm)',
+              fontWeight: 700,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-link)',
+              padding: 0,
+              fontFamily: 'inherit',
+            }}
+            onClick={() => downloadMaterial(m)}
+            title={t('mat_download')}
+          >
+            <MIcon name="download" size={15} />
+            {t('mat_download')}
+          </button>
+        )}
+        <div className="lrow__actions">
+          <XIB label={t('edit')} size="sm" onClick={onEdit}>
+            <MIcon name="edit" size={15} />
+          </XIB>
+          <XIB label={t('delete')} size="sm" onClick={onDelete}>
+            <MIcon name="trash" size={15} />
+          </XIB>
+        </div>
+      </div>
+    </XC>
+  );
+}
+
 function MaterialsScreen() {
-  const { data, add, update, remove } = useStore();
+  const { materials: matList, classes } = useLoaderData();
+  const fetcher = useFetcher();
   const { t } = useLang();
   const [filterClass, setFilterClass] = React.useState('all');
   const [filterType, setFilterType] = React.useState('all');
   const [favOnly, setFavOnly] = React.useState(false);
   const [modal, setModal] = React.useState(null);
-  const className = (id) => (data.classes.find((c) => c.id === id) || {}).name || t('mat_unfiled');
 
-  let list = data.materials;
+  let list = matList;
   if (filterClass !== 'all') list = list.filter((m) => m.classId === filterClass);
   if (filterType !== 'all') list = list.filter((m) => m.type === filterType);
   if (favOnly) list = list.filter((m) => m.favorite);
@@ -59,18 +143,34 @@ function MaterialsScreen() {
     setModal({
       title: '',
       type: 'notes',
-      classId: data.classes[0]?.id || '',
+      classId: classes[0]?.id || '',
       url: '',
       fileName: '',
-      fileData: '',
       favorite: false,
       addedAt: iso(TODAY),
     });
+
   const save = (f) => {
-    if (!f.title.trim()) f.title = t('mat_untitled');
-    if (f.id) update('materials', f.id, f);
-    else add('materials', f);
+    const title = f.title.trim() || t('mat_untitled');
+    const fd = new FormData();
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('title', title);
+    fd.set('type', f.type);
+    if (f.classId) fd.set('classId', f.classId);
+    if (f.url) fd.set('url', f.url);
+    if (f.fileName) fd.set('fileName', f.fileName);
+    fd.set('favorite', String(!!f.favorite));
+    if (f.addedAt) fd.set('addedAt', f.addedAt);
+    fetcher.submit(fd, { action: '/materials', method: 'post' });
     setModal(null);
+  };
+
+  const removeMat = (id) => {
+    const fd = new FormData();
+    fd.set('intent', 'delete');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/materials', method: 'post' });
   };
 
   return (
@@ -91,7 +191,7 @@ function MaterialsScreen() {
             onChange={setFilterClass}
             options={[
               { value: 'all', label: t('mat_all_classes') },
-              ...data.classes.map((c) => ({ value: c.id, label: c.name })),
+              ...classes.map((c) => ({ value: c.id, label: c.name })),
             ]}
           />
         </div>
@@ -114,81 +214,16 @@ function MaterialsScreen() {
       </div>
       {list.length ? (
         <div className="m-grid cols-3">
-          {list.map((m) => {
-            const mt = MAT_TYPES[m.type];
-            const isLink = m.type === 'link' || m.type === 'video';
-            return (
-              <XC key={m.id} interactive>
-                <div className="m-spread" style={{ alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div
-                    className="iconwrap"
-                    style={{ width: 44, height: 44, ...ICON_TINT(mt.color) }}
-                  >
-                    <MIcon name={mt.icon} size={20} />
-                  </div>
-                  <button
-                    className={'starbtn' + (m.favorite ? ' is-on' : '')}
-                    onClick={() => update('materials', m.id, { favorite: !m.favorite })}
-                    title={t('mat_fav_only')}
-                  >
-                    <MIcon name={m.favorite ? 'starFill' : 'star'} size={18} />
-                  </button>
-                </div>
-                <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-md)' }}>{m.title}</h3>
-                <div className="lrow__meta" style={{ marginBottom: 14 }}>
-                  <span className="mchip">{t(mt.tk)}</span>
-                  <XTag
-                    dot
-                    color={(data.classes.find((c) => c.id === m.classId) || {}).color || 'neutral'}
-                  >
-                    {className(m.classId)}
-                  </XTag>
-                </div>
-                <div className="m-spread">
-                  {isLink ? (
-                    <a
-                      href={m.url || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="m-row"
-                      style={{ gap: 6, fontSize: 'var(--text-sm)', fontWeight: 700 }}
-                    >
-                      <MIcon name="link" size={14} />
-                      {t('mat_open_link')}
-                    </a>
-                  ) : (
-                    <button
-                      className="m-row"
-                      style={{
-                        gap: 6,
-                        fontSize: 'var(--text-sm)',
-                        fontWeight: 700,
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--text-link)',
-                        padding: 0,
-                        fontFamily: 'inherit',
-                      }}
-                      onClick={() => downloadMaterial(m)}
-                      title={t('mat_download')}
-                    >
-                      <MIcon name="download" size={15} />
-                      {t('mat_download')}
-                    </button>
-                  )}
-                  <div className="lrow__actions">
-                    <XIB label={t('edit')} size="sm" onClick={() => setModal({ ...m })}>
-                      <MIcon name="edit" size={15} />
-                    </XIB>
-                    <XIB label={t('delete')} size="sm" onClick={() => remove('materials', m.id)}>
-                      <MIcon name="trash" size={15} />
-                    </XIB>
-                  </div>
-                </div>
-              </XC>
-            );
-          })}
+          {list.map((m) => (
+            <MaterialCard
+              key={m.id}
+              m={m}
+              classes={classes}
+              onEdit={() => setModal({ ...m })}
+              onDelete={() => removeMat(m.id)}
+              t={t}
+            />
+          ))}
         </div>
       ) : (
         <XC>
@@ -202,7 +237,7 @@ function MaterialsScreen() {
           setDraft={setModal}
           onClose={() => setModal(null)}
           onSave={save}
-          classes={data.classes}
+          classes={classes}
         />
       )}
     </div>
@@ -357,10 +392,15 @@ const PRESETS = {
 
 // A single color row. Defined at module scope (stable identity) so live theme
 // updates re-render via props instead of remounting the <input type=color>.
-function ThemeColorRow({ value, label, sub, onChange }) {
+function ThemeColorRow({ value, label, sub, onChange, onCommit }) {
   return (
     <div className="colorrow">
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onCommit ? (e) => onCommit(e.target.value) : undefined}
+      />
       <div style={{ flex: 1 }}>
         <div className="colorrow__label">{label}</div>
         <div className="colorrow__sub">{sub}</div>
@@ -374,15 +414,38 @@ function ThemeColorRow({ value, label, sub, onChange }) {
 
 // Renders the full theme editor body (presets + color pickers + background image). Used inside the Calendar "Customize" modal.
 function CalendarThemePanel() {
-  const { data, setTheme } = useStore();
+  const { theme } = useLoaderData();
+  const fetcher = useFetcher();
   const { t } = useLang();
-  const theme = data.theme;
+  // Local draft for live preview. Initialized once from loader; not re-synced on
+  // revalidation so in-progress edits are not clobbered by the server round-trip.
+  const draftRef = React.useRef({ ...theme });
+  const [draft, setDraftState] = React.useState(() => ({ ...theme }));
+
+  const setField = (key, value) => {
+    draftRef.current = { ...draftRef.current, [key]: value };
+    setDraftState({ ...draftRef.current });
+  };
+
+  const submitNow = (patch = {}) => {
+    const next = { ...draftRef.current, ...patch };
+    draftRef.current = next;
+    setDraftState(next);
+    const fd = new FormData();
+    fd.set('intent', 'theme');
+    Object.entries(next).forEach(([k, v]) => {
+      if (v !== null && v !== undefined) fd.set(k, String(v));
+    });
+    fetcher.submit(fd, { action: '/calendar', method: 'post' });
+  };
+
   const matchPreset = Object.entries(PRESETS).find(
-    ([, p]) => p.bg === theme.bg && p.gridLine === theme.gridLine && p.today === theme.today,
+    ([, p]) => p.bg === draft.bg && p.gridLine === draft.gridLine && p.today === draft.today,
   )?.[0];
+
   const applyPreset = (key) => {
     const p = PRESETS[key];
-    setTheme({ bg: p.bg, gridLine: p.gridLine, today: p.today, header: p.header });
+    submitNow({ bg: p.bg, gridLine: p.gridLine, today: p.today, header: p.header });
   };
 
   return (
@@ -410,28 +473,32 @@ function CalendarThemePanel() {
         {t('theme_finetune')}
       </div>
       <ThemeColorRow
-        value={theme.bg}
+        value={draft.bg}
         label={t('theme_canvas')}
         sub={t('theme_canvas_sub')}
-        onChange={(v) => setTheme({ bg: v })}
+        onChange={(v) => setField('bg', v)}
+        onCommit={(v) => submitNow({ bg: v })}
       />
       <ThemeColorRow
-        value={theme.header}
+        value={draft.header}
         label={t('theme_dayheader')}
         sub={t('theme_dayheader_sub')}
-        onChange={(v) => setTheme({ header: v })}
+        onChange={(v) => setField('header', v)}
+        onCommit={(v) => submitNow({ header: v })}
       />
       <ThemeColorRow
-        value={theme.gridLine}
+        value={draft.gridLine}
         label={t('theme_grid')}
         sub={t('theme_grid_sub')}
-        onChange={(v) => setTheme({ gridLine: v })}
+        onChange={(v) => setField('gridLine', v)}
+        onCommit={(v) => submitNow({ gridLine: v })}
       />
       <ThemeColorRow
-        value={theme.today}
+        value={draft.today}
         label={t('theme_today')}
         sub={t('theme_today_sub')}
-        onChange={(v) => setTheme({ today: v })}
+        onChange={(v) => setField('today', v)}
+        onCommit={(v) => submitNow({ today: v })}
       />
       <hr className="divider" style={{ margin: '18px 0 14px' }} />
       <div className="mochi-eyebrow" style={{ marginBottom: 8 }}>
@@ -442,8 +509,9 @@ function CalendarThemePanel() {
         <input
           className="mochi-input"
           placeholder={t('theme_imgurl_ph')}
-          value={theme.bgImage}
-          onChange={(e) => setTheme({ bgImage: e.target.value })}
+          value={draft.bgImage}
+          onChange={(e) => setField('bgImage', e.target.value)}
+          onBlur={() => submitNow()}
         />
       </div>
       <label
@@ -471,9 +539,9 @@ function CalendarThemePanel() {
               // Bump opacity to a clearly visible level on upload if it's still at
               // the subtle default, so the image is actually seen (not washed out).
               r.onload = () =>
-                setTheme({
+                submitNow({
                   bgImage: r.result,
-                  ...(theme.bgOpacity <= 0.15 ? { bgOpacity: 0.6 } : {}),
+                  ...(draftRef.current.bgOpacity <= 0.15 ? { bgOpacity: 0.6 } : {}),
                 });
               r.readAsDataURL(f);
             }
@@ -487,7 +555,7 @@ function CalendarThemePanel() {
             {t('theme_opacity')}
           </label>
           <span className="m-mono m-muted" style={{ fontSize: 'var(--text-xs)' }}>
-            {Math.round(theme.bgOpacity * 100) + '%'}
+            {Math.round(draft.bgOpacity * 100) + '%'}
           </span>
         </div>
         <input
@@ -495,17 +563,18 @@ function CalendarThemePanel() {
           min={0}
           max={1}
           step={0.02}
-          value={theme.bgOpacity}
-          onChange={(e) => setTheme({ bgOpacity: Number(e.target.value) })}
+          value={draft.bgOpacity}
+          onChange={(e) => setField('bgOpacity', Number(e.target.value))}
+          onPointerUp={(e) => submitNow({ bgOpacity: Number(e.target.value) })}
           style={{ width: '100%', accentColor: 'var(--brand)' }}
         />
       </div>
-      {theme.bgImage && (
+      {draft.bgImage && (
         <XBtn
           variant="ghost"
           size="sm"
           iconLeft={<MIcon name="x" size={15} />}
-          onClick={() => setTheme({ bgImage: '' })}
+          onClick={() => submitNow({ bgImage: '' })}
         >
           {t('theme_remove_img')}
         </XBtn>

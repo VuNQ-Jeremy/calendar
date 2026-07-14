@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
-import { StoreProvider } from '../src/store.jsx';
 import { SEEN_INTRO_KEY } from '../src/instructions.jsx';
 import AppLayout from '../app/routes/_app';
 
@@ -14,12 +13,15 @@ const TEST_USER = {
   color: 'orange',
 };
 
-function withProviders(element: React.ReactElement) {
-  return (
-    <LanguageProvider>
-      <StoreProvider>{element}</StoreProvider>
-    </LanguageProvider>
-  );
+const STUB_LOADER_DATA = {
+  homeworkDueCount: 0,
+  unusedInviteCount: 0,
+  newFeedbackCount: 0,
+  invites: [],
+};
+
+function withLang(element: React.ReactElement) {
+  return React.createElement(LanguageProvider, null, element);
 }
 
 describe('AppLayout (_app.tsx)', () => {
@@ -38,6 +40,7 @@ describe('AppLayout (_app.tsx)', () => {
       {
         path: '/',
         Component: AppLayout,
+        loader: () => STUB_LOADER_DATA,
         children: [
           {
             path: 'dashboard',
@@ -48,7 +51,7 @@ describe('AppLayout (_app.tsx)', () => {
     ]);
 
     await act(async () => {
-      render(withProviders(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
+      render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
     });
 
     // Sidebar nav items are rendered as links
@@ -64,6 +67,7 @@ describe('AppLayout (_app.tsx)', () => {
       {
         path: '/',
         Component: AppLayout,
+        loader: () => STUB_LOADER_DATA,
         children: [
           {
             path: 'dashboard',
@@ -74,7 +78,7 @@ describe('AppLayout (_app.tsx)', () => {
     ]);
 
     await act(async () => {
-      render(withProviders(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
+      render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
     });
 
     // Auth screen shown when no session

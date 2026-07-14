@@ -1,7 +1,7 @@
 import React from 'react';
+import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
-import { useStore } from '../store.jsx';
 import { PageHeader } from '../ui.jsx';
 import { colorOf, iso, addDays, TODAY } from '../lib/core.js';
 import { useLang, getCal } from '../lib/i18n.jsx';
@@ -15,14 +15,14 @@ import { startOfWeek, addMin, fmtTime, toMin, MONTHS, DOW, expandEvents } from '
 const { Button: CBtn, IconButton: CIBtn, Tabs: CTabs } = DS;
 
 function CalendarScreen() {
-  const { data, add, update, remove } = useStore();
+  const { events, classes, theme } = useLoaderData();
+  const fetcher = useFetcher();
   const { t, lang } = useLang();
   const { months, monthsShort, dow } = getCal(lang);
   const [view, setView] = React.useState('week');
   const [cursor, setCursor] = React.useState(() => new Date(TODAY));
-  const [editor, setEditor] = React.useState(null); // draft or null
+  const [editor, setEditor] = React.useState(null);
   const [themeOpen, setThemeOpen] = React.useState(false);
-  const theme = data.theme;
 
   const weekDays = React.useMemo(() => {
     const s = startOfWeek(cursor);
@@ -56,24 +56,41 @@ function CalendarScreen() {
       recurrence: 'none',
     });
   const openEdit = (ev) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
+
   const save = (f) => {
-    if (!f.title.trim()) f.title = t('ev_untitled');
-    if (f.id) update('events', f.id, f);
-    else add('events', f);
+    const evTitle = f.title.trim() || t('ev_untitled');
+    const fd = new FormData();
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('title', evTitle);
+    fd.set('date', f.date);
+    if (f.start) fd.set('start', f.start);
+    if (f.end) fd.set('end', f.end);
+    if (f.color) fd.set('color', f.color);
+    if (f.classId) fd.set('classId', f.classId);
+    if (f.location) fd.set('location', f.location);
+    fd.set('recurrence', f.recurrence || 'none');
+    fetcher.submit(fd, { action: '/calendar', method: 'post' });
     setEditor(null);
   };
+
   const del = (id) => {
-    remove('events', id);
+    const fd = new FormData();
+    fd.set('intent', 'delete');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/calendar', method: 'post' });
     setEditor(null);
   };
+
   const move = (ev, newDate, ns, ne) => {
-    if (ev.id)
-      update('events', ev.id, {
-        date: ev.recurrence && ev.recurrence !== 'none' ? ev.date : newDate,
-        start: ns,
-        end: ne,
-        ...(ev.recurrence && ev.recurrence !== 'none' ? {} : { date: newDate }),
-      });
+    if (!ev.id) return;
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', ev.id);
+    if (!ev.recurrence || ev.recurrence === 'none') fd.set('date', newDate);
+    fd.set('start', ns);
+    fd.set('end', ne);
+    fetcher.submit(fd, { action: '/calendar', method: 'post' });
   };
 
   const calStyle = {
@@ -140,7 +157,7 @@ function CalendarScreen() {
         {view === 'month' && (
           <MonthView
             cursor={cursor}
-            events={data.events}
+            events={events}
             onPick={openEdit}
             onCreate={(dk) => openNew(dk)}
           />
@@ -149,7 +166,7 @@ function CalendarScreen() {
           <TimeGrid
             cursor={cursor}
             days={weekDays}
-            events={data.events}
+            events={events}
             onPick={openEdit}
             onCreate={openNew}
             onMove={move}
@@ -159,16 +176,16 @@ function CalendarScreen() {
           <TimeGrid
             cursor={cursor}
             days={dayDays}
-            events={data.events}
+            events={events}
             onPick={openEdit}
             onCreate={openNew}
             onMove={move}
           />
         )}
-        {view === 'agenda' && <AgendaView cursor={cursor} events={data.events} onPick={openEdit} />}
+        {view === 'agenda' && <AgendaView cursor={cursor} events={events} onPick={openEdit} />}
       </div>
       <div className="legend">
-        {data.classes.map((c) => {
+        {classes.map((c) => {
           const col = colorOf(c.color);
           return (
             <div key={c.id} className="legend__item">
@@ -184,7 +201,7 @@ function CalendarScreen() {
         draft={editor}
         onSave={save}
         onDelete={del}
-        classes={data.classes}
+        classes={classes}
       />
       {themeOpen && <CalendarThemeDrawer onClose={() => setThemeOpen(false)} />}
     </div>

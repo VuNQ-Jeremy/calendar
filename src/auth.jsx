@@ -1,7 +1,6 @@
 import React from 'react';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { useStore } from './store.jsx';
 import { useLang } from './lib/i18n.jsx';
 
 // app/auth.jsx — login / signup / forgot password / onboarding via one-time code
@@ -16,8 +15,8 @@ function AuthField({ icon, ...props }) {
   );
 }
 
-function AuthScreen({ onLogin }) {
-  const { data } = useStore();
+/** @param {{ onLogin: Function, invites: import('../server/services/invites').InviteRow[] }} props */
+function AuthScreen({ onLogin, invites = [] }) {
   const { t } = useLang();
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
   const [mode, setMode] = React.useState('login'); // login | code
@@ -40,9 +39,8 @@ function AuthScreen({ onLogin }) {
       setError(t('auth_enter_both'));
       return;
     }
-    const user = data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
     onLogin(
-      user || {
+      {
         id: 'u1',
         name: email.split('@')[0].replace(/^./, (c) => c.toUpperCase()),
         email,
@@ -54,9 +52,7 @@ function AuthScreen({ onLogin }) {
   };
   const checkCode = () => {
     const norm = code.trim().toUpperCase().replace(/\s/g, '');
-    const match = data.invites.find(
-      (i) => i.code.replace('-', '') === norm.replace('-', '') && !i.used,
-    );
+    const match = invites.find((i) => i.code.replace('-', '') === norm.replace('-', '') && !i.used);
     if (match) {
       setCodeOk(match);
       setError('');
@@ -83,7 +79,7 @@ function AuthScreen({ onLogin }) {
     );
   };
 
-  const sampleInvite = data.invites.find((i) => !i.used);
+  const sampleInvite = invites.find((i) => !i.used);
 
   // ---- panels ----
   const Brand = (

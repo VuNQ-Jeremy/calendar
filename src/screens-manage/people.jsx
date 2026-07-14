@@ -1,7 +1,7 @@
 import React from 'react';
+import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
-import { useStore } from '../store.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from '../ui.jsx';
 import { colorOf, iso, TODAY, makeCode } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
@@ -9,7 +9,8 @@ import { useLang } from '../lib/i18n.jsx';
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv } = DS;
 
 export function StudentsScreen() {
-  const { data, add, update, remove } = useStore();
+  const { students, staff, parents, invites, classes } = useLoaderData();
+  const fetcher = useFetcher();
   const { t } = useLang();
   const relLabel = (r) => t('rel_' + String(r || 'guardian').toLowerCase());
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
@@ -20,15 +21,27 @@ export function StudentsScreen() {
   const [inviteModal, setInviteModal] = React.useState(false);
   const [confirm, confirmNode] = useConfirm();
 
-  const classNames = (ids) => data.classes.filter((c) => ids.includes(c.id)).map((c) => c.name);
+  const classNames = (ids) => classes.filter((c) => ids.includes(c.id)).map((c) => c.name);
+
   const openNew = () =>
     setModal({ name: '', grade: '9', color: 'blue', guardian: '', email: '', classIds: [] });
+
   const save = (f) => {
-    if (!f.name.trim()) f.name = t('sm_default_name');
-    if (f.id) update('students', f.id, f);
-    else add('students', f);
+    const name = f.name.trim() || t('sm_default_name');
+    const fd = new FormData();
+    fd.set('entity', 'student');
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('name', name);
+    if (f.grade) fd.set('grade', f.grade);
+    if (f.guardian) fd.set('guardian', f.guardian);
+    fd.set('email', f.email || '');
+    fd.set('color', f.color || 'blue');
+    fd.set('classIds', JSON.stringify(f.classIds || []));
+    fetcher.submit(fd, { action: '/people', method: 'post' });
     setModal(null);
   };
+
   const del = async (s) => {
     if (
       await confirm({
@@ -37,17 +50,33 @@ export function StudentsScreen() {
         confirmLabel: t('remove'),
         danger: true,
       })
-    )
-      remove('students', s.id);
+    ) {
+      const fd = new FormData();
+      fd.set('entity', 'student');
+      fd.set('intent', 'delete');
+      fd.set('id', s.id);
+      fetcher.submit(fd, { action: '/people', method: 'post' });
+    }
   };
+
   const openNewStaff = () =>
     setStaffModal({ name: '', email: '', role: 'Teacher', color: 'violet', phone: '' });
+
   const saveStaff = (f) => {
-    if (!f.name.trim()) f.name = t('stf_default_name');
-    if (f.id) update('users', f.id, f);
-    else add('users', f);
+    const name = f.name.trim() || t('stf_default_name');
+    const fd = new FormData();
+    fd.set('entity', 'staff');
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('name', name);
+    fd.set('email', f.email || '');
+    fd.set('role', f.role || 'Teacher');
+    fd.set('color', f.color || 'violet');
+    if (f.phone) fd.set('phone', f.phone);
+    fetcher.submit(fd, { action: '/people', method: 'post' });
     setStaffModal(null);
   };
+
   const delStaff = async (u) => {
     if (
       await confirm({
@@ -56,9 +85,15 @@ export function StudentsScreen() {
         confirmLabel: t('remove'),
         danger: true,
       })
-    )
-      remove('users', u.id);
+    ) {
+      const fd = new FormData();
+      fd.set('entity', 'staff');
+      fd.set('intent', 'delete');
+      fd.set('id', u.id);
+      fetcher.submit(fd, { action: '/people', method: 'post' });
+    }
   };
+
   const openNewParent = () =>
     setParentModal({
       name: '',
@@ -68,12 +103,23 @@ export function StudentsScreen() {
       color: 'green',
       studentIds: [],
     });
+
   const saveParent = (f) => {
-    if (!f.name.trim()) f.name = t('par_default_name');
-    if (f.id) update('parents', f.id, f);
-    else add('parents', f);
+    const name = f.name.trim() || t('par_default_name');
+    const fd = new FormData();
+    fd.set('entity', 'parent');
+    fd.set('intent', f.id ? 'update' : 'create');
+    if (f.id) fd.set('id', f.id);
+    fd.set('name', name);
+    fd.set('email', f.email || '');
+    if (f.phone) fd.set('phone', f.phone);
+    fd.set('color', f.color || 'green');
+    if (f.relation) fd.set('relation', f.relation);
+    fd.set('studentIds', JSON.stringify(f.studentIds || []));
+    fetcher.submit(fd, { action: '/people', method: 'post' });
     setParentModal(null);
   };
+
   const delParent = async (p) => {
     if (
       await confirm({
@@ -82,8 +128,13 @@ export function StudentsScreen() {
         confirmLabel: t('remove'),
         danger: true,
       })
-    )
-      remove('parents', p.id);
+    ) {
+      const fd = new FormData();
+      fd.set('entity', 'parent');
+      fd.set('intent', 'delete');
+      fd.set('id', p.id);
+      fetcher.submit(fd, { action: '/people', method: 'post' });
+    }
   };
 
   return (
@@ -130,19 +181,19 @@ export function StudentsScreen() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { id: 'students', label: t('ppl_tab_students', { n: data.students.length }) },
-          { id: 'staff', label: t('ppl_tab_staff', { n: data.users.length }) },
-          { id: 'parents', label: t('ppl_tab_parents', { n: (data.parents || []).length }) },
+          { id: 'students', label: t('ppl_tab_students', { n: students.length }) },
+          { id: 'staff', label: t('ppl_tab_staff', { n: staff.length }) },
+          { id: 'parents', label: t('ppl_tab_parents', { n: parents.length }) },
           {
             id: 'invites',
-            label: t('ppl_tab_invites', { n: data.invites.filter((i) => !i.used).length }),
+            label: t('ppl_tab_invites', { n: invites.filter((i) => !i.used).length }),
           },
         ]}
       />
 
       {tab === 'students' && (
         <div className="m-stack">
-          {data.students.map((s) => (
+          {students.map((s) => (
             <div key={s.id} className="lrow">
               <MAv name={s.name} color={s.color} size="md" />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -184,7 +235,7 @@ export function StudentsScreen() {
 
       {tab === 'staff' && (
         <div className="m-stack">
-          {data.users.map((u) => (
+          {staff.map((u) => (
             <div key={u.id} className="lrow">
               <MAv name={u.name} color={u.color} size="md" />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -220,11 +271,9 @@ export function StudentsScreen() {
 
       {tab === 'parents' && (
         <div className="m-stack">
-          {(data.parents || []).length === 0 && (
-            <div className="m-empty">{t('ppl_no_parents')}</div>
-          )}
-          {(data.parents || []).map((p) => {
-            const kids = data.students.filter((s) => (p.studentIds || []).includes(s.id));
+          {parents.length === 0 && <div className="m-empty">{t('ppl_no_parents')}</div>}
+          {parents.map((p) => {
+            const kids = students.filter((s) => (p.studentIds || []).includes(s.id));
             return (
               <div key={p.id} className="lrow">
                 <MAv name={p.name} color={p.color} size="md" />
@@ -278,7 +327,7 @@ export function StudentsScreen() {
           setDraft={setModal}
           onClose={() => setModal(null)}
           onSave={save}
-          classes={data.classes}
+          classes={classes}
         />
       )}
       {staffModal && (
@@ -295,10 +344,10 @@ export function StudentsScreen() {
           setDraft={setParentModal}
           onClose={() => setParentModal(null)}
           onSave={saveParent}
-          students={data.students}
+          students={students}
         />
       )}
-      {inviteModal && <InviteModal onClose={() => setInviteModal(false)} />}
+      {inviteModal && <InviteModal onClose={() => setInviteModal(false)} classes={classes} />}
       {confirmNode}
     </div>
   );
@@ -638,7 +687,8 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }) {
 
 // ---- Invites ----
 function InvitesPanel() {
-  const { data, remove } = useStore();
+  const { invites, classes } = useLoaderData();
+  const fetcher = useFetcher();
   const { t } = useLang();
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
   const [copied, setCopied] = React.useState(null);
@@ -647,8 +697,15 @@ function InvitesPanel() {
     setCopied(code);
     setTimeout(() => setCopied(null), 1500);
   };
-  const classOf = (id) => (data.classes.find((c) => c.id === id) || {}).name;
-  if (!data.invites.length)
+  const classOf = (id) => (classes.find((c) => c.id === id) || {}).name;
+  const removeInvite = (id) => {
+    const fd = new FormData();
+    fd.set('entity', 'invite');
+    fd.set('intent', 'delete');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/people', method: 'post' });
+  };
+  if (!invites.length)
     return (
       <MC>
         <Empty icon="key" title={t('inv_none_title')} sub={t('inv_none_sub')} />
@@ -656,7 +713,7 @@ function InvitesPanel() {
     );
   return (
     <div className="m-stack">
-      {data.invites.map((inv) => (
+      {invites.map((inv) => (
         <div key={inv.id} className="lrow">
           <div
             className="iconwrap"
@@ -702,7 +759,7 @@ function InvitesPanel() {
                 {copied === inv.code ? t('copied') : t('copy')}
               </MBtn>
             )}
-            <MIB label={t('delete')} size="sm" onClick={() => remove('invites', inv.id)}>
+            <MIB label={t('delete')} size="sm" onClick={() => removeInvite(inv.id)}>
               <MIcon name="trash" size={16} />
             </MIB>
           </div>
@@ -712,20 +769,30 @@ function InvitesPanel() {
   );
 }
 
-function InviteModal({ onClose }) {
-  const { data, add } = useStore();
+function InviteModal({ onClose, classes }) {
+  const invFetcher = useFetcher();
   const { t } = useLang();
   const [role, setRole] = React.useState('Student');
   const [name, setName] = React.useState('');
   const [classId, setClassId] = React.useState('');
   const [generated, setGenerated] = React.useState(null);
   const roleLabel = (r) => t('role_' + String(r || '').toLowerCase());
+
   const gen = () => {
     const code = makeCode();
-    const item = { code, role, name, classId: classId || null, createdAt: iso(TODAY), used: false };
-    add('invites', item);
+    const fd = new FormData();
+    fd.set('entity', 'invite');
+    fd.set('intent', 'create');
+    fd.set('code', code);
+    fd.set('role', role);
+    if (name) fd.set('name', name);
+    if (classId) fd.set('classId', classId);
+    fd.set('createdAt', iso(TODAY));
+    fd.set('used', 'false');
+    invFetcher.submit(fd, { action: '/people', method: 'post' });
     setGenerated(code);
   };
+
   const copy = () => navigator.clipboard && navigator.clipboard.writeText(generated);
 
   return (
@@ -804,7 +871,7 @@ function InviteModal({ onClose }) {
             onChange={setClassId}
             options={[
               { value: '', label: t('invm_no_class') },
-              ...data.classes.map((c) => ({ value: c.id, label: c.name })),
+              ...classes.map((c) => ({ value: c.id, label: c.name })),
             ]}
           />
         </>

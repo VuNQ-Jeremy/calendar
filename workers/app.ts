@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
-import { createRequestHandler } from 'react-router';
-import { handleApi } from '../worker/api';
+import { createRequestHandler, RouterContextProvider } from 'react-router';
+import { cloudflareCtx } from '../app/load-context';
 
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
@@ -8,9 +8,8 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname.startsWith('/api/')) return handleApi(request, env, url);
-    return requestHandler(request);
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const context = new RouterContextProvider(new Map([[cloudflareCtx, { env, ctx }]]));
+    return requestHandler(request, context);
   },
 } satisfies ExportedHandler<Env>;
