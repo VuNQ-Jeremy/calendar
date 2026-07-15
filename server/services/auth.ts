@@ -1,4 +1,4 @@
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, lt, ne } from 'drizzle-orm';
 import { redirect } from 'react-router';
 import { createDb } from '../db';
 import type { Db } from '../db';
@@ -255,4 +255,38 @@ export async function resetPassword(db: Db, token: string, newPassword: string):
   ]);
 
   return true;
+}
+
+export type ChangePasswordResult = 'ok' | 'wrong_current_password';
+
+export async function changePassword(
+  db: Db,
+  accountId: string,
+  currentPassword: string,
+  newPassword: string,
+  currentTokenHash: string,
+): Promise<ChangePasswordResult> {
+  const account = await db.query.accounts.findFirst({
+    where: eq(accounts.id, accountId),
+  });
+  // Timing-safe: always run a verify even if account is somehow missing.
+  const storedHash = account?.passwordHash ?? DUMMY_HASH;
+  const valid = await verifyPassword(currentPassword, storedHash);
+
+  console.log('[auth] change_password.attempt', {
+    accountFound: !!account,
+    currentPasswordValid: valid,
+  });
+
+  if (!valid || !account) return 'wrong_current_password';
+
+  const passwordHash = await hashPassword(newPassword);
+  await db.batch([
+    db.update(accounts).set({ passwordHash }).where(eq(accounts.id, accountId)),
+    // Log out every other device, keep the session performing the change.
+    db
+      .delete(sessions)
+      .where(and(eq(sessions.accountId, accountId), ne(sessions.token, currentTokenHash))),
+  ]);
+  return 'ok';
 }

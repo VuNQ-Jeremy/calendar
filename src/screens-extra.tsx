@@ -637,13 +637,21 @@ interface ProfileFields {
   color: string;
 }
 
+interface PwStatus {
+  busy: boolean;
+  ok: boolean;
+  error: string | null;
+}
+
 interface ProfileScreenProps {
   user: AppUser;
   onSave: (updates: Partial<AppUser> & Record<string, unknown>) => void;
   onLogout: () => void;
+  onChangePassword: (currentPassword: string, newPassword: string) => void;
+  pwStatus: PwStatus;
 }
 
-function ProfileScreen({ user, onSave, onLogout }: ProfileScreenProps) {
+function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: ProfileScreenProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<ProfileFields>(() => ({
     name: user.name,
@@ -652,6 +660,11 @@ function ProfileScreen({ user, onSave, onLogout }: ProfileScreenProps) {
     color: user.color || 'orange',
   }));
   const [saved, setSaved] = React.useState(false);
+  const [curPw, setCurPw] = React.useState('');
+  const [newPw, setNewPw] = React.useState('');
+  const [confirmPw, setConfirmPw] = React.useState('');
+  const [showPw, setShowPw] = React.useState(false);
+  const [clientErr, setClientErr] = React.useState<string | null>(null);
   const set = <K extends keyof ProfileFields>(k: K, v: ProfileFields[K]) => {
     setF((p) => ({ ...p, [k]: v }));
     setSaved(false);
@@ -665,6 +678,24 @@ function ProfileScreen({ user, onSave, onLogout }: ProfileScreenProps) {
     onSave({ name: f.name.trim() || user.name, email: f.email, phone: f.phone, color: f.color });
     setSaved(true);
   };
+
+  const submitPw = () => {
+    setClientErr(null);
+    if (newPw !== confirmPw) return setClientErr('auth_pw_nomatch');
+    if (newPw.length < 8) return setClientErr('auth_pw_short');
+    onChangePassword(curPw, newPw);
+  };
+
+  React.useEffect(() => {
+    if (pwStatus.ok) {
+      setCurPw('');
+      setNewPw('');
+      setConfirmPw('');
+      setClientErr(null);
+    }
+  }, [pwStatus.ok]);
+
+  const pwErr = clientErr ?? pwStatus.error;
 
   return (
     <div className="content" style={{ maxWidth: 920 }}>
@@ -797,6 +828,79 @@ function ProfileScreen({ user, onSave, onLogout }: ProfileScreenProps) {
             <p className="m-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 0 }}>
               {t('prof_account_sub')}
             </p>
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 'var(--text-md)', fontWeight: 600 }}>
+                {t('prof_change_pw')}
+              </h3>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitPw();
+                }}
+              >
+                <div className="mochi-field" style={{ marginBottom: 12 }}>
+                  <label className="mochi-field__label">{t('prof_current_pw')}</label>
+                  <div className="auth-field">
+                    <input
+                      className="mochi-input auth-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={curPw}
+                      onChange={(e) => setCurPw(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                </div>
+                <div className="mochi-field" style={{ marginBottom: 12 }}>
+                  <label className="mochi-field__label">{t('prof_new_pw')}</label>
+                  <div className="auth-field">
+                    <input
+                      className="mochi-input auth-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={newPw}
+                      onChange={(e) => setNewPw(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="auth-field__eye"
+                      onClick={() => setShowPw((s) => !s)}
+                      aria-label="Toggle password"
+                    >
+                      <MIcon name={showPw ? 'eyeOff' : 'eye'} size={18} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mochi-field" style={{ marginBottom: 12 }}>
+                  <label className="mochi-field__label">{t('auth_confirm_pw')}</label>
+                  <div className="auth-field">
+                    <input
+                      className="mochi-input auth-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={confirmPw}
+                      onChange={(e) => setConfirmPw(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+                {pwErr && <div className="auth-error" style={{ marginBottom: 12 }}>{t(pwErr)}</div>}
+                {pwStatus.ok && (
+                  <div style={{ color: 'var(--brand)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>
+                    {t('prof_pw_changed')}
+                  </div>
+                )}
+                <div className="m-row" style={{ gap: 12 }}>
+                  <XBtn
+                    type="submit"
+                    variant="primary"
+                    disabled={
+                      pwStatus.busy || !curPw || !newPw || !confirmPw
+                    }
+                  >
+                    {t('prof_change_pw')}
+                  </XBtn>
+                </div>
+              </form>
+            </div>
             <div className="m-row" style={{ gap: 12 }}>
               <XBtn
                 variant="danger"

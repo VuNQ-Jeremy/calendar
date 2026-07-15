@@ -123,6 +123,8 @@ describe('ProfileScreen', () => {
           user: TEST_USER,
           onSave: () => {},
           onLogout: () => {},
+          onChangePassword: () => {},
+          pwStatus: { busy: false, ok: false, error: null },
         }),
       ),
     );

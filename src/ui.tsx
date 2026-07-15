@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PALETTE } from './lib/core.js';
@@ -64,24 +65,110 @@ interface SelectProps {
 }
 
 function Select({ label, value, onChange, options, hint }: SelectProps) {
+  const norm = options.map((o) =>
+    typeof o === 'string' ? { value: o, label: o } : o,
+  );
+  const selected = norm.find((o) => o.value === value);
+  const [open, setOpen] = React.useState(false);
+  const [active, setActive] = React.useState(0);
+  const [pos, setPos] = React.useState<{ top: number; left: number; width: number; up: boolean } | null>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const id = React.useId();
+
+  const openMenu = () => {
+    const r = triggerRef.current!.getBoundingClientRect();
+    const menuH = Math.min(norm.length * 40 + 12, 280);
+    const up = window.innerHeight - r.bottom < menuH + 8 && r.top > menuH + 8;
+    setPos({ top: up ? r.top - menuH - 6 : r.bottom + 6, left: r.left, width: r.width, up });
+    setActive(Math.max(0, norm.findIndex((o) => o.value === value)));
+    setOpen(true);
+  };
+  const close = () => { setOpen(false); triggerRef.current?.focus(); };
+  const pick = (v: string) => { onChange(v); close(); };
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node) &&
+          !triggerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open]);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); openMenu(); }
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowDown': e.preventDefault(); setActive((i) => Math.min(i + 1, norm.length - 1)); break;
+      case 'ArrowUp':   e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); break;
+      case 'Home':      e.preventDefault(); setActive(0); break;
+      case 'End':       e.preventDefault(); setActive(norm.length - 1); break;
+      case 'Enter': case ' ': e.preventDefault(); pick(norm[active].value); break;
+      case 'Escape':    e.preventDefault(); close(); break;
+      case 'Tab':       setOpen(false); break;
+    }
+  };
+
   return (
     <div className="mochi-field">
       {label && <label className="mochi-field__label">{label}</label>}
-      <div className="m-select">
-        <select className="m-select__el" value={value} onChange={(e) => onChange(e.target.value)}>
-          {options.map((o) => {
-            const val = typeof o === 'string' ? o : o.value;
-            const lab = typeof o === 'string' ? o : o.label;
-            return (
-              <option key={val} value={val}>
-                {lab}
-              </option>
-            );
-          })}
-        </select>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={'m-select__trigger' + (open ? ' is-open' : '')}
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-controls={id}
+        aria-activedescendant={open ? `${id}-${active}` : undefined}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={onKeyDown}
+      >
+        <span className="m-select__value">{selected?.label ?? ''}</span>
         <MIcon name="chevronDown" size={16} className="m-select__chev" />
-      </div>
+      </button>
       {hint && <span className="mochi-field__hint">{hint}</span>}
+      {open && pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            id={id}
+            role="listbox"
+            className={'m-select__menu' + (pos.up ? ' is-up' : '')}
+            style={{ top: pos.top, left: pos.left, width: pos.width }}
+          >
+            {norm.map((o, i) => (
+              <div
+                key={o.value}
+                id={`${id}-${i}`}
+                role="option"
+                aria-selected={o.value === value}
+                className={
+                  'm-select__option' +
+                  (o.value === value ? ' is-selected' : '') +
+                  (i === active ? ' is-active' : '')
+                }
+                onPointerEnter={() => setActive(i)}
+                onClick={() => pick(o.value)}
+              >
+                <span>{o.label}</span>
+                {o.value === value && <MIcon name="check" size={16} />}
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
