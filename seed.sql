@@ -12,6 +12,14 @@ INSERT INTO staff (id, name, email, role, color, phone) VALUES
   ('u1', 'Sam Okafor', 'sam@school.edu',  'Admin',   'orange', '(555) 010-2280'),
   ('u2', 'Priya Nair', 'priya@school.edu','Teacher', 'violet', '(555) 010-7741');
 
+-- Bootstrap accounts (admin/dev) live outside the demo dataset above; the DELETE FROM staff
+-- statement removes them too, so re-insert here (idempotent) to avoid orphaning their
+-- `accounts` rows (staff_id FK is ON DELETE SET NULL, which would break their login).
+INSERT INTO staff (id, name, email, role, color) VALUES
+  ('admin-0000-0000-0000-000000000001', 'Admin', 'admin@mochi.edu', 'Admin', 'orange'),
+  ('dev-0000-0000-0000-000000000002',   'Dev',   'dev@mochi.edu',   'Admin', 'blue')
+ON CONFLICT(id) DO NOTHING;
+
 INSERT INTO students (id, name, grade, guardian, email, color) VALUES
   ('s1', 'Leo Park',     '9', 'Mina Park',    'leo@school.edu',  'green'),
   ('s2', 'Mia Chen',     '9', 'David Chen',   'mia@school.edu',  'blue'),

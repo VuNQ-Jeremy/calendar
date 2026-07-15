@@ -14,6 +14,7 @@ import type { IconName } from '../../src/icons.jsx';
 import { iso, TODAY } from '../../src/lib/core.js';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
+import { DevInspector } from '../../src/dev-inspector.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
@@ -23,6 +24,8 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 
 const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB } = DS;
+
+const DEV_ACCOUNT_EMAIL = 'dev@mochi.edu';
 
 const TWEAKS = {
   accent: '#F79A4E',
@@ -222,6 +225,7 @@ export default function AppLayout() {
         />
       )}
       {introOpen && <InstructionsModal onClose={closeIntro} />}
+      {user.email === DEV_ACCOUNT_EMAIL && <DevInspector />}
     </div>
   );
 }

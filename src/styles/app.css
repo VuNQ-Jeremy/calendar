@@ -1554,3 +1554,27 @@ body {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ============================================================ DEV INSPECTOR (Alt+hover data-loc overlay) ============================================================ */
+.dev-inspector {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+.dev-inspector__box {
+  position: absolute;
+  outline: 2px solid #f79a4e;
+  background: rgba(247, 154, 78, 0.12);
+  border-radius: 4px;
+}
+.dev-inspector__badge {
+  position: absolute;
+  background: #1a1a1a;
+  color: #fff;
+  font: 12px/1.4 var(--font-mono, monospace);
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
