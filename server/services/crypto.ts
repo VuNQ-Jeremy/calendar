@@ -1,4 +1,6 @@
-const ITERATIONS = 210_000;
+// Workers (workerd) enforces a hard cap of 100,000 iterations for PBKDF2
+// deriveBits; exceeding it throws instead of derating, so this must stay <=100_000.
+const ITERATIONS = 100_000;
 
 function b64(buf: Uint8Array): string {
   return btoa(String.fromCharCode(...buf));
@@ -39,8 +41,16 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [scheme, iter, saltB64, hashB64] = stored.split('$');
-  if (scheme !== 'pbkdf2') return false;
+  const parts = stored.split('$');
+  const [scheme, iter, saltB64, hashB64] = parts;
+  if (scheme !== 'pbkdf2' || parts.length !== 4 || !saltB64 || !hashB64) {
+    console.error('[auth] verify.malformed_hash', {
+      scheme,
+      partCount: parts.length,
+      storedLength: stored.length,
+    });
+    return false;
+  }
   const expected = unb64(hashB64);
   const actual = await derive(password, unb64(saltB64), parseInt(iter, 10));
   return timingSafeEqual(actual, expected);

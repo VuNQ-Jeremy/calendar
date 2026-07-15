@@ -62,7 +62,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     let result: { accountId: string } | null;
     try {
       result = await login(db, email, password);
-    } catch {
+    } catch (err) {
+      console.error('[auth] login.threw', {
+        name: err instanceof Error ? err.name : typeof err,
+        message: err instanceof Error ? err.message : String(err),
+      });
       return Response.json({ intent, error: 'auth_wrong_creds' }, { status: 400 });
     }
     if (!result) {

@@ -16,7 +16,7 @@ import { sessionCookie } from '../session';
 
 // Static dummy hash for timing-safe login (prevents user-enumeration via timing).
 const DUMMY_HASH =
-  'pbkdf2$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+  'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 export type SessionUser = {
   account: { id: string; email: string };
@@ -103,7 +103,16 @@ export async function login(
 
   // Always run verifyPassword — prevents user-enumeration via timing.
   const storedHash = account?.passwordHash ?? DUMMY_HASH;
+  const [hashScheme, hashIterations] = storedHash.split('$');
   const valid = await verifyPassword(password, storedHash);
+
+  console.log('[auth] login.attempt', {
+    emailDomain: normalizedEmail.split('@')[1] ?? null,
+    accountFound: !!account,
+    hashScheme,
+    hashIterations: Number(hashIterations) || null,
+    passwordValid: valid,
+  });
 
   if (!valid || !account) {
     await new Promise((r) => setTimeout(r, 1000));

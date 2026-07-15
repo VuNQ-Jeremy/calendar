@@ -15,7 +15,8 @@
 import { webcrypto } from 'node:crypto';
 
 const crypto = webcrypto;
-const ITERATIONS = 210_000;
+// Must match server/services/crypto.ts — Workers caps PBKDF2 at 100,000 iterations.
+const ITERATIONS = 100_000;
 
 function b64(buf) {
   return Buffer.from(buf).toString('base64');

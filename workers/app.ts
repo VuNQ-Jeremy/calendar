@@ -10,6 +10,26 @@ const requestHandler = createRequestHandler(
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const context = new RouterContextProvider(new Map([[cloudflareCtx, { env, ctx }]]));
-    return requestHandler(request, context);
+    const url = new URL(request.url);
+    const start = Date.now();
+    try {
+      const response = await requestHandler(request, context);
+      console.log('[request]', {
+        method: request.method,
+        path: url.pathname,
+        status: response.status,
+        ms: Date.now() - start,
+      });
+      return response;
+    } catch (err) {
+      console.error('[request] unhandled', {
+        method: request.method,
+        path: url.pathname,
+        ms: Date.now() - start,
+        name: err instanceof Error ? err.name : typeof err,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   },
 } satisfies ExportedHandler<Env>;
