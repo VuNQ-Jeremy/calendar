@@ -1,0 +1,74 @@
+/* ============================================================
+   TAILWIND v4 + shadcn/ui entry — bridged onto Mochi DS tokens.
+
+   Layering note: Mochi DS css (src/ds/styles) and app.css are
+   UNLAYERED, so they intentionally override Tailwind's layered
+   preflight/theme wherever token names collide. In particular,
+   Tailwind's rounded-*, shadow-*, text-*, font-mono, tracking-*,
+   leading-* and ease-* utilities resolve to Mochi values — this
+   is deliberate. The global :focus-visible rule in DS base.css
+   supersedes shadcn focus-ring utilities (uniform Mochi orange
+   focus glow) — also deliberate.
+   ============================================================ */
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* ---- shadcn CSS-variable contract → Mochi semantic tokens ----
+   NOTE: --ring is NOT defined here. The DS already owns --ring as a
+   box-shadow value (see effects.css --shadow-focus); shadcn's ring
+   COLOR is bridged directly via --color-ring in @theme below. */
+:root {
+  --background: var(--bg-page);
+  --foreground: var(--text-body);
+
+  --card: var(--surface-card);
+  --card-foreground: var(--text-body);
+
+  --popover: var(--surface-card);
+  --popover-foreground: var(--text-body);
+
+  --primary: var(--brand);
+  --primary-foreground: var(--text-on-brand);
+
+  --secondary: var(--brand-soft);
+  --secondary-foreground: var(--brand-soft-ink);
+
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--text-muted);
+
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--text-strong);
+
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--border-subtle);
+  --input: var(--border-strong);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--border-focus);
+
+  /* Fonts: font-sans = Nunito Sans; font-display utility for Fredoka.
+     (font-mono already resolves to DM Mono via DS --font-mono.) */
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}

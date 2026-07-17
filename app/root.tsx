@@ -14,6 +14,7 @@ import '@fontsource/nunito-sans/800.css';
 import '@fontsource/dm-mono/400.css';
 import '@fontsource/dm-mono/500.css';
 import '../src/ds/styles/styles.css';
+import '../src/styles/tailwind.css';
 import '../src/styles/app.css';
 
 export function Layout({ children }: { children: React.ReactNode }) {

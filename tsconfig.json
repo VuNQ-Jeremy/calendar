@@ -15,7 +15,8 @@
     "strict": true,
     "skipLibCheck": true,
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./app/*"],
+      "@/*": ["./src/*"]
     }
   }
 }

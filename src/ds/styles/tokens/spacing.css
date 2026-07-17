@@ -17,9 +17,9 @@
   --space-20: 5rem;     /* 80 */
 
   /* Layout rails */
-  --container-sm:  640px;
-  --container-md:  840px;
-  --container-lg:  1100px;
+  --layout-sm:  640px;
+  --layout-md:  840px;
+  --layout-lg:  1100px;
   --sidebar-w:     260px;
   --gutter:        var(--space-6);
 }
