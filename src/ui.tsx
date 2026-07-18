@@ -94,7 +94,12 @@ function Select({ label, value, onChange, options, hint }: SelectProps) {
       if (!menuRef.current?.contains(e.target as Node) &&
           !triggerRef.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      // Ignore scrolling that happens inside the menu itself (e.g. a long
+      // time-picker list); only close when the underlying page/modal scrolls.
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
     document.addEventListener('pointerdown', onDown);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onScroll);
@@ -107,7 +112,18 @@ function Select({ label, value, onChange, options, hint }: SelectProps) {
 
   React.useEffect(() => {
     if (!open) return;
-    menuRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
+    // Scroll the menu directly instead of scrollIntoView(): the latter can
+    // also scroll ancestor containers / the document (notably for fixed-
+    // position menus in Chrome), which fires a page-level scroll event that
+    // the close-on-scroll handler sees and instantly dismisses the menu.
+    const menu = menuRef.current;
+    const el = menu?.querySelector<HTMLElement>('.is-active');
+    if (!menu || !el) return;
+    const viewTop = menu.scrollTop;
+    const viewBot = viewTop + menu.clientHeight;
+    if (el.offsetTop < viewTop) menu.scrollTop = el.offsetTop;
+    else if (el.offsetTop + el.offsetHeight > viewBot)
+      menu.scrollTop = el.offsetTop + el.offsetHeight - menu.clientHeight;
   }, [open, active]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
