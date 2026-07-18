@@ -2,7 +2,7 @@ import React from 'react';
 import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { PageHeader, Empty, Modal, MSelect } from './ui.jsx';
+import { PageHeader, Empty, Modal, MSelect, MDatePicker } from './ui.jsx';
 import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
 import { useLang, locale } from './lib/i18n.jsx';
@@ -440,15 +440,12 @@ function HomeworkScreen() {
               }}
               options={classes.map((c) => ({ value: c.id, label: c.name }))}
             />
-            <div className="mochi-field">
-              <label className="mochi-field__label">{t('hw_due')}</label>
-              <input
-                type="date"
-                className="mochi-input"
-                value={modal.due || ''}
-                onChange={(e) => setModal((m) => (m ? { ...m, due: e.target.value } : m))}
-              />
-            </div>
+            <MDatePicker
+              label={t('hw_due')}
+              value={modal.due || ''}
+              onChange={(v) => setModal((m) => (m ? { ...m, due: v } : m))}
+              clearable
+            />
           </div>
           <div className="mochi-field" style={{ maxWidth: 160 }}>
             <label className="mochi-field__label">{t('hw_points')}</label>

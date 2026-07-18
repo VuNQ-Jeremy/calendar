@@ -2,8 +2,9 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { PALETTE } from './lib/core.js';
-import { useLang } from './lib/i18n.jsx';
+import { PALETTE, iso, addDays, TODAY } from './lib/core.js';
+import { useLang, getCal } from './lib/i18n.jsx';
+import { startOfWeek, parseISO, toMin, fmtTime } from './calendar/utils.js';
 
 const { Button, IconButton } = DS;
 
@@ -104,6 +105,11 @@ function Select({ label, value, onChange, options, hint }: SelectProps) {
     };
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
+  }, [open, active]);
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
       if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); openMenu(); }
@@ -171,6 +177,187 @@ function Select({ label, value, onChange, options, hint }: SelectProps) {
         )}
     </div>
   );
+}
+
+interface DatePickerProps {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string;
+  clearable?: boolean;
+}
+
+function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps) {
+  const { t, lang } = useLang();
+  const { months, monthsShort, dowMon } = getCal(lang);
+  const [open, setOpen] = React.useState(false);
+  const [pos, setPos] = React.useState<{ top: number; left: number; up: boolean } | null>(null);
+  const [cursor, setCursor] = React.useState<Date>(TODAY);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  const MENU_W = 272;
+  const MENU_H = 332;
+
+  const openMenu = () => {
+    const r = triggerRef.current!.getBoundingClientRect();
+    const up = window.innerHeight - r.bottom < MENU_H + 8 && r.top > MENU_H + 8;
+    const left = Math.min(r.left, window.innerWidth - MENU_W - 8);
+    setPos({ top: up ? r.top - MENU_H - 6 : r.bottom + 6, left, up });
+    setCursor(value ? parseISO(value) : TODAY);
+    setOpen(true);
+  };
+  const close = () => { setOpen(false); triggerRef.current?.focus(); };
+  const pick = (d: Date) => { onChange(iso(d)); close(); };
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!menuRef.current?.contains(e.target as Node) &&
+          !triggerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  const cells = React.useMemo(() => {
+    if (!open) return [];
+    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const gridStart = startOfWeek(first);
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [open, cursor]);
+  const todayKey = iso(TODAY);
+
+  return (
+    <div className="mochi-field">
+      {label && <label className="mochi-field__label">{label}</label>}
+      <button
+        type="button"
+        ref={triggerRef}
+        className={'m-select__trigger' + (open ? ' is-open' : '')}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => (open ? close() : openMenu())}
+      >
+        <span className="m-select__value" style={!value ? { color: 'var(--text-muted)' } : undefined}>
+          {value
+            ? `${parseISO(value).getDate()} ${monthsShort[parseISO(value).getMonth()]} ${parseISO(value).getFullYear()}`
+            : t('dp_pick_date')}
+        </span>
+        <MIcon name="calendar" size={16} className="m-select__chev" />
+      </button>
+      {hint && <span className="mochi-field__hint">{hint}</span>}
+      {open && pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="dialog"
+            className={'m-datepicker__menu' + (pos.up ? ' is-up' : '')}
+            style={{ top: pos.top, left: pos.left, width: MENU_W }}
+          >
+            <div className="m-datepicker__head">
+              <button
+                type="button"
+                className="m-datepicker__nav"
+                aria-label={t('dp_prev_month')}
+                onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+              >
+                <MIcon name="chevronLeft" size={16} />
+              </button>
+              <span className="m-datepicker__title">
+                {months[cursor.getMonth()]} {cursor.getFullYear()}
+              </span>
+              <button
+                type="button"
+                className="m-datepicker__nav"
+                aria-label={t('dp_next_month')}
+                onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+              >
+                <MIcon name="chevronRight" size={16} />
+              </button>
+            </div>
+            <div className="m-datepicker__dow">
+              {dowMon.map((d, i) => (
+                <span key={i}>{d}</span>
+              ))}
+            </div>
+            <div className="m-datepicker__grid">
+              {cells.map((d, i) => {
+                const dk = iso(d);
+                const out = d.getMonth() !== cursor.getMonth();
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={
+                      'm-datepicker__day' +
+                      (out ? ' is-out' : '') +
+                      (dk === todayKey ? ' is-today' : '') +
+                      (dk === value ? ' is-selected' : '')
+                    }
+                    aria-label={dk}
+                    aria-pressed={dk === value}
+                    onClick={() => pick(d)}
+                  >
+                    {d.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="m-datepicker__foot">
+              <button type="button" onClick={() => pick(TODAY)}>
+                {t('today')}
+              </button>
+              {clearable && (
+                <button type="button" onClick={() => { onChange(''); close(); }}>
+                  {t('dp_clear')}
+                </button>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+interface TimePickerProps {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string;
+}
+
+function TimePicker({ label, value, onChange, hint }: TimePickerProps) {
+  const options = React.useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    for (let m = 0; m < 24 * 60; m += 15) {
+      const v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      opts.push({ value: v, label: fmtTime(v) });
+    }
+    if (value && !opts.some((o) => o.value === value)) {
+      opts.push({ value, label: fmtTime(value) });
+      opts.sort((a, b) => toMin(a.value) - toMin(b.value));
+    }
+    return opts;
+  }, [value]);
+  return <Select label={label} value={value} onChange={onChange} options={options} hint={hint} />;
 }
 
 interface ColorPickerProps {
@@ -293,4 +480,13 @@ function useConfirm(): [(opts: ConfirmOpts) => Promise<boolean>, React.ReactElem
   return [confirm, node];
 }
 
-export { Modal, Select as MSelect, ColorPicker, PageHeader, Empty, useConfirm };
+export {
+  Modal,
+  Select as MSelect,
+  DatePicker as MDatePicker,
+  TimePicker as MTimePicker,
+  ColorPicker,
+  PageHeader,
+  Empty,
+  useConfirm,
+};

@@ -1,7 +1,7 @@
 import React from 'react';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
-import { Modal, MSelect, ColorPicker } from '../ui.jsx';
+import { Modal, MSelect, MDatePicker, MTimePicker, ColorPicker } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import type { ClassLite } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
@@ -72,33 +72,9 @@ export function EventModal({ open, onClose, draft, onSave, onDelete, classes }: 
         />
       </div>
       <div className="m-grid cols-3" style={{ gap: 14 }}>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('ev_date')}</label>
-          <input
-            type="date"
-            className="mochi-input"
-            value={f.date || ''}
-            onChange={(e) => set('date', e.target.value)}
-          />
-        </div>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('ev_start')}</label>
-          <input
-            type="time"
-            className="mochi-input"
-            value={f.start || ''}
-            onChange={(e) => set('start', e.target.value)}
-          />
-        </div>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('ev_end')}</label>
-          <input
-            type="time"
-            className="mochi-input"
-            value={f.end || ''}
-            onChange={(e) => set('end', e.target.value)}
-          />
-        </div>
+        <MDatePicker label={t('ev_date')} value={f.date || ''} onChange={(v) => set('date', v)} />
+        <MTimePicker label={t('ev_start')} value={f.start || ''} onChange={(v) => set('start', v)} />
+        <MTimePicker label={t('ev_end')} value={f.end || ''} onChange={(v) => set('end', v)} />
       </div>
       <div className="m-grid cols-2" style={{ gap: 14 }}>
         <MSelect
