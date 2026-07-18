@@ -31,10 +31,12 @@ export const toMin = (t: string): number => {
   return h * 60 + m;
 };
 
-export const fmtTime = (t: string): string => {
+export const fmtTime = (t: string, full = false): string => {
   let [h, m] = t.split(':').map(Number);
   const ap = h >= 12 ? 'pm' : 'am';
   h = h % 12 || 12;
+  // full: uniform "h:mm am" (time-picker lists); default: compact "9am" pills
+  if (full) return `${h}:${String(m).padStart(2, '0')} ${ap}`;
   return m ? `${h}:${String(m).padStart(2, '0')}${ap}` : `${h}${ap}`;
 };
 

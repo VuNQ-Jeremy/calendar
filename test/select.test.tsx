@@ -61,7 +61,7 @@ describe('MSelect popover', () => {
     render(withLang(<MTimePicker value="09:00" onChange={onChange} />));
     fireEvent.click(screen.getByRole('combobox'));
     const menu = screen.getByRole('listbox');
-    fireEvent.click(within(menu).getByText('10am')); // fmtTime('10:00')
+    fireEvent.click(within(menu).getByText('10:00 am')); // fmtTime('10:00', true)
     expect(onChange).toHaveBeenCalledWith('10:00');
   });
 });

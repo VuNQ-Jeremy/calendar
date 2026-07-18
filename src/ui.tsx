@@ -365,10 +365,10 @@ function TimePicker({ label, value, onChange, hint }: TimePickerProps) {
     const opts: { value: string; label: string }[] = [];
     for (let m = 0; m < 24 * 60; m += 15) {
       const v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-      opts.push({ value: v, label: fmtTime(v) });
+      opts.push({ value: v, label: fmtTime(v, true) });
     }
     if (value && !opts.some((o) => o.value === value)) {
-      opts.push({ value, label: fmtTime(value) });
+      opts.push({ value, label: fmtTime(value, true) });
       opts.sort((a, b) => toMin(a.value) - toMin(b.value));
     }
     return opts;
