@@ -1,6 +1,8 @@
 import React from 'react';
 
-const W = 600; // viewBox width; SVG scales to container
+// viewBox width; SVG scales to container. Text/strokes scale down with a wider
+// viewBox — 900 keeps the 11-unit labels near actual 11px at typical card widths.
+const W = 900;
 const PAD = { top: 12, right: 12, bottom: 26, left: 34 };
 
 export interface ChartPoint {
@@ -13,7 +15,7 @@ export function ProgressLineChart({
   points,
   yMin = 0,
   yMax = 10,
-  height = 150,
+  height = 220,
   color = 'var(--brand)',
   formatX,
   ariaLabel,
