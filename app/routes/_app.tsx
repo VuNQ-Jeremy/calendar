@@ -50,6 +50,13 @@ const NAV = [
       { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder' },
       { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard' },
       { id: 'assessments', path: '/assessments', tk: 'nav_assessments', icon: 'chart' },
+      {
+        id: 'config',
+        path: '/config',
+        tk: 'nav_config',
+        icon: 'settings',
+        adminOnly: true,
+      },
       { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message' },
     ],
   },
@@ -105,21 +112,23 @@ function Sidebar({
       {NAV.map((sec) => (
         <div key={sec.tk}>
           <div className="sb__section">{t(sec.tk)}</div>
-          {sec.items.map((n) => (
-            <NavLink
-              key={n.id}
-              to={n.path}
-              className={({ isActive }) => 'sb__item' + (isActive ? ' is-active' : '')}
-            >
-              <MIcon name={n.icon as IconName} size={20} />
-              <span>{t(n.tk)}</span>
-              {counts[n.id] > 0 && (
-                <span className="count">
-                  <ShBadge color="brand">{counts[n.id]}</ShBadge>
-                </span>
-              )}
-            </NavLink>
-          ))}
+          {sec.items
+            .filter((n) => !('adminOnly' in n) || !n.adminOnly || user.role === 'Admin')
+            .map((n) => (
+              <NavLink
+                key={n.id}
+                to={n.path}
+                className={({ isActive }) => 'sb__item' + (isActive ? ' is-active' : '')}
+              >
+                <MIcon name={n.icon as IconName} size={20} />
+                <span>{t(n.tk)}</span>
+                {counts[n.id] > 0 && (
+                  <span className="count">
+                    <ShBadge color="brand">{counts[n.id]}</ShBadge>
+                  </span>
+                )}
+              </NavLink>
+            ))}
         </div>
       ))}
       <div className="sb__langbar">
@@ -247,6 +256,9 @@ export function ErrorBoundary() {
     } else if (status === 400) {
       title = t('err_bad_request_title');
       message = t('err_bad_request_msg');
+    } else if (status === 403) {
+      title = t('err_forbidden_title');
+      message = t('err_forbidden_msg');
     }
   }
 

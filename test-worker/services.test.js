@@ -12,6 +12,8 @@ import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
 import * as invitesSvc from '../server/services/invites';
 import * as assessSvc from '../server/services/assessments';
+import * as typesSvc from '../server/services/assessment-types';
+import * as attendanceSvc from '../server/services/attendance';
 import { hashPassword } from '../server/services/crypto';
 import { sessionCookie } from '../server/session';
 import {
@@ -22,10 +24,12 @@ import {
   parentStudents,
   events,
   homework,
+  homeworkGrades,
   materials,
   sessions,
   scoreRecords,
   behaviorRecords,
+  attendanceRecords,
 } from '../server/db/schema';
 
 function db() {
@@ -520,10 +524,11 @@ describe('assessments service', () => {
       studentId: student.id,
       date: '2026-05-01',
       score: 7.5,
-      label: 'Kiểm tra 15 phút',
+      assessmentTypeId: 'at2',
     });
     expect(rec.id).toBeTruthy();
     expect(rec.score).toBe(7.5);
+    expect(rec.assessmentTypeId).toBe('at2');
 
     const list = await assessSvc.listScores(d);
     expect(list.some((r) => r.id === rec.id)).toBe(true);
@@ -620,6 +625,243 @@ describe('assessments service', () => {
     const behAfter = await d.select().from(behaviorRecords).where(eq(behaviorRecords.id, beh.id));
     expect(scoreAfter[0]?.classId).toBeNull();
     expect(behAfter[0]?.classId).toBeNull();
+  });
+});
+
+describe('assessment types service', () => {
+  it('creates, lists, renames, and deactivates a type', async () => {
+    const d = db();
+    const created = await typesSvc.create(d, { name: 'Pop quiz', active: true });
+    expect(created.id).toBeTruthy();
+    expect(created.sortOrder).toBeGreaterThan(0);
+
+    const list = await typesSvc.list(d);
+    expect(list.some((t) => t.id === created.id)).toBe(true);
+
+    const renamed = await typesSvc.update(d, created.id, { name: 'Pop quiz v2' });
+    expect(renamed.name).toBe('Pop quiz v2');
+
+    const deactivated = await typesSvc.update(d, created.id, { active: false });
+    expect(deactivated.active).toBe(false);
+  });
+
+  it('rejects a duplicate name', async () => {
+    const d = db();
+    await typesSvc.create(d, { name: 'Unique Type A', active: true });
+    await expect(typesSvc.create(d, { name: 'Unique Type A', active: true })).rejects.toBeTruthy();
+  });
+});
+
+describe('attendance service', () => {
+  it('saves and lists attendance for an occurrence, and dates stay independent', async () => {
+    const d = db();
+    const student1 = await peopleSvc.createStudent(d, {
+      name: 'Attendance Student 1',
+      color: 'blue',
+      classIds: [],
+    });
+    const student2 = await peopleSvc.createStudent(d, {
+      name: 'Attendance Student 2',
+      color: 'green',
+      classIds: [],
+    });
+    const ev = await eventsSvc.create(d, {
+      title: 'Attendance Event',
+      date: '2026-06-22',
+      recurrence: 'weekly',
+    });
+
+    await attendanceSvc.saveOccurrence(d, ev.id, '2026-06-22', [
+      { studentId: student1.id, status: 'present' },
+      { studentId: student2.id, status: 'late' },
+    ]);
+    const day1 = await attendanceSvc.listForOccurrence(d, ev.id, '2026-06-22');
+    expect(day1.length).toBe(2);
+
+    // Re-saving with one record overwrites (unmarked student disappears).
+    await attendanceSvc.saveOccurrence(d, ev.id, '2026-06-22', [
+      { studentId: student1.id, status: 'absent' },
+    ]);
+    const day1After = await attendanceSvc.listForOccurrence(d, ev.id, '2026-06-22');
+    expect(day1After.length).toBe(1);
+    expect(day1After[0].status).toBe('absent');
+
+    // A different occurrence date for the same event is independent.
+    const day2 = await attendanceSvc.listForOccurrence(d, ev.id, '2026-06-29');
+    expect(day2.length).toBe(0);
+
+    await eventsSvc.remove(d, ev.id);
+    const afterEventDelete = await d
+      .select()
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.eventId, ev.id));
+    expect(afterEventDelete.length).toBe(0);
+  });
+
+  it('cascades attendance rows on student delete', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Attendance Cascade Student',
+      color: 'orange',
+      classIds: [],
+    });
+    const ev = await eventsSvc.create(d, {
+      title: 'Attendance Cascade Event',
+      date: '2026-06-22',
+      recurrence: 'none',
+    });
+    await attendanceSvc.saveOccurrence(d, ev.id, '2026-06-22', [
+      { studentId: student.id, status: 'present' },
+    ]);
+    await peopleSvc.removeStudent(d, student.id);
+    const rows = await d
+      .select()
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.studentId, student.id));
+    expect(rows.length).toBe(0);
+  });
+});
+
+describe('homework grading sync', () => {
+  async function setup(d) {
+    const cls = await classesSvc.create(d, {
+      name: 'Grading Class',
+      color: 'blue',
+      schedule: [],
+      studentIds: [],
+    });
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Grading Student',
+      color: 'blue',
+      classIds: [],
+    });
+    const hw = await homeworkSvc.create(d, {
+      title: 'Graded Homework',
+      classId: cls.id,
+      due: '2026-06-23',
+      done: false,
+      assessmentTypeId: 'at2',
+    });
+    return { cls, student, hw };
+  }
+
+  it('grading creates a linked score record, and re-grading updates it without duplicating', async () => {
+    const d = db();
+    const { student, hw, cls } = await setup(d);
+
+    const grades = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: 8, comment: 'Nice work' },
+    ]);
+    const grade = grades.find((g) => g.studentId === student.id);
+    expect(grade.scoreRecordId).toBeTruthy();
+
+    const scoreRows = await d
+      .select()
+      .from(scoreRecords)
+      .where(eq(scoreRecords.id, grade.scoreRecordId));
+    expect(scoreRows[0].score).toBe(8);
+    expect(scoreRows[0].date).toBe('2026-06-23');
+    expect(scoreRows[0].classId).toBe(cls.id);
+    expect(scoreRows[0].assessmentTypeId).toBe('at2');
+    expect(scoreRows[0].notes).toBe('Nice work');
+
+    const regraded = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: 9, comment: 'Even better' },
+    ]);
+    const regrade = regraded.find((g) => g.studentId === student.id);
+    expect(regrade.scoreRecordId).toBe(grade.scoreRecordId);
+
+    const allScores = await assessSvc.listScores(d);
+    const linkedScores = allScores.filter((s) => s.id === grade.scoreRecordId);
+    expect(linkedScores.length).toBe(1);
+    expect(linkedScores[0].score).toBe(9);
+  });
+
+  it('clearing score and comment removes the grade and its score record', async () => {
+    const d = db();
+    const { student, hw } = await setup(d);
+    const grades = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: 7, comment: 'ok' },
+    ]);
+    const scoreRecordId = grades[0].scoreRecordId;
+
+    const cleared = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: null, comment: null },
+    ]);
+    expect(cleared.find((g) => g.studentId === student.id)).toBeUndefined();
+
+    const scoreAfter = await d
+      .select()
+      .from(scoreRecords)
+      .where(eq(scoreRecords.id, scoreRecordId));
+    expect(scoreAfter.length).toBe(0);
+  });
+
+  it('comment-only grade has no linked score record', async () => {
+    const d = db();
+    const { student, hw } = await setup(d);
+    const grades = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: null, comment: 'Missing submission' },
+    ]);
+    const grade = grades.find((g) => g.studentId === student.id);
+    expect(grade.scoreRecordId).toBeNull();
+    expect(grade.comment).toBe('Missing submission');
+  });
+
+  it('updating homework due date propagates to linked score records', async () => {
+    const d = db();
+    const { student, hw } = await setup(d);
+    const grades = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: 6, comment: null },
+    ]);
+    const scoreRecordId = grades[0].scoreRecordId;
+
+    await homeworkSvc.update(d, hw.id, { due: '2026-07-01' });
+
+    const scoreAfter = await d
+      .select()
+      .from(scoreRecords)
+      .where(eq(scoreRecords.id, scoreRecordId));
+    expect(scoreAfter[0].date).toBe('2026-07-01');
+  });
+
+  it('deleting homework deletes linked score records', async () => {
+    const d = db();
+    const { student, hw } = await setup(d);
+    const grades = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: 5, comment: null },
+    ]);
+    const scoreRecordId = grades[0].scoreRecordId;
+
+    await homeworkSvc.remove(d, hw.id);
+
+    const scoreAfter = await d
+      .select()
+      .from(scoreRecords)
+      .where(eq(scoreRecords.id, scoreRecordId));
+    expect(scoreAfter.length).toBe(0);
+    const gradesAfter = await d
+      .select()
+      .from(homeworkGrades)
+      .where(eq(homeworkGrades.homeworkId, hw.id));
+    expect(gradesAfter.length).toBe(0);
+  });
+
+  it('removing the linked score record from the Assessments side unlinks the grade', async () => {
+    const d = db();
+    const { student, hw } = await setup(d);
+    const grades = await homeworkSvc.saveGrades(d, hw.id, [
+      { studentId: student.id, score: 6.5, comment: null },
+    ]);
+    const scoreRecordId = grades[0].scoreRecordId;
+
+    await assessSvc.removeScore(d, scoreRecordId);
+
+    const gradesAfter = await d
+      .select()
+      .from(homeworkGrades)
+      .where(eq(homeworkGrades.homeworkId, hw.id));
+    expect(gradesAfter[0].scoreRecordId).toBeNull();
   });
 });
 

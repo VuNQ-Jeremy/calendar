@@ -1,4 +1,12 @@
-import { sqliteTable, text, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  primaryKey,
+  index,
+  unique,
+} from 'drizzle-orm/sqlite-core';
 
 export const staff = sqliteTable('staff', {
   id: text('id').primaryKey(),
@@ -97,6 +105,13 @@ export const events = sqliteTable(
   (t) => [index('idx_events_date').on(t.date)],
 );
 
+export const assessmentTypes = sqliteTable('assessment_types', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
 export const homework = sqliteTable('homework', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
@@ -106,6 +121,9 @@ export const homework = sqliteTable('homework', {
   notes: text('notes'),
   color: text('color'),
   done: integer('done', { mode: 'boolean' }).notNull().default(false),
+  assessmentTypeId: text('assessment_type_id').references(() => assessmentTypes.id, {
+    onDelete: 'set null',
+  }),
 });
 
 export const materials = sqliteTable('materials', {
@@ -191,12 +209,15 @@ export const scoreRecords = sqliteTable(
     classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
     date: text('date').notNull(),
     score: real('score').notNull(),
-    label: text('label'),
+    assessmentTypeId: text('assessment_type_id').references(() => assessmentTypes.id, {
+      onDelete: 'set null',
+    }),
     notes: text('notes'),
   },
   (t) => [
     index('idx_score_records_student').on(t.studentId, t.date),
     index('idx_score_records_class').on(t.classId),
+    index('idx_score_records_type').on(t.assessmentTypeId),
   ],
 );
 
@@ -215,5 +236,47 @@ export const behaviorRecords = sqliteTable(
   (t) => [
     index('idx_behavior_records_student').on(t.studentId, t.date),
     index('idx_behavior_records_class').on(t.classId),
+  ],
+);
+
+export const attendanceRecords = sqliteTable(
+  'attendance_records',
+  {
+    eventId: text('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    status: text('status').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.date, t.studentId] }),
+    index('idx_attendance_student').on(t.studentId, t.date),
+  ],
+);
+
+export const homeworkGrades = sqliteTable(
+  'homework_grades',
+  {
+    id: text('id').primaryKey(),
+    homeworkId: text('homework_id')
+      .notNull()
+      .references(() => homework.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    score: real('score'),
+    comment: text('comment'),
+    gradedAt: text('graded_at'),
+    scoreRecordId: text('score_record_id').references(() => scoreRecords.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    index('idx_homework_grades_hw').on(t.homeworkId),
+    index('idx_homework_grades_student').on(t.studentId),
+    unique('uq_homework_grades').on(t.homeworkId, t.studentId),
   ],
 );

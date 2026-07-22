@@ -7,7 +7,15 @@ function beh(date: string, type: string): BehaviorRow {
 }
 
 function score(date: string, value: number): ScoreRow {
-  return { id: date, studentId: 's1', classId: null, date, score: value, label: null, notes: null };
+  return {
+    id: date,
+    studentId: 's1',
+    classId: null,
+    date,
+    score: value,
+    assessmentTypeId: null,
+    notes: null,
+  };
 }
 
 describe('weekStart()', () => {

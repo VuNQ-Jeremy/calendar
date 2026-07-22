@@ -96,6 +96,14 @@ export async function requireUser(request: Request, env: Env): Promise<SessionUs
   return user;
 }
 
+export async function requireAdmin(request: Request, env: Env): Promise<SessionUser> {
+  const sessionUser = await requireUser(request, env);
+  if (sessionUser.user.role !== 'Admin') {
+    throw Response.json({ error: 'forbidden' }, { status: 403 });
+  }
+  return sessionUser;
+}
+
 // ---- Auth actions ----
 
 export async function login(

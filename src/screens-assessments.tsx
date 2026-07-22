@@ -17,6 +17,7 @@ import {
 import type { ScoreRow, BehaviorRow } from '../server/services/assessments.js';
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
+import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 
 const { Card, Button, IconButton, Tabs } = DS;
 
@@ -27,6 +28,7 @@ interface AssessLoaderData {
   behavior: BehaviorRow[];
   students: StudentRow[];
   classes: ClassLite[];
+  types: AssessmentTypeRow[];
 }
 
 type ScoreDraft = {
@@ -35,7 +37,7 @@ type ScoreDraft = {
   date: string;
   score: number | '';
   classId: string;
-  label: string;
+  assessmentTypeId: string;
   notes: string;
 };
 
@@ -85,7 +87,7 @@ function TypeBadge({ type, label }: { type: BehaviorTypeId; label: string }) {
 }
 
 function AssessmentsScreen() {
-  const { scores, behavior, students, classes } = useLoaderData() as AssessLoaderData;
+  const { scores, behavior, students, classes, types } = useLoaderData() as AssessLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const [confirm, confirmNode] = useConfirm();
@@ -131,6 +133,7 @@ function AssessmentsScreen() {
   const praiseCount = studentBehavior.filter((r) => r.type === 'praise' && inWindow(r)).length;
 
   const classById = (id: string | null) => classes.find((c) => c.id === id);
+  const typeById = (id: string | null) => types.find((tp) => tp.id === id);
   const defaultClassId = () => {
     if (classFilter !== 'all') return classFilter;
     const st = students.find((s) => s.id === activeStudentId);
@@ -148,7 +151,7 @@ function AssessmentsScreen() {
       date: today,
       score: '',
       classId: defaultClassId(),
-      label: '',
+      assessmentTypeId: '',
       notes: '',
     });
 
@@ -169,7 +172,7 @@ function AssessmentsScreen() {
     fd.set('date', f.date);
     fd.set('score', String(f.score));
     if (f.classId) fd.set('classId', f.classId);
-    if (f.label) fd.set('label', f.label);
+    fd.set('assessmentTypeId', f.assessmentTypeId);
     if (f.notes) fd.set('notes', f.notes);
     fetcher.submit(fd, { action: '/assessments', method: 'post' });
     setScoreModal(null);
@@ -277,7 +280,7 @@ function AssessmentsScreen() {
               points={studentScores.map((r) => ({
                 x: r.date,
                 y: r.score,
-                label: r.label ?? undefined,
+                label: typeById(r.assessmentTypeId)?.name,
               }))}
               formatX={fmtShort}
               ariaLabel={t('assess_progress_chart')}
@@ -291,7 +294,11 @@ function AssessmentsScreen() {
                   <div style={{ flex: 1 }}>
                     <div className="m-row" style={{ gap: 8 }}>
                       <ScoreBadge score={r.score} />
-                      {r.label && <div className="lrow__title">{r.label}</div>}
+                      {r.assessmentTypeId && (
+                        <div className="lrow__title">
+                          {typeById(r.assessmentTypeId)?.name ?? '—'}
+                        </div>
+                      )}
                       {r.classId && (
                         <span
                           className="mchip"
@@ -327,7 +334,7 @@ function AssessmentsScreen() {
                           date: r.date,
                           score: r.score,
                           classId: r.classId ?? '',
-                          label: r.label ?? '',
+                          assessmentTypeId: r.assessmentTypeId ?? '',
                           notes: r.notes ?? '',
                         })
                       }
@@ -529,15 +536,17 @@ function AssessmentsScreen() {
                 ...classes.map((c) => ({ value: c.id, label: c.name })),
               ]}
             />
-            <div className="mochi-field">
-              <label className="mochi-field__label">{t('assess_score_label')}</label>
-              <input
-                className="mochi-input"
-                placeholder={t('assess_score_label_ph')}
-                value={scoreModal.label}
-                onChange={(e) => setScoreModal((m) => (m ? { ...m, label: e.target.value } : m))}
-              />
-            </div>
+            <MSelect
+              label={t('assess_score_label')}
+              value={scoreModal.assessmentTypeId}
+              onChange={(v) => setScoreModal((m) => (m ? { ...m, assessmentTypeId: v } : m))}
+              options={[
+                { value: '', label: t('assess_type_none') },
+                ...types
+                  .filter((tp) => tp.active || tp.id === scoreModal.assessmentTypeId)
+                  .map((tp) => ({ value: tp.id, label: tp.name })),
+              ]}
+            />
           </div>
           <div className="mochi-field">
             <label className="mochi-field__label">{t('assess_notes')}</label>

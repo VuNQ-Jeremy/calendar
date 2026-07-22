@@ -3,11 +3,12 @@
 --   wrangler d1 execute mochi --remote --file=./seed.sql   (deployed DB)
 -- Dates are static (anchored around 2026-06-22, a Monday) for a stable demo.
 
+DELETE FROM attendance_records; DELETE FROM homework_grades;
 DELETE FROM parent_students; DELETE FROM class_students; DELETE FROM class_schedule;
 DELETE FROM events; DELETE FROM homework; DELETE FROM materials; DELETE FROM invites;
 DELETE FROM parents; DELETE FROM classes; DELETE FROM students; DELETE FROM staff;
 DELETE FROM feedback; DELETE FROM settings;
-DELETE FROM score_records; DELETE FROM behavior_records;
+DELETE FROM score_records; DELETE FROM behavior_records; DELETE FROM assessment_types;
 
 INSERT INTO staff (id, name, email, role, color, phone) VALUES
   ('u1', 'Sam Okafor', 'sam@school.edu',  'Admin',   'orange', '(555) 010-2280'),
@@ -65,12 +66,12 @@ INSERT INTO events (id, title, date, start_time, end_time, color, class_id, loca
   ('e6', 'Science fair',  '2026-06-26', '10:00', '12:00', 'green',  'c1',  'Gym',      'none'),
   ('e7', 'Parent night',  '2026-06-27', '18:00', '19:30', 'rose',   NULL,  'Hall',     'none');
 
-INSERT INTO homework (id, title, class_id, due, points, notes, color, done) VALUES
-  ('h1', 'Cell diagram lab',  'c1', '2026-06-22', 20, 'Label all organelles.',           'green',  0),
-  ('h2', 'Quadratics, set 4', 'c2', '2026-06-23', 15, 'Questions 1-12, show working.',    'blue',   0),
-  ('h3', 'Read chapters 5-6', 'c3', '2026-06-24', 10, 'Be ready to discuss memory.',      'violet', 0),
-  ('h4', 'Color wheel study', 'c4', '2026-06-21', 25, 'Primary/secondary/tertiary.',      'orange', 0),
-  ('h5', 'Vocab quiz prep',   'c3', '2026-06-22', 10, '',                                 'violet', 1);
+INSERT INTO homework (id, title, class_id, due, points, notes, color, done, assessment_type_id) VALUES
+  ('h1', 'Cell diagram lab',  'c1', '2026-06-22', 20, 'Label all organelles.',           'green',  0, 'at3'),
+  ('h2', 'Quadratics, set 4', 'c2', '2026-06-23', 15, 'Questions 1-12, show working.',    'blue',   0, 'at2'),
+  ('h3', 'Read chapters 5-6', 'c3', '2026-06-24', 10, 'Be ready to discuss memory.',      'violet', 0, NULL),
+  ('h4', 'Color wheel study', 'c4', '2026-06-21', 25, 'Primary/secondary/tertiary.',      'orange', 0, NULL),
+  ('h5', 'Vocab quiz prep',   'c3', '2026-06-22', 10, '',                                 'violet', 1, 'at1');
 
 INSERT INTO materials (id, title, type, class_id, url, file_name, favorite, added_at) VALUES
   ('m1', 'Photosynthesis slides', 'notes',     'c1', '',                        'photosynthesis.pdf', 1, '2026-06-22'),
@@ -89,19 +90,29 @@ INSERT INTO feedback (id, message, category, author, status, created_at) VALUES
 INSERT INTO settings (key, value) VALUES
   ('theme', '{"bg":"#FFFCF8","gridLine":"#ECE0CF","today":"#FFE7D1","header":"#FDF6EC","bgImage":"","bgOpacity":0.12}');
 
-INSERT INTO score_records (id, student_id, class_id, date, score, label, notes) VALUES
-  ('sc1',  's1', 'c1', '2026-05-04', 6.5, 'Kiểm tra miệng',   NULL),
-  ('sc2',  's1', 'c1', '2026-05-18', 7.0, 'Kiểm tra 15 phút', NULL),
-  ('sc3',  's1', 'c1', '2026-06-01', 7.5, 'Kiểm tra 1 tiết',  'Improving steadily.'),
-  ('sc4',  's1', 'c1', '2026-06-15', 8.5, 'Giữa kỳ',          'Great progress!'),
-  ('sc5',  's1', 'c3', '2026-05-11', 7.0, 'Essay draft',      NULL),
-  ('sc6',  's1', 'c3', '2026-06-08', 8.0, 'Essay final',      NULL),
-  ('sc7',  's2', 'c1', '2026-05-06', 8.0, 'Kiểm tra miệng',   NULL),
-  ('sc8',  's2', 'c2', '2026-05-20', 5.5, 'Kiểm tra 15 phút', 'Struggled with quadratics.'),
-  ('sc9',  's2', 'c2', '2026-06-03', 6.5, 'Kiểm tra 1 tiết',  NULL),
-  ('sc10', 's2', 'c2', '2026-06-17', 7.5, 'Giữa kỳ',          'Big improvement.'),
-  ('sc11', 's4', 'c2', '2026-05-12', 4.5, 'Kiểm tra 15 phút', NULL),
-  ('sc12', 's4', 'c2', '2026-06-09', 6.0, 'Kiểm tra 1 tiết',  NULL);
+INSERT INTO assessment_types (id, name, active, sort_order) VALUES
+  ('at1', 'Kiểm tra miệng',   1, 1),
+  ('at2', 'Kiểm tra 15 phút', 1, 2),
+  ('at3', 'Kiểm tra 1 tiết',  1, 3),
+  ('at4', 'Giữa kỳ',          1, 4),
+  ('at5', 'Essay draft',      1, 5),
+  ('at6', 'Essay final',      1, 6);
+
+INSERT INTO score_records (id, student_id, class_id, date, score, assessment_type_id, notes) VALUES
+  ('sc1',  's1', 'c1', '2026-05-04', 6.5, 'at1', NULL),
+  ('sc2',  's1', 'c1', '2026-05-18', 7.0, 'at2', NULL),
+  ('sc3',  's1', 'c1', '2026-06-01', 7.5, 'at3', 'Improving steadily.'),
+  ('sc4',  's1', 'c1', '2026-06-15', 8.5, 'at4', 'Great progress!'),
+  ('sc5',  's1', 'c3', '2026-05-11', 7.0, 'at5', NULL),
+  ('sc6',  's1', 'c3', '2026-06-08', 8.0, 'at6', NULL),
+  ('sc7',  's2', 'c1', '2026-05-06', 8.0, 'at1', NULL),
+  ('sc8',  's2', 'c2', '2026-05-20', 5.5, 'at2', 'Struggled with quadratics.'),
+  ('sc9',  's2', 'c2', '2026-06-03', 6.5, 'at3', NULL),
+  ('sc10', 's2', 'c2', '2026-06-17', 7.5, 'at4', 'Big improvement.'),
+  ('sc11', 's4', 'c2', '2026-05-12', 4.5, 'at2', NULL),
+  ('sc12', 's4', 'c2', '2026-06-09', 6.0, 'at3', NULL),
+  ('sc13', 's2', 'c2', '2026-06-23', 7.5, 'at2', 'Good working shown.'),
+  ('sc14', 's4', 'c2', '2026-06-23', 6.0, 'at2', 'Check sign errors in Q7-9.');
 
 INSERT INTO behavior_records (id, student_id, class_id, date, type, notes) VALUES
   ('bh1',  's2', 'c2', '2026-04-28', 'late',             NULL),
@@ -116,3 +127,12 @@ INSERT INTO behavior_records (id, student_id, class_id, date, type, notes) VALUE
   ('bh10', 's4', 'c2', '2026-05-21', 'absent',           NULL),
   ('bh11', 's4', 'c3', '2026-06-04', 'disruptive',       'Talking during reading time.'),
   ('bh12', 's4', 'c2', '2026-06-16', 'praise',           'Volunteered to present.');
+
+INSERT INTO attendance_records (event_id, student_id, date, status) VALUES
+  ('e1', 's1', '2026-06-22', 'present'),
+  ('e1', 's2', '2026-06-22', 'late'),
+  ('e1', 's3', '2026-06-22', 'absent');
+
+INSERT INTO homework_grades (id, homework_id, student_id, score, comment, graded_at, score_record_id) VALUES
+  ('hg1', 'h2', 's2', 7.5, 'Good working shown.',        '2026-06-23', 'sc13'),
+  ('hg2', 'h2', 's4', 6.0, 'Check sign errors in Q7-9.', '2026-06-23', 'sc14');

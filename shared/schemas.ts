@@ -89,6 +89,7 @@ export const HomeworkInput = z.object({
   notes: z.string().max(2000).nullish(),
   color: ColorId.nullish(),
   done: z.coerce.boolean().default(false),
+  assessmentTypeId: z.string().nullish(),
 });
 export type HomeworkInput = z.infer<typeof HomeworkInput>;
 
@@ -137,10 +138,39 @@ export const ScoreRecordInput = z.object({
   classId: z.string().nullish(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   score: z.coerce.number().min(0).max(10),
-  label: z.string().max(200).nullish(),
+  assessmentTypeId: z.string().nullish(),
   notes: z.string().max(2000).nullish(),
 });
 export type ScoreRecordInput = z.infer<typeof ScoreRecordInput>;
+
+export const AssessmentTypeInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  active: z.coerce.boolean().default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type AssessmentTypeInput = z.infer<typeof AssessmentTypeInput>;
+
+export const AttendanceStatus = z.enum(['present', 'absent', 'late', 'excused']);
+export type AttendanceStatus = z.infer<typeof AttendanceStatus>;
+
+export const AttendanceSaveInput = z.object({
+  eventId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  records: z.array(z.object({ studentId: z.string().min(1), status: AttendanceStatus })),
+});
+export type AttendanceSaveInput = z.infer<typeof AttendanceSaveInput>;
+
+export const HomeworkGradesSaveInput = z.object({
+  homeworkId: z.string().min(1),
+  records: z.array(
+    z.object({
+      studentId: z.string().min(1),
+      score: z.number().min(0).max(10).nullish(),
+      comment: z.string().max(2000).nullish(),
+    }),
+  ),
+});
+export type HomeworkGradesSaveInput = z.infer<typeof HomeworkGradesSaveInput>;
 
 export const BehaviorRecordInput = z.object({
   studentId: z.string().min(1),

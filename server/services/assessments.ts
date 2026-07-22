@@ -9,7 +9,7 @@ export type ScoreRow = {
   classId: string | null;
   date: string;
   score: number;
-  label: string | null;
+  assessmentTypeId: string | null;
   notes: string | null;
 };
 
@@ -29,7 +29,7 @@ function mapScore(r: typeof scoreRecords.$inferSelect): ScoreRow {
     classId: r.classId,
     date: r.date,
     score: r.score,
-    label: r.label,
+    assessmentTypeId: r.assessmentTypeId,
     notes: r.notes,
   };
 }
@@ -58,7 +58,7 @@ export async function createScore(db: Db, input: ScoreRecordInput): Promise<Scor
     classId: input.classId ?? null,
     date: input.date,
     score: input.score,
-    label: input.label ?? null,
+    assessmentTypeId: input.assessmentTypeId ?? null,
     notes: input.notes ?? null,
   });
   const rows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
@@ -75,7 +75,7 @@ export async function updateScore(
   if (patch.classId !== undefined) set.classId = patch.classId ?? null;
   if (patch.date !== undefined) set.date = patch.date;
   if (patch.score !== undefined) set.score = patch.score;
-  if (patch.label !== undefined) set.label = patch.label ?? null;
+  if (patch.assessmentTypeId !== undefined) set.assessmentTypeId = patch.assessmentTypeId ?? null;
   if (patch.notes !== undefined) set.notes = patch.notes ?? null;
   if (Object.keys(set).length) {
     await db.update(scoreRecords).set(set).where(eq(scoreRecords.id, id));

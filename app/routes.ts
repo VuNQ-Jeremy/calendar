@@ -4,6 +4,7 @@ export default [
   route('login', 'routes/login.tsx'),
   route('logout', 'routes/logout.tsx'),
   route('materials/:id/download', 'routes/materials.$id.download.tsx'),
+  route('attendance', 'routes/attendance.tsx'),
   layout('routes/_app.tsx', [
     index('routes/home.tsx'),
     route('dashboard', 'routes/dashboard.tsx'),
@@ -13,6 +14,7 @@ export default [
     route('materials', 'routes/materials.tsx'),
     route('homework', 'routes/homework.tsx'),
     route('assessments', 'routes/assessments.tsx'),
+    route('config', 'routes/config.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),
   ]),

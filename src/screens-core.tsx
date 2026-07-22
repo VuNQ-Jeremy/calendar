@@ -7,9 +7,11 @@ import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
 import { useLang, locale } from './lib/i18n.jsx';
 import type { IconName } from './icons.jsx';
-import type { ClassLite } from '../server/services/classes.js';
-import type { HomeworkRow } from '../server/services/homework.js';
+import type { ClassLite, ClassRow } from '../server/services/classes.js';
+import type { HomeworkRow, GradeRow } from '../server/services/homework.js';
 import type { EventRow } from '../server/services/events.js';
+import type { StudentRow } from '../server/services/people.js';
+import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 
 const {
   Card: SC,
@@ -41,7 +43,10 @@ interface DashLoaderData {
 
 interface HwLoaderData {
   homework: HomeworkRow[];
-  classes: ClassLite[];
+  classes: ClassRow[];
+  students: StudentRow[];
+  grades: GradeRow[];
+  types: AssessmentTypeRow[];
 }
 
 type HomeworkDraft = {
@@ -53,6 +58,7 @@ type HomeworkDraft = {
   done?: boolean;
   points?: number | string | null;
   notes?: string | null;
+  assessmentTypeId?: string | null;
 };
 
 // ---- StatCard ----
@@ -224,9 +230,23 @@ interface HomeworkItemProps {
   onEdit: () => void;
   onDelete: () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  typeName?: string | null;
+  gradedLabel?: string | null;
+  onGrade?: () => void;
 }
 
-function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }: HomeworkItemProps) {
+function HomeworkItem({
+  h,
+  classes,
+  today,
+  lang,
+  onEdit,
+  onDelete,
+  t,
+  typeName,
+  gradedLabel,
+  onGrade,
+}: HomeworkItemProps) {
   const fetcher = useFetcher();
   const optimisticDone = fetcher.formData ? fetcher.formData.get('done') === 'true' : h.done;
   const c = colorOf(h.color);
@@ -279,6 +299,22 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }: Homework
               {t('hw_pts', { n: h.points })}
             </span>
           )}
+          {typeName && (
+            <span
+              className="mchip"
+              style={{ background: 'var(--cream-200)', color: 'var(--text-body)' }}
+            >
+              {typeName}
+            </span>
+          )}
+          {gradedLabel && (
+            <span
+              className="mchip"
+              style={{ background: 'var(--cream-200)', color: 'var(--text-body)' }}
+            >
+              {gradedLabel}
+            </span>
+          )}
         </div>
         {h.notes && (
           <div
@@ -296,6 +332,11 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }: Homework
         )}
       </div>
       <div className="lrow__actions">
+        {onGrade && (
+          <SIB label={t('hw_grade')} size="sm" onClick={onGrade}>
+            <MIcon name="chart" size={16} />
+          </SIB>
+        )}
         <SIB label={t('edit')} size="sm" onClick={onEdit}>
           <MIcon name="edit" size={16} />
         </SIB>
@@ -307,12 +348,111 @@ function HomeworkItem({ h, classes, today, lang, onEdit, onDelete, t }: Homework
   );
 }
 
+interface GradeModalProps {
+  hw: HomeworkRow;
+  roster: StudentRow[];
+  grades: GradeRow[];
+  onClose: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function GradeModal({ hw, roster, grades, onClose, t }: GradeModalProps) {
+  const fetcher = useFetcher();
+  const [rows, setRows] = React.useState<Record<string, { score: number | ''; comment: string }>>(
+    () => {
+      const init: Record<string, { score: number | ''; comment: string }> = {};
+      for (const s of roster) {
+        const g = grades.find((gr) => gr.studentId === s.id);
+        init[s.id] = { score: g?.score ?? '', comment: g?.comment ?? '' };
+      }
+      return init;
+    },
+  );
+
+  const setRow = (studentId: string, patch: Partial<{ score: number | ''; comment: string }>) =>
+    setRows((prev) => ({ ...prev, [studentId]: { ...prev[studentId], ...patch } }));
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('intent', 'save-grades');
+    fd.set('homeworkId', hw.id);
+    fd.set(
+      'records',
+      JSON.stringify(
+        roster.map((s) => ({
+          studentId: s.id,
+          score:
+            rows[s.id]?.score === '' || rows[s.id]?.score == null ? null : Number(rows[s.id].score),
+          comment: rows[s.id]?.comment?.trim() ? rows[s.id].comment.trim() : null,
+        })),
+      ),
+    );
+    fetcher.submit(fd, { action: '/homework', method: 'post' });
+    onClose();
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={t('hw_grade') + ': ' + hw.title}
+      width={560}
+      footer={
+        <>
+          <SBtn variant="secondary" onClick={onClose}>
+            {t('cancel')}
+          </SBtn>
+          <SBtn variant="primary" onClick={save}>
+            {t('save')}
+          </SBtn>
+        </>
+      }
+    >
+      <div
+        className="m-muted"
+        style={{ fontSize: 'var(--text-sm)', marginBottom: 10 } as React.CSSProperties}
+      >
+        {t('hw_grade_synced')}
+      </div>
+      <div className="m-stack">
+        {roster.map((s) => (
+          <div key={s.id} className="lrow">
+            <div style={{ flex: 1 }}>
+              <div className="lrow__title">{s.name}</div>
+              <div className="m-grid cols-2" style={{ gap: 10, marginTop: 6 }}>
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  className="mochi-input"
+                  value={rows[s.id]?.score ?? ''}
+                  onChange={(e) =>
+                    setRow(s.id, { score: e.target.value === '' ? '' : Number(e.target.value) })
+                  }
+                />
+                <input
+                  className="mochi-input"
+                  placeholder={t('hw_comment')}
+                  value={rows[s.id]?.comment ?? ''}
+                  onChange={(e) => setRow(s.id, { comment: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
 function HomeworkScreen() {
-  const { homework: allHw, classes } = useLoaderData() as HwLoaderData;
+  const { homework: allHw, classes, students, grades, types } = useLoaderData() as HwLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const [filter, setFilter] = React.useState('all');
   const [modal, setModal] = React.useState<HomeworkDraft | null>(null);
+  const [gradeModal, setGradeModal] = React.useState<HomeworkRow | null>(null);
   const today = iso(TODAY);
 
   const list = allHw.filter((h) =>
@@ -330,6 +470,7 @@ function HomeworkScreen() {
       done: false,
       points: 10,
       notes: '',
+      assessmentTypeId: '',
     });
 
   const save = (f: HomeworkDraft) => {
@@ -344,6 +485,7 @@ function HomeworkScreen() {
     fd.set('done', String(!!f.done));
     if (f.points != null && f.points !== '') fd.set('points', String(f.points));
     if (f.notes) fd.set('notes', f.notes);
+    fd.set('assessmentTypeId', f.assessmentTypeId ?? '');
     fetcher.submit(fd, { action: '/homework', method: 'post' });
     setModal(null);
   };
@@ -386,18 +528,30 @@ function HomeworkScreen() {
       />
       <div className="m-stack">
         {list.length ? (
-          list.map((h) => (
-            <HomeworkItem
-              key={h.id}
-              h={h}
-              classes={classes}
-              today={today}
-              lang={lang}
-              onEdit={() => setModal({ ...h })}
-              onDelete={() => removeHw(h.id)}
-              t={t}
-            />
-          ))
+          list.map((h) => {
+            const roster = classes.find((c) => c.id === h.classId)?.studentIds ?? [];
+            const hwGrades = grades.filter((g) => g.homeworkId === h.id);
+            const gradedCount = hwGrades.filter((g) => g.score != null || g.comment).length;
+            return (
+              <HomeworkItem
+                key={h.id}
+                h={h}
+                classes={classes}
+                today={today}
+                lang={lang}
+                onEdit={() => setModal({ ...h })}
+                onDelete={() => removeHw(h.id)}
+                t={t}
+                typeName={types.find((tp) => tp.id === h.assessmentTypeId)?.name ?? null}
+                gradedLabel={
+                  h.classId && roster.length
+                    ? t('hw_graded_n', { done: gradedCount, total: roster.length })
+                    : null
+                }
+                onGrade={h.classId ? () => setGradeModal(h) : undefined}
+              />
+            );
+          })
         ) : (
           <SC>
             <Empty icon="clipboard" title={t('hw_no_tasks')} sub={t('hw_add_start')} />
@@ -447,6 +601,17 @@ function HomeworkScreen() {
               clearable
             />
           </div>
+          <MSelect
+            label={t('assess_score_label')}
+            value={modal.assessmentTypeId ?? ''}
+            onChange={(v) => setModal((m) => (m ? { ...m, assessmentTypeId: v } : m))}
+            options={[
+              { value: '', label: t('assess_type_none') },
+              ...types
+                .filter((tp) => tp.active || tp.id === modal.assessmentTypeId)
+                .map((tp) => ({ value: tp.id, label: tp.name })),
+            ]}
+          />
           <div className="mochi-field" style={{ maxWidth: 160 }}>
             <label className="mochi-field__label">{t('hw_points')}</label>
             <input
@@ -478,6 +643,17 @@ function HomeworkScreen() {
             />
           </div>
         </Modal>
+      )}
+      {gradeModal && (
+        <GradeModal
+          hw={gradeModal}
+          roster={(classes.find((c) => c.id === gradeModal.classId)?.studentIds ?? [])
+            .map((sid) => students.find((s) => s.id === sid))
+            .filter((s): s is StudentRow => !!s)}
+          grades={grades.filter((g) => g.homeworkId === gradeModal.id)}
+          onClose={() => setGradeModal(null)}
+          t={t}
+        />
       )}
     </div>
   );

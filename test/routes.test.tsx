@@ -80,4 +80,61 @@ describe('AppLayout (_app.tsx)', () => {
 
     localStorage.clear();
   });
+
+  it('hides the System Config nav item for a non-Admin user', async () => {
+    localStorage.setItem(SEEN_INTRO_KEY, '1');
+
+    const Stub = createRoutesStub([
+      {
+        path: '/',
+        Component: AppLayout,
+        loader: () => STUB_LOADER_DATA,
+        children: [
+          {
+            path: 'dashboard',
+            Component: () => React.createElement('div', null, 'Dashboard content'),
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
+    });
+
+    expect(screen.queryByRole('link', { name: 'System Config' })).not.toBeInTheDocument();
+
+    localStorage.clear();
+  });
+
+  it('shows the System Config nav item for an Admin user', async () => {
+    localStorage.setItem(SEEN_INTRO_KEY, '1');
+
+    const adminLoaderData = {
+      ...STUB_LOADER_DATA,
+      user: { ...TEST_USER, role: 'Admin' },
+    };
+
+    const Stub = createRoutesStub([
+      {
+        path: '/',
+        Component: AppLayout,
+        loader: () => adminLoaderData,
+        children: [
+          {
+            path: 'dashboard',
+            Component: () => React.createElement('div', null, 'Dashboard content'),
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
+    });
+
+    expect(screen.getByRole('link', { name: 'System Config' })).toBeInTheDocument();
+
+    localStorage.clear();
+  });
 });

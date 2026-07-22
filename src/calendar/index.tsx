@@ -12,7 +12,8 @@ import { AgendaView } from './agenda-view.jsx';
 import { CalendarThemeDrawer } from './theme-drawer.jsx';
 import { startOfWeek, addMin, fmtTime, toMin, MONTHS, DOW, expandEvents } from './utils.js';
 import type { EventRow } from '../../server/services/events.js';
-import type { ClassLite } from '../../server/services/classes.js';
+import type { ClassRow } from '../../server/services/classes.js';
+import type { StudentRow } from '../../server/services/people.js';
 import type { ExpandedEvent } from './utils.js';
 
 const { Button: CBtn, IconButton: CIBtn, Tabs: CTabs } = DS;
@@ -28,7 +29,8 @@ interface Theme {
 
 interface CalendarLoaderData {
   events: EventRow[];
-  classes: ClassLite[];
+  classes: ClassRow[];
+  students: StudentRow[];
   theme: Theme;
 }
 
@@ -37,7 +39,7 @@ type ViewMode = 'day' | 'week' | 'month' | 'agenda';
 type EventDraft = Partial<EventRow> & { recurrence?: string };
 
 function CalendarScreen() {
-  const { events, classes, theme } = useLoaderData() as CalendarLoaderData;
+  const { events, classes, students, theme } = useLoaderData() as CalendarLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const { months, monthsShort, dow } = getCal(lang);
@@ -224,6 +226,7 @@ function CalendarScreen() {
         onSave={save}
         onDelete={del}
         classes={classes}
+        students={students}
       />
       {themeOpen && <CalendarThemeDrawer onClose={() => setThemeOpen(false)} />}
     </div>

@@ -75,6 +75,16 @@ export function bucketBehaviorByWeek(
   return keys.map((k) => buckets.get(k)!);
 }
 
+export const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'excused'] as const;
+export type AttendanceStatusId = (typeof ATTENDANCE_STATUSES)[number];
+
+export const ATTENDANCE_META: Record<AttendanceStatusId, { tk: string; color: string }> = {
+  present: { tk: 'att_present', color: 'green' },
+  late: { tk: 'att_late', color: 'orange' },
+  absent: { tk: 'att_absent', color: 'rose' },
+  excused: { tk: 'att_excused', color: 'blue' },
+};
+
 export type ScoreStats = { average: number | null; latest: number | null; delta: number | null };
 
 /**

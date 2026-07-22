@@ -6,25 +6,27 @@ import { requireUser } from '../../server/services/auth';
 import * as assessSvc from '../../server/services/assessments';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
+import * as typesSvc from '../../server/services/assessment-types';
 import { ScoreRecordInput, BehaviorRecordInput } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireUser(request, env);
   const db = createDb(env);
-  const [scores, behavior, students, classes] = await Promise.all([
+  const [scores, behavior, students, classes, types] = await Promise.all([
     assessSvc.listScores(db),
     assessSvc.listBehavior(db),
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
+    typesSvc.list(db),
   ]);
-  return { scores, behavior, students, classes };
+  return { scores, behavior, students, classes, types };
 }
 
 function preprocessRaw(raw: Record<string, unknown>) {
   const out = { ...raw };
   if (out.classId === '') delete out.classId;
-  if (out.label === '') delete out.label;
+  if (out.assessmentTypeId === '') out.assessmentTypeId = null;
   if (out.notes === '') delete out.notes;
   return out;
 }

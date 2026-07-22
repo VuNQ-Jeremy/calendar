@@ -5,20 +5,29 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 import * as homeworkSvc from '../../server/services/homework';
 import * as classesSvc from '../../server/services/classes';
-import { HomeworkInput } from '../../shared/schemas';
+import * as peopleSvc from '../../server/services/people';
+import * as typesSvc from '../../server/services/assessment-types';
+import { HomeworkInput, HomeworkGradesSaveInput } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireUser(request, env);
   const db = createDb(env);
-  const [homework, classes] = await Promise.all([homeworkSvc.list(db), classesSvc.listLite(db)]);
-  return { homework, classes };
+  const [homework, classes, students, grades, types] = await Promise.all([
+    homeworkSvc.list(db),
+    classesSvc.list(db),
+    peopleSvc.listStudents(db),
+    homeworkSvc.listGrades(db),
+    typesSvc.list(db),
+  ]);
+  return { homework, classes, students, grades, types };
 }
 
 function preprocessHwRaw(raw: Record<string, unknown>) {
   const out = { ...raw };
   if (out.points === '') delete out.points;
   if (typeof out.done === 'string') out.done = out.done === 'true';
+  if (out.assessmentTypeId === '') out.assessmentTypeId = null;
   return out;
 }
 
@@ -34,6 +43,22 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     await homeworkSvc.remove(db, id);
     return { ok: true };
+  }
+
+  if (intent === 'save-grades') {
+    let recordsRaw: unknown;
+    try {
+      recordsRaw = JSON.parse((formData.get('records') as string) ?? '[]');
+    } catch {
+      return Response.json({ error: 'bad records json' }, { status: 400 });
+    }
+    const parsed = HomeworkGradesSaveInput.safeParse({
+      homeworkId: formData.get('homeworkId'),
+      records: recordsRaw,
+    });
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    const grades = await homeworkSvc.saveGrades(db, parsed.data.homeworkId, parsed.data.records);
+    return { ok: true, grades };
   }
 
   const raw = preprocessHwRaw(Object.fromEntries(formData) as Record<string, unknown>);
