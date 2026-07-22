@@ -1391,7 +1391,7 @@ body {
   display: grid;
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 10;
   background: var(--cal-header, var(--cream-100));
   border-bottom: var(--border-width) solid var(--cal-grid, var(--border-subtle));
 }
