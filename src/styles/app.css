@@ -1017,14 +1017,10 @@ body {
   gap: 8px;
   padding: 0 12px;
   height: 42px;
-  background: var(--surface-base);
+  background: var(--surface-card);
   border: 1.5px solid var(--border-soft);
   border-radius: var(--radius-md);
   color: var(--text-muted);
-}
-.tokensearch__field:focus-within {
-  border-color: var(--brand-base);
-  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 .tokensearch__input {
   flex: 1;
@@ -1040,7 +1036,7 @@ body {
 .tokensearch__menu {
   position: fixed;
   z-index: 1100;
-  background: var(--surface-base);
+  background: var(--surface-card);
   border: 1.5px solid var(--border-soft);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);

@@ -692,7 +692,6 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }: T
                     style={{ background: colorOf(i.color).base }}
                   />
                   <span style={{ flex: 1, textAlign: 'left' }}>{i.name}</span>
-                  <MIcon name="plus" size={14} />
                 </button>
               ))
             ) : (
