@@ -9,9 +9,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -24,6 +24,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Prints the CI token's account + permission scopes into the log.
+      # The migrations step below needs the "Account -> D1 -> Edit" scope.
+      - name: Check Cloudflare auth
+        run: npx wrangler whoami
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Apply D1 migrations
         run: npx wrangler d1 migrations apply mochi-class --remote
