@@ -50,7 +50,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const intent = formData.get('intent') as string;
   const url = new URL(request.url);
   const next = url.searchParams.get('next');
-  const dest = next && next.startsWith('/') ? next : '/dashboard';
+  const dest = next && next.startsWith('/') && !next.endsWith('.data') ? next : '/dashboard';
 
   if (intent === 'login') {
     const email = (formData.get('email') as string) ?? '';

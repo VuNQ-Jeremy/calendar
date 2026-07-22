@@ -84,7 +84,14 @@ export async function requireUser(request: Request, env: Env): Promise<SessionUs
   const user = await getUser(request, env);
   if (!user) {
     const url = new URL(request.url);
-    throw redirect('/login?next=' + encodeURIComponent(url.pathname));
+    // Client-side navigations hit "<path>.data" (the root index is "/_.data");
+    // strip the single-fetch suffix so post-login navigation targets the page itself.
+    let next = url.pathname;
+    if (next.endsWith('.data')) {
+      next = next.slice(0, -'.data'.length);
+      if (next === '/_' || next === '/_root' || next === '') next = '/';
+    }
+    throw redirect('/login?next=' + encodeURIComponent(next));
   }
   return user;
 }
