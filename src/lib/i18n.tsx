@@ -212,6 +212,9 @@ const en_strings = {
   cfg_deactivate: 'Deactivate',
   cfg_rename: 'Rename',
   cfg_drag_reorder: 'Drag to reorder',
+  cfg_delete_q: 'Delete type?',
+  cfg_delete_msg:
+    '"{name}" will be deleted. Homework and scores using it keep their data but lose this type label.',
   cfg_no_types: 'No assessment types yet',
   ev_details: 'Details',
   att_tab: 'Attendance',
@@ -646,6 +649,9 @@ export const STRINGS = {
     cfg_deactivate: 'Ngưng sử dụng',
     cfg_rename: 'Đổi tên',
     cfg_drag_reorder: 'Kéo để sắp xếp lại',
+    cfg_delete_q: 'Xóa loại?',
+    cfg_delete_msg:
+      '"{name}" sẽ bị xóa. Bài tập và điểm đang dùng loại này vẫn giữ nguyên dữ liệu nhưng mất nhãn loại.',
     cfg_no_types: 'Chưa có loại bài kiểm tra',
     ev_details: 'Chi tiết',
     att_tab: 'Điểm danh',

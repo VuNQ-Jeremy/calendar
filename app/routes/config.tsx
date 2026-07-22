@@ -51,6 +51,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return { ok: true };
     }
 
+    if (intent === 'delete-type') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      await typesSvc.remove(db, id);
+      return { ok: true };
+    }
+
     if (intent === 'reorder-types') {
       let ids: unknown;
       try {

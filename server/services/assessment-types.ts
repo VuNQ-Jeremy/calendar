@@ -44,6 +44,10 @@ export async function create(db: Db, input: AssessmentTypeInput): Promise<Assess
   return map(rows[0]);
 }
 
+export async function remove(db: Db, id: string): Promise<void> {
+  await db.delete(assessmentTypes).where(eq(assessmentTypes.id, id));
+}
+
 export async function reorder(db: Db, ids: string[]): Promise<void> {
   for (let i = 0; i < ids.length; i++) {
     await db

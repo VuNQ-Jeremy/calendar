@@ -51,6 +51,20 @@ function SystemConfigScreen() {
     submit(fd);
   };
 
+  const del = async (tp: AssessmentTypeRow) => {
+    const ok = await confirm({
+      title: t('cfg_delete_q'),
+      message: t('cfg_delete_msg', { name: tp.name }),
+      confirmLabel: t('delete'),
+      danger: true,
+    });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'delete-type');
+    fd.set('id', tp.id);
+    submit(fd);
+  };
+
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [localOrder, setLocalOrder] = React.useState<string[] | null>(null);
   const reorderPending = React.useRef(false);
@@ -147,6 +161,9 @@ function SystemConfigScreen() {
                   <Button variant="secondary" size="sm" onClick={() => toggleActive(tp)}>
                     {tp.active ? t('cfg_deactivate') : t('cfg_activate')}
                   </Button>
+                  <IconButton label={t('delete')} size="sm" onClick={() => del(tp)}>
+                    <MIcon name="trash" size={16} />
+                  </IconButton>
                 </div>
               </div>
             ))}
