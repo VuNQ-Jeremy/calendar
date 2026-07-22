@@ -14,6 +14,7 @@ const BASE_EVENT: Omit<EventRow, 'date' | 'recurrence'> = {
   end: '10:00',
   classId: 'cls-1',
   location: null,
+  notes: null,
 };
 
 describe('expandEvents() — weekly recurrence', () => {

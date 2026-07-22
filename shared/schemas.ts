@@ -35,6 +35,7 @@ export const EventInput = z.object({
   classId: z.string().nullish(),
   location: z.string().max(200).nullish(),
   recurrence: z.enum(['none', 'daily', 'weekly']).default('none'),
+  notes: z.string().max(4000).nullish(),
 });
 export type EventInput = z.infer<typeof EventInput>;
 
@@ -113,7 +114,7 @@ export type HomeworkInput = z.infer<typeof HomeworkInput>;
 
 export const MaterialInput = z.object({
   title: z.string().trim().min(1).max(200),
-  type: z.enum(['notes', 'worksheet', 'video', 'link']).default('notes'),
+  type: z.enum(['notes', 'worksheet', 'video', 'link', 'curriculum']).default('notes'),
   classId: z.string().nullish(),
   url: z.string().max(2000).nullish(),
   fileName: z.string().max(500).nullish(),
@@ -182,6 +183,12 @@ export const AttendanceSaveInput = z.object({
   records: z.array(z.object({ studentId: z.string().min(1), status: AttendanceStatus })),
 });
 export type AttendanceSaveInput = z.infer<typeof AttendanceSaveInput>;
+
+export const EventMaterialsSaveInput = z.object({
+  eventId: z.string().min(1),
+  materialIds: z.array(z.string().min(1)),
+});
+export type EventMaterialsSaveInput = z.infer<typeof EventMaterialsSaveInput>;
 
 export const HomeworkGradesSaveInput = z.object({
   homeworkId: z.string().min(1),

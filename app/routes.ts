@@ -4,7 +4,9 @@ export default [
   route('login', 'routes/login.tsx'),
   route('logout', 'routes/logout.tsx'),
   route('materials/:id/download', 'routes/materials.$id.download.tsx'),
+  route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
+  route('event-materials', 'routes/event-materials.tsx'),
   layout('routes/_app.tsx', [
     index('routes/home.tsx'),
     route('dashboard', 'routes/dashboard.tsx'),

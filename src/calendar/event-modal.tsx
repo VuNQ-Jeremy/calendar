@@ -6,10 +6,13 @@ import { Modal, MSelect, MDatePicker, MTimePicker, ColorPicker, Empty } from '..
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import { ATTENDANCE_META, ATTENDANCE_STATUSES, type AttendanceStatusId } from '../lib/assess.js';
+import { MAT_TYPES } from '../lib/mat-types.js';
+import { HomeworkTab } from './homework-tab.jsx';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { AttendanceRow } from '../../server/services/attendance.js';
+import type { MaterialRow } from '../../server/services/materials.js';
 
 const { Button: CBtn, Tabs: CTabs } = DS;
 
@@ -23,6 +26,7 @@ interface EventModalProps {
   onDelete: (id: string) => void;
   classes: ClassRow[];
   students: StudentRow[];
+  materials: MaterialRow[];
 }
 
 interface AttendanceTabProps {
@@ -144,6 +148,85 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
   );
 }
 
+interface EventMaterialsPickerProps {
+  eventId: string;
+  classId: string;
+  materials: MaterialRow[];
+}
+
+function EventMaterialsPicker({ eventId, classId, materials }: EventMaterialsPickerProps) {
+  const { t } = useLang();
+  const loadFetcher = useFetcher<{ materialIds: string[] }>();
+  const saveFetcher = useFetcher();
+  const [ids, setIds] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    loadFetcher.load(`/event-materials?eventId=${encodeURIComponent(eventId)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  React.useEffect(() => {
+    if (loadFetcher.data) setIds(loadFetcher.data.materialIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadFetcher.data]);
+
+  const classMats = materials
+    .filter((m) => m.classId === classId)
+    .sort((a, b) => Number(b.type === 'curriculum') - Number(a.type === 'curriculum'));
+
+  const toggle = (materialId: string) => {
+    const next = ids.includes(materialId)
+      ? ids.filter((x) => x !== materialId)
+      : [...ids, materialId];
+    setIds(next);
+    const fd = new FormData();
+    fd.set('intent', 'save');
+    fd.set('eventId', eventId);
+    fd.set('materialIds', JSON.stringify(next));
+    saveFetcher.submit(fd, { action: '/event-materials', method: 'post' });
+  };
+
+  return (
+    <div className="mochi-field">
+      <label className="mochi-field__label">{t('ev_materials')}</label>
+      {classMats.length ? (
+        <div className="m-stack" style={{ gap: 6 }}>
+          {classMats.map((m) => {
+            const on = ids.includes(m.id);
+            const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                className="lrow"
+                onClick={() => toggle(m.id)}
+                style={{
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  border: on ? '1.5px solid var(--brand)' : '1.5px solid var(--border-subtle)',
+                  background: 'transparent',
+                }}
+              >
+                <MIcon name={on ? 'check' : mt.icon} size={16} />
+                <span style={{ flex: 1 }} className="lrow__title">
+                  {m.title}
+                </span>
+                <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                  {t(mt.tk)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+          {t('ev_materials_empty')}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function EventModal({
   open,
   onClose,
@@ -152,10 +235,11 @@ export function EventModal({
   onDelete,
   classes,
   students,
+  materials,
 }: EventModalProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<EventDraft>(draft || {});
-  const [tab, setTab] = React.useState<'details' | 'attendance'>('details');
+  const [tab, setTab] = React.useState<'details' | 'attendance' | 'homework'>('details');
   React.useEffect(() => {
     setF(draft || {});
     setTab('details');
@@ -168,7 +252,7 @@ export function EventModal({
     { value: '', label: t('ev_class_personal') },
     ...classes.map((c) => ({ value: c.id, label: c.name })),
   ];
-  const showAttendanceTab = !isNew && !!f.classId;
+  const showTabs = !isNew && !!f.classId;
 
   return (
     <Modal
@@ -176,6 +260,7 @@ export function EventModal({
       onClose={onClose}
       title={isNew ? t('ev_new') : t('ev_edit')}
       width={540}
+      size={isNew ? 'default' : 'full'}
       footer={
         tab === 'details' ? (
           <>
@@ -206,87 +291,125 @@ export function EventModal({
         )
       }
     >
-      {showAttendanceTab && (
+      {showTabs && (
         <CTabs
           value={tab}
-          onChange={(id: string) => setTab(id as 'details' | 'attendance')}
+          onChange={(id: string) => setTab(id as 'details' | 'attendance' | 'homework')}
           tabs={[
             { id: 'details', label: t('ev_details') },
             { id: 'attendance', label: t('att_tab') },
+            { id: 'homework', label: t('hw_tab') },
           ]}
         />
       )}
 
-      {tab === 'attendance' && showAttendanceTab ? (
-        <AttendanceTab
+      {tab === 'attendance' && showTabs ? (
+        <div className="evm-pane-scroll">
+          <AttendanceTab
+            eventId={f.id!}
+            date={f.date || ''}
+            classId={f.classId || ''}
+            classes={classes}
+            students={students}
+          />
+        </div>
+      ) : tab === 'homework' && showTabs ? (
+        <HomeworkTab
           eventId={f.id!}
-          date={f.date || ''}
           classId={f.classId || ''}
           classes={classes}
           students={students}
+          materials={materials}
         />
       ) : (
-        <>
-          <div className="mochi-field">
-            <label className="mochi-field__label">{t('ev_title')}</label>
-            <input
-              className="mochi-input"
-              placeholder={t('ev_title_ph')}
-              value={f.title || ''}
-              autoFocus
-              onChange={(e) => set('title', e.target.value)}
-            />
+        <div className="evm-pane-scroll">
+          <div
+            className={showTabs ? 'm-grid cols-2' : ''}
+            style={showTabs ? { gap: 24, alignItems: 'start' } : undefined}
+          >
+            <div>
+              <div className="mochi-field">
+                <label className="mochi-field__label">{t('ev_title')}</label>
+                <input
+                  className="mochi-input"
+                  placeholder={t('ev_title_ph')}
+                  value={f.title || ''}
+                  autoFocus
+                  onChange={(e) => set('title', e.target.value)}
+                />
+              </div>
+              <div className="m-grid cols-3" style={{ gap: 14 }}>
+                <MDatePicker
+                  label={t('ev_date')}
+                  value={f.date || ''}
+                  onChange={(v) => set('date', v)}
+                />
+                <MTimePicker
+                  label={t('ev_start')}
+                  value={f.start || ''}
+                  onChange={(v) => set('start', v)}
+                />
+                <MTimePicker
+                  label={t('ev_end')}
+                  value={f.end || ''}
+                  onChange={(v) => set('end', v)}
+                />
+              </div>
+              <div className="m-grid cols-2" style={{ gap: 14 }}>
+                <MSelect
+                  label={t('class')}
+                  value={f.classId || ''}
+                  onChange={(v) => {
+                    set('classId', v);
+                    const c = classes.find((x) => x.id === v);
+                    if (c) set('color', c.color);
+                  }}
+                  options={classOpts}
+                />
+                <MSelect
+                  label={t('ev_repeat')}
+                  value={f.recurrence || 'none'}
+                  onChange={(v) => set('recurrence', v)}
+                  options={[
+                    { value: 'none', label: t('ev_repeat_none') },
+                    { value: 'daily', label: t('ev_repeat_daily') },
+                    { value: 'weekly', label: t('ev_repeat_weekly') },
+                  ]}
+                />
+              </div>
+              <div className="mochi-field">
+                <label className="mochi-field__label">{t('ev_location')}</label>
+                <input
+                  className="mochi-input"
+                  placeholder={t('ev_location_ph')}
+                  value={f.location || ''}
+                  onChange={(e) => set('location', e.target.value)}
+                />
+              </div>
+              <ColorPicker
+                label={t('color')}
+                value={f.color || 'orange'}
+                onChange={(v) => set('color', v)}
+              />
+            </div>
+            <div>
+              <div className="mochi-field">
+                <label className="mochi-field__label">{t('ev_notes')}</label>
+                <textarea
+                  className="mochi-input"
+                  rows={6}
+                  placeholder={t('ev_notes_ph')}
+                  value={f.notes || ''}
+                  onChange={(e) => set('notes', e.target.value)}
+                  style={{ resize: 'vertical', minHeight: 120 }}
+                />
+              </div>
+              {showTabs && (
+                <EventMaterialsPicker eventId={f.id!} classId={f.classId!} materials={materials} />
+              )}
+            </div>
           </div>
-          <div className="m-grid cols-3" style={{ gap: 14 }}>
-            <MDatePicker
-              label={t('ev_date')}
-              value={f.date || ''}
-              onChange={(v) => set('date', v)}
-            />
-            <MTimePicker
-              label={t('ev_start')}
-              value={f.start || ''}
-              onChange={(v) => set('start', v)}
-            />
-            <MTimePicker label={t('ev_end')} value={f.end || ''} onChange={(v) => set('end', v)} />
-          </div>
-          <div className="m-grid cols-2" style={{ gap: 14 }}>
-            <MSelect
-              label={t('class')}
-              value={f.classId || ''}
-              onChange={(v) => {
-                set('classId', v);
-                const c = classes.find((x) => x.id === v);
-                if (c) set('color', c.color);
-              }}
-              options={classOpts}
-            />
-            <MSelect
-              label={t('ev_repeat')}
-              value={f.recurrence || 'none'}
-              onChange={(v) => set('recurrence', v)}
-              options={[
-                { value: 'none', label: t('ev_repeat_none') },
-                { value: 'daily', label: t('ev_repeat_daily') },
-                { value: 'weekly', label: t('ev_repeat_weekly') },
-              ]}
-            />
-          </div>
-          <div className="mochi-field">
-            <label className="mochi-field__label">{t('ev_location')}</label>
-            <input
-              className="mochi-input"
-              placeholder={t('ev_location_ph')}
-              value={f.location || ''}
-              onChange={(e) => set('location', e.target.value)}
-            />
-          </div>
-          <ColorPicker
-            label={t('color')}
-            value={f.color || 'orange'}
-            onChange={(v) => set('color', v)}
-          />
-        </>
+        </div>
       )}
     </Modal>
   );

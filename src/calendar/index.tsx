@@ -14,6 +14,7 @@ import { startOfWeek, addMin, fmtTime, toMin, MONTHS, DOW, expandEvents } from '
 import type { EventRow } from '../../server/services/events.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
+import type { MaterialRow } from '../../server/services/materials.js';
 import type { ExpandedEvent } from './utils.js';
 
 const { Button: CBtn, IconButton: CIBtn, Tabs: CTabs } = DS;
@@ -32,6 +33,7 @@ interface CalendarLoaderData {
   classes: ClassRow[];
   students: StudentRow[];
   theme: Theme;
+  materials: MaterialRow[];
 }
 
 type ViewMode = 'day' | 'week' | 'month' | 'agenda';
@@ -39,7 +41,7 @@ type ViewMode = 'day' | 'week' | 'month' | 'agenda';
 type EventDraft = Partial<EventRow> & { recurrence?: string };
 
 function CalendarScreen() {
-  const { events, classes, students, theme } = useLoaderData() as CalendarLoaderData;
+  const { events, classes, students, theme, materials } = useLoaderData() as CalendarLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const { months, monthsShort, dow } = getCal(lang);
@@ -78,6 +80,7 @@ function CalendarScreen() {
       classId: '',
       location: '',
       recurrence: 'none',
+      notes: '',
     });
   const openEdit = (ev: EventRow) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
 
@@ -94,6 +97,7 @@ function CalendarScreen() {
     if (f.classId) fd.set('classId', f.classId);
     if (f.location) fd.set('location', f.location);
     fd.set('recurrence', f.recurrence || 'none');
+    fd.set('notes', f.notes ?? '');
     fetcher.submit(fd, { action: '/calendar', method: 'post' });
     setEditor(null);
   };
@@ -227,6 +231,7 @@ function CalendarScreen() {
         onDelete={del}
         classes={classes}
         students={students}
+        materials={materials}
       />
       {themeOpen && <CalendarThemeDrawer onClose={() => setThemeOpen(false)} />}
     </div>

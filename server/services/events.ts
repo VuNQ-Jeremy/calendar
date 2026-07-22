@@ -13,6 +13,7 @@ export type EventRow = {
   classId: string | null;
   location: string | null;
   recurrence: string;
+  notes: string | null;
 };
 
 function map(r: typeof events.$inferSelect): EventRow {
@@ -26,6 +27,7 @@ function map(r: typeof events.$inferSelect): EventRow {
     classId: r.classId,
     location: r.location,
     recurrence: r.recurrence,
+    notes: r.notes,
   };
 }
 
@@ -60,6 +62,7 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
     classId: input.classId ?? null,
     location: input.location ?? null,
     recurrence: input.recurrence,
+    notes: input.notes || null,
   });
   const rows = await db.select().from(events).where(eq(events.id, id));
   return map(rows[0]);
@@ -75,6 +78,7 @@ export async function update(db: Db, id: string, patch: Partial<EventInput>): Pr
   if (patch.classId !== undefined) set.classId = patch.classId ?? null;
   if (patch.location !== undefined) set.location = patch.location ?? null;
   if (patch.recurrence !== undefined) set.recurrence = patch.recurrence;
+  if (patch.notes !== undefined) set.notes = patch.notes || null;
   if (Object.keys(set).length) {
     await db.update(events).set(set).where(eq(events.id, id));
   }

@@ -15,9 +15,10 @@ interface ModalProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   width?: number;
+  size?: 'default' | 'full';
 }
 
-function Modal({ open, onClose, title, children, footer, width = 520 }: ModalProps) {
+function Modal({ open, onClose, title, children, footer, width = 520, size = 'default' }: ModalProps) {
   const { t } = useLang();
 
   React.useEffect(() => {
@@ -38,7 +39,12 @@ function Modal({ open, onClose, title, children, footer, width = 520 }: ModalPro
         if (e.target === e.currentTarget) onClose && onClose();
       }}
     >
-      <div className="m-dialog" style={{ maxWidth: width }} role="dialog" aria-modal="true">
+      <div
+        className={'m-dialog' + (size === 'full' ? ' m-dialog--full' : '')}
+        style={size === 'full' ? undefined : { maxWidth: width }}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="m-dialog__head">
           <h3 className="m-dialog__title">{title}</h3>
           <IconButton label={t('close')} size="sm" onClick={onClose}>

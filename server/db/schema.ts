@@ -101,6 +101,7 @@ export const events = sqliteTable(
     classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
     location: text('location'),
     recurrence: text('recurrence').notNull().default('none'),
+    notes: text('notes'),
   },
   (t) => [index('idx_events_date').on(t.date)],
 );
@@ -137,6 +138,23 @@ export const materials = sqliteTable('materials', {
   favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
   addedAt: text('added_at'),
 });
+
+export const eventMaterials = sqliteTable(
+  'event_materials',
+  {
+    eventId: text('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    materialId: text('material_id')
+      .notNull()
+      .references(() => materials.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.materialId] }),
+    index('idx_event_materials_material').on(t.materialId),
+  ],
+);
 
 export const invites = sqliteTable('invites', {
   id: text('id').primaryKey(),

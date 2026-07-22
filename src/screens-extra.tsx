@@ -5,25 +5,12 @@ import { MIcon } from './icons.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty } from './ui.jsx';
 import { iso, TODAY, ICON_TINT } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
-import type { IconName } from './icons.jsx';
+import { MAT_TYPES } from './lib/mat-types.js';
 import type { ClassLite } from '../server/services/classes.js';
 import type { MaterialRow } from '../server/services/materials.js';
 import type { AppUser } from './screens-core.jsx';
 
 const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Switch: XSw, Avatar: XAvatar } = DS;
-
-interface MatType {
-  icon: IconName;
-  tk: string;
-  color: string;
-}
-
-const MAT_TYPES: Record<string, MatType> = {
-  notes: { icon: 'file', tk: 'type_notes', color: 'blue' },
-  worksheet: { icon: 'clipboard', tk: 'type_worksheet', color: 'green' },
-  video: { icon: 'video', tk: 'type_video', color: 'violet' },
-  link: { icon: 'link', tk: 'type_link', color: 'orange' },
-};
 
 interface MaterialLoaderData {
   materials: MaterialRow[];
