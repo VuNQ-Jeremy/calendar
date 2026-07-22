@@ -64,33 +64,31 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
     .map((sid) => students.find((s) => s.id === sid))
     .filter((s): s is StudentRow => !!s);
 
-  const setMark = (studentId: string, status: AttendanceStatusId) => {
-    setMarks((prev) => {
-      if (prev[studentId] === status) {
-        const next = { ...prev };
-        delete next[studentId];
-        return next;
-      }
-      return { ...prev, [studentId]: status };
-    });
-  };
-
-  const markAllPresent = () => {
-    const next: Record<string, AttendanceStatusId> = { ...marks };
-    for (const s of roster) next[s.id] = 'present';
-    setMarks(next);
-  };
-
-  const save = () => {
+  const persist = (next: Record<string, AttendanceStatusId>) => {
     const fd = new FormData();
     fd.set('intent', 'save');
     fd.set('eventId', eventId);
     fd.set('date', date);
     fd.set(
       'records',
-      JSON.stringify(Object.entries(marks).map(([studentId, status]) => ({ studentId, status }))),
+      JSON.stringify(Object.entries(next).map(([studentId, status]) => ({ studentId, status }))),
     );
     saveFetcher.submit(fd, { action: '/attendance', method: 'post' });
+  };
+
+  const setMark = (studentId: string, status: AttendanceStatusId) => {
+    const next = { ...marks };
+    if (next[studentId] === status) delete next[studentId];
+    else next[studentId] = status;
+    setMarks(next);
+    persist(next);
+  };
+
+  const markAllPresent = () => {
+    const next: Record<string, AttendanceStatusId> = { ...marks };
+    for (const s of roster) next[s.id] = 'present';
+    setMarks(next);
+    persist(next);
   };
 
   if (!roster.length) {
@@ -99,7 +97,12 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
 
   return (
     <div className="m-stack">
-      <div className="m-row" style={{ justifyContent: 'flex-end' }}>
+      <div className="m-row" style={{ justifyContent: 'flex-end', gap: 10 }}>
+        {saveFetcher.data?.ok && saveFetcher.state === 'idle' && (
+          <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+            {t('att_saved')}
+          </span>
+        )}
         <CBtn variant="secondary" size="sm" onClick={markAllPresent}>
           {t('att_mark_all')}
         </CBtn>
@@ -134,16 +137,6 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
           </div>
         </div>
       ))}
-      <div className="m-row" style={{ justifyContent: 'flex-end', gap: 10, marginTop: 6 }}>
-        {saveFetcher.data?.ok && saveFetcher.state === 'idle' && (
-          <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
-            {t('att_saved')}
-          </span>
-        )}
-        <CBtn variant="primary" onClick={save}>
-          {t('att_save')}
-        </CBtn>
-      </div>
     </div>
   );
 }
