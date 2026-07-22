@@ -49,6 +49,7 @@ const NAV = [
       { id: 'people', path: '/people', tk: 'nav_people', icon: 'users' },
       { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder' },
       { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard' },
+      { id: 'assessments', path: '/assessments', tk: 'nav_assessments', icon: 'chart' },
       { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message' },
     ],
   },

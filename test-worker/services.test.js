@@ -11,6 +11,7 @@ import * as feedbackSvc from '../server/services/feedback';
 import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
 import * as invitesSvc from '../server/services/invites';
+import * as assessSvc from '../server/services/assessments';
 import { hashPassword } from '../server/services/crypto';
 import { sessionCookie } from '../server/session';
 import {
@@ -23,6 +24,8 @@ import {
   homework,
   materials,
   sessions,
+  scoreRecords,
+  behaviorRecords,
 } from '../server/db/schema';
 
 function db() {
@@ -502,6 +505,121 @@ describe('FK cascade — delete account', () => {
 
     const sessAfter = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
     expect(sessAfter.length).toBe(0);
+  });
+});
+
+describe('assessments service', () => {
+  it('creates, lists, updates, and removes a score record', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Score Student',
+      color: 'blue',
+      classIds: [],
+    });
+    const rec = await assessSvc.createScore(d, {
+      studentId: student.id,
+      date: '2026-05-01',
+      score: 7.5,
+      label: 'Kiểm tra 15 phút',
+    });
+    expect(rec.id).toBeTruthy();
+    expect(rec.score).toBe(7.5);
+
+    const list = await assessSvc.listScores(d);
+    expect(list.some((r) => r.id === rec.id)).toBe(true);
+
+    const updated = await assessSvc.updateScore(d, rec.id, { score: 9 });
+    expect(updated.score).toBe(9);
+
+    await assessSvc.removeScore(d, rec.id);
+    const after = await assessSvc.listScores(d);
+    expect(after.some((r) => r.id === rec.id)).toBe(false);
+  });
+
+  it('creates, lists, updates, and removes a behavior record', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Behavior Student',
+      color: 'green',
+      classIds: [],
+    });
+    const rec = await assessSvc.createBehavior(d, {
+      studentId: student.id,
+      date: '2026-05-02',
+      type: 'late',
+    });
+    expect(rec.id).toBeTruthy();
+    expect(rec.type).toBe('late');
+
+    const list = await assessSvc.listBehavior(d);
+    expect(list.some((r) => r.id === rec.id)).toBe(true);
+
+    const updated = await assessSvc.updateBehavior(d, rec.id, { type: 'absent' });
+    expect(updated.type).toBe('absent');
+
+    await assessSvc.removeBehavior(d, rec.id);
+    const after = await assessSvc.listBehavior(d);
+    expect(after.some((r) => r.id === rec.id)).toBe(false);
+  });
+
+  it('cascades score and behavior records on student delete', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Cascade Assess Student',
+      color: 'orange',
+      classIds: [],
+    });
+    const score = await assessSvc.createScore(d, {
+      studentId: student.id,
+      date: '2026-05-03',
+      score: 8,
+    });
+    const beh = await assessSvc.createBehavior(d, {
+      studentId: student.id,
+      date: '2026-05-03',
+      type: 'missing_homework',
+    });
+
+    await peopleSvc.removeStudent(d, student.id);
+
+    const scoreAfter = await d.select().from(scoreRecords).where(eq(scoreRecords.id, score.id));
+    const behAfter = await d.select().from(behaviorRecords).where(eq(behaviorRecords.id, beh.id));
+    expect(scoreAfter.length).toBe(0);
+    expect(behAfter.length).toBe(0);
+  });
+
+  it('sets class_id to NULL on class delete for both record types', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Assess Class Student',
+      color: 'violet',
+      classIds: [],
+    });
+    const cls = await classesSvc.create(d, {
+      name: 'Assess Class',
+      color: 'blue',
+      schedule: [],
+      studentIds: [],
+    });
+    const score = await assessSvc.createScore(d, {
+      studentId: student.id,
+      classId: cls.id,
+      date: '2026-05-04',
+      score: 6,
+    });
+    const beh = await assessSvc.createBehavior(d, {
+      studentId: student.id,
+      classId: cls.id,
+      date: '2026-05-04',
+      type: 'late',
+    });
+
+    await classesSvc.remove(d, cls.id);
+
+    const scoreAfter = await d.select().from(scoreRecords).where(eq(scoreRecords.id, score.id));
+    const behAfter = await d.select().from(behaviorRecords).where(eq(behaviorRecords.id, beh.id));
+    expect(scoreAfter[0]?.classId).toBeNull();
+    expect(behAfter[0]?.classId).toBeNull();
   });
 });
 

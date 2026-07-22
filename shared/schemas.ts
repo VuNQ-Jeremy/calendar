@@ -122,6 +122,35 @@ export const FeedbackInput = z.object({
 });
 export type FeedbackInput = z.infer<typeof FeedbackInput>;
 
+export const BehaviorType = z.enum([
+  'late',
+  'absent',
+  'missing_homework',
+  'disruptive',
+  'praise',
+  'other',
+]);
+export type BehaviorType = z.infer<typeof BehaviorType>;
+
+export const ScoreRecordInput = z.object({
+  studentId: z.string().min(1),
+  classId: z.string().nullish(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  score: z.coerce.number().min(0).max(10),
+  label: z.string().max(200).nullish(),
+  notes: z.string().max(2000).nullish(),
+});
+export type ScoreRecordInput = z.infer<typeof ScoreRecordInput>;
+
+export const BehaviorRecordInput = z.object({
+  studentId: z.string().min(1),
+  classId: z.string().nullish(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  type: BehaviorType,
+  notes: z.string().max(2000).nullish(),
+});
+export type BehaviorRecordInput = z.infer<typeof BehaviorRecordInput>;
+
 export const ThemeInput = z.object({
   bg: z
     .string()

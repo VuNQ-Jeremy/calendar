@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
 
 export const staff = sqliteTable('staff', {
   id: text('id').primaryKey(),
@@ -179,4 +179,41 @@ export const feedback = sqliteTable(
     createdAt: text('created_at'),
   },
   (t) => [index('idx_feedback_status').on(t.status)],
+);
+
+export const scoreRecords = sqliteTable(
+  'score_records',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
+    date: text('date').notNull(),
+    score: real('score').notNull(),
+    label: text('label'),
+    notes: text('notes'),
+  },
+  (t) => [
+    index('idx_score_records_student').on(t.studentId, t.date),
+    index('idx_score_records_class').on(t.classId),
+  ],
+);
+
+export const behaviorRecords = sqliteTable(
+  'behavior_records',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
+    date: text('date').notNull(),
+    type: text('type').notNull(),
+    notes: text('notes'),
+  },
+  (t) => [
+    index('idx_behavior_records_student').on(t.studentId, t.date),
+    index('idx_behavior_records_class').on(t.classId),
+  ],
 );

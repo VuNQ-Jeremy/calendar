@@ -7,6 +7,7 @@ DELETE FROM parent_students; DELETE FROM class_students; DELETE FROM class_sched
 DELETE FROM events; DELETE FROM homework; DELETE FROM materials; DELETE FROM invites;
 DELETE FROM parents; DELETE FROM classes; DELETE FROM students; DELETE FROM staff;
 DELETE FROM feedback; DELETE FROM settings;
+DELETE FROM score_records; DELETE FROM behavior_records;
 
 INSERT INTO staff (id, name, email, role, color, phone) VALUES
   ('u1', 'Sam Okafor', 'sam@school.edu',  'Admin',   'orange', '(555) 010-2280'),
@@ -85,3 +86,31 @@ INSERT INTO feedback (id, message, category, author, status, created_at) VALUES
 
 INSERT INTO settings (key, value) VALUES
   ('theme', '{"bg":"#FFFCF8","gridLine":"#ECE0CF","today":"#FFE7D1","header":"#FDF6EC","bgImage":"","bgOpacity":0.12}');
+
+INSERT INTO score_records (id, student_id, class_id, date, score, label, notes) VALUES
+  ('sc1',  's1', 'c1', '2026-05-04', 6.5, 'Kiểm tra miệng',   NULL),
+  ('sc2',  's1', 'c1', '2026-05-18', 7.0, 'Kiểm tra 15 phút', NULL),
+  ('sc3',  's1', 'c1', '2026-06-01', 7.5, 'Kiểm tra 1 tiết',  'Improving steadily.'),
+  ('sc4',  's1', 'c1', '2026-06-15', 8.5, 'Giữa kỳ',          'Great progress!'),
+  ('sc5',  's1', 'c3', '2026-05-11', 7.0, 'Essay draft',      NULL),
+  ('sc6',  's1', 'c3', '2026-06-08', 8.0, 'Essay final',      NULL),
+  ('sc7',  's2', 'c1', '2026-05-06', 8.0, 'Kiểm tra miệng',   NULL),
+  ('sc8',  's2', 'c2', '2026-05-20', 5.5, 'Kiểm tra 15 phút', 'Struggled with quadratics.'),
+  ('sc9',  's2', 'c2', '2026-06-03', 6.5, 'Kiểm tra 1 tiết',  NULL),
+  ('sc10', 's2', 'c2', '2026-06-17', 7.5, 'Giữa kỳ',          'Big improvement.'),
+  ('sc11', 's4', 'c2', '2026-05-12', 4.5, 'Kiểm tra 15 phút', NULL),
+  ('sc12', 's4', 'c2', '2026-06-09', 6.0, 'Kiểm tra 1 tiết',  NULL);
+
+INSERT INTO behavior_records (id, student_id, class_id, date, type, notes) VALUES
+  ('bh1',  's2', 'c2', '2026-04-28', 'late',             NULL),
+  ('bh2',  's2', 'c2', '2026-05-05', 'late',             NULL),
+  ('bh3',  's2', 'c1', '2026-05-06', 'missing_homework', 'Cell diagram not handed in.'),
+  ('bh4',  's2', 'c2', '2026-05-12', 'late',             NULL),
+  ('bh5',  's2', 'c2', '2026-05-26', 'missing_homework', NULL),
+  ('bh6',  's2', 'c2', '2026-06-09', 'late',             NULL),
+  ('bh7',  's2', 'c2', '2026-06-17', 'praise',           'Helped classmates before the midterm.'),
+  ('bh8',  's4', 'c2', '2026-05-07', 'absent',           'Sick day.'),
+  ('bh9',  's4', 'c3', '2026-05-14', 'missing_homework', NULL),
+  ('bh10', 's4', 'c2', '2026-05-21', 'absent',           NULL),
+  ('bh11', 's4', 'c3', '2026-06-04', 'disruptive',       'Talking during reading time.'),
+  ('bh12', 's4', 'c2', '2026-06-16', 'praise',           'Volunteered to present.');

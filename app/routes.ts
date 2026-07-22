@@ -12,6 +12,7 @@ export default [
     route('people', 'routes/people.tsx'),
     route('materials', 'routes/materials.tsx'),
     route('homework', 'routes/homework.tsx'),
+    route('assessments', 'routes/assessments.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),
   ]),
