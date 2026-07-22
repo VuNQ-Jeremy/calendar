@@ -73,7 +73,11 @@ export function EventModal({ open, onClose, draft, onSave, onDelete, classes }: 
       </div>
       <div className="m-grid cols-3" style={{ gap: 14 }}>
         <MDatePicker label={t('ev_date')} value={f.date || ''} onChange={(v) => set('date', v)} />
-        <MTimePicker label={t('ev_start')} value={f.start || ''} onChange={(v) => set('start', v)} />
+        <MTimePicker
+          label={t('ev_start')}
+          value={f.start || ''}
+          onChange={(v) => set('start', v)}
+        />
         <MTimePicker label={t('ev_end')} value={f.end || ''} onChange={(v) => set('end', v)} />
       </div>
       <div className="m-grid cols-2" style={{ gap: 14 }}>

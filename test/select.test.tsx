@@ -34,9 +34,7 @@ describe('MSelect popover', () => {
   });
 
   it('stays open when the menu itself scrolls (time-picker case)', () => {
-    render(
-      withLang(<MTimePicker value="09:00" onChange={() => {}} />),
-    );
+    render(withLang(<MTimePicker value="09:00" onChange={() => {}} />));
     fireEvent.click(screen.getByRole('combobox'));
     const menu = screen.getByRole('listbox');
     expect(menu).toBeInTheDocument();

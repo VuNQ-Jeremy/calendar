@@ -882,9 +882,15 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
                     />
                   </div>
                 </div>
-                {pwErr && <div className="auth-error" style={{ marginBottom: 12 }}>{t(pwErr)}</div>}
+                {pwErr && (
+                  <div className="auth-error" style={{ marginBottom: 12 }}>
+                    {t(pwErr)}
+                  </div>
+                )}
                 {pwStatus.ok && (
-                  <div style={{ color: 'var(--brand)', fontSize: 'var(--text-sm)', marginBottom: 12 }}>
+                  <div
+                    style={{ color: 'var(--brand)', fontSize: 'var(--text-sm)', marginBottom: 12 }}
+                  >
                     {t('prof_pw_changed')}
                   </div>
                 )}
@@ -892,9 +898,7 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
                   <XBtn
                     type="submit"
                     variant="primary"
-                    disabled={
-                      pwStatus.busy || !curPw || !newPw || !confirmPw
-                    }
+                    disabled={pwStatus.busy || !curPw || !newPw || !confirmPw}
                   >
                     {t('prof_change_pw')}
                   </XBtn>
