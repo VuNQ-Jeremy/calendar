@@ -14,7 +14,7 @@ import type { StudentRow } from '../../server/services/people.js';
 import type { AttendanceRow } from '../../server/services/attendance.js';
 import type { MaterialRow } from '../../server/services/materials.js';
 
-const { Button: CBtn, Tabs: CTabs } = DS;
+const { Button: CBtn, Tabs: CTabs, IconButton: CIBtn } = DS;
 
 type EventDraft = Partial<EventRow> & { recurrence?: string };
 
@@ -27,6 +27,8 @@ interface EventModalProps {
   classes: ClassRow[];
   students: StudentRow[];
   materials: MaterialRow[];
+  eventMaterials: { eventId: string; materialId: string }[];
+  events: EventRow[];
 }
 
 interface AttendanceTabProps {
@@ -145,9 +147,29 @@ interface EventMaterialsPickerProps {
   eventId: string;
   classId: string;
   materials: MaterialRow[];
+  eventMaterials: { eventId: string; materialId: string }[];
+  events: EventRow[];
 }
 
-function EventMaterialsPicker({ eventId, classId, materials }: EventMaterialsPickerProps) {
+function MaterialRowView({ m }: { m: MaterialRow }) {
+  const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
+  return (
+    <div className="lrow" style={{ border: '1.5px solid var(--border-subtle)' }}>
+      <MIcon name={mt.icon} size={16} />
+      <span style={{ flex: 1 }} className="lrow__title">
+        {m.title}
+      </span>
+    </div>
+  );
+}
+
+function EventMaterialsPicker({
+  eventId,
+  classId,
+  materials,
+  eventMaterials,
+  events,
+}: EventMaterialsPickerProps) {
   const { t } = useLang();
   const loadFetcher = useFetcher<{ materialIds: string[] }>();
   const saveFetcher = useFetcher();
@@ -163,14 +185,14 @@ function EventMaterialsPicker({ eventId, classId, materials }: EventMaterialsPic
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadFetcher.data]);
 
-  const classMats = materials
-    .filter((m) => m.classId === classId)
-    .sort((a, b) => Number(b.type === 'curriculum') - Number(a.type === 'curriculum'));
+  const classMaterials = materials.filter((m) => m.classId === classId);
+  const classMats = classMaterials.filter((m) => m.scope === 'class');
+  const attachedMats = ids
+    .map((id) => classMaterials.find((m) => m.id === id))
+    .filter((m): m is MaterialRow => !!m);
+  const candidates = classMaterials.filter((m) => !ids.includes(m.id));
 
-  const toggle = (materialId: string) => {
-    const next = ids.includes(materialId)
-      ? ids.filter((x) => x !== materialId)
-      : [...ids, materialId];
+  const save = (next: string[]) => {
     setIds(next);
     const fd = new FormData();
     fd.set('intent', 'save');
@@ -179,43 +201,85 @@ function EventMaterialsPicker({ eventId, classId, materials }: EventMaterialsPic
     saveFetcher.submit(fd, { action: '/event-materials', method: 'post' });
   };
 
-  return (
-    <div className="mochi-field">
-      <label className="mochi-field__label">{t('ev_materials')}</label>
-      {classMats.length ? (
-        <div className="m-stack" style={{ gap: 6 }}>
-          {classMats.map((m) => {
-            const on = ids.includes(m.id);
-            const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                className="lrow"
-                onClick={() => toggle(m.id)}
-                style={{
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  border: on ? '1.5px solid var(--brand)' : '1.5px solid var(--border-subtle)',
-                  background: 'transparent',
-                }}
-              >
-                <MIcon name={on ? 'check' : mt.icon} size={16} />
-                <span style={{ flex: 1 }} className="lrow__title">
-                  {m.title}
-                </span>
-                <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
-                  {t(mt.tk)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
+  const attach = (materialId: string) => {
+    if (!materialId || ids.includes(materialId)) return;
+    save([...ids, materialId]);
+  };
+
+  const detach = (materialId: string) => {
+    save(ids.filter((x) => x !== materialId));
+  };
+
+  const usageLabel = (m: MaterialRow) => {
+    if (m.scope === 'class') return t('mat_scope_class');
+    const otherDates = eventMaterials
+      .filter((em) => em.materialId === m.id && em.eventId !== eventId)
+      .map((em) => events.find((e) => e.id === em.eventId)?.date)
+      .filter((d): d is string => !!d)
+      .sort();
+    const latest = otherDates[otherDates.length - 1];
+    return latest ? t('ev_mat_used_on', { date: latest }) : t('mat_scope_event');
+  };
+
+  if (!classMaterials.length) {
+    return (
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('ev_materials')}</label>
         <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
           {t('ev_materials_empty')}
         </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mochi-field">
+      <label className="mochi-field__label">{t('ev_materials')}</label>
+      {classMats.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>
+            {t('ev_mat_class_group')}
+          </div>
+          <div className="m-stack" style={{ gap: 6 }}>
+            {classMats.map((m) => (
+              <MaterialRowView key={m.id} m={m} />
+            ))}
+          </div>
+        </div>
       )}
+      <div>
+        <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>
+          {t('ev_mat_event_group')}
+        </div>
+        {attachedMats.length > 0 && (
+          <div className="m-stack" style={{ gap: 6, marginBottom: 8 }}>
+            {attachedMats.map((m) => {
+              const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
+              return (
+                <div key={m.id} className="lrow" style={{ border: '1.5px solid var(--brand)' }}>
+                  <MIcon name={mt.icon} size={16} />
+                  <span style={{ flex: 1 }} className="lrow__title">
+                    {m.title}
+                  </span>
+                  <CIBtn label={t('delete')} size="sm" onClick={() => detach(m.id)}>
+                    <MIcon name="x" size={14} />
+                  </CIBtn>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {candidates.length > 0 && (
+          <MSelect
+            value=""
+            onChange={attach}
+            options={[
+              { value: '', label: t('ev_mat_add') },
+              ...candidates.map((m) => ({ value: m.id, label: `${m.title} — ${usageLabel(m)}` })),
+            ]}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -229,6 +293,8 @@ export function EventModal({
   classes,
   students,
   materials,
+  eventMaterials,
+  events,
 }: EventModalProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<EventDraft>(draft || {});
@@ -398,7 +464,13 @@ export function EventModal({
                 />
               </div>
               {showTabs && (
-                <EventMaterialsPicker eventId={f.id!} classId={f.classId!} materials={materials} />
+                <EventMaterialsPicker
+                  eventId={f.id!}
+                  classId={f.classId!}
+                  materials={materials}
+                  eventMaterials={eventMaterials}
+                  events={events}
+                />
               )}
             </div>
           </div>

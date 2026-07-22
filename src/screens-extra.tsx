@@ -70,6 +70,7 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
       <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-md)' }}>{m.title}</h3>
       <div className="lrow__meta" style={{ marginBottom: 14 }}>
         <span className="mchip">{t(mt.tk)}</span>
+        <span className="mchip">{t(m.scope === 'event' ? 'mat_scope_event' : 'mat_scope_class')}</span>
         <XTag dot color={cls?.color || 'neutral'}>
           {cls?.name || t('mat_unfiled')}
         </XTag>
@@ -133,6 +134,7 @@ function MaterialsScreen() {
       fileName: '',
       favorite: false,
       addedAt: iso(TODAY),
+      scope: 'class',
     });
 
   const save = (f: MaterialDraft) => {
@@ -142,7 +144,7 @@ function MaterialsScreen() {
     if (f.id) fd.set('id', f.id);
     fd.set('title', title);
     fd.set('type', f.type);
-    if (f.classId) fd.set('classId', f.classId);
+    fd.set('classId', f.classId);
     if (f.url) fd.set('url', f.url);
     if (f.fileField) {
       fd.set('file', f.fileField, f.fileField.name);
@@ -151,6 +153,7 @@ function MaterialsScreen() {
     }
     fd.set('favorite', String(!!f.favorite));
     if (f.addedAt) fd.set('addedAt', f.addedAt);
+    fd.set('scope', f.scope || 'class');
     fetcher.submit(fd, { action: '/materials', method: 'post' });
     setModal(null);
   };
@@ -305,7 +308,21 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialMo
           label={t('class')}
           value={draft.classId}
           onChange={(v) => set('classId', v)}
-          options={classes.map((c) => ({ value: c.id, label: c.name }))}
+          options={[
+            { value: '', label: t('mat_unfiled') },
+            ...classes.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
+      </div>
+      <div className="m-grid cols-2" style={{ gap: 14 }}>
+        <MSelect
+          label={t('mat_scope')}
+          value={draft.scope || 'class'}
+          onChange={(v) => set('scope', v)}
+          options={[
+            { value: 'class', label: t('mat_scope_class') },
+            { value: 'event', label: t('mat_scope_event') },
+          ]}
         />
       </div>
       {isLink ? (
@@ -348,9 +365,6 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialMo
             <span className="mochi-field__hint" style={{ color: 'var(--color-red-600)' }}>
               {t('mat_too_large')}
             </span>
-          )}
-          {!fileSizeError && draft.fileField && (
-            <span className="mochi-field__hint">{t('mat_stored')}</span>
           )}
         </div>
       )}

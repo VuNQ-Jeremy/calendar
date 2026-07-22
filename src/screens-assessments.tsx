@@ -254,28 +254,26 @@ function AssessmentsScreen() {
 
       {tab === 'scores' ? (
         <>
-          <div className="m-grid cols-3">
-            <Stat num={stats.average ?? '—'} label={t('assess_avg')} color="blue" />
-            <Stat num={stats.latest ?? '—'} label={t('assess_latest')} color="green" />
-            <Stat
-              num={
-                stats.delta == null ? (
-                  '—'
-                ) : (
-                  <span style={{ color: stats.delta >= 0 ? 'var(--cat-green)' : 'var(--danger)' }}>
-                    {stats.delta > 0 ? '▲ +' : stats.delta < 0 ? '▼ ' : ''}
-                    {stats.delta}
-                  </span>
-                )
-              }
-              label={t('assess_trend')}
-              color="orange"
-            />
-          </div>
           <Card style={{ padding: 18 }}>
-            <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
-              {t('assess_progress_chart')}
-            </h2>
+            <div className="m-spread" style={{ marginBottom: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>
+                {t('assess_progress_chart')}
+              </h2>
+              <div className="m-row" style={{ gap: 10 }}>
+                <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                  {t('assess_avg')}
+                </span>
+                <span className="mchip" style={{ fontWeight: 700 }}>
+                  {stats.average ?? '—'}
+                </span>
+                <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                  {t('assess_latest')}
+                </span>
+                <span className="mchip" style={{ fontWeight: 700 }}>
+                  {stats.latest ?? '—'}
+                </span>
+              </div>
+            </div>
             <ProgressLineChart
               points={studentScores.map((r) => ({
                 x: r.date,

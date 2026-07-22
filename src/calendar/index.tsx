@@ -34,6 +34,7 @@ interface CalendarLoaderData {
   students: StudentRow[];
   theme: Theme;
   materials: MaterialRow[];
+  eventMaterials: { eventId: string; materialId: string }[];
 }
 
 type ViewMode = 'day' | 'week' | 'month' | 'agenda';
@@ -41,7 +42,8 @@ type ViewMode = 'day' | 'week' | 'month' | 'agenda';
 type EventDraft = Partial<EventRow> & { recurrence?: string };
 
 function CalendarScreen() {
-  const { events, classes, students, theme, materials } = useLoaderData() as CalendarLoaderData;
+  const { events, classes, students, theme, materials, eventMaterials } =
+    useLoaderData() as CalendarLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const { months, monthsShort, dow } = getCal(lang);
@@ -221,6 +223,8 @@ function CalendarScreen() {
         classes={classes}
         students={students}
         materials={materials}
+        eventMaterials={eventMaterials}
+        events={events}
       />
       {themeOpen && <CalendarThemeDrawer onClose={() => setThemeOpen(false)} />}
     </div>

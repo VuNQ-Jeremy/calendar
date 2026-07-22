@@ -120,6 +120,7 @@ export const MaterialInput = z.object({
   fileName: z.string().max(500).nullish(),
   favorite: z.coerce.boolean().default(false),
   addedAt: z.string().nullish(),
+  scope: z.enum(['class', 'event']).default('class'),
 });
 export type MaterialInput = z.infer<typeof MaterialInput>;
 

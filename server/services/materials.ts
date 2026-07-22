@@ -13,6 +13,7 @@ export type MaterialRow = {
   fileKey: string | null;
   favorite: boolean;
   addedAt: string | null;
+  scope: string;
 };
 
 function map(r: typeof materials.$inferSelect): MaterialRow {
@@ -26,6 +27,7 @@ function map(r: typeof materials.$inferSelect): MaterialRow {
     fileKey: r.fileKey,
     favorite: Boolean(r.favorite),
     addedAt: r.addedAt,
+    scope: r.scope,
   };
 }
 
@@ -66,6 +68,7 @@ export async function create(
       fileKey,
       favorite: input.favorite,
       addedAt: input.addedAt ?? null,
+      scope: input.scope,
     });
   } catch (err) {
     if (fileKey && files) await files.delete(fileKey);
@@ -93,6 +96,7 @@ export async function update(
   if (patch.url !== undefined) set.url = patch.url ?? null;
   if (patch.favorite !== undefined) set.favorite = patch.favorite;
   if (patch.addedAt !== undefined) set.addedAt = patch.addedAt ?? null;
+  if (patch.scope !== undefined) set.scope = patch.scope;
 
   let newFileKey: string | null | undefined;
   if (file && files) {

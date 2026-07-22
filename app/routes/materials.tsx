@@ -20,6 +20,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 function preprocessMatRaw(raw: Record<string, unknown>) {
   const out = { ...raw };
   if (typeof out.favorite === 'string') out.favorite = out.favorite === 'true';
+  if (out.classId === '') out.classId = null;
   return out;
 }
 

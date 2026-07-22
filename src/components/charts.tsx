@@ -13,7 +13,7 @@ export function ProgressLineChart({
   points,
   yMin = 0,
   yMax = 10,
-  height = 220,
+  height = 150,
   color = 'var(--brand)',
   formatX,
   ariaLabel,

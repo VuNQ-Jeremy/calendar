@@ -137,6 +137,7 @@ export const materials = sqliteTable('materials', {
   fileKey: text('file_key'),
   favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
   addedAt: text('added_at'),
+  scope: text('scope').notNull().default('class'),
 });
 
 export const eventMaterials = sqliteTable(

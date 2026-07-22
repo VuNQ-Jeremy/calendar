@@ -8,6 +8,7 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as themeSvc from '../../server/services/theme';
 import * as materialsSvc from '../../server/services/materials';
+import * as eventMaterialsSvc from '../../server/services/event-materials';
 import type { Theme } from '../../server/services/theme';
 import { EventInput, ThemeInput, parsePatch } from '../../shared/schemas';
 
@@ -15,14 +16,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireUser(request, env);
   const db = createDb(env);
-  const [events, classes, students, theme, materials] = await Promise.all([
+  const [events, classes, students, theme, materials, eventMaterials] = await Promise.all([
     eventsSvc.list(db),
     classesSvc.list(db),
     peopleSvc.listStudents(db),
     themeSvc.getTheme(db),
     materialsSvc.list(db),
+    eventMaterialsSvc.listAll(db),
   ]);
-  return { events, classes, students, theme, materials };
+  return { events, classes, students, theme, materials, eventMaterials };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {

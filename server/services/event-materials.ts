@@ -11,6 +11,11 @@ export async function listForEvent(db: Db, eventId: string): Promise<string[]> {
   return rows.map((r) => r.materialId);
 }
 
+export async function listAll(db: Db): Promise<{ eventId: string; materialId: string }[]> {
+  const rows = await db.select().from(eventMaterials);
+  return rows.map((r) => ({ eventId: r.eventId, materialId: r.materialId }));
+}
+
 // Replace-set semantics: the submitted list becomes the full attachment set.
 // If the event's class changes later, previously attached materials from the old
 // class are intentionally kept (harmless; still listed as attached).
