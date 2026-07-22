@@ -8,7 +8,7 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as themeSvc from '../../server/services/theme';
 import type { Theme } from '../../server/services/theme';
-import { EventInput, ThemeInput } from '../../shared/schemas';
+import { EventInput, ThemeInput, parsePatch } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -59,7 +59,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = EventInput.partial().safeParse(raw);
+    const parsed = parsePatch(EventInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await eventsSvc.update(db, id, parsed.data);
     return { ok: true };

@@ -1,5 +1,23 @@
 import { z } from 'zod';
 
+/**
+ * Parse a partial update payload. Zod's `.partial()` still applies `.default()`
+ * values for absent keys, which would silently overwrite existing columns
+ * (e.g. toggling `favorite` resetting `type` to its default). Strip any parsed
+ * key that was not actually present in the raw input.
+ */
+export function parsePatch<S extends z.ZodObject<z.ZodRawShape>>(
+  schema: S,
+  raw: Record<string, unknown>,
+): z.ZodSafeParseResult<Partial<z.infer<S>>> {
+  const result = schema.partial().safeParse(raw);
+  if (!result.success) return result as z.ZodSafeParseError<Partial<z.infer<S>>>;
+  const data = Object.fromEntries(
+    Object.entries(result.data as Record<string, unknown>).filter(([k]) => Object.hasOwn(raw, k)),
+  ) as Partial<z.infer<S>>;
+  return { success: true, data };
+}
+
 export const ColorId = z.enum(['violet', 'green', 'blue', 'orange', 'cocoa', 'rose']);
 
 export const EventInput = z.object({
@@ -149,6 +167,11 @@ export const AssessmentTypeInput = z.object({
   sortOrder: z.coerce.number().int().nullish(),
 });
 export type AssessmentTypeInput = z.infer<typeof AssessmentTypeInput>;
+
+export const AssessmentTypeReorder = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type AssessmentTypeReorder = z.infer<typeof AssessmentTypeReorder>;
 
 export const AttendanceStatus = z.enum(['present', 'absent', 'late', 'excused']);
 export type AttendanceStatus = z.infer<typeof AttendanceStatus>;

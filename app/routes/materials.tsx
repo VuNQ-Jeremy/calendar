@@ -5,7 +5,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 import * as materialsSvc from '../../server/services/materials';
 import * as classesSvc from '../../server/services/classes';
-import { MaterialInput } from '../../shared/schemas';
+import { MaterialInput, parsePatch } from '../../shared/schemas';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
@@ -61,7 +61,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = MaterialInput.partial().safeParse(raw);
+    const parsed = parsePatch(MaterialInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await materialsSvc.update(db, id, parsed.data, file, env.FILES);
     return { ok: true };

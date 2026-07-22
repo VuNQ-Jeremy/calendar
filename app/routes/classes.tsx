@@ -7,7 +7,7 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import * as homeworkSvc from '../../server/services/homework';
-import { ClassInput } from '../../shared/schemas';
+import { ClassInput, parsePatch } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -51,7 +51,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = ClassInput.partial().safeParse(raw);
+    const parsed = parsePatch(ClassInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await classesSvc.update(db, id, parsed.data);
     return { ok: true };

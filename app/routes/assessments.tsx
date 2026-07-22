@@ -7,7 +7,7 @@ import * as assessSvc from '../../server/services/assessments';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
 import * as typesSvc from '../../server/services/assessment-types';
-import { ScoreRecordInput, BehaviorRecordInput } from '../../shared/schemas';
+import { ScoreRecordInput, BehaviorRecordInput, parsePatch } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -56,7 +56,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
   if (intent === 'update-score') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = ScoreRecordInput.partial().safeParse(raw);
+    const parsed = parsePatch(ScoreRecordInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await assessSvc.updateScore(db, id, parsed.data);
     return { ok: true };
@@ -69,7 +69,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
   if (intent === 'update-behavior') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = BehaviorRecordInput.partial().safeParse(raw);
+    const parsed = parsePatch(BehaviorRecordInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await assessSvc.updateBehavior(db, id, parsed.data);
     return { ok: true };

@@ -6,7 +6,13 @@ import { requireUser } from '../../server/services/auth';
 import * as peopleSvc from '../../server/services/people';
 import * as invitesSvc from '../../server/services/invites';
 import * as classesSvc from '../../server/services/classes';
-import { StudentInput, StaffInput, ParentInput, InviteInput } from '../../shared/schemas';
+import {
+  StudentInput,
+  StaffInput,
+  ParentInput,
+  InviteInput,
+  parsePatch,
+} from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -51,7 +57,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
     if (intent === 'update') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-      const parsed = StudentInput.partial().safeParse(raw);
+      const parsed = parsePatch(StudentInput, raw);
       if (!parsed.success)
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.updateStudent(db, id, parsed.data);
@@ -75,7 +81,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
     if (intent === 'update') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-      const parsed = StaffInput.partial().safeParse(raw);
+      const parsed = parsePatch(StaffInput, raw);
       if (!parsed.success)
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.updateStaff(db, id, parsed.data);
@@ -103,7 +109,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
     if (intent === 'update') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-      const parsed = ParentInput.partial().safeParse(raw);
+      const parsed = parsePatch(ParentInput, raw);
       if (!parsed.success)
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       await peopleSvc.updateParent(db, id, parsed.data);

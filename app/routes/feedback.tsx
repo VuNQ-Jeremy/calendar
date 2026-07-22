@@ -6,7 +6,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
-import { FeedbackInput } from '../../shared/schemas';
+import { FeedbackInput, parsePatch } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -41,7 +41,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = FeedbackInput.partial().safeParse(raw);
+    const parsed = parsePatch(FeedbackInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await feedbackSvc.update(db, id, parsed.data);
     return { ok: true };

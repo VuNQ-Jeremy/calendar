@@ -7,7 +7,7 @@ import * as homeworkSvc from '../../server/services/homework';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as typesSvc from '../../server/services/assessment-types';
-import { HomeworkInput, HomeworkGradesSaveInput } from '../../shared/schemas';
+import { HomeworkInput, HomeworkGradesSaveInput, parsePatch } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -72,7 +72,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = HomeworkInput.partial().safeParse(raw);
+    const parsed = parsePatch(HomeworkInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await homeworkSvc.update(db, id, parsed.data);
     return { ok: true };

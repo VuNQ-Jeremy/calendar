@@ -4,7 +4,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
-import { AssessmentTypeInput } from '../../shared/schemas';
+import { AssessmentTypeInput, AssessmentTypeReorder, parsePatch } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -43,11 +43,26 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (intent === 'update-type') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-      const parsed = AssessmentTypeInput.partial().safeParse(raw);
+      const parsed = parsePatch(AssessmentTypeInput, raw);
       if (!parsed.success) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
       await typesSvc.update(db, id, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'reorder-types') {
+      let ids: unknown;
+      try {
+        ids = JSON.parse((formData.get('ids') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid ids' }, { status: 400 });
+      }
+      const parsed = AssessmentTypeReorder.safeParse({ ids });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await typesSvc.reorder(db, parsed.data.ids);
       return { ok: true };
     }
   } catch {

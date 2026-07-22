@@ -51,39 +51,89 @@ function SystemConfigScreen() {
     submit(fd);
   };
 
-  const move = (tp: AssessmentTypeRow, dir: -1 | 1) => {
-    const idx = types.findIndex((x) => x.id === tp.id);
-    const neighbor = types[idx + dir];
-    if (!neighbor) return;
-    const fdA = new FormData();
-    fdA.set('intent', 'update-type');
-    fdA.set('id', tp.id);
-    fdA.set('sortOrder', String(neighbor.sortOrder));
-    submit(fdA);
-    const fdB = new FormData();
-    fdB.set('intent', 'update-type');
-    fdB.set('id', neighbor.id);
-    fdB.set('sortOrder', String(tp.sortOrder));
-    submit(fdB);
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [localOrder, setLocalOrder] = React.useState<string[] | null>(null);
+  const reorderPending = React.useRef(false);
+
+  // Show the in-progress drag order; fall back to server order.
+  const ordered = React.useMemo(() => {
+    if (!localOrder) return types;
+    const byId = new Map(types.map((tp) => [tp.id, tp]));
+    const rows = localOrder.flatMap((id) => byId.get(id) ?? []);
+    for (const tp of types) if (!localOrder.includes(tp.id)) rows.push(tp);
+    return rows;
+  }, [types, localOrder]);
+
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && reorderPending.current) {
+      reorderPending.current = false;
+      setLocalOrder(null);
+    }
+  }, [fetcher.state]);
+
+  const previewMove = (srcId: string, overId: string) => {
+    setLocalOrder((prev) => {
+      const cur = prev ?? types.map((tp) => tp.id);
+      const from = cur.indexOf(srcId);
+      const to = cur.indexOf(overId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = cur.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, srcId);
+      return next;
+    });
+  };
+
+  const commitOrder = () => {
+    setDragId(null);
+    if (!localOrder) return;
+    if (localOrder.join('|') === types.map((tp) => tp.id).join('|')) {
+      setLocalOrder(null);
+      return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'reorder-types');
+    fd.set('ids', JSON.stringify(localOrder));
+    submit(fd);
+    reorderPending.current = true;
   };
 
   return (
     <div className="content">
-      <PageHeader
-        title={t('cfg_title')}
-        subtitle={t('cfg_sub')}
-        actions={
+      <PageHeader title={t('cfg_title')} subtitle={t('cfg_sub')} />
+      <Card style={{ padding: 18 }}>
+        <div
+          className="m-row"
+          style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}
+        >
+          <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_types_title')}</h2>
           <Button variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openAdd}>
             {t('cfg_add_type')}
           </Button>
-        }
-      />
-      <Card style={{ padding: 18 }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>{t('cfg_types_title')}</h2>
-        {types.length ? (
+        </div>
+        {ordered.length ? (
           <div className="m-stack">
-            {types.map((tp, idx) => (
-              <div key={tp.id} className="lrow">
+            {ordered.map((tp) => (
+              <div
+                key={tp.id}
+                className={'lrow' + (dragId === tp.id ? ' is-dragging' : '')}
+                draggable
+                onDragStart={(e) => {
+                  setDragId(tp.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', tp.id);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragId && dragId !== tp.id) previewMove(dragId, tp.id);
+                }}
+                onDrop={(e) => e.preventDefault()}
+                onDragEnd={commitOrder}
+              >
+                <span className="lrow__grip" title={t('cfg_drag_reorder')} aria-hidden="true">
+                  <MIcon name="grip" size={16} />
+                </span>
                 <div className="m-row" style={{ flex: 1, gap: 10 }}>
                   <span className="lrow__title">{tp.name}</span>
                   <Badge color={tp.active ? 'green' : 'neutral'}>
@@ -91,22 +141,6 @@ function SystemConfigScreen() {
                   </Badge>
                 </div>
                 <div className="lrow__actions">
-                  <IconButton
-                    label={t('cfg_move_up')}
-                    size="sm"
-                    disabled={idx === 0}
-                    onClick={() => move(tp, -1)}
-                  >
-                    <MIcon name="chevronDown" size={16} style={{ transform: 'rotate(180deg)' }} />
-                  </IconButton>
-                  <IconButton
-                    label={t('cfg_move_down')}
-                    size="sm"
-                    disabled={idx === types.length - 1}
-                    onClick={() => move(tp, 1)}
-                  >
-                    <MIcon name="chevronDown" size={16} />
-                  </IconButton>
                   <IconButton label={t('cfg_rename')} size="sm" onClick={() => openRename(tp)}>
                     <MIcon name="edit" size={16} />
                   </IconButton>
