@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
@@ -66,7 +67,7 @@ export function StudentsScreen() {
     classes.filter((c) => ids.includes(c.id)).map((c) => c.name);
 
   const openNew = () =>
-    setModal({ name: '', grade: '9', color: 'blue', guardian: '', email: '', classIds: [] });
+    setModal({ name: '', grade: '', color: 'blue', guardian: '', email: '', classIds: [] });
 
   const save = (f: StudentDraft) => {
     const name = f.name.trim() || t('sm_default_name');
@@ -595,14 +596,33 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }: T
   const { t } = useLang();
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
+  const [pos, setPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
+  const fieldRef = React.useRef<HTMLDivElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      const el = e.target as Node;
+      if (wrapRef.current?.contains(el) || menuRef.current?.contains(el)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = fieldRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open, selectedIds]);
   const selected = items.filter((i) => selectedIds.includes(i.id));
   const ql = q.trim().toLowerCase();
   const matches = items.filter(
@@ -638,7 +658,7 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }: T
           ))}
         </div>
       )}
-      <div className="tokensearch__field">
+      <div className="tokensearch__field" ref={fieldRef}>
         <MIcon name="search" size={17} />
         <input
           className="tokensearch__input"
@@ -651,28 +671,38 @@ function TokenSearch({ items, selectedIds, onToggle, placeholder, emptyHint }: T
           onFocus={() => setOpen(true)}
         />
       </div>
-      {open && (
-        <div className="tokensearch__menu">
-          {matches.length > 0 ? (
-            matches.slice(0, 6).map((i) => (
-              <button
-                key={i.id}
-                type="button"
-                className="tokensearch__opt"
-                onClick={() => pick(i.id)}
-              >
-                <span className="tokensearch__dot" style={{ background: colorOf(i.color).base }} />
-                <span style={{ flex: 1, textAlign: 'left' }}>{i.name}</span>
-                <MIcon name="plus" size={14} />
-              </button>
-            ))
-          ) : (
-            <div className="tokensearch__empty">
-              {ql ? t('ts_no_match', { q }) : emptyHint || t('ts_nothing_left')}
-            </div>
-          )}
-        </div>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="tokensearch__menu"
+            style={{ top: pos.top, left: pos.left, width: pos.width }}
+          >
+            {matches.length > 0 ? (
+              matches.slice(0, 6).map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  className="tokensearch__opt"
+                  onClick={() => pick(i.id)}
+                >
+                  <span
+                    className="tokensearch__dot"
+                    style={{ background: colorOf(i.color).base }}
+                  />
+                  <span style={{ flex: 1, textAlign: 'left' }}>{i.name}</span>
+                  <MIcon name="plus" size={14} />
+                </button>
+              ))
+            ) : (
+              <div className="tokensearch__empty">
+                {ql ? t('ts_no_match', { q }) : emptyHint || t('ts_nothing_left')}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
