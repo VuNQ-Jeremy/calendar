@@ -43,6 +43,22 @@ export function TimeGrid({
   const dayStart = HOURS[0] * 60;
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
+  const gridRef = React.useRef<HTMLDivElement>(null);
+
+  // focus the grid on the earliest event in the visible range (fall back to now),
+  // keeping ~1h of context above it; refocus when navigating to another range
+  const rangeKey = iso(rangeStart) + ':' + dayList.length;
+  const earliestMin = all.length
+    ? Math.min(...all.map((e) => toMin(e.start ?? '00:00')))
+    : null;
+  React.useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const now = new Date();
+    const anchor = earliestMin ?? now.getHours() * 60 + now.getMinutes();
+    el.scrollTop = Math.max(0, ((anchor - 60) / 60) * HR_H);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKey, earliestMin]);
 
   const yFor = (min: number) => ((min - dayStart) / 60) * HR_H;
 
@@ -102,7 +118,7 @@ export function TimeGrid({
   }, [drag, dayList, onMove]);
 
   return (
-    <div className="tgrid" style={{ '--hr-h': HR_H + 'px' } as React.CSSProperties}>
+    <div className="tgrid" ref={gridRef} style={{ '--hr-h': HR_H + 'px' } as React.CSSProperties}>
       <div className="tgrid__head" style={{ gridTemplateColumns: gridTpl }}>
         <div className="tgrid__corner" />
         {dayList.map((d, i) => {

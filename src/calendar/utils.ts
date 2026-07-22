@@ -18,7 +18,7 @@ export const MONTHS = [
   'December',
 ];
 
-export const HOURS = Array.from({ length: 14 }, (_, i) => i + 7); // 7am .. 8pm
+export const HOURS = Array.from({ length: 24 }, (_, i) => i); // midnight .. 11pm
 export const HR_H = 56;
 
 export const parseISO = (s: string): Date => {
