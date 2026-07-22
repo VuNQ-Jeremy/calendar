@@ -66,6 +66,14 @@ INSERT INTO events (id, title, date, start_time, end_time, color, class_id, loca
   ('e6', 'Science fair',  '2026-06-26', '10:00', '12:00', 'green',  'c1',  'Gym',      'none'),
   ('e7', 'Parent night',  '2026-06-27', '18:00', '19:30', 'rose',   NULL,  'Hall',     'none');
 
+INSERT INTO assessment_types (id, name, active, sort_order) VALUES
+  ('at1', 'Kiểm tra miệng',   1, 1),
+  ('at2', 'Kiểm tra 15 phút', 1, 2),
+  ('at3', 'Kiểm tra 1 tiết',  1, 3),
+  ('at4', 'Giữa kỳ',          1, 4),
+  ('at5', 'Essay draft',      1, 5),
+  ('at6', 'Essay final',      1, 6);
+
 INSERT INTO homework (id, title, class_id, due, points, notes, color, done, assessment_type_id) VALUES
   ('h1', 'Cell diagram lab',  'c1', '2026-06-22', 20, 'Label all organelles.',           'green',  0, 'at3'),
   ('h2', 'Quadratics, set 4', 'c2', '2026-06-23', 15, 'Questions 1-12, show working.',    'blue',   0, 'at2'),
@@ -89,14 +97,6 @@ INSERT INTO feedback (id, message, category, author, status, created_at) VALUES
 
 INSERT INTO settings (key, value) VALUES
   ('theme', '{"bg":"#FFFCF8","gridLine":"#ECE0CF","today":"#FFE7D1","header":"#FDF6EC","bgImage":"","bgOpacity":0.12}');
-
-INSERT INTO assessment_types (id, name, active, sort_order) VALUES
-  ('at1', 'Kiểm tra miệng',   1, 1),
-  ('at2', 'Kiểm tra 15 phút', 1, 2),
-  ('at3', 'Kiểm tra 1 tiết',  1, 3),
-  ('at4', 'Giữa kỳ',          1, 4),
-  ('at5', 'Essay draft',      1, 5),
-  ('at6', 'Essay final',      1, 6);
 
 INSERT INTO score_records (id, student_id, class_id, date, score, assessment_type_id, notes) VALUES
   ('sc1',  's1', 'c1', '2026-05-04', 6.5, 'at1', NULL),
