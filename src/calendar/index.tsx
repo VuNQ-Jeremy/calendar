@@ -3,7 +3,7 @@ import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { PageHeader } from '../ui.jsx';
-import { colorOf, iso, addDays, TODAY } from '../lib/core.js';
+import { iso, addDays, TODAY } from '../lib/core.js';
 import { useLang, getCal } from '../lib/i18n.jsx';
 import { EventModal } from './event-modal.jsx';
 import { MonthView } from './month-view.jsx';
@@ -129,7 +129,7 @@ function CalendarScreen() {
   } as React.CSSProperties;
 
   return (
-    <div className="content">
+    <div className="content content--fill">
       <PageHeader
         title={t('cal_title')}
         subtitle={t('cal_sub')}
@@ -211,17 +211,6 @@ function CalendarScreen() {
           />
         )}
         {view === 'agenda' && <AgendaView cursor={cursor} events={events} onPick={openEdit} />}
-      </div>
-      <div className="legend">
-        {classes.map((c) => {
-          const col = colorOf(c.color);
-          return (
-            <div key={c.id} className="legend__item">
-              <span className="legend__dot" style={{ background: col.base }} />
-              {c.name}
-            </div>
-          );
-        })}
       </div>
       <EventModal
         open={!!editor}
