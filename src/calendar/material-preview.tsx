@@ -32,7 +32,8 @@ function DocxView({ id }: { id: string }) {
       ref.current.innerHTML = '';
       await renderAsync(buf, ref.current);
       if (!cancelled) setState('ready');
-    })().catch(() => {
+    })().catch((err) => {
+      console.error('[docx-preview]', err);
       if (!cancelled) setState('error');
     });
     return () => {

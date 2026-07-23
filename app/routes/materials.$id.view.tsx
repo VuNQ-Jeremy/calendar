@@ -55,6 +55,6 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   });
 }
 
-export default function MaterialView() {
-  return null;
-}
+// No default export: this must stay a resource route. With a component export
+// React Router treats GETs as document requests and serves the SSR HTML shell
+// instead of the loader's binary Response.
