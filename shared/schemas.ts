@@ -235,6 +235,19 @@ export const FlashcardImportInput = z.object({
 });
 export type FlashcardImportInput = z.infer<typeof FlashcardImportInput>;
 
+export const TranslateInput = z.object({
+  items: z
+    .array(
+      z.object({
+        word: z.string().trim().min(1).max(100),
+        definitionEn: z.string().max(1000).nullish(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type TranslateInput = z.infer<typeof TranslateInput>;
+
 export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
 

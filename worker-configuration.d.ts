@@ -5,6 +5,12 @@ interface __BaseEnv_Env {
   FILES: R2Bucket;
   DB: D1Database;
   ASSETS: Fetcher;
+  // Anthropic API key for server-side EN→VI translation. Optional: unset →
+  // translation is disabled and the flashcard UI degrades gracefully. Stored as
+  // a Cloudflare secret in prod (`wrangler secret put ANTHROPIC_API_KEY`) and in
+  // `.dev.vars` locally. Hand-added because `wrangler types` (workerd) crashes
+  // on this machine; will be regenerated identically on a working machine.
+  ANTHROPIC_API_KEY?: string;
 }
 declare namespace Cloudflare {
   interface GlobalProps {

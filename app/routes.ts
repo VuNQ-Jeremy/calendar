@@ -7,6 +7,7 @@ export default [
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
+  route('translate', 'routes/translate.tsx'),
   layout('routes/_app.tsx', [
     index('routes/home.tsx'),
     route('dashboard', 'routes/dashboard.tsx'),

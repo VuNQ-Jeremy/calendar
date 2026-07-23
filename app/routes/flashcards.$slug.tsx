@@ -32,7 +32,14 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       ? flashcardsSvc.listMasteryForStudent(db, su.user.id, topic.id)
       : Promise.resolve([]),
   ]);
-  return { topic, words, results, mastery, kind: su.kind };
+  return {
+    topic,
+    words,
+    results,
+    mastery,
+    kind: su.kind,
+    canTranslate: Boolean(env.ANTHROPIC_API_KEY),
+  };
 }
 
 export async function clientLoader({ serverLoader, params }: ClientLoaderFunctionArgs) {
