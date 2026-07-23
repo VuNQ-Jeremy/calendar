@@ -624,6 +624,32 @@ function ImportModal({
   const setRow = (i: number, patch: Partial<ImportRow>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
+  // Manual (re)translate for the review step: fills every included row whose
+  // meaning is still blank in one batched call. Typed meanings are left alone.
+  const translateBlanks = async () => {
+    const seen = new Set<string>();
+    const items: { word: string; definitionEn?: string | null }[] = [];
+    for (const r of rows) {
+      const key = r.word.toLowerCase();
+      if (!r.include || !r.word.trim() || r.meaningVi.trim() || seen.has(key)) continue;
+      seen.add(key);
+      items.push({ word: r.word, definitionEn: r.definitionEn || null });
+    }
+    if (items.length === 0) return;
+    setTranslating(true);
+    const map = await fetchTranslations(items);
+    setTranslating(false);
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.meaningVi.trim()) return r;
+        const vi = map.get(r.word.toLowerCase());
+        return vi ? { ...r, meaningVi: vi } : r;
+      }),
+    );
+  };
+
+  const blanksCount = rows.filter((r) => r.include && r.word.trim() && !r.meaningVi.trim()).length;
+
   const submit = () => {
     const words = rows
       .filter((r) => r.include && r.word.trim())
@@ -673,6 +699,16 @@ function ImportModal({
             <FBtn variant="secondary" onClick={() => setStep('paste')}>
               {t('cancel')}
             </FBtn>
+            {canTranslate && (
+              <FBtn
+                variant="secondary"
+                iconLeft={<MIcon name="sparkle" size={16} />}
+                disabled={translating || blanksCount === 0}
+                onClick={translateBlanks}
+              >
+                {translating ? t('fc_translating') : t('fc_translate')}
+              </FBtn>
+            )}
             <FBtn variant="primary" disabled={readyCount === 0} onClick={submit}>
               {t('fc_import_n', { n: readyCount })}
             </FBtn>

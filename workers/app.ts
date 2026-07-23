@@ -2,6 +2,11 @@
 import { createRequestHandler, RouterContextProvider } from 'react-router';
 import { cloudflareCtx } from '../app/load-context';
 
+// Durable Object used to relocate Anthropic API egress to a supported region
+// (see workers/translate-proxy.ts). Must be exported from the Worker's main
+// module for Cloudflare to register the class.
+export { TranslateProxy } from './translate-proxy';
+
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
   import.meta.env.MODE,

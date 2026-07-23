@@ -30,6 +30,13 @@
       "bucket_name": "mochi-files",
     },
   ],
+  // Durable Object for region-pinned Anthropic egress (see
+  // workers/translate-proxy.ts). SQLite-backed class so it works on the free
+  // Workers plan.
+  "durable_objects": {
+    "bindings": [{ "name": "TRANSLATE_DO", "class_name": "TranslateProxy" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TranslateProxy"] }],
   "observability": {
     "enabled": true,
   },

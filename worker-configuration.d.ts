@@ -11,6 +11,9 @@ interface __BaseEnv_Env {
   // `.dev.vars` locally. Hand-added because `wrangler types` (workerd) crashes
   // on this machine; will be regenerated identically on a working machine.
   ANTHROPIC_API_KEY?: string;
+  // Durable Object namespace for region-pinned Anthropic egress. Hand-added
+  // alongside ANTHROPIC_API_KEY (wrangler types crashes on this machine).
+  TRANSLATE_DO: DurableObjectNamespace;
 }
 declare namespace Cloudflare {
   interface GlobalProps {
