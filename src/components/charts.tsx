@@ -104,6 +104,19 @@ export function ProgressLineChart({
           <title>{`${formatX(p.x)} — ${p.y}${p.label ? ` (${p.label})` : ''}`}</title>
         </circle>
       ))}
+      {points.map((p, i) => (
+        <text
+          key={`v${i}`}
+          x={px(i)}
+          y={py(p.y) - 10}
+          textAnchor="middle"
+          fontSize={11}
+          fontWeight={600}
+          fill="var(--text)"
+        >
+          {p.y}
+        </text>
+      ))}
       {points.map((p, i) =>
         showX(i) ? (
           <text
