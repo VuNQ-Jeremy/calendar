@@ -154,7 +154,9 @@ function MaterialsScreen() {
     fd.set('favorite', String(!!f.favorite));
     if (f.addedAt) fd.set('addedAt', f.addedAt);
     fd.set('scope', f.scope || 'class');
-    fetcher.submit(fd, { action: '/materials', method: 'post' });
+    // multipart is required whenever a File is attached: the urlencoded
+    // default serializes File entries to plain strings and the upload is lost.
+    fetcher.submit(fd, { action: '/materials', method: 'post', encType: 'multipart/form-data' });
     setModal(null);
   };
 
