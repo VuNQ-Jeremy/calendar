@@ -8,6 +8,7 @@ import { useLang } from '../lib/i18n.jsx';
 import { ATTENDANCE_META, ATTENDANCE_STATUSES, type AttendanceStatusId } from '../lib/assess.js';
 import { MAT_TYPES } from '../lib/mat-types.js';
 import { HomeworkTab } from './homework-tab.jsx';
+import { MaterialsTab } from './materials-tab.jsx';
 import { MaterialSearchDropdown } from '../material-search.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
 import { cacheSet, invalidate } from '../lib/cache.js';
@@ -310,7 +311,9 @@ export function EventModal({
 }: EventModalProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<EventDraft>(draft || {});
-  const [tab, setTab] = React.useState<'details' | 'attendance' | 'homework'>('details');
+  const [tab, setTab] = React.useState<'details' | 'attendance' | 'homework' | 'materials'>(
+    'details',
+  );
   React.useEffect(() => {
     setF(draft || {});
     setTab('details');
@@ -365,11 +368,14 @@ export function EventModal({
       {showTabs && (
         <CTabs
           value={tab}
-          onChange={(id: string) => setTab(id as 'details' | 'attendance' | 'homework')}
+          onChange={(id: string) =>
+            setTab(id as 'details' | 'attendance' | 'homework' | 'materials')
+          }
           tabs={[
             { id: 'details', label: t('ev_details') },
             { id: 'attendance', label: t('att_tab') },
             { id: 'homework', label: t('hw_tab') },
+            { id: 'materials', label: t('mat_tab') },
           ]}
         />
       )}
@@ -385,13 +391,9 @@ export function EventModal({
           />
         </div>
       ) : tab === 'homework' && showTabs ? (
-        <HomeworkTab
-          eventId={f.id!}
-          classId={f.classId || ''}
-          classes={classes}
-          students={students}
-          materials={materials}
-        />
+        <HomeworkTab classId={f.classId || ''} classes={classes} students={students} />
+      ) : tab === 'materials' && showTabs ? (
+        <MaterialsTab eventId={f.id!} classId={f.classId || ''} materials={materials} />
       ) : (
         <div className="evm-pane-scroll">
           <div

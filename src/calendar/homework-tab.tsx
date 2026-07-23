@@ -3,37 +3,27 @@ import { useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { Empty } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
-import { MaterialPreview } from './material-preview.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
-import type { MaterialRow } from '../../server/services/materials.js';
 import type { HomeworkRow, GradeRow } from '../../server/services/homework.js';
 
 const { Button: CBtn } = DS;
 
 interface HomeworkTabProps {
-  eventId: string;
   classId: string;
   classes: ClassRow[];
   students: StudentRow[];
-  materials: MaterialRow[];
 }
 
-type Selected = { kind: 'hw'; id: string } | { kind: 'mat'; id: string } | null;
-
-export function HomeworkTab({ eventId, classId, classes, students, materials }: HomeworkTabProps) {
+export function HomeworkTab({ classId, classes, students }: HomeworkTabProps) {
   const { t } = useLang();
   const { data: hwData } = useCachedLoad<{ homework: HomeworkRow[]; grades: GradeRow[] }>(
     'hw:modal',
     '/homework',
   );
-  const { data: attachedData } = useCachedLoad<{ materialIds: string[] }>(
-    `evmat:${eventId}`,
-    `/event-materials?eventId=${encodeURIComponent(eventId)}`,
-  );
   const [query, setQuery] = React.useState('');
-  const [selected, setSelected] = React.useState<Selected>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   // Local copy of grades so save results can be merged without a full reload
   // (the /homework route clientAction invalidates the cache on grade save,
   // so the next modal open refetches fresh, but this session keeps the
@@ -55,14 +45,7 @@ export function HomeworkTab({ eventId, classId, classes, students, materials }: 
     .filter((h) => !q || h.title.toLowerCase().includes(q))
     .sort((a, b) => (b.due ?? '').localeCompare(a.due ?? ''));
 
-  const attachedIds = attachedData?.materialIds ?? [];
-  const classMats = materials
-    .filter((m) => m.classId === classId)
-    .filter((m) => !q || m.title.toLowerCase().includes(q))
-    .sort((a, b) => Number(attachedIds.includes(b.id)) - Number(attachedIds.includes(a.id)));
-
-  const selHw = selected?.kind === 'hw' ? hwList.find((h) => h.id === selected.id) : undefined;
-  const selMat = selected?.kind === 'mat' ? classMats.find((m) => m.id === selected.id) : undefined;
+  const selHw = hwList.find((h) => h.id === selectedId);
 
   return (
     <div className="evm-split">
@@ -73,21 +56,18 @@ export function HomeworkTab({ eventId, classId, classes, students, materials }: 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div className="m-muted" style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
-          {t('hw_section_homework')}
-        </div>
         {hwList.length ? (
           hwList.map((h) => {
             const graded = grades.filter(
               (g) => g.homeworkId === h.id && (g.score != null || g.comment),
             ).length;
-            const active = selected?.kind === 'hw' && selected.id === h.id;
+            const active = selectedId === h.id;
             return (
               <button
                 key={h.id}
                 type="button"
                 className="lrow"
-                onClick={() => setSelected({ kind: 'hw', id: h.id })}
+                onClick={() => setSelectedId(h.id)}
                 style={{
                   cursor: 'pointer',
                   textAlign: 'left',
@@ -109,31 +89,6 @@ export function HomeworkTab({ eventId, classId, classes, students, materials }: 
             {t('hw_list_empty')}
           </span>
         )}
-        <div className="m-muted" style={{ fontSize: 'var(--text-sm)', fontWeight: 700, marginTop: 8 }}>
-          {t('hw_section_materials')}
-        </div>
-        {classMats.map((m) => {
-          const active = selected?.kind === 'mat' && selected.id === m.id;
-          return (
-            <button
-              key={m.id}
-              type="button"
-              className="lrow"
-              onClick={() => setSelected({ kind: 'mat', id: m.id })}
-              style={{
-                cursor: 'pointer',
-                textAlign: 'left',
-                background: 'transparent',
-                border: active ? '1.5px solid var(--brand)' : '1.5px solid var(--border-subtle)',
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0 }} className="lrow__title">
-                {attachedIds.includes(m.id) ? '★ ' : ''}
-                {m.title}
-              </span>
-            </button>
-          );
-        })}
       </div>
       <div className="evm-split__right">
         {selHw ? (
@@ -146,8 +101,6 @@ export function HomeworkTab({ eventId, classId, classes, students, materials }: 
               setGrades((prev) => [...prev.filter((g) => g.homeworkId !== selHw.id), ...saved])
             }
           />
-        ) : selMat ? (
-          <MaterialPreview material={selMat} />
         ) : (
           <Empty icon="clipboard" title={t('hw_pick_prompt')} />
         )}
