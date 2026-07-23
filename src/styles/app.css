@@ -991,6 +991,12 @@ body {
   min-height: 0;
   overflow-y: auto;
 }
+/* grading row: MSelect is used inline without a label, so drop the
+   form-field bottom margin that would otherwise offset the score
+   dropdown upward from the comment input within the centered row */
+.hw-grade-score .mochi-field {
+  margin-bottom: 0;
+}
 @keyframes mfade {
   from {
     opacity: 0;

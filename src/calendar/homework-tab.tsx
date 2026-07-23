@@ -185,7 +185,7 @@ function GradingPanel({ homework, roster, grades, onSaved }: GradingPanelProps) 
             <span style={{ flex: 1, minWidth: 0 }} className="lrow__title">
               {s.name}
             </span>
-            <div style={{ width: 90 }}>
+            <div className="hw-grade-score" style={{ width: 90 }}>
               <MSelect
                 value={rows[s.id]?.score ?? ''}
                 onChange={(v) => setScore(s.id, v)}
