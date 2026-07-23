@@ -20,14 +20,19 @@ export function HomeworkTab({ classId, classes, students }: HomeworkTabProps) {
     '/homework',
   );
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  // Local copy of grades so save results can be merged without a full reload
-  // (the /homework route clientAction invalidates the cache on grade save,
-  // so the next modal open refetches fresh, but this session keeps the
-  // just-saved rows visible without waiting on that refetch).
+  // Local copy of the homework list + grades. Auto-saving a grade POSTs to
+  // /homework, whose clientAction invalidates the 'hw:' cache in a finally —
+  // that would wipe hwData to undefined and blank the whole section until a
+  // remount refetches. Holding our own copy (updated only when hwData is
+  // present) keeps the list visible across those save-triggered invalidations.
+  const [homework, setHomework] = React.useState<HomeworkRow[]>([]);
   const [grades, setGrades] = React.useState<GradeRow[]>([]);
 
   React.useEffect(() => {
-    if (hwData) setGrades(hwData.grades);
+    if (hwData) {
+      setHomework(hwData.homework);
+      setGrades(hwData.grades);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hwData]);
 
@@ -35,7 +40,7 @@ export function HomeworkTab({ classId, classes, students }: HomeworkTabProps) {
     .map((sid) => students.find((s) => s.id === sid))
     .filter((s): s is StudentRow => !!s);
 
-  const hwList = (hwData?.homework ?? [])
+  const hwList = homework
     .filter((h) => h.classId === classId)
     .sort((a, b) => (b.due ?? '').localeCompare(a.due ?? ''));
 
