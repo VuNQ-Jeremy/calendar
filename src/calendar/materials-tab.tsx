@@ -19,24 +19,32 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
   );
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
+  // Same grouping as EventMaterialsPicker in the details tab: class-scoped
+  // materials of this class, plus materials explicitly attached to the event.
   const attachedIds = attachedData?.materialIds ?? [];
-  const classMats = materials
-    .filter((m) => m.classId === classId)
-    .sort((a, b) => Number(attachedIds.includes(b.id)) - Number(attachedIds.includes(a.id)));
+  const isClassMat = (m: MaterialRow) => m.scope === 'class' && m.classId === classId;
+  const classMats = materials.filter(isClassMat);
+  const eventMats = attachedIds
+    .map((id) => materials.find((m) => m.id === id))
+    .filter((m): m is MaterialRow => !!m && !isClassMat(m));
+  const allMats = [...classMats, ...eventMats];
 
   // Auto-select the first material once the list is available.
   React.useEffect(() => {
-    if (selectedId == null && classMats.length) setSelectedId(classMats[0].id);
+    if (selectedId == null && allMats.length) setSelectedId(allMats[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classMats.length]);
+  }, [allMats.length]);
 
-  const selMat = classMats.find((m) => m.id === selectedId);
+  const selMat = allMats.find((m) => m.id === selectedId);
 
-  return (
-    <div className="evm-split">
-      <div className="evm-split__left">
-        {classMats.length ? (
-          classMats.map((m) => {
+  const renderGroup = (label: string, mats: MaterialRow[]) =>
+    mats.length > 0 && (
+      <div>
+        <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>
+          {label}
+        </div>
+        <div className="m-stack" style={{ gap: 6 }}>
+          {mats.map((m) => {
             const active = selectedId === m.id;
             return (
               <button
@@ -52,12 +60,23 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
                 }}
               >
                 <span style={{ flex: 1, minWidth: 0 }} className="lrow__title">
-                  {attachedIds.includes(m.id) ? '★ ' : ''}
                   {m.title}
                 </span>
               </button>
             );
-          })
+          })}
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="evm-split">
+      <div className="evm-split__left">
+        {allMats.length ? (
+          <div className="m-stack" style={{ gap: 14 }}>
+            {renderGroup(t('ev_mat_class_group'), classMats)}
+            {renderGroup(t('ev_mat_event_group'), eventMats)}
+          </div>
         ) : (
           <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
             {t('mat_list_empty')}
