@@ -17,27 +17,24 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
     `evmat:${eventId}`,
     `/event-materials?eventId=${encodeURIComponent(eventId)}`,
   );
-  const [query, setQuery] = React.useState('');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
   const attachedIds = attachedData?.materialIds ?? [];
-  const q = query.trim().toLowerCase();
   const classMats = materials
     .filter((m) => m.classId === classId)
-    .filter((m) => !q || m.title.toLowerCase().includes(q))
     .sort((a, b) => Number(attachedIds.includes(b.id)) - Number(attachedIds.includes(a.id)));
+
+  // Auto-select the first material once the list is available.
+  React.useEffect(() => {
+    if (selectedId == null && classMats.length) setSelectedId(classMats[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classMats.length]);
 
   const selMat = classMats.find((m) => m.id === selectedId);
 
   return (
     <div className="evm-split">
       <div className="evm-split__left">
-        <input
-          className="mochi-input"
-          placeholder={t('ev_mat_search_ph')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
         {classMats.length ? (
           classMats.map((m) => {
             const active = selectedId === m.id;

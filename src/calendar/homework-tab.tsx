@@ -1,14 +1,11 @@
 import React from 'react';
 import { useFetcher } from 'react-router';
-import { DS } from '../ds/index.js';
-import { Empty } from '../ui.jsx';
+import { Empty, MSelect } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { HomeworkRow, GradeRow } from '../../server/services/homework.js';
-
-const { Button: CBtn } = DS;
 
 interface HomeworkTabProps {
   classId: string;
@@ -22,7 +19,6 @@ export function HomeworkTab({ classId, classes, students }: HomeworkTabProps) {
     'hw:modal',
     '/homework',
   );
-  const [query, setQuery] = React.useState('');
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   // Local copy of grades so save results can be merged without a full reload
   // (the /homework route clientAction invalidates the cache on grade save,
@@ -39,23 +35,21 @@ export function HomeworkTab({ classId, classes, students }: HomeworkTabProps) {
     .map((sid) => students.find((s) => s.id === sid))
     .filter((s): s is StudentRow => !!s);
 
-  const q = query.trim().toLowerCase();
   const hwList = (hwData?.homework ?? [])
     .filter((h) => h.classId === classId)
-    .filter((h) => !q || h.title.toLowerCase().includes(q))
     .sort((a, b) => (b.due ?? '').localeCompare(a.due ?? ''));
+
+  // Auto-select the first homework once the list is available.
+  React.useEffect(() => {
+    if (selectedId == null && hwList.length) setSelectedId(hwList[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hwList.length]);
 
   const selHw = hwList.find((h) => h.id === selectedId);
 
   return (
     <div className="evm-split">
       <div className="evm-split__left">
-        <input
-          className="mochi-input"
-          placeholder={t('hw_search_ph')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
         {hwList.length ? (
           hwList.map((h) => {
             const graded = grades.filter(
@@ -116,6 +110,16 @@ interface GradingPanelProps {
   onSaved: (grades: GradeRow[]) => void;
 }
 
+// Score dropdown options: blank (ungraded) plus 0–10 in 0.25 steps, matching
+// the granularity the old number input allowed so no stored score is unpickable.
+const SCORE_OPTIONS = [
+  { value: '', label: '—' },
+  ...Array.from({ length: 41 }, (_, i) => {
+    const v = String(i * 0.25);
+    return { value: v, label: v };
+  }),
+];
+
 function GradingPanel({ homework, roster, grades, onSaved }: GradingPanelProps) {
   const { t } = useLang();
   const saveFetcher = useFetcher<{ ok: boolean; grades: GradeRow[] }>();
@@ -137,20 +141,12 @@ function GradingPanel({ homework, roster, grades, onSaved }: GradingPanelProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveFetcher.data]);
 
-  const setRow = (sid: string, patch: Partial<{ score: string; comment: string }>) =>
-    setRows((p) => ({ ...p, [sid]: { ...p[sid], ...patch } }));
-
-  const invalid = Object.values(rows).some((r) => {
-    if (r.score === '') return false;
-    const n = Number(r.score);
-    return !Number.isFinite(n) || n < 0 || n > 10;
-  });
-
-  const save = () => {
+  // Auto-save: persist the whole roster whenever a score or comment changes.
+  const persist = (next: Record<string, { score: string; comment: string }>) => {
     const records = roster.map((s) => ({
       studentId: s.id,
-      score: rows[s.id]?.score === '' || rows[s.id] == null ? null : Number(rows[s.id].score),
-      comment: rows[s.id]?.comment || null,
+      score: next[s.id]?.score === '' || next[s.id] == null ? null : Number(next[s.id].score),
+      comment: next[s.id]?.comment || null,
     }));
     const fd = new FormData();
     fd.set('intent', 'save-grades');
@@ -159,11 +155,24 @@ function GradingPanel({ homework, roster, grades, onSaved }: GradingPanelProps) 
     saveFetcher.submit(fd, { action: '/homework', method: 'post' });
   };
 
+  const setScore = (sid: string, score: string) => {
+    const next = { ...rows, [sid]: { ...rows[sid], score } };
+    setRows(next);
+    persist(next);
+  };
+  const setComment = (sid: string, comment: string) =>
+    setRows((p) => ({ ...p, [sid]: { ...p[sid], comment } }));
+  const commitComment = () => persist(rows);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div className="m-row" style={{ gap: 10, marginBottom: 8 }}>
         <strong style={{ flex: 1 }}>{homework.title}</strong>
-        {homework.due && <span className="m-muted">{homework.due}</span>}
+        {saveFetcher.data?.ok && saveFetcher.state === 'idle' && (
+          <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+            {t('hw_grade_saved')}
+          </span>
+        )}
       </div>
       <div className="evm-pane-scroll m-stack">
         {roster.map((s) => (
@@ -171,37 +180,24 @@ function GradingPanel({ homework, roster, grades, onSaved }: GradingPanelProps) 
             <span style={{ flex: 1, minWidth: 0 }} className="lrow__title">
               {s.name}
             </span>
-            <input
-              className="mochi-input"
-              type="number"
-              min={0}
-              max={10}
-              step={0.25}
-              style={{ width: 90 }}
-              placeholder="—"
-              value={rows[s.id]?.score ?? ''}
-              onChange={(e) => setRow(s.id, { score: e.target.value })}
-            />
+            <div style={{ width: 90 }}>
+              <MSelect
+                value={rows[s.id]?.score ?? ''}
+                onChange={(v) => setScore(s.id, v)}
+                options={SCORE_OPTIONS}
+              />
+            </div>
             <input
               className="mochi-input"
               style={{ width: 220 }}
               placeholder={t('hw_comment')}
               value={rows[s.id]?.comment ?? ''}
-              onChange={(e) => setRow(s.id, { comment: e.target.value })}
+              onChange={(e) => setComment(s.id, e.target.value)}
+              onBlur={commitComment}
             />
           </div>
         ))}
         {!roster.length && <Empty icon="users" title={t('att_empty_roster')} />}
-      </div>
-      <div className="m-row" style={{ justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
-        {saveFetcher.data?.ok && saveFetcher.state === 'idle' && (
-          <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
-            {t('hw_grade_saved')}
-          </span>
-        )}
-        <CBtn variant="primary" onClick={save} disabled={invalid || saveFetcher.state !== 'idle'}>
-          {t('hw_grade_save')}
-        </CBtn>
       </div>
     </div>
   );

@@ -12,13 +12,23 @@ interface ModalProps {
   open: boolean;
   onClose?: () => void;
   title: React.ReactNode;
+  subtitle?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
   width?: number;
   size?: 'default' | 'full';
 }
 
-function Modal({ open, onClose, title, children, footer, width = 520, size = 'default' }: ModalProps) {
+function Modal({
+  open,
+  onClose,
+  title,
+  subtitle,
+  children,
+  footer,
+  width = 520,
+  size = 'default',
+}: ModalProps) {
   const { t } = useLang();
 
   React.useEffect(() => {
@@ -46,7 +56,14 @@ function Modal({ open, onClose, title, children, footer, width = 520, size = 'de
         aria-modal="true"
       >
         <div className="m-dialog__head">
-          <h3 className="m-dialog__title">{title}</h3>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 className="m-dialog__title">{title}</h3>
+            {subtitle && (
+              <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 2 }}>
+                {subtitle}
+              </div>
+            )}
+          </div>
           <IconButton label={t('close')} size="sm" onClick={onClose}>
             <MIcon name="x" size={18} />
           </IconButton>

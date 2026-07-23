@@ -328,11 +328,21 @@ export function EventModal({
   ];
   const showTabs = !isNew && !!f.classId;
 
+  const subtitleParts: string[] = [];
+  if (f.date) {
+    const [y, mo, d] = f.date.split('-');
+    subtitleParts.push(`${d}/${mo}/${y.slice(2)}`);
+  }
+  const clsName = classes.find((c) => c.id === f.classId)?.name;
+  if (clsName) subtitleParts.push(clsName);
+  const subtitle = subtitleParts.join(' · ') || undefined;
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={isNew ? t('ev_new') : t('ev_edit')}
+      subtitle={subtitle}
       width={540}
       size={isNew ? 'default' : 'full'}
       footer={
