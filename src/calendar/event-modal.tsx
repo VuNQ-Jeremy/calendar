@@ -147,6 +147,7 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
 interface EventMaterialsPickerProps {
   eventId: string;
   classId: string;
+  classes: ClassRow[];
   materials: MaterialRow[];
   eventMaterials: { eventId: string; materialId: string }[];
   events: EventRow[];
@@ -155,6 +156,7 @@ interface EventMaterialsPickerProps {
 function EventMaterialsPicker({
   eventId,
   classId,
+  classes,
   materials,
   eventMaterials,
   events,
@@ -164,7 +166,9 @@ function EventMaterialsPicker({
   const saveFetcher = useFetcher();
   const scopeFetcher = useFetcher();
   const [ids, setIds] = React.useState<string[]>([]);
-  const [scopeOv, setScopeOv] = React.useState<Record<string, 'class' | 'event'>>({});
+  const [ov, setOv] = React.useState<
+    Record<string, { scope: 'class' | 'event'; classId: string | null }>
+  >({});
 
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
@@ -208,16 +212,17 @@ function EventMaterialsPicker({
     };
   }, [open]);
 
-  const effScope = (m: MaterialRow) => scopeOv[m.id] ?? m.scope;
-  const classMaterials = materials.filter((m) => m.classId === classId);
-  const classMats = classMaterials.filter((m) => effScope(m) === 'class');
+  const effScope = (m: MaterialRow) => ov[m.id]?.scope ?? m.scope;
+  const effClassId = (m: MaterialRow) => (ov[m.id] ? ov[m.id].classId : m.classId);
+  const isClassMat = (m: MaterialRow) => effScope(m) === 'class' && effClassId(m) === classId;
+  const classMats = materials.filter(isClassMat);
   const attachedMats = ids
-    .map((id) => classMaterials.find((m) => m.id === id))
-    .filter((m): m is MaterialRow => !!m && effScope(m) === 'event');
+    .map((id) => materials.find((m) => m.id === id))
+    .filter((m): m is MaterialRow => !!m && !isClassMat(m));
   const ql = q.trim().toLowerCase();
-  const pool = classMaterials.filter(
+  const pool = materials.filter(
     (m) =>
-      effScope(m) === 'event' &&
+      !isClassMat(m) &&
       !ids.includes(m.id) &&
       (ql === '' || m.title.toLowerCase().includes(ql)),
   );
@@ -231,17 +236,19 @@ function EventMaterialsPicker({
     saveFetcher.submit(fd, { action: '/event-materials', method: 'post' });
   };
 
-  const setScope = (m: MaterialRow, scope: 'class' | 'event') => {
-    setScopeOv((p) => ({ ...p, [m.id]: scope }));
+  const setScope = (m: MaterialRow, scope: 'class' | 'event', moveToClass = false) => {
+    const nextClassId = moveToClass ? classId : effClassId(m);
+    setOv((p) => ({ ...p, [m.id]: { scope, classId: nextClassId } }));
     const fd = new FormData();
     fd.set('intent', 'update');
     fd.set('id', m.id);
     fd.set('scope', scope);
+    if (moveToClass) fd.set('classId', classId);
     scopeFetcher.submit(fd, { action: '/materials', method: 'post' });
   };
 
   const pickClass = (m: MaterialRow) => {
-    setScope(m, 'class');
+    setScope(m, 'class', effClassId(m) !== classId);
     if (ids.includes(m.id)) saveJoin(ids.filter((x) => x !== m.id));
   };
 
@@ -263,7 +270,7 @@ function EventMaterialsPicker({
     return latest ? t('ev_mat_used_on', { date: latest }) : '';
   };
 
-  if (!classMaterials.length) {
+  if (!materials.length) {
     return (
       <div className="mochi-field">
         <label className="mochi-field__label">{t('ev_materials')}</label>
@@ -302,7 +309,11 @@ function EventMaterialsPicker({
               {pool.length > 0 ? (
                 pool.slice(0, 8).map((m) => {
                   const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
-                  const hint = usageLabel(m);
+                  const srcClass =
+                    effClassId(m) && effClassId(m) !== classId
+                      ? (classes.find((c) => c.id === effClassId(m))?.name ?? '')
+                      : '';
+                  const hint = [srcClass, usageLabel(m)].filter(Boolean).join(' · ');
                   return (
                     <div key={m.id} className="tokensearch__opt" style={{ cursor: 'default' }}>
                       <MIcon name={mt.icon} size={16} />
@@ -568,6 +579,7 @@ export function EventModal({
                 <EventMaterialsPicker
                   eventId={f.id!}
                   classId={f.classId!}
+                  classes={classes}
                   materials={materials}
                   eventMaterials={eventMaterials}
                   events={events}
