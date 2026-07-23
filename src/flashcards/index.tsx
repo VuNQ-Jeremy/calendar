@@ -84,7 +84,7 @@ export function FlashcardTopicsScreen() {
               <FC
                 key={topic.id}
                 interactive={true}
-                onClick={() => navigate(`/flashcards/${topic.id}`)}
+                onClick={() => navigate(`/flashcards/${topic.slug ?? topic.id}`)}
                 style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
               >
                 <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>

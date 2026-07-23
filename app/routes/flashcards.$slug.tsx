@@ -17,27 +17,26 @@ import {
 } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
 
-const keyFor = (topicId: string) => `route:flashcards:${topicId}`;
+const keyFor = (slug: string) => `route:flashcards:${slug}`;
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireUser(request, env);
   const db = createDb(env);
-  const topicId = params.topicId!;
-  const topic = await flashcardsSvc.getTopic(db, topicId);
+  const topic = await flashcardsSvc.getTopicBySlug(db, params.slug!);
   if (!topic) throw new Response('Not found', { status: 404 });
   const [words, results, mastery] = await Promise.all([
-    flashcardsSvc.listWords(db, topicId),
-    flashcardsSvc.listTopicResults(db, topicId),
+    flashcardsSvc.listWords(db, topic.id),
+    flashcardsSvc.listTopicResults(db, topic.id),
     su.kind === 'student'
-      ? flashcardsSvc.listMasteryForStudent(db, su.user.id, topicId)
+      ? flashcardsSvc.listMasteryForStudent(db, su.user.id, topic.id)
       : Promise.resolve([]),
   ]);
   return { topic, words, results, mastery, kind: su.kind };
 }
 
 export async function clientLoader({ serverLoader, params }: ClientLoaderFunctionArgs) {
-  const cacheKey = keyFor(params.topicId!);
+  const cacheKey = keyFor(params.slug!);
   const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(cacheKey);
   if (cached !== undefined) return cached;
   const data = await serverLoader();
@@ -59,7 +58,9 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireUser(request, env);
   const db = createDb(env);
-  const topicId = params.topicId!;
+  const topic = await flashcardsSvc.getTopicBySlug(db, params.slug!);
+  if (!topic) throw new Response('Not found', { status: 404 });
+  const topicId = topic.id;
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

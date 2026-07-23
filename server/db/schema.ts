@@ -300,13 +300,18 @@ export const homeworkGrades = sqliteTable(
   ],
 );
 
-export const flashcardTopics = sqliteTable('flashcard_topics', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  color: text('color').notNull().default('violet'),
-  createdAt: text('created_at'),
-});
+export const flashcardTopics = sqliteTable(
+  'flashcard_topics',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    slug: text('slug'),
+    description: text('description'),
+    color: text('color').notNull().default('violet'),
+    createdAt: text('created_at'),
+  },
+  (t) => [index('idx_flashcard_topics_slug').on(t.slug)],
+);
 
 export const flashcardWords = sqliteTable(
   'flashcard_words',

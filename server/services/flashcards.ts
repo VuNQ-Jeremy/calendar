@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, or, and, desc, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   flashcardTopics,
@@ -17,11 +17,47 @@ import type {
 export type FlashcardTopicRow = {
   id: string;
   name: string;
+  slug: string | null;
   description: string | null;
   color: string;
   createdAt: string | null;
   wordCount: number;
 };
+
+export type TopicInfo = {
+  id: string;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  color: string;
+};
+
+/** Turn a topic name into a URL-friendly slug (ASCII, hyphenated). */
+function slugify(name: string): string {
+  const base = name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '') // strip diacritics (incl. Vietnamese tones)
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || 'topic';
+}
+
+/** Append -2, -3… until the slug is free (ignoring the row being updated). */
+async function uniqueSlug(db: Db, base: string, excludeId?: string): Promise<string> {
+  const rows = await db
+    .select({ id: flashcardTopics.id, slug: flashcardTopics.slug })
+    .from(flashcardTopics);
+  const taken = new Set(
+    rows.filter((r) => r.id !== excludeId && r.slug).map((r) => r.slug as string),
+  );
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
 
 export type FlashcardWordRow = {
   id: string;
@@ -81,6 +117,7 @@ export async function listTopics(db: Db): Promise<FlashcardTopicRow[]> {
     .select({
       id: flashcardTopics.id,
       name: flashcardTopics.name,
+      slug: flashcardTopics.slug,
       description: flashcardTopics.description,
       color: flashcardTopics.color,
       createdAt: flashcardTopics.createdAt,
@@ -93,20 +130,24 @@ export async function listTopics(db: Db): Promise<FlashcardTopicRow[]> {
   return rows.map((r) => ({ ...r, wordCount: Number(r.wordCount) }));
 }
 
-export async function getTopic(
-  db: Db,
-  id: string,
-): Promise<{ id: string; name: string; description: string | null; color: string } | null> {
-  const rows = await db.select().from(flashcardTopics).where(eq(flashcardTopics.id, id));
-  const r = rows[0];
+/** Resolve a topic by its slug, falling back to its id so old UUID links work. */
+export async function getTopicBySlug(db: Db, slugOrId: string): Promise<TopicInfo | null> {
+  const rows = await db
+    .select()
+    .from(flashcardTopics)
+    .where(or(eq(flashcardTopics.slug, slugOrId), eq(flashcardTopics.id, slugOrId)));
+  // Prefer an exact slug match when both a slug row and an id row could match.
+  const r = rows.find((x) => x.slug === slugOrId) ?? rows[0];
   if (!r) return null;
-  return { id: r.id, name: r.name, description: r.description, color: r.color };
+  return { id: r.id, name: r.name, slug: r.slug, description: r.description, color: r.color };
 }
 
 export async function createTopic(db: Db, input: FlashcardTopicInput): Promise<void> {
+  const slug = await uniqueSlug(db, slugify(input.name));
   await db.insert(flashcardTopics).values({
     id: crypto.randomUUID(),
     name: input.name,
+    slug,
     description: input.description ?? null,
     color: input.color,
     createdAt: new Date().toISOString(),
@@ -119,7 +160,10 @@ export async function updateTopic(
   patch: Partial<FlashcardTopicInput>,
 ): Promise<void> {
   const set: Partial<typeof flashcardTopics.$inferInsert> = {};
-  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.name !== undefined) {
+    set.name = patch.name;
+    set.slug = await uniqueSlug(db, slugify(patch.name), id);
+  }
   if (patch.description !== undefined) set.description = patch.description ?? null;
   if (patch.color !== undefined) set.color = patch.color;
   if (Object.keys(set).length) {
