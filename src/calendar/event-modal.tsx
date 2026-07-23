@@ -164,11 +164,7 @@ function EventMaterialsPicker({
   const { t } = useLang();
   const loadFetcher = useFetcher<{ materialIds: string[] }>();
   const saveFetcher = useFetcher();
-  const scopeFetcher = useFetcher();
   const [ids, setIds] = React.useState<string[]>([]);
-  const [ov, setOv] = React.useState<
-    Record<string, { scope: 'class' | 'event'; classId: string | null }>
-  >({});
 
   const [q, setQ] = React.useState('');
   const [open, setOpen] = React.useState(false);
@@ -212,9 +208,7 @@ function EventMaterialsPicker({
     };
   }, [open]);
 
-  const effScope = (m: MaterialRow) => ov[m.id]?.scope ?? m.scope;
-  const effClassId = (m: MaterialRow) => (ov[m.id] ? ov[m.id].classId : m.classId);
-  const isClassMat = (m: MaterialRow) => effScope(m) === 'class' && effClassId(m) === classId;
+  const isClassMat = (m: MaterialRow) => m.scope === 'class' && m.classId === classId;
   const classMats = materials.filter(isClassMat);
   const attachedMats = ids
     .map((id) => materials.find((m) => m.id === id))
@@ -236,22 +230,6 @@ function EventMaterialsPicker({
     saveFetcher.submit(fd, { action: '/event-materials', method: 'post' });
   };
 
-  const setScope = (m: MaterialRow, scope: 'class' | 'event', moveToClass = false) => {
-    const nextClassId = moveToClass ? classId : effClassId(m);
-    setOv((p) => ({ ...p, [m.id]: { scope, classId: nextClassId } }));
-    const fd = new FormData();
-    fd.set('intent', 'update');
-    fd.set('id', m.id);
-    fd.set('scope', scope);
-    if (moveToClass) fd.set('classId', classId);
-    scopeFetcher.submit(fd, { action: '/materials', method: 'post' });
-  };
-
-  const pickClass = (m: MaterialRow) => {
-    setScope(m, 'class', effClassId(m) !== classId);
-    if (ids.includes(m.id)) saveJoin(ids.filter((x) => x !== m.id));
-  };
-
   const pickEvent = (m: MaterialRow) => {
     if (!ids.includes(m.id)) saveJoin([...ids, m.id]);
   };
@@ -267,7 +245,9 @@ function EventMaterialsPicker({
       .filter((d): d is string => !!d)
       .sort();
     const latest = otherDates[otherDates.length - 1];
-    return latest ? t('ev_mat_used_on', { date: latest }) : '';
+    if (!latest) return '';
+    const [y, mo, d] = latest.split('-');
+    return t('ev_mat_used_on', { date: `${d}/${mo}/${y.slice(2)}` });
   };
 
   if (!materials.length) {
@@ -310,8 +290,8 @@ function EventMaterialsPicker({
                 pool.slice(0, 8).map((m) => {
                   const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
                   const srcClass =
-                    effClassId(m) && effClassId(m) !== classId
-                      ? (classes.find((c) => c.id === effClassId(m))?.name ?? '')
+                    m.classId && m.classId !== classId
+                      ? (classes.find((c) => c.id === m.classId)?.name ?? '')
                       : '';
                   const hint = [srcClass, usageLabel(m)].filter(Boolean).join(' · ');
                   return (
@@ -328,9 +308,6 @@ function EventMaterialsPicker({
                           </span>
                         )}
                       </span>
-                      <CBtn variant="secondary" size="sm" onClick={() => pickClass(m)}>
-                        {t('ev_mat_btn_class')}
-                      </CBtn>
                       <CBtn variant="secondary" size="sm" onClick={() => pickEvent(m)}>
                         {t('ev_mat_btn_event')}
                       </CBtn>
@@ -360,9 +337,6 @@ function EventMaterialsPicker({
                   <span style={{ flex: 1 }} className="lrow__title">
                     {m.title}
                   </span>
-                  <CIBtn label={t('delete')} size="sm" onClick={() => setScope(m, 'event')}>
-                    <MIcon name="x" size={14} />
-                  </CIBtn>
                 </div>
               );
             })}
