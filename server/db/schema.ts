@@ -334,9 +334,8 @@ export const flashcardResults = sqliteTable(
   'flashcard_results',
   {
     id: text('id').primaryKey(),
-    studentId: text('student_id')
-      .notNull()
-      .references(() => students.id, { onDelete: 'cascade' }),
+    studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
     topicId: text('topic_id')
       .notNull()
       .references(() => flashcardTopics.id, { onDelete: 'cascade' }),

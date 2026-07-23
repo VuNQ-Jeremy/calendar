@@ -1,4 +1,4 @@
-import { eq, or, and, desc, sql } from 'drizzle-orm';
+import { eq, or, and, desc, sql, isNotNull } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   flashcardTopics,
@@ -6,6 +6,7 @@ import {
   flashcardResults,
   flashcardMastery,
   students,
+  staff,
 } from '../db/schema';
 import type { Db } from '../db/index';
 import type {
@@ -72,9 +73,10 @@ export type FlashcardWordRow = {
 
 export type FlashcardResultRow = {
   id: string;
-  studentId: string;
-  studentName: string;
-  studentColor: string;
+  playerId: string;
+  playerName: string;
+  playerColor: string;
+  isStaff: boolean;
   topicId: string;
   mode: string;
   score: number;
@@ -255,9 +257,10 @@ export async function listTopicResults(
   const rows = await db
     .select({
       id: flashcardResults.id,
-      studentId: flashcardResults.studentId,
-      studentName: students.name,
-      studentColor: students.color,
+      playerId: sql<string>`coalesce(${flashcardResults.studentId}, ${flashcardResults.staffId})`,
+      playerName: sql<string>`coalesce(${students.name}, ${staff.name})`,
+      playerColor: sql<string>`coalesce(${students.color}, ${staff.color})`,
+      isStaff: sql<number>`${flashcardResults.staffId} is not null`,
       topicId: flashcardResults.topicId,
       mode: flashcardResults.mode,
       score: flashcardResults.score,
@@ -266,23 +269,26 @@ export async function listTopicResults(
       playedAt: flashcardResults.playedAt,
     })
     .from(flashcardResults)
-    .innerJoin(students, eq(students.id, flashcardResults.studentId))
+    .leftJoin(students, eq(students.id, flashcardResults.studentId))
+    .leftJoin(staff, eq(staff.id, flashcardResults.staffId))
     .where(eq(flashcardResults.topicId, topicId))
     .orderBy(desc(flashcardResults.playedAt))
     .limit(limit);
-  return rows;
+  return rows.map((r) => ({ ...r, isStaff: Boolean(r.isStaff) }));
 }
 
 export async function recordResult(
   db: Db,
-  studentId: string,
+  player: { kind: 'staff' | 'student'; id: string },
   input: FlashcardResultInput,
 ): Promise<void> {
   const now = new Date().toISOString();
+  const isStudent = player.kind === 'student';
   const ops: BatchItem<'sqlite'>[] = [
     db.insert(flashcardResults).values({
       id: crypto.randomUUID(),
-      studentId,
+      studentId: isStudent ? player.id : null,
+      staffId: isStudent ? null : player.id,
       topicId: input.topicId,
       mode: input.mode,
       score: input.score,
@@ -290,25 +296,28 @@ export async function recordResult(
       durationMs: input.durationMs ?? null,
       playedAt: now,
     }),
-    ...input.answers.map((a) =>
-      db
-        .insert(flashcardMastery)
-        .values({
-          studentId,
-          wordId: a.wordId,
-          correct: a.correct ? 1 : 0,
-          wrong: a.correct ? 0 : 1,
-          lastSeen: now,
-        })
-        .onConflictDoUpdate({
-          target: [flashcardMastery.studentId, flashcardMastery.wordId],
-          set: {
-            correct: sql`${flashcardMastery.correct} + ${a.correct ? 1 : 0}`,
-            wrong: sql`${flashcardMastery.wrong} + ${a.correct ? 0 : 1}`,
-            lastSeen: now,
-          },
-        }),
-    ),
+    // Mastery tracks per-student adaptive ordering; staff plays don't feed it.
+    ...(isStudent
+      ? input.answers.map((a) =>
+          db
+            .insert(flashcardMastery)
+            .values({
+              studentId: player.id,
+              wordId: a.wordId,
+              correct: a.correct ? 1 : 0,
+              wrong: a.correct ? 0 : 1,
+              lastSeen: now,
+            })
+            .onConflictDoUpdate({
+              target: [flashcardMastery.studentId, flashcardMastery.wordId],
+              set: {
+                correct: sql`${flashcardMastery.correct} + ${a.correct ? 1 : 0}`,
+                wrong: sql`${flashcardMastery.wrong} + ${a.correct ? 0 : 1}`,
+                lastSeen: now,
+              },
+            }),
+        )
+      : []),
   ];
   await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 }
@@ -340,9 +349,10 @@ export async function studentFlashcardStats(db: Db): Promise<StudentFlashcardSta
       lastPlayedAt: sql<string>`max(${flashcardResults.playedAt})`,
     })
     .from(flashcardResults)
+    .where(isNotNull(flashcardResults.studentId))
     .groupBy(flashcardResults.studentId);
   return rows.map((r) => ({
-    studentId: r.studentId,
+    studentId: r.studentId as string,
     rounds: Number(r.rounds),
     avgPct: Math.round(Number(r.avgPct)),
     lastPlayedAt: r.lastPlayedAt ?? null,

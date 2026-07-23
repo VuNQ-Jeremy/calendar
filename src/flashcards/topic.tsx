@@ -66,7 +66,6 @@ export function FlashcardTopicScreen() {
   }, [words, mastery, kind]);
 
   const finish = (r: GameResult) => {
-    if (kind !== 'student') return; // staff play is preview-only
     const fd = new FormData();
     fd.set('intent', 'record-result');
     fd.set('topicId', topic.id);
@@ -81,7 +80,7 @@ export function FlashcardTopicScreen() {
   if (playing) {
     const exit = () => setPlaying(null);
     return (
-      <GameOverlay topicName={topic.name} onExit={exit} isPreview={isStaff}>
+      <GameOverlay topicName={topic.name} onExit={exit}>
         {playing === 'flip' && <FlipGame words={orderedWords} onExit={exit} onFinish={finish} />}
         {playing === 'quiz' && <QuizGame words={words} onExit={exit} onFinish={finish} />}
         {playing === 'match' && <MatchGame words={words} onExit={exit} onFinish={finish} />}
@@ -142,12 +141,10 @@ export function FlashcardTopicScreen() {
 function GameOverlay({
   topicName,
   onExit,
-  isPreview,
   children,
 }: {
   topicName: string;
   onExit: () => void;
-  isPreview: boolean;
   children: React.ReactNode;
 }) {
   const { t } = useLang();
@@ -174,11 +171,6 @@ function GameOverlay({
       >
         <div style={{ fontWeight: 700, color: 'var(--text-strong)', flex: 1, minWidth: 0 }}>
           {topicName}
-          {isPreview && (
-            <span style={{ marginLeft: 10, fontWeight: 500, color: 'var(--text-muted)' }}>
-              · {t('fc_preview_note')}
-            </span>
-          )}
         </div>
         <FBtn variant="secondary" iconLeft={<MIcon name="x" size={16} />} onClick={onExit}>
           {t('fc_exit')}
@@ -790,10 +782,11 @@ function ResultsTab({ results }: { results: FlashcardResultRow[] }) {
   const leaderboard = React.useMemo(() => {
     const best = new Map<string, { name: string; color: string; pct: number }>();
     for (const r of results) {
+      if (r.isStaff) continue; // leaderboard is a student competition
       const pct = Math.round((r.score * 100) / r.total);
-      const cur = best.get(r.studentId);
+      const cur = best.get(r.playerId);
       if (!cur || pct > cur.pct) {
-        best.set(r.studentId, { name: r.studentName, color: r.studentColor, pct });
+        best.set(r.playerId, { name: r.playerName, color: r.playerColor, pct });
       }
     }
     return Array.from(best.values())
@@ -816,9 +809,16 @@ function ResultsTab({ results }: { results: FlashcardResultRow[] }) {
         <div className="m-stack" style={{ gap: 8 }}>
           {results.map((r) => (
             <div key={r.id} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
-              <FAv name={r.studentName} color={r.studentColor} size="sm" />
+              <FAv name={r.playerName} color={r.playerColor} size="sm" />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{r.studentName}</div>
+                <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+                  {r.playerName}
+                  {r.isStaff && (
+                    <FBadge color="orange" style={{ marginLeft: 8 }}>
+                      {t('fc_staff_badge')}
+                    </FBadge>
+                  )}
+                </div>
                 <div className="lrow__meta">
                   <FBadge color="violet">{t(`fc_mode_${r.mode}`)}</FBadge>
                   <span>

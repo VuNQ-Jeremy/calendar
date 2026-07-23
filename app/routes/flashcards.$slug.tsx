@@ -123,7 +123,6 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
   }
 
   if (intent === 'record-result') {
-    if (su.kind !== 'student') return { ok: true, preview: true };
     let answers: unknown = [];
     try {
       answers = JSON.parse((formData.get('answers') as string) ?? '[]');
@@ -142,7 +141,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
     if (parsed.data.topicId !== topicId) {
       return Response.json({ error: 'topic mismatch' }, { status: 400 });
     }
-    await flashcardsSvc.recordResult(db, su.user.id, parsed.data);
+    await flashcardsSvc.recordResult(db, { kind: su.kind, id: su.user.id }, parsed.data);
     return { ok: true };
   }
 
