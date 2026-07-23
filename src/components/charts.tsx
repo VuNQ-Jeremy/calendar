@@ -112,7 +112,7 @@ export function ProgressLineChart({
           textAnchor="middle"
           fontSize={11}
           fontWeight={600}
-          fill="var(--text)"
+          fill="var(--text-strong, #3A312A)"
         >
           {p.y}
         </text>
