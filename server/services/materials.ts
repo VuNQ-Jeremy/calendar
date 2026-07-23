@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { materials } from '../db/schema';
+import { materials, eventMaterials } from '../db/schema';
 import type { Db } from '../db/index';
 import type { MaterialInput } from '../../shared/schemas';
 
@@ -112,6 +112,12 @@ export async function update(
   try {
     if (Object.keys(set).length) {
       await db.update(materials).set(set).where(eq(materials.id, id));
+    }
+    // A scope change resets per-event attachments: an unattached class
+    // material must not resurface as an event material, and a promoted
+    // class material must not keep stale per-event rows either.
+    if (patch.scope !== undefined && current && patch.scope !== current.scope) {
+      await db.delete(eventMaterials).where(eq(eventMaterials.materialId, id));
     }
     // Delete old R2 object after successful DB update
     if (newFileKey && files && current?.fileKey && current.fileKey !== newFileKey) {
