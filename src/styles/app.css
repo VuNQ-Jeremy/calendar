@@ -1008,6 +1008,21 @@ body {
     transform: translateY(12px) scale(0.97);
   }
 }
+/* small inline spinner (busy state on buttons) */
+.mspin {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: mspin 0.7s linear infinite;
+}
+@keyframes mspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* slide-in drawer (used by Calendar "Customize") */
 .drawer-scrim {

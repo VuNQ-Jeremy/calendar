@@ -9,6 +9,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as materialsSvc from '../../server/services/materials';
+import type { MaterialRow } from '../../server/services/materials';
 import * as classesSvc from '../../server/services/classes';
 import { MaterialInput, parsePatch } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
@@ -50,7 +51,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     await materialsSvc.remove(db, id, env.FILES);
-    return { ok: true };
+    return { ok: true, deletedId: id };
   }
 
   // Extract file upload if present
@@ -71,27 +72,51 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (intent === 'create') {
     const parsed = MaterialInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await materialsSvc.create(db, parsed.data, file, env.FILES);
-    return { ok: true };
+    const material = await materialsSvc.create(db, parsed.data, file, env.FILES);
+    return { ok: true, material };
   }
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     const parsed = parsePatch(MaterialInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await materialsSvc.update(db, id, parsed.data, file, env.FILES);
-    return { ok: true };
+    const material = await materialsSvc.update(db, id, parsed.data, file, env.FILES);
+    return { ok: true, material };
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  let data: Awaited<ReturnType<typeof serverAction>>;
   try {
-    return await serverAction();
+    data = await serverAction();
   } finally {
     invalidate('route:', 'evmat:');
   }
+  // Write the mutated row back into the materials route cache so the
+  // post-action revalidation is a cache hit instead of a second server
+  // round-trip (the download button depends on the fresh fileKey).
+  const result = data as {
+    ok?: boolean;
+    material?: MaterialRow;
+    deletedId?: string;
+  } | null;
+  if (cached && result?.ok) {
+    if (result.material) {
+      const row = result.material;
+      const exists = cached.materials.some((m) => m.id === row.id);
+      const materials = exists
+        ? cached.materials.map((m) => (m.id === row.id ? row : m))
+        : [...cached.materials, row];
+      cacheSet(CACHE_KEY, { ...cached, materials });
+    } else if (result.deletedId) {
+      const materials = cached.materials.filter((m) => m.id !== result.deletedId);
+      cacheSet(CACHE_KEY, { ...cached, materials });
+    }
+  }
+  return data;
 }
 
 export default function Materials() {

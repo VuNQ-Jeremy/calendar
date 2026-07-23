@@ -119,13 +119,29 @@ function MaterialsScreen() {
   const [filterType, setFilterType] = React.useState('all');
   const [favOnly, setFavOnly] = React.useState(false);
   const [modal, setModal] = React.useState<MaterialDraft | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [saveFailed, setSaveFailed] = React.useState(false);
+
+  // Close the modal only once the save round-trip has actually finished
+  // (uploads can take seconds); watch the non-idle → idle transition so a
+  // stale fetcher.data from a previous save can't close it prematurely.
+  const prevFetcherState = React.useRef(fetcher.state);
+  React.useEffect(() => {
+    if (saving && prevFetcherState.current !== 'idle' && fetcher.state === 'idle') {
+      setSaving(false);
+      if ((fetcher.data as { ok?: boolean } | undefined)?.ok) setModal(null);
+      else setSaveFailed(true);
+    }
+    prevFetcherState.current = fetcher.state;
+  }, [saving, fetcher.state, fetcher.data]);
 
   let list = matList;
   if (filterClass !== 'all') list = list.filter((m) => m.classId === filterClass);
   if (filterType !== 'all') list = list.filter((m) => m.type === filterType);
   if (favOnly) list = list.filter((m) => m.favorite);
 
-  const openNew = () =>
+  const openNew = () => {
+    setSaveFailed(false);
     setModal({
       title: '',
       type: 'notes',
@@ -136,6 +152,7 @@ function MaterialsScreen() {
       addedAt: iso(TODAY),
       scope: 'class',
     });
+  };
 
   const save = (f: MaterialDraft) => {
     const title = f.title.trim() || t('mat_untitled');
@@ -157,7 +174,8 @@ function MaterialsScreen() {
     // multipart is required whenever a File is attached: the urlencoded
     // default serializes File entries to plain strings and the upload is lost.
     fetcher.submit(fd, { action: '/materials', method: 'post', encType: 'multipart/form-data' });
-    setModal(null);
+    setSaveFailed(false);
+    setSaving(true);
   };
 
   const removeMat = (id: string) => {
@@ -213,7 +231,8 @@ function MaterialsScreen() {
               key={m.id}
               m={m}
               classes={classes}
-              onEdit={() =>
+              onEdit={() => {
+                setSaveFailed(false);
                 setModal({
                   ...m,
                   title: m.title,
@@ -222,8 +241,8 @@ function MaterialsScreen() {
                   url: m.url ?? '',
                   fileName: m.fileName ?? '',
                   favorite: m.favorite,
-                })
-              }
+                });
+              }}
               onDelete={() => removeMat(m.id)}
               t={t}
             />
@@ -242,6 +261,8 @@ function MaterialsScreen() {
           onClose={() => setModal(null)}
           onSave={save}
           classes={classes}
+          busy={saving}
+          error={saveFailed}
         />
       )}
     </div>
@@ -254,9 +275,19 @@ interface MaterialModalProps {
   onClose: () => void;
   onSave: (f: MaterialDraft) => void;
   classes: ClassLite[];
+  busy: boolean;
+  error: boolean;
 }
 
-function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialModalProps) {
+function MaterialModal({
+  draft,
+  setDraft,
+  onClose,
+  onSave,
+  classes,
+  busy,
+  error,
+}: MaterialModalProps) {
   const { t } = useLang();
   const set = <K extends keyof MaterialDraft>(k: K, v: MaterialDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
@@ -281,11 +312,16 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialMo
       width={520}
       footer={
         <>
-          <XBtn variant="secondary" onClick={onClose}>
+          <XBtn variant="secondary" onClick={onClose} disabled={busy}>
             {t('cancel')}
           </XBtn>
-          <XBtn variant="primary" onClick={() => onSave(draft)}>
-            {t('save')}
+          <XBtn
+            variant="primary"
+            onClick={() => onSave(draft)}
+            disabled={busy}
+            iconLeft={busy ? <span className="mspin" /> : undefined}
+          >
+            {busy ? t('mat_saving') : t('save')}
           </XBtn>
         </>
       }
@@ -368,6 +404,11 @@ function MaterialModal({ draft, setDraft, onClose, onSave, classes }: MaterialMo
               {t('mat_too_large')}
             </span>
           )}
+        </div>
+      )}
+      {error && !busy && (
+        <div className="auth-error" style={{ marginTop: 12 }}>
+          {t('mat_save_failed')}
         </div>
       )}
     </Modal>
