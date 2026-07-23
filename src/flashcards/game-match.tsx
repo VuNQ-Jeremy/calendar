@@ -1,7 +1,7 @@
 import React from 'react';
 import { DS } from '../ds/index.js';
 import { useLang } from '../lib/i18n.jsx';
-import { shuffle, fmtDuration } from './game-utils.js';
+import { shuffle, fmtDuration, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
 
 const { Button: FBtn } = DS;
@@ -15,7 +15,7 @@ function buildTiles(words: GameProps['words']) {
   const tiles: Tile[] = [];
   for (const w of pairs) {
     tiles.push({ key: `${w.id}-w`, wordId: w.id, kind: 'word', label: w.word });
-    tiles.push({ key: `${w.id}-m`, wordId: w.id, kind: 'meaning', label: w.meaningVi });
+    tiles.push({ key: `${w.id}-m`, wordId: w.id, kind: 'meaning', label: meaningOf(w) });
   }
   return { pairs, tiles: shuffle(tiles) };
 }

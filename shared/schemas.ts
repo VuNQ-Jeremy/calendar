@@ -221,7 +221,9 @@ export type FlashcardTopicInput = z.infer<typeof FlashcardTopicInput>;
 
 export const FlashcardWordInput = z.object({
   word: z.string().trim().min(1).max(100),
-  meaningVi: z.string().trim().min(1).max(500),
+  // Optional: the English definition auto-fills, so a manual Vietnamese meaning
+  // is not required. Games fall back to the definition when this is blank.
+  meaningVi: z.string().trim().max(500).default(''),
   definitionEn: z.string().max(1000).nullish(),
   ipa: z.string().max(200).nullish(),
   audioUrl: z.string().max(2000).nullish(),

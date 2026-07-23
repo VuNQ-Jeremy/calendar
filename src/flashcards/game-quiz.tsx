@@ -3,7 +3,7 @@ import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
-import { shuffle } from './game-utils.js';
+import { shuffle, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 
@@ -18,14 +18,17 @@ type Question = {
 
 function buildQuestions(words: FlashcardWordRow[]): Question[] {
   return shuffle(words).map((w) => {
+    const answer = meaningOf(w);
     const distractors = shuffle(
-      words.filter((o) => o.id !== w.id && o.meaningVi !== w.meaningVi).map((o) => o.meaningVi),
+      Array.from(
+        new Set(words.filter((o) => o.id !== w.id).map(meaningOf).filter((m) => m !== answer)),
+      ),
     ).slice(0, 3);
     return {
       word: w,
       prompt: Math.random() < 0.35 ? 'audio' : 'text',
-      options: shuffle([w.meaningVi, ...distractors]),
-      answer: w.meaningVi,
+      options: shuffle([answer, ...distractors]),
+      answer,
     };
   });
 }

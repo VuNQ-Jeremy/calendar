@@ -227,7 +227,7 @@ function WordsTab({
   };
 
   const save = (f: WordDraft) => {
-    if (!f.word.trim() || !f.meaningVi.trim()) return;
+    if (!f.word.trim()) return;
     const fd = new FormData();
     fd.set('intent', f.id ? 'word-update' : 'word-create');
     if (f.id) fd.set('id', f.id);
@@ -293,9 +293,11 @@ function WordsTab({
                     </span>
                   )}
                 </div>
-                <div style={{ color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>
-                  {w.meaningVi}
-                </div>
+                {w.meaningVi && (
+                  <div style={{ color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>
+                    {w.meaningVi}
+                  </div>
+                )}
                 {w.definitionEn && (
                   <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
                     {w.definitionEn}
@@ -534,7 +536,7 @@ function ImportModal({
 
   const submit = () => {
     const words = rows
-      .filter((r) => r.include && r.word.trim() && r.meaningVi.trim())
+      .filter((r) => r.include && r.word.trim())
       .map((r) => ({
         word: r.word.trim(),
         meaningVi: r.meaningVi.trim(),
@@ -550,7 +552,7 @@ function ImportModal({
     onClose();
   };
 
-  const readyCount = rows.filter((r) => r.include && r.word.trim() && r.meaningVi.trim()).length;
+  const readyCount = rows.filter((r) => r.include && r.word.trim()).length;
 
   return (
     <Modal

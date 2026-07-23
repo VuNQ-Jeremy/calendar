@@ -3,7 +3,7 @@ import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
-import { shuffle } from './game-utils.js';
+import { shuffle, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
 
 const { Button: FBtn, IconButton: FIB } = DS;
@@ -65,7 +65,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
                 <div key={w.id} className="lrow" style={{ padding: '8px 12px' }}>
                   <span style={{ fontWeight: 600 }}>{w.word}</span>
                   <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                    {w.meaningVi}
+                    {meaningOf(w)}
                   </span>
                 </div>
               ))}
@@ -122,8 +122,8 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
             </FIB>
           </div>
           <div style={{ ...cardFace, transform: 'rotateY(180deg)' }}>
-            <div style={{ fontSize: 'var(--text-lg, 24px)', fontWeight: 700 }}>{w.meaningVi}</div>
-            {w.definitionEn && (
+            <div style={{ fontSize: 'var(--text-lg, 24px)', fontWeight: 700 }}>{meaningOf(w)}</div>
+            {w.meaningVi && w.definitionEn && (
               <div style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: '80%' }}>
                 {w.definitionEn}
               </div>

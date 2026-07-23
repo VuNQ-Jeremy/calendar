@@ -16,6 +16,15 @@ export interface GameProps {
   onFinish: (result: GameResult) => void;
 }
 
+/**
+ * The text shown as a card's "meaning". Prefers the manual Vietnamese meaning
+ * and falls back to the English definition (then the word itself) so cards with
+ * no Vietnamese translation still work in every game mode.
+ */
+export function meaningOf(w: FlashcardWordRow): string {
+  return w.meaningVi || w.definitionEn || w.word;
+}
+
 /** Fisher–Yates shuffle returning a new array (does not mutate the input). */
 export function shuffle<T>(arr: readonly T[]): T[] {
   const out = arr.slice();
