@@ -30,7 +30,14 @@ function DocxView({ id }: { id: string }) {
       const buf = await res.arrayBuffer();
       if (cancelled || !ref.current) return;
       ref.current.innerHTML = '';
-      await renderAsync(buf, ref.current);
+      // No page chrome: skip the grey wrapper and fixed page box so the
+      // document flows to the pane's full width; page margins become padding.
+      await renderAsync(buf, ref.current, undefined, {
+        inWrapper: false,
+        ignoreWidth: true,
+        ignoreHeight: true,
+        breakPages: false,
+      });
       if (!cancelled) setState('ready');
     })().catch((err) => {
       console.error('[docx-preview]', err);
@@ -107,7 +114,11 @@ export function MaterialPreview({ material }: { material: MaterialRow }) {
           {material.title}
         </strong>
         {material.fileKey && (
-          <a href={`/materials/${material.id}/download`} style={{ fontSize: 'var(--text-sm)' }}>
+          <a
+            href={`/materials/${material.id}/download`}
+            download={material.fileName ?? true}
+            style={{ fontSize: 'var(--text-sm)' }}
+          >
             {t('mat_download')}
           </a>
         )}

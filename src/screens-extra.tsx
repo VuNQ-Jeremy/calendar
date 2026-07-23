@@ -90,6 +90,7 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
         ) : m.fileKey ? (
           <a
             href={`/materials/${m.id}/download`}
+            download={m.fileName ?? true}
             className="m-row"
             style={{ gap: 6, fontSize: 'var(--text-sm)', fontWeight: 700 }}
             title={t('mat_download')}
