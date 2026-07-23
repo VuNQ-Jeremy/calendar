@@ -285,3 +285,11 @@ export const ThemeInput = z.object({
   bgOpacity: z.coerce.number().min(0).max(1).nullish(),
 });
 export type ThemeInput = z.infer<typeof ThemeInput>;
+
+export const SCROLLBAR_STYLES = ['slim', 'inset', 'brand', 'ghost'] as const;
+export type ScrollbarStyle = (typeof SCROLLBAR_STYLES)[number];
+
+export const UiPrefsInput = z.object({
+  scrollbar: z.enum(SCROLLBAR_STYLES).optional(),
+});
+export type UiPrefsInput = z.infer<typeof UiPrefsInput>;

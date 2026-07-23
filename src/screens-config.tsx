@@ -5,23 +5,46 @@ import { MIcon } from './icons.jsx';
 import { PageHeader, Empty, Modal, useConfirm } from './ui.jsx';
 import { useLang } from './lib/i18n.jsx';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
+import type { ScrollbarStyle } from '../shared/schemas.js';
 
 const { Card, Button, IconButton, Badge } = DS;
 
 interface ConfigLoaderData {
   types: AssessmentTypeRow[];
+  uiPrefs: { scrollbar: ScrollbarStyle };
 }
+
+// Mock colors are hardcoded hex (same values as the DS tokens) so each card
+// always previews its own style regardless of the currently active preset.
+const SB_PRESETS: Record<ScrollbarStyle, { tk: string; track: string; thumb: string; barW: number }> = {
+  slim: { tk: 'cfg_sb_slim', track: 'transparent', thumb: '#B8A893', barW: 6 },
+  inset: { tk: 'cfg_sb_inset', track: '#F6EDDF', thumb: '#DBCBB4', barW: 9 },
+  brand: { tk: 'cfg_sb_brand', track: 'transparent', thumb: '#F79A4E', barW: 6 },
+  ghost: { tk: 'cfg_sb_ghost', track: 'transparent', thumb: 'rgba(184,168,147,0.35)', barW: 6 },
+};
 
 type TypeDraft = { id?: string; name: string };
 
 function SystemConfigScreen() {
-  const { types } = useLoaderData() as ConfigLoaderData;
+  const { types, uiPrefs } = useLoaderData() as ConfigLoaderData;
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
   const [confirm, confirmNode] = useConfirm();
   const [modal, setModal] = React.useState<TypeDraft | null>(null);
 
   const submit = (fd: FormData) => fetcher.submit(fd, { action: '/config', method: 'post' });
+
+  const [sbLocal, setSbLocal] = React.useState<ScrollbarStyle | null>(null);
+  const scrollbar = sbLocal ?? uiPrefs.scrollbar;
+
+  const pickScrollbar = (key: ScrollbarStyle) => {
+    setSbLocal(key);
+    document.documentElement.dataset.scrollbar = key; // instant whole-app preview
+    const fd = new FormData();
+    fd.set('intent', 'ui-prefs');
+    fd.set('scrollbar', key);
+    submit(fd);
+  };
 
   const openAdd = () => setModal({ name: '' });
   const openRename = (tp: AssessmentTypeRow) => setModal({ id: tp.id, name: tp.name });
@@ -171,6 +194,40 @@ function SystemConfigScreen() {
         ) : (
           <Empty icon="settings" title={t('cfg_no_types')} />
         )}
+      </Card>
+
+      <Card style={{ padding: 18, marginTop: 16 }}>
+        <div style={{ marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_sb_title')}</h2>
+          <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+            {t('cfg_sb_sub')}
+          </p>
+        </div>
+        <div className="theme-preset">
+          {(Object.keys(SB_PRESETS) as ScrollbarStyle[]).map((key) => {
+            const p = SB_PRESETS[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                className={'preset preset--sb' + (scrollbar === key ? ' is-active' : '')}
+                onClick={() => pickScrollbar(key)}
+              >
+                <div className="sbmock">
+                  <div className="sbmock__lines">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <div className="sbmock__bar" style={{ background: p.track, width: p.barW }}>
+                    <span style={{ background: p.thumb }} />
+                  </div>
+                </div>
+                <div className="preset__name">{t(p.tk)}</div>
+              </button>
+            );
+          })}
+        </div>
       </Card>
 
       {modal && (

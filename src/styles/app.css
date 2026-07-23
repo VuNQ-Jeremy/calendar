@@ -1682,6 +1682,47 @@ body {
   color: var(--text-strong);
 }
 
+/* scrollbar-style picker on /config */
+.preset--sb {
+  width: 128px;
+}
+.sbmock {
+  display: flex;
+  gap: 4px;
+  height: 44px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  margin-bottom: 6px;
+}
+.sbmock__lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: center;
+}
+.sbmock__lines span {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--sand-300);
+}
+.sbmock__lines span:nth-child(2) {
+  width: 70%;
+}
+.sbmock__bar {
+  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.sbmock__bar span {
+  display: block;
+  width: 100%;
+  height: 55%;
+  border-radius: 999px;
+}
+
 /* schedule editor */
 .sched-row {
   display: grid;
@@ -1767,4 +1808,86 @@ body {
   border-radius: 4px;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* ===================== Scrollbars (universal) =====================
+   Preset selected on /config, applied as data-scrollbar on <html>.
+   Base rules = 'slim' (the default, no attribute needed). */
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--taupe-400);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background: var(--taupe-500);
+}
+
+/* --- inset: visible sunken track, padded sand thumb --- */
+html[data-scrollbar='inset'] *::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+html[data-scrollbar='inset'] *::-webkit-scrollbar-track {
+  background: var(--surface-sunken);
+  border-radius: 999px;
+}
+html[data-scrollbar='inset'] *::-webkit-scrollbar-thumb {
+  background: var(--sand-400);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+html[data-scrollbar='inset'] *::-webkit-scrollbar-thumb:hover,
+html[data-scrollbar='inset'] *::-webkit-scrollbar-thumb:active {
+  background: var(--taupe-400);
+  background-clip: padding-box;
+}
+
+/* --- brand: orange accent thumb --- */
+html[data-scrollbar='brand'] *::-webkit-scrollbar-thumb {
+  background: var(--brand);
+}
+html[data-scrollbar='brand'] *::-webkit-scrollbar-thumb:hover,
+html[data-scrollbar='brand'] *::-webkit-scrollbar-thumb:active {
+  background: var(--brand-hover);
+}
+
+/* --- ghost: invisible until the scroll container is hovered --- */
+html[data-scrollbar='ghost'] *::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+html[data-scrollbar='ghost'] *:hover::-webkit-scrollbar-thumb {
+  background: var(--taupe-400);
+}
+html[data-scrollbar='ghost'] *:hover::-webkit-scrollbar-thumb:hover,
+html[data-scrollbar='ghost'] *:hover::-webkit-scrollbar-thumb:active {
+  background: var(--taupe-500);
+}
+
+/* Firefox (no ::-webkit-scrollbar support): standard properties. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--taupe-400) transparent;
+  }
+  html[data-scrollbar='inset'] * {
+    scrollbar-width: auto;
+    scrollbar-color: var(--sand-400) var(--surface-sunken);
+  }
+  html[data-scrollbar='brand'] * {
+    scrollbar-color: var(--brand) transparent;
+  }
+  /* ghost: hover-reveal isn't possible with standard properties;
+     Firefox falls back to the slim style (already covered by the base rule). */
 }

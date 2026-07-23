@@ -20,6 +20,7 @@ import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as homeworkSvc from '../../server/services/homework';
 import * as invitesSvc from '../../server/services/invites';
+import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 
@@ -73,22 +74,25 @@ const NAV = [
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const { user, kind } = await requireUser(request, env);
+  const db = createDb(env);
   if (kind === 'student') {
+    const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
     return {
       homeworkDueCount: 0,
       unusedInviteCount: 0,
       newFeedbackCount: 0,
+      uiPrefs,
       user: { ...user, kind },
     };
   }
-  const db = createDb(env);
   const today = iso(TODAY);
-  const [homeworkDueCount, unusedInviteCount, newFeedbackCount] = await Promise.all([
+  const [homeworkDueCount, unusedInviteCount, newFeedbackCount, uiPrefs] = await Promise.all([
     homeworkSvc.countDue(db, today),
     invitesSvc.countUnused(db),
     feedbackSvc.countNew(db),
+    uiPrefsSvc.getUiPrefs(db),
   ]);
-  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, user: { ...user, kind } };
+  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, uiPrefs, user: { ...user, kind } };
 }
 
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
@@ -187,7 +191,7 @@ export type AppContext = {
 };
 
 export default function AppLayout() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, uiPrefs } = useLoaderData<typeof loader>();
   const feedbackFetcher = useFetcher();
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
     typeof newFeedbackDraft
@@ -201,6 +205,10 @@ export default function AppLayout() {
       /* storage unavailable */
     }
   }, []);
+
+  React.useEffect(() => {
+    document.documentElement.dataset.scrollbar = uiPrefs.scrollbar;
+  }, [uiPrefs.scrollbar]);
 
   const closeIntro = () => {
     setIntroOpen(false);

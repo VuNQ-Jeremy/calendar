@@ -9,7 +9,13 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
-import { AssessmentTypeInput, AssessmentTypeReorder, parsePatch } from '../../shared/schemas';
+import * as uiPrefsSvc from '../../server/services/ui-prefs';
+import {
+  AssessmentTypeInput,
+  AssessmentTypeReorder,
+  UiPrefsInput,
+  parsePatch,
+} from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
 
 const CACHE_KEY = 'route:config';
@@ -18,8 +24,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
-  const types = await typesSvc.list(db);
-  return { types };
+  const [types, uiPrefs] = await Promise.all([typesSvc.list(db), uiPrefsSvc.getUiPrefs(db)]);
+  return { types, uiPrefs };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -86,6 +92,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
       await typesSvc.reorder(db, parsed.data.ids);
       return { ok: true };
+    }
+
+    if (intent === 'ui-prefs') {
+      const parsed = UiPrefsInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const uiPrefs = await uiPrefsSvc.setUiPrefs(db, parsed.data);
+      return { ok: true, uiPrefs };
     }
   } catch {
     return Response.json({ error: 'duplicate' }, { status: 400 });
