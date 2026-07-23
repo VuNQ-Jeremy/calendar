@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
@@ -151,18 +152,6 @@ interface EventMaterialsPickerProps {
   events: EventRow[];
 }
 
-function MaterialRowView({ m }: { m: MaterialRow }) {
-  const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
-  return (
-    <div className="lrow" style={{ border: '1.5px solid var(--border-subtle)' }}>
-      <MIcon name={mt.icon} size={16} />
-      <span style={{ flex: 1 }} className="lrow__title">
-        {m.title}
-      </span>
-    </div>
-  );
-}
-
 function EventMaterialsPicker({
   eventId,
   classId,
@@ -173,7 +162,16 @@ function EventMaterialsPicker({
   const { t } = useLang();
   const loadFetcher = useFetcher<{ materialIds: string[] }>();
   const saveFetcher = useFetcher();
+  const scopeFetcher = useFetcher();
   const [ids, setIds] = React.useState<string[]>([]);
+  const [scopeOv, setScopeOv] = React.useState<Record<string, 'class' | 'event'>>({});
+
+  const [q, setQ] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const [pos, setPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const fieldRef = React.useRef<HTMLDivElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     loadFetcher.load(`/event-materials?eventId=${encodeURIComponent(eventId)}`);
@@ -185,14 +183,46 @@ function EventMaterialsPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadFetcher.data]);
 
+  React.useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const el = e.target as Node;
+      if (wrapRef.current?.contains(el) || menuRef.current?.contains(el)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = fieldRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
+
+  const effScope = (m: MaterialRow) => scopeOv[m.id] ?? m.scope;
   const classMaterials = materials.filter((m) => m.classId === classId);
-  const classMats = classMaterials.filter((m) => m.scope === 'class');
+  const classMats = classMaterials.filter((m) => effScope(m) === 'class');
   const attachedMats = ids
     .map((id) => classMaterials.find((m) => m.id === id))
-    .filter((m): m is MaterialRow => !!m);
-  const candidates = classMaterials.filter((m) => !ids.includes(m.id));
+    .filter((m): m is MaterialRow => !!m && effScope(m) === 'event');
+  const ql = q.trim().toLowerCase();
+  const pool = classMaterials.filter(
+    (m) =>
+      effScope(m) === 'event' &&
+      !ids.includes(m.id) &&
+      (ql === '' || m.title.toLowerCase().includes(ql)),
+  );
 
-  const save = (next: string[]) => {
+  const saveJoin = (next: string[]) => {
     setIds(next);
     const fd = new FormData();
     fd.set('intent', 'save');
@@ -201,24 +231,36 @@ function EventMaterialsPicker({
     saveFetcher.submit(fd, { action: '/event-materials', method: 'post' });
   };
 
-  const attach = (materialId: string) => {
-    if (!materialId || ids.includes(materialId)) return;
-    save([...ids, materialId]);
+  const setScope = (m: MaterialRow, scope: 'class' | 'event') => {
+    setScopeOv((p) => ({ ...p, [m.id]: scope }));
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', m.id);
+    fd.set('scope', scope);
+    scopeFetcher.submit(fd, { action: '/materials', method: 'post' });
   };
 
-  const detach = (materialId: string) => {
-    save(ids.filter((x) => x !== materialId));
+  const pickClass = (m: MaterialRow) => {
+    setScope(m, 'class');
+    if (ids.includes(m.id)) saveJoin(ids.filter((x) => x !== m.id));
+  };
+
+  const pickEvent = (m: MaterialRow) => {
+    if (!ids.includes(m.id)) saveJoin([...ids, m.id]);
+  };
+
+  const detachEvent = (materialId: string) => {
+    saveJoin(ids.filter((x) => x !== materialId));
   };
 
   const usageLabel = (m: MaterialRow) => {
-    if (m.scope === 'class') return t('mat_scope_class');
     const otherDates = eventMaterials
       .filter((em) => em.materialId === m.id && em.eventId !== eventId)
       .map((em) => events.find((e) => e.id === em.eventId)?.date)
       .filter((d): d is string => !!d)
       .sort();
     const latest = otherDates[otherDates.length - 1];
-    return latest ? t('ev_mat_used_on', { date: latest }) : t('mat_scope_event');
+    return latest ? t('ev_mat_used_on', { date: latest }) : '';
   };
 
   if (!classMaterials.length) {
@@ -235,24 +277,93 @@ function EventMaterialsPicker({
   return (
     <div className="mochi-field">
       <label className="mochi-field__label">{t('ev_materials')}</label>
+      <div className="tokensearch" ref={wrapRef}>
+        <div className="tokensearch__field" ref={fieldRef}>
+          <MIcon name="search" size={17} />
+          <input
+            className="tokensearch__input"
+            placeholder={t('ev_mat_search_ph')}
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+          />
+        </div>
+        {open &&
+          pos &&
+          createPortal(
+            <div
+              ref={menuRef}
+              className="tokensearch__menu"
+              style={{ top: pos.top, left: pos.left, width: pos.width }}
+            >
+              {pool.length > 0 ? (
+                pool.slice(0, 8).map((m) => {
+                  const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
+                  const hint = usageLabel(m);
+                  return (
+                    <div key={m.id} className="tokensearch__opt" style={{ cursor: 'default' }}>
+                      <MIcon name={mt.icon} size={16} />
+                      <span style={{ flex: 1, textAlign: 'left' }}>
+                        {m.title}
+                        {hint && (
+                          <span
+                            className="m-muted"
+                            style={{ fontSize: 'var(--text-sm)', marginLeft: 6 }}
+                          >
+                            {hint}
+                          </span>
+                        )}
+                      </span>
+                      <CBtn variant="secondary" size="sm" onClick={() => pickClass(m)}>
+                        {t('ev_mat_btn_class')}
+                      </CBtn>
+                      <CBtn variant="secondary" size="sm" onClick={() => pickEvent(m)}>
+                        {t('ev_mat_btn_event')}
+                      </CBtn>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="tokensearch__empty">
+                  {ql ? t('ts_no_match', { q }) : t('ts_nothing_left')}
+                </div>
+              )}
+            </div>,
+            document.body,
+          )}
+      </div>
       {classMats.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginTop: 14 }}>
           <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>
             {t('ev_mat_class_group')}
           </div>
           <div className="m-stack" style={{ gap: 6 }}>
-            {classMats.map((m) => (
-              <MaterialRowView key={m.id} m={m} />
-            ))}
+            {classMats.map((m) => {
+              const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
+              return (
+                <div key={m.id} className="lrow" style={{ border: '1.5px solid var(--border-subtle)' }}>
+                  <MIcon name={mt.icon} size={16} />
+                  <span style={{ flex: 1 }} className="lrow__title">
+                    {m.title}
+                  </span>
+                  <CIBtn label={t('delete')} size="sm" onClick={() => setScope(m, 'event')}>
+                    <MIcon name="x" size={14} />
+                  </CIBtn>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
-      <div>
-        <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>
-          {t('ev_mat_event_group')}
-        </div>
-        {attachedMats.length > 0 && (
-          <div className="m-stack" style={{ gap: 6, marginBottom: 8 }}>
+      {attachedMats.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>
+            {t('ev_mat_event_group')}
+          </div>
+          <div className="m-stack" style={{ gap: 6 }}>
             {attachedMats.map((m) => {
               const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
               return (
@@ -261,25 +372,15 @@ function EventMaterialsPicker({
                   <span style={{ flex: 1 }} className="lrow__title">
                     {m.title}
                   </span>
-                  <CIBtn label={t('delete')} size="sm" onClick={() => detach(m.id)}>
+                  <CIBtn label={t('delete')} size="sm" onClick={() => detachEvent(m.id)}>
                     <MIcon name="x" size={14} />
                   </CIBtn>
                 </div>
               );
             })}
           </div>
-        )}
-        {candidates.length > 0 && (
-          <MSelect
-            value=""
-            onChange={attach}
-            options={[
-              { value: '', label: t('ev_mat_add') },
-              ...candidates.map((m) => ({ value: m.id, label: `${m.title} — ${usageLabel(m)}` })),
-            ]}
-          />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

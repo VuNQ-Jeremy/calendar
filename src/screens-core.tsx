@@ -138,7 +138,14 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
     <div className="content">
       <PageHeader
         title={t('dash_greeting', { name: user.name.split(' ')[0] })}
-        subtitle={t('dash_sub', { date: todayStr, count: todays.length })}
+        subtitle={t(
+          todays.length === 0
+            ? 'dash_sub_none'
+            : todays.length === 1
+              ? 'dash_sub_one'
+              : 'dash_sub_many',
+          { date: todayStr, count: todays.length },
+        )}
       />
       <div className="m-grid cols-4">
         <StatCard icon="book" color="green" num={classes.length} label={t('stat_classes')} />
