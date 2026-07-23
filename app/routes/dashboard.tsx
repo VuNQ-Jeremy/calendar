@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from 'react-router';
+import type { LoaderFunctionArgs, ClientLoaderFunctionArgs } from 'react-router';
 import { useOutletContext, useNavigate } from 'react-router';
 import { DashboardScreen } from '../../src/screens-core.jsx';
 import type { AppContext } from './_app.js';
@@ -11,6 +11,9 @@ import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import { iso, TODAY } from '../../src/lib/core.js';
 import { requireUser } from '../../server/services/auth';
+import { cacheGet, cacheSet } from '../../src/lib/cache.js';
+
+const CACHE_KEY = 'route:dashboard';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -31,6 +34,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     studentCount: students.length,
     materialCount: materials.length,
   };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 export default function Dashboard() {

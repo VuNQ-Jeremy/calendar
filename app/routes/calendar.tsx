@@ -1,4 +1,9 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { CalendarScreen } from '../../src/calendar/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
@@ -11,6 +16,9 @@ import * as materialsSvc from '../../server/services/materials';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
 import type { Theme } from '../../server/services/theme';
 import { EventInput, ThemeInput, parsePatch } from '../../shared/schemas';
+import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
+
+const CACHE_KEY = 'route:calendar';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -25,6 +33,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     eventMaterialsSvc.listAll(db),
   ]);
   return { events, classes, students, theme, materials, eventMaterials };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -70,6 +86,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:');
+  }
 }
 
 export default function Calendar() {

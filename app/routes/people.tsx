@@ -1,4 +1,9 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { StudentsScreen } from '../../src/screens-manage/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
@@ -13,6 +18,9 @@ import {
   InviteInput,
   parsePatch,
 } from '../../shared/schemas';
+import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
+
+const CACHE_KEY = 'route:people';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -26,6 +34,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     classesSvc.listLite(db),
   ]);
   return { students, staff, parents, invites, classes };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -134,6 +150,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown entity/intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:');
+  }
 }
 
 export default function People() {

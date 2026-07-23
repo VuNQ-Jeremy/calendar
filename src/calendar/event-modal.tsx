@@ -1,5 +1,4 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
@@ -9,6 +8,9 @@ import { useLang } from '../lib/i18n.jsx';
 import { ATTENDANCE_META, ATTENDANCE_STATUSES, type AttendanceStatusId } from '../lib/assess.js';
 import { MAT_TYPES } from '../lib/mat-types.js';
 import { HomeworkTab } from './homework-tab.jsx';
+import { MaterialSearchDropdown } from '../material-search.jsx';
+import { useCachedLoad } from '../lib/use-cached-load.js';
+import { cacheSet, invalidate } from '../lib/cache.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
@@ -42,26 +44,30 @@ interface AttendanceTabProps {
 
 function AttendanceTab({ eventId, date, classId, classes, students }: AttendanceTabProps) {
   const { t } = useLang();
-  const loadFetcher = useFetcher<{ records: AttendanceRow[] }>();
-  const saveFetcher = useFetcher<{ ok: boolean }>();
+  const attKey = `att:${eventId}:${date}`;
+  const { data } = useCachedLoad<{ records: AttendanceRow[] }>(
+    attKey,
+    `/attendance?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
+  );
+  const saveFetcher = useFetcher<{ ok: boolean; records: AttendanceRow[] }>();
   const [marks, setMarks] = React.useState<Record<string, AttendanceStatusId>>({});
 
   React.useEffect(() => {
-    loadFetcher.load(
-      `/attendance?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId, date]);
-
-  React.useEffect(() => {
-    if (!loadFetcher.data) return;
+    if (!data) return;
     const seeded: Record<string, AttendanceStatusId> = {};
-    for (const r of loadFetcher.data.records) {
+    for (const r of data.records) {
       seeded[r.studentId] = r.status as AttendanceStatusId;
     }
     setMarks(seeded);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadFetcher.data]);
+  }, [data]);
+
+  React.useEffect(() => {
+    if (saveFetcher.data?.ok && saveFetcher.data.records) {
+      cacheSet(attKey, { records: saveFetcher.data.records });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveFetcher.data]);
 
   const roster = (classes.find((c) => c.id === classId)?.studentIds ?? [])
     .map((sid) => students.find((s) => s.id === sid))
@@ -162,67 +168,30 @@ function EventMaterialsPicker({
   events,
 }: EventMaterialsPickerProps) {
   const { t } = useLang();
-  const loadFetcher = useFetcher<{ materialIds: string[] }>();
+  const evmatKey = `evmat:${eventId}`;
+  const { data } = useCachedLoad<{ materialIds: string[] }>(
+    evmatKey,
+    `/event-materials?eventId=${encodeURIComponent(eventId)}`,
+  );
   const saveFetcher = useFetcher();
   const [ids, setIds] = React.useState<string[]>([]);
 
-  const [q, setQ] = React.useState('');
-  const [open, setOpen] = React.useState(false);
-  const [pos, setPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
-  const wrapRef = React.useRef<HTMLDivElement>(null);
-  const fieldRef = React.useRef<HTMLDivElement>(null);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-
   React.useEffect(() => {
-    loadFetcher.load(`/event-materials?eventId=${encodeURIComponent(eventId)}`);
+    if (data) setIds(data.materialIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
-
-  React.useEffect(() => {
-    if (loadFetcher.data) setIds(loadFetcher.data.materialIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadFetcher.data]);
-
-  React.useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      const el = e.target as Node;
-      if (wrapRef.current?.contains(el) || menuRef.current?.contains(el)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
-
-  React.useLayoutEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const r = fieldRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width });
-    };
-    place();
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [open]);
+  }, [data]);
 
   const isClassMat = (m: MaterialRow) => m.scope === 'class' && m.classId === classId;
   const classMats = materials.filter(isClassMat);
   const attachedMats = ids
     .map((id) => materials.find((m) => m.id === id))
     .filter((m): m is MaterialRow => !!m && !isClassMat(m));
-  const ql = q.trim().toLowerCase();
-  const pool = materials.filter(
-    (m) =>
-      !isClassMat(m) &&
-      !ids.includes(m.id) &&
-      (ql === '' || m.title.toLowerCase().includes(ql)),
-  );
+  const candidates = materials.filter((m) => !isClassMat(m) && !ids.includes(m.id));
 
   const saveJoin = (next: string[]) => {
     setIds(next);
+    cacheSet(evmatKey, { materialIds: next });
+    invalidate('route:calendar');
     const fd = new FormData();
     fd.set('intent', 'save');
     fd.set('eventId', eventId);
@@ -264,65 +233,22 @@ function EventMaterialsPicker({
   return (
     <div className="mochi-field">
       <label className="mochi-field__label">{t('ev_materials')}</label>
-      <div className="tokensearch" ref={wrapRef}>
-        <div className="tokensearch__field" ref={fieldRef}>
-          <MIcon name="search" size={17} />
-          <input
-            className="tokensearch__input"
-            placeholder={t('ev_mat_search_ph')}
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-          />
-        </div>
-        {open &&
-          pos &&
-          createPortal(
-            <div
-              ref={menuRef}
-              className="tokensearch__menu"
-              style={{ top: pos.top, left: pos.left, width: pos.width }}
-            >
-              {pool.length > 0 ? (
-                pool.slice(0, 8).map((m) => {
-                  const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
-                  const srcClass =
-                    m.classId && m.classId !== classId
-                      ? (classes.find((c) => c.id === m.classId)?.name ?? '')
-                      : '';
-                  const hint = [srcClass, usageLabel(m)].filter(Boolean).join(' · ');
-                  return (
-                    <div key={m.id} className="tokensearch__opt" style={{ cursor: 'default' }}>
-                      <MIcon name={mt.icon} size={16} />
-                      <span style={{ flex: 1, textAlign: 'left' }}>
-                        {m.title}
-                        {hint && (
-                          <span
-                            className="m-muted"
-                            style={{ fontSize: 'var(--text-sm)', marginLeft: 6 }}
-                          >
-                            {hint}
-                          </span>
-                        )}
-                      </span>
-                      <CBtn variant="secondary" size="sm" onClick={() => pickEvent(m)}>
-                        {t('ev_mat_btn_event')}
-                      </CBtn>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="tokensearch__empty">
-                  {ql ? t('ts_no_match', { q }) : t('ts_nothing_left')}
-                </div>
-              )}
-            </div>,
-            document.body,
-          )}
-      </div>
+      <MaterialSearchDropdown
+        items={candidates}
+        placeholder={t('ev_mat_search_ph')}
+        hint={(m) => {
+          const srcClass =
+            m.classId && m.classId !== classId
+              ? (classes.find((c) => c.id === m.classId)?.name ?? '')
+              : '';
+          return [srcClass, usageLabel(m)].filter(Boolean).join(' · ');
+        }}
+        renderAction={(m) => (
+          <CBtn variant="secondary" size="sm" onClick={() => pickEvent(m)}>
+            {t('mat_btn_add')}
+          </CBtn>
+        )}
+      />
       {classMats.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 6 }}>

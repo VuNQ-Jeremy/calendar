@@ -4,6 +4,7 @@ import { DS } from '../ds/index.js';
 import { Empty } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { MaterialPreview } from './material-preview.jsx';
+import { useCachedLoad } from '../lib/use-cached-load.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { MaterialRow } from '../../server/services/materials.js';
@@ -23,36 +24,38 @@ type Selected = { kind: 'hw'; id: string } | { kind: 'mat'; id: string } | null;
 
 export function HomeworkTab({ eventId, classId, classes, students, materials }: HomeworkTabProps) {
   const { t } = useLang();
-  const hwFetcher = useFetcher<{ homework: HomeworkRow[]; grades: GradeRow[] }>();
-  const attachedFetcher = useFetcher<{ materialIds: string[] }>();
+  const { data: hwData } = useCachedLoad<{ homework: HomeworkRow[]; grades: GradeRow[] }>(
+    'hw:modal',
+    '/homework',
+  );
+  const { data: attachedData } = useCachedLoad<{ materialIds: string[] }>(
+    `evmat:${eventId}`,
+    `/event-materials?eventId=${encodeURIComponent(eventId)}`,
+  );
   const [query, setQuery] = React.useState('');
   const [selected, setSelected] = React.useState<Selected>(null);
   // Local copy of grades so save results can be merged without a full reload
-  // (fetcher.load data is NOT revalidated after another fetcher's action).
+  // (the /homework route clientAction invalidates the cache on grade save,
+  // so the next modal open refetches fresh, but this session keeps the
+  // just-saved rows visible without waiting on that refetch).
   const [grades, setGrades] = React.useState<GradeRow[]>([]);
 
   React.useEffect(() => {
-    hwFetcher.load('/homework');
-    attachedFetcher.load(`/event-materials?eventId=${encodeURIComponent(eventId)}`);
+    if (hwData) setGrades(hwData.grades);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
-
-  React.useEffect(() => {
-    if (hwFetcher.data) setGrades(hwFetcher.data.grades);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hwFetcher.data]);
+  }, [hwData]);
 
   const roster = (classes.find((c) => c.id === classId)?.studentIds ?? [])
     .map((sid) => students.find((s) => s.id === sid))
     .filter((s): s is StudentRow => !!s);
 
   const q = query.trim().toLowerCase();
-  const hwList = (hwFetcher.data?.homework ?? [])
+  const hwList = (hwData?.homework ?? [])
     .filter((h) => h.classId === classId)
     .filter((h) => !q || h.title.toLowerCase().includes(q))
     .sort((a, b) => (b.due ?? '').localeCompare(a.due ?? ''));
 
-  const attachedIds = attachedFetcher.data?.materialIds ?? [];
+  const attachedIds = attachedData?.materialIds ?? [];
   const classMats = materials
     .filter((m) => m.classId === classId)
     .filter((m) => !q || m.title.toLowerCase().includes(q))

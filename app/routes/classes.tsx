@@ -1,4 +1,9 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { ClassesScreen } from '../../src/screens-manage/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
@@ -8,6 +13,9 @@ import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import * as homeworkSvc from '../../server/services/homework';
 import { ClassInput, parsePatch } from '../../shared/schemas';
+import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
+
+const CACHE_KEY = 'route:classes';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -20,6 +28,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     homeworkSvc.list(db),
   ]);
   return { classes, students, materials, homework };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -58,6 +74,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:');
+  }
 }
 
 export default function Classes() {

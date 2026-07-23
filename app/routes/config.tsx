@@ -1,10 +1,18 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { SystemConfigScreen } from '../../src/screens-config.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
 import { AssessmentTypeInput, AssessmentTypeReorder, parsePatch } from '../../shared/schemas';
+import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
+
+const CACHE_KEY = 'route:config';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -12,6 +20,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = createDb(env);
   const types = await typesSvc.list(db);
   return { types };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 function preprocessRaw(raw: Record<string, unknown>) {
@@ -76,6 +92,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:');
+  }
 }
 
 export default function Config() {

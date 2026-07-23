@@ -1,4 +1,9 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { MaterialsScreen } from '../../src/screens-extra.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
@@ -6,8 +11,10 @@ import { requireUser } from '../../server/services/auth';
 import * as materialsSvc from '../../server/services/materials';
 import * as classesSvc from '../../server/services/classes';
 import { MaterialInput, parsePatch } from '../../shared/schemas';
+import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
+const CACHE_KEY = 'route:materials';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -15,6 +22,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = createDb(env);
   const [materials, classes] = await Promise.all([materialsSvc.list(db), classesSvc.listLite(db)]);
   return { materials, classes };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 function preprocessMatRaw(raw: Record<string, unknown>) {
@@ -69,6 +84,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:', 'evmat:');
+  }
 }
 
 export default function Materials() {

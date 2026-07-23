@@ -1,6 +1,6 @@
 import React from 'react';
 import { useOutletContext, useFetcher } from 'react-router';
-import type { ActionFunctionArgs } from 'react-router';
+import type { ActionFunctionArgs, ClientActionFunctionArgs } from 'react-router';
 import { ProfileScreen } from '../../src/screens-extra.jsx';
 import type { AppContext } from './_app.js';
 import { createDb } from '../../server/db/index';
@@ -10,6 +10,7 @@ import { sessionCookie } from '../../server/session';
 import { hashToken } from '../../server/services/crypto';
 import * as peopleSvc from '../../server/services/people';
 import { ColorId } from '../../shared/schemas';
+import { invalidate } from '../../src/lib/cache.js';
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -60,6 +61,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:');
+  }
 }
 
 export default function Profile() {

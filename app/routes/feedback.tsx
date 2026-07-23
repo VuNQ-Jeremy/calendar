@@ -1,4 +1,9 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientLoaderFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { useOutletContext } from 'react-router';
 import { FeedbackScreen } from '../../src/feedback.jsx';
 import type { AppContext } from './_app.js';
@@ -7,6 +12,9 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
 import { FeedbackInput, parsePatch } from '../../shared/schemas';
+import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
+
+const CACHE_KEY = 'route:feedback';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -14,6 +22,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = createDb(env);
   const feedback = await feedbackSvc.list(db);
   return { feedback };
+}
+
+export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  if (cached !== undefined) return cached;
+  const data = await serverLoader();
+  cacheSet(CACHE_KEY, data);
+  return data;
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -48,6 +64,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
+}
+
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  try {
+    return await serverAction();
+  } finally {
+    invalidate('route:');
+  }
 }
 
 export default function Feedback() {
