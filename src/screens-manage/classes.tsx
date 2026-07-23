@@ -3,8 +3,10 @@ import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { Modal, ColorPicker, PageHeader, useConfirm } from '../ui.jsx';
+import { MaterialSearchDropdown } from '../material-search.jsx';
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
+import { MAT_TYPES } from '../lib/mat-types.js';
 import type { IconName } from '../icons.jsx';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
@@ -156,6 +158,7 @@ export function ClassesScreen() {
       {detail && (
         <ClassDetailModal
           cls={detail}
+          classes={classes}
           students={students}
           materials={materials}
           homework={homework}
@@ -173,6 +176,7 @@ export function ClassesScreen() {
 
 interface ClassDetailModalProps {
   cls: ClassRow;
+  classes: ClassRow[];
   students: StudentRow[];
   materials: MaterialRow[];
   homework: HomeworkRow[];
@@ -182,6 +186,7 @@ interface ClassDetailModalProps {
 
 function ClassDetailModal({
   cls,
+  classes,
   students,
   materials,
   homework,
@@ -189,10 +194,30 @@ function ClassDetailModal({
   onEdit,
 }: ClassDetailModalProps) {
   const { t } = useLang();
+  const matFetcher = useFetcher();
+  const [ov, setOv] = React.useState<
+    Record<string, { scope: 'class' | 'event'; classId: string | null }>
+  >({});
+  const effScope = (m: MaterialRow) => ov[m.id]?.scope ?? m.scope;
+  const effClassId = (m: MaterialRow) => (ov[m.id] ? ov[m.id].classId : m.classId);
+  const isClassMat = (m: MaterialRow) => effScope(m) === 'class' && effClassId(m) === cls.id;
+
   const roster = students.filter((s) => cls.studentIds.includes(s.id));
-  const clsMaterials = materials.filter((m) => m.classId === cls.id);
+  const clsMaterials = materials.filter(isClassMat);
   const clsHomework = homework.filter((h) => h.classId === cls.id);
   const openHw = clsHomework.filter((h) => !h.done).length;
+
+  const setScope = (m: MaterialRow, scope: 'class' | 'event', moveToClass = false) => {
+    setOv((p) => ({ ...p, [m.id]: { scope, classId: moveToClass ? cls.id : effClassId(m) } }));
+    const fd = new FormData();
+    fd.set('intent', 'update');
+    fd.set('id', m.id);
+    fd.set('scope', scope);
+    if (moveToClass) fd.set('classId', cls.id);
+    matFetcher.submit(fd, { action: '/materials', method: 'post' });
+  };
+  const attachClass = (m: MaterialRow) => setScope(m, 'class', effClassId(m) !== cls.id);
+  const detachClass = (m: MaterialRow) => setScope(m, 'event');
 
   const Stat = (icon: IconName, label: string, val: number) => (
     <div
@@ -263,10 +288,7 @@ function ClassDetailModal({
         {t('cls_roster_n', { n: roster.length })}
       </div>
       {roster.length ? (
-        <div
-          className="m-grid cols-2"
-          style={{ gap: 8, marginBottom: clsMaterials.length ? 20 : 0 }}
-        >
+        <div className="m-grid cols-2" style={{ gap: 8, marginBottom: 20 }}>
           {roster.map((s) => (
             <div key={s.id} className="m-row" style={{ gap: 10, padding: '6px 4px' }}>
               <MAv name={s.name} color={s.color} size="sm" />
@@ -283,23 +305,39 @@ function ClassDetailModal({
           {t('cls_no_students_assigned')}
         </span>
       )}
+      <div className="mochi-eyebrow" style={{ margin: '4px 0 8px' }}>
+        {t('cls_materials_n', { n: clsMaterials.length })}
+      </div>
+      <MaterialSearchDropdown
+        items={materials.filter((m) => !isClassMat(m))}
+        placeholder={t('ev_mat_search_ph')}
+        hint={(m) => {
+          const src = effClassId(m);
+          return src && src !== cls.id ? (classes.find((c) => c.id === src)?.name ?? '') : '';
+        }}
+        renderAction={(m) => (
+          <MBtn variant="secondary" size="sm" onClick={() => attachClass(m)}>
+            {t('mat_btn_add')}
+          </MBtn>
+        )}
+      />
       {clsMaterials.length > 0 && (
-        <>
-          <div className="mochi-eyebrow" style={{ margin: '4px 0 8px' }}>
-            {t('cls_materials_n', { n: clsMaterials.length })}
-          </div>
-          <div className="tablebar">
-            {clsMaterials.map((m) => (
-              <span key={m.id} className="mchip">
-                <MIcon
-                  name={m.type === 'link' ? 'link' : m.type === 'video' ? 'video' : 'file'}
-                  size={12}
-                />
-                {m.title}
-              </span>
-            ))}
-          </div>
-        </>
+        <div className="m-stack" style={{ gap: 6, marginTop: 10 }}>
+          {clsMaterials.map((m) => {
+            const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
+            return (
+              <div key={m.id} className="lrow" style={{ border: '1.5px solid var(--border-subtle)' }}>
+                <MIcon name={mt.icon} size={16} />
+                <span style={{ flex: 1 }} className="lrow__title">
+                  {m.title}
+                </span>
+                <MIB label={t('delete')} size="sm" onClick={() => detachClass(m)}>
+                  <MIcon name="x" size={14} />
+                </MIB>
+              </div>
+            );
+          })}
+        </div>
       )}
     </Modal>
   );
