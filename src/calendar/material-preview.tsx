@@ -49,14 +49,28 @@ function DocxView({ id }: { id: string }) {
   }, [id]);
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+        border: '1.5px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-md)',
+        padding: 'var(--space-4)',
+      }}
+    >
       {state === 'loading' && (
         <div className="m-muted" style={{ padding: 'var(--space-4)' }}>
           {t('mat_preview_loading')}
         </div>
       )}
       {state === 'error' && <Empty icon="file" title={t('mat_preview_unsupported')} />}
-      <div ref={ref} style={{ display: state === 'ready' ? 'block' : 'none' }} />
+      {/* position: relative — absolutely positioned document elements (text
+          frames) must anchor to this container, not escape the modal. */}
+      <div
+        ref={ref}
+        style={{ position: 'relative', display: state === 'ready' ? 'block' : 'none' }}
+      />
     </div>
   );
 }
