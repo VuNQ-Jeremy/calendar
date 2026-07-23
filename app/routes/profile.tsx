@@ -26,12 +26,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const phone = formData.get('phone') as string | null;
     const colorRaw = formData.get('color') as string | null;
     const colorParsed = ColorId.safeParse(colorRaw);
-    await peopleSvc.updateStaff(db, user.id, {
-      ...(name ? { name } : {}),
-      ...(email !== null ? { email: email || null } : {}),
-      ...(phone !== null ? { phone: phone || null } : {}),
-      ...(colorParsed.success ? { color: colorParsed.data } : {}),
-    });
+    if (sessionUser.kind === 'student') {
+      await peopleSvc.updateStudent(db, user.id, {
+        ...(name ? { name } : {}),
+        ...(email !== null ? { email: email || null } : {}),
+        ...(colorParsed.success ? { color: colorParsed.data } : {}),
+      });
+    } else {
+      await peopleSvc.updateStaff(db, user.id, {
+        ...(name ? { name } : {}),
+        ...(email !== null ? { email: email || null } : {}),
+        ...(phone !== null ? { phone: phone || null } : {}),
+        ...(colorParsed.success ? { color: colorParsed.data } : {}),
+      });
+    }
     return { ok: true };
   }
 

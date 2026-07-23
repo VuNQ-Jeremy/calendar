@@ -299,3 +299,69 @@ export const homeworkGrades = sqliteTable(
     unique('uq_homework_grades').on(t.homeworkId, t.studentId),
   ],
 );
+
+export const flashcardTopics = sqliteTable('flashcard_topics', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  color: text('color').notNull().default('violet'),
+  createdAt: text('created_at'),
+});
+
+export const flashcardWords = sqliteTable(
+  'flashcard_words',
+  {
+    id: text('id').primaryKey(),
+    topicId: text('topic_id')
+      .notNull()
+      .references(() => flashcardTopics.id, { onDelete: 'cascade' }),
+    word: text('word').notNull(),
+    meaningVi: text('meaning_vi').notNull(),
+    definitionEn: text('definition_en'),
+    ipa: text('ipa'),
+    audioUrl: text('audio_url'),
+    createdAt: text('created_at'),
+  },
+  (t) => [index('idx_flashcard_words_topic').on(t.topicId)],
+);
+
+export const flashcardResults = sqliteTable(
+  'flashcard_results',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    topicId: text('topic_id')
+      .notNull()
+      .references(() => flashcardTopics.id, { onDelete: 'cascade' }),
+    mode: text('mode').notNull(),
+    score: integer('score').notNull(),
+    total: integer('total').notNull(),
+    durationMs: integer('duration_ms'),
+    playedAt: text('played_at').notNull(),
+  },
+  (t) => [
+    index('idx_flashcard_results_topic').on(t.topicId, t.playedAt),
+    index('idx_flashcard_results_student').on(t.studentId, t.playedAt),
+  ],
+);
+
+export const flashcardMastery = sqliteTable(
+  'flashcard_mastery',
+  {
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    wordId: text('word_id')
+      .notNull()
+      .references(() => flashcardWords.id, { onDelete: 'cascade' }),
+    correct: integer('correct').notNull().default(0),
+    wrong: integer('wrong').notNull().default(0),
+    lastSeen: text('last_seen'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.studentId, t.wordId] }),
+    index('idx_flashcard_mastery_word').on(t.wordId),
+  ],
+);

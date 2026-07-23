@@ -212,6 +212,43 @@ export const BehaviorRecordInput = z.object({
 });
 export type BehaviorRecordInput = z.infer<typeof BehaviorRecordInput>;
 
+export const FlashcardTopicInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().max(1000).nullish(),
+  color: ColorId.default('violet'),
+});
+export type FlashcardTopicInput = z.infer<typeof FlashcardTopicInput>;
+
+export const FlashcardWordInput = z.object({
+  word: z.string().trim().min(1).max(100),
+  meaningVi: z.string().trim().min(1).max(500),
+  definitionEn: z.string().max(1000).nullish(),
+  ipa: z.string().max(200).nullish(),
+  audioUrl: z.string().max(2000).nullish(),
+});
+export type FlashcardWordInput = z.infer<typeof FlashcardWordInput>;
+
+export const FlashcardImportInput = z.object({
+  words: z.array(FlashcardWordInput).min(1).max(200),
+});
+export type FlashcardImportInput = z.infer<typeof FlashcardImportInput>;
+
+export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);
+export type FlashcardMode = z.infer<typeof FlashcardMode>;
+
+export const FlashcardResultInput = z.object({
+  topicId: z.string().min(1),
+  mode: FlashcardMode,
+  score: z.coerce.number().int().min(0),
+  total: z.coerce.number().int().min(1),
+  durationMs: z.coerce.number().int().min(0).nullish(),
+  answers: z
+    .array(z.object({ wordId: z.string().min(1), correct: z.boolean() }))
+    .max(500)
+    .default([]),
+});
+export type FlashcardResultInput = z.infer<typeof FlashcardResultInput>;
+
 export const ThemeInput = z.object({
   bg: z
     .string()

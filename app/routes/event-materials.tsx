@@ -1,13 +1,13 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
 import { EventMaterialsSaveInput } from '../../shared/schemas';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const url = new URL(request.url);
   const eventId = url.searchParams.get('eventId');
@@ -18,7 +18,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;

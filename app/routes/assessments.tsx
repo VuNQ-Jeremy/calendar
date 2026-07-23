@@ -7,7 +7,7 @@ import type {
 import { AssessmentsScreen } from '../../src/screens-assessments.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import * as assessSvc from '../../server/services/assessments';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
@@ -19,7 +19,7 @@ const CACHE_KEY = 'route:assessments';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const [scores, behavior, students, classes, types] = await Promise.all([
     assessSvc.listScores(db),
@@ -49,7 +49,7 @@ function preprocessRaw(raw: Record<string, unknown>) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;

@@ -8,7 +8,7 @@ import { CalendarScreen } from '../../src/calendar/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as eventsSvc from '../../server/services/events';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as themeSvc from '../../server/services/theme';
@@ -22,7 +22,7 @@ const CACHE_KEY = 'route:calendar';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const [events, classes, students, theme, materials, eventMaterials] = await Promise.all([
     eventsSvc.list(db),
@@ -45,7 +45,7 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;

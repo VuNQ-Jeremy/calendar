@@ -9,7 +9,7 @@ import { FeedbackScreen } from '../../src/feedback.jsx';
 import type { AppContext } from './_app.js';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
 import { FeedbackInput, parsePatch } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
@@ -18,7 +18,7 @@ const CACHE_KEY = 'route:feedback';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const feedback = await feedbackSvc.list(db);
   return { feedback };
@@ -34,7 +34,7 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;

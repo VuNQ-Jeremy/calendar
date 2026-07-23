@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { LoaderFunctionArgs } from 'react-router';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import { materials } from '../../server/db/schema';
 
 const EXT_MIME: Record<string, string> = {
@@ -25,7 +25,7 @@ function guessMime(fileName: string | null): string | null {
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
 
   const rows = await db.select().from(materials).where(eq(materials.id, params.id!));

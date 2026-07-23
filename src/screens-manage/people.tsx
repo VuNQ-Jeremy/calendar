@@ -9,6 +9,7 @@ import { useLang } from '../lib/i18n.jsx';
 import type { ClassLite } from '../../server/services/classes.js';
 import type { StudentRow, StaffRow, ParentRow } from '../../server/services/people.js';
 import type { InviteRow } from '../../server/services/invites.js';
+import type { StudentFlashcardStats } from '../../server/services/flashcards.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv } = DS;
 
@@ -18,6 +19,7 @@ interface PeopleLoaderData {
   parents: ParentRow[];
   invites: InviteRow[];
   classes: ClassLite[];
+  flashcardStats: StudentFlashcardStats[];
 }
 
 type StudentDraft = {
@@ -50,7 +52,8 @@ type ParentDraft = {
 };
 
 export function StudentsScreen() {
-  const { students, staff, parents, invites, classes } = useLoaderData() as PeopleLoaderData;
+  const { students, staff, parents, invites, classes, flashcardStats } =
+    useLoaderData() as PeopleLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
   const relLabel = (r: string | null | undefined) =>
@@ -379,6 +382,7 @@ export function StudentsScreen() {
           onClose={() => setModal(null)}
           onSave={save}
           classes={classes}
+          stats={modal.id ? flashcardStats.find((s) => s.studentId === modal.id) : undefined}
         />
       )}
       {staffModal && (
@@ -410,9 +414,10 @@ interface StudentModalProps {
   onClose: () => void;
   onSave: (f: StudentDraft) => void;
   classes: ClassLite[];
+  stats?: StudentFlashcardStats;
 }
 
-function StudentModal({ draft, setDraft, onClose, onSave, classes }: StudentModalProps) {
+function StudentModal({ draft, setDraft, onClose, onSave, classes, stats }: StudentModalProps) {
   const { t } = useLang();
   const set = <K extends keyof StudentDraft>(k: K, v: StudentDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
@@ -495,6 +500,45 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes }: StudentModa
           emptyHint={t('sm_all_classes_added')}
         />
       </div>
+      {draft.id && (
+        <>
+          <hr className="divider" />
+          <label className="mochi-field__label">{t('nav_flashcards')}</label>
+          {stats ? (
+            <div className="m-row" style={{ gap: 20, marginTop: 8, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{stats.rounds}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                  {t('fc_stats_rounds')}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{stats.avgPct}%</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                  {t('fc_stats_avg')}
+                </div>
+              </div>
+              {stats.lastPlayedAt && (
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-strong)' }}>
+                    {new Date(stats.lastPlayedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                    {t('fc_stats_last')}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>
+              {t('fc_stats_none')}
+            </div>
+          )}
+        </>
+      )}
     </Modal>
   );
 }

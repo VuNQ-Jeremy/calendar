@@ -38,33 +38,49 @@ const NAV = [
   {
     tk: 'nav_overview',
     items: [
-      { id: 'dashboard', path: '/dashboard', tk: 'nav_dashboard', icon: 'home' },
-      { id: 'calendar', path: '/calendar', tk: 'nav_calendar', icon: 'calendar' },
+      { id: 'dashboard', path: '/dashboard', tk: 'nav_dashboard', icon: 'home', staffOnly: true },
+      { id: 'calendar', path: '/calendar', tk: 'nav_calendar', icon: 'calendar', staffOnly: true },
     ],
   },
   {
     tk: 'nav_manage',
     items: [
-      { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book' },
-      { id: 'people', path: '/people', tk: 'nav_people', icon: 'users' },
-      { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder' },
-      { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard' },
-      { id: 'assessments', path: '/assessments', tk: 'nav_assessments', icon: 'chart' },
+      { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book', staffOnly: true },
+      { id: 'people', path: '/people', tk: 'nav_people', icon: 'users', staffOnly: true },
+      { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder', staffOnly: true },
+      { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard', staffOnly: true },
+      {
+        id: 'assessments',
+        path: '/assessments',
+        tk: 'nav_assessments',
+        icon: 'chart',
+        staffOnly: true,
+      },
+      { id: 'flashcards', path: '/flashcards', tk: 'nav_flashcards', icon: 'cards' },
       {
         id: 'config',
         path: '/config',
         tk: 'nav_config',
         icon: 'settings',
         adminOnly: true,
+        staffOnly: true,
       },
-      { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message' },
+      { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message', staffOnly: true },
     ],
   },
 ];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user } = await requireUser(request, env);
+  const { user, kind } = await requireUser(request, env);
+  if (kind === 'student') {
+    return {
+      homeworkDueCount: 0,
+      unusedInviteCount: 0,
+      newFeedbackCount: 0,
+      user: { ...user, kind },
+    };
+  }
   const db = createDb(env);
   const today = iso(TODAY);
   const [homeworkDueCount, unusedInviteCount, newFeedbackCount] = await Promise.all([
@@ -72,7 +88,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     invitesSvc.countUnused(db),
     feedbackSvc.countNew(db),
   ]);
-  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, user };
+  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, user: { ...user, kind } };
 }
 
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
@@ -109,12 +125,17 @@ function Sidebar({
           </ShIB>
         </span>
       </div>
-      {NAV.map((sec) => (
-        <div key={sec.tk}>
-          <div className="sb__section">{t(sec.tk)}</div>
-          {sec.items
-            .filter((n) => !('adminOnly' in n) || !n.adminOnly || user.role === 'Admin')
-            .map((n) => (
+      {NAV.map((sec) => {
+        const items = sec.items.filter(
+          (n) =>
+            (!('staffOnly' in n) || !n.staffOnly || user.kind === 'staff') &&
+            (!('adminOnly' in n) || !n.adminOnly || user.role === 'Admin'),
+        );
+        if (items.length === 0) return null;
+        return (
+          <div key={sec.tk}>
+            <div className="sb__section">{t(sec.tk)}</div>
+            {items.map((n) => (
               <NavLink
                 key={n.id}
                 to={n.path}
@@ -129,15 +150,18 @@ function Sidebar({
                 )}
               </NavLink>
             ))}
-        </div>
-      ))}
+          </div>
+        );
+      })}
       <div className="sb__langbar">
         <LanguageToggle />
       </div>
-      <button className="sb__cta" onClick={onFeedback} title={t('cta_feedback')}>
-        <MIcon name="message" size={18} />
-        <span>{t('cta_feedback')}</span>
-      </button>
+      {user.kind === 'staff' && (
+        <button className="sb__cta" onClick={onFeedback} title={t('cta_feedback')}>
+          <MIcon name="message" size={18} />
+          <span>{t('cta_feedback')}</span>
+        </button>
+      )}
       <NavLink
         to="/profile"
         className={({ isActive }) => 'sb__foot' + (isActive ? ' is-active' : '')}

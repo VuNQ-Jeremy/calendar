@@ -7,10 +7,11 @@ import type {
 import { StudentsScreen } from '../../src/screens-manage/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import * as peopleSvc from '../../server/services/people';
 import * as invitesSvc from '../../server/services/invites';
 import * as classesSvc from '../../server/services/classes';
+import * as flashcardsSvc from '../../server/services/flashcards';
 import {
   StudentInput,
   StaffInput,
@@ -24,16 +25,17 @@ const CACHE_KEY = 'route:people';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
-  const [students, staff, parents, invites, classes] = await Promise.all([
+  const [students, staff, parents, invites, classes, flashcardStats] = await Promise.all([
     peopleSvc.listStudents(db),
     peopleSvc.listStaff(db),
     peopleSvc.listParents(db),
     invitesSvc.list(db),
     classesSvc.listLite(db),
+    flashcardsSvc.studentFlashcardStats(db),
   ]);
-  return { students, staff, parents, invites, classes };
+  return { students, staff, parents, invites, classes, flashcardStats };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -46,7 +48,7 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const entity = formData.get('entity') as string;

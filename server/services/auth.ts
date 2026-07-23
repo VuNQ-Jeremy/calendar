@@ -19,6 +19,7 @@ const DUMMY_HASH =
   'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 export type SessionUser = {
+  kind: 'staff' | 'student';
   account: { id: string; email: string };
   user: {
     id: string;
@@ -60,24 +61,47 @@ export async function getUser(request: Request, env: Env): Promise<SessionUser |
   const accountRow = await db.query.accounts.findFirst({
     where: eq(accounts.id, sessionRow.accountId),
   });
-  if (!accountRow?.staffId) return null;
+  if (!accountRow) return null;
 
-  const staffRow = await db.query.staff.findFirst({
-    where: eq(staff.id, accountRow.staffId),
-  });
-  if (!staffRow) return null;
+  if (accountRow.staffId) {
+    const staffRow = await db.query.staff.findFirst({
+      where: eq(staff.id, accountRow.staffId),
+    });
+    if (!staffRow) return null;
+    return {
+      kind: 'staff',
+      account: { id: accountRow.id, email: accountRow.email },
+      user: {
+        id: staffRow.id,
+        name: staffRow.name,
+        email: staffRow.email ?? null,
+        role: staffRow.role,
+        color: staffRow.color,
+        phone: staffRow.phone ?? null,
+      },
+    };
+  }
 
-  return {
-    account: { id: accountRow.id, email: accountRow.email },
-    user: {
-      id: staffRow.id,
-      name: staffRow.name,
-      email: staffRow.email ?? null,
-      role: staffRow.role,
-      color: staffRow.color,
-      phone: staffRow.phone ?? null,
-    },
-  };
+  if (accountRow.studentId) {
+    const studentRow = await db.query.students.findFirst({
+      where: eq(students.id, accountRow.studentId),
+    });
+    if (!studentRow) return null;
+    return {
+      kind: 'student',
+      account: { id: accountRow.id, email: accountRow.email },
+      user: {
+        id: studentRow.id,
+        name: studentRow.name,
+        email: studentRow.email ?? null,
+        role: 'Student',
+        color: studentRow.color,
+        phone: null,
+      },
+    };
+  }
+
+  return null; // parent accounts remain unsupported
 }
 
 export async function requireUser(request: Request, env: Env): Promise<SessionUser> {
@@ -96,8 +120,14 @@ export async function requireUser(request: Request, env: Env): Promise<SessionUs
   return user;
 }
 
-export async function requireAdmin(request: Request, env: Env): Promise<SessionUser> {
+export async function requireStaff(request: Request, env: Env): Promise<SessionUser> {
   const sessionUser = await requireUser(request, env);
+  if (sessionUser.kind !== 'staff') throw redirect('/flashcards');
+  return sessionUser;
+}
+
+export async function requireAdmin(request: Request, env: Env): Promise<SessionUser> {
+  const sessionUser = await requireStaff(request, env);
   if (sessionUser.user.role !== 'Admin') {
     throw Response.json({ error: 'forbidden' }, { status: 403 });
   }

@@ -13,6 +13,7 @@ const TEST_USER = {
   color: 'orange',
   email: 'test@school.edu',
   phone: null,
+  kind: 'staff' as const,
 };
 
 const STUB_LOADER_DATA = {

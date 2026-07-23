@@ -7,7 +7,7 @@ import type {
 import { HomeworkScreen } from '../../src/screens-core.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireStaff } from '../../server/services/auth';
 import * as homeworkSvc from '../../server/services/homework';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
@@ -19,7 +19,7 @@ const CACHE_KEY = 'route:homework';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const [homework, classes, students, grades, types] = await Promise.all([
     homeworkSvc.list(db),
@@ -49,7 +49,7 @@ function preprocessHwRaw(raw: Record<string, unknown>) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireUser(request, env);
+  await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;

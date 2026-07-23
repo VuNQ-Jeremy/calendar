@@ -16,6 +16,8 @@ export default [
     route('materials', 'routes/materials.tsx'),
     route('homework', 'routes/homework.tsx'),
     route('assessments', 'routes/assessments.tsx'),
+    route('flashcards', 'routes/flashcards.tsx'),
+    route('flashcards/:topicId', 'routes/flashcards.$topicId.tsx'),
     route('config', 'routes/config.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),

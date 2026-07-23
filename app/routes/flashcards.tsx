@@ -4,24 +4,22 @@ import type {
   ClientLoaderFunctionArgs,
   ClientActionFunctionArgs,
 } from 'react-router';
-import { MaterialsScreen } from '../../src/screens-extra.jsx';
+import { FlashcardTopicsScreen } from '../../src/flashcards/index.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireStaff } from '../../server/services/auth';
-import * as materialsSvc from '../../server/services/materials';
-import * as classesSvc from '../../server/services/classes';
-import { MaterialInput, parsePatch } from '../../shared/schemas';
+import { requireUser, requireStaff } from '../../server/services/auth';
+import * as flashcardsSvc from '../../server/services/flashcards';
+import { FlashcardTopicInput, parsePatch } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
-const CACHE_KEY = 'route:materials';
+const CACHE_KEY = 'route:flashcards';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
+  const { kind } = await requireUser(request, env);
   const db = createDb(env);
-  const [materials, classes] = await Promise.all([materialsSvc.list(db), classesSvc.listLite(db)]);
-  return { materials, classes };
+  const topics = await flashcardsSvc.listTopics(db);
+  return { topics, kind };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -32,16 +30,9 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
   return data;
 }
 
-function preprocessMatRaw(raw: Record<string, unknown>) {
-  const out = { ...raw };
-  if (typeof out.favorite === 'string') out.favorite = out.favorite === 'true';
-  if (out.classId === '') out.classId = null;
-  return out;
-}
-
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
+  await requireStaff(request, env); // topic CRUD is staff-only
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
@@ -49,37 +40,25 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    await materialsSvc.remove(db, id, env.FILES);
+    await flashcardsSvc.removeTopic(db, id);
     return { ok: true };
   }
 
-  // Extract file upload if present
-  const fileRaw = formData.get('file');
-  const file = fileRaw instanceof File && fileRaw.size > 0 ? fileRaw : undefined;
-
-  if (file && file.size > MAX_FILE_SIZE) {
-    return Response.json(
-      { errors: { fieldErrors: { file: ['File exceeds 20 MB limit'] } } },
-      { status: 400 },
-    );
-  }
-
-  const raw = preprocessMatRaw(Object.fromEntries(formData) as Record<string, unknown>);
-  // Remove the file entry from raw so it doesn't interfere with schema validation
-  delete (raw as Record<string, unknown>).file;
+  const raw = Object.fromEntries(formData) as Record<string, unknown>;
+  if (raw.description === '') raw.description = null;
 
   if (intent === 'create') {
-    const parsed = MaterialInput.safeParse(raw);
+    const parsed = FlashcardTopicInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await materialsSvc.create(db, parsed.data, file, env.FILES);
+    await flashcardsSvc.createTopic(db, parsed.data);
     return { ok: true };
   }
 
   if (intent === 'update') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    const parsed = parsePatch(MaterialInput, raw);
+    const parsed = parsePatch(FlashcardTopicInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await materialsSvc.update(db, id, parsed.data, file, env.FILES);
+    await flashcardsSvc.updateTopic(db, id, parsed.data);
     return { ok: true };
   }
 
@@ -90,10 +69,10 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {
     return await serverAction();
   } finally {
-    invalidate('route:', 'evmat:');
+    invalidate('route:flashcards');
   }
 }
 
-export default function Materials() {
-  return <MaterialsScreen />;
+export default function Flashcards() {
+  return <FlashcardTopicsScreen />;
 }
