@@ -184,6 +184,7 @@ body {
   margin: var(--space-6) 0 0;
 }
 .auth-error {
+  background: rgba(220, 106, 82, 0.12); /* --danger at 12% */
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: #a23a25;
   border-radius: var(--radius-md);
@@ -488,7 +489,9 @@ body {
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-8);
+  background: var(--bg-page);
   background: color-mix(in srgb, var(--bg-page) 85%, transparent);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border-bottom: var(--border-width) solid var(--border-subtle);
 }
@@ -910,6 +913,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(58, 49, 42, 0.38);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
@@ -1029,6 +1033,7 @@ body {
   position: fixed;
   inset: 0;
   background: rgba(58, 49, 42, 0.38);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   display: flex;
   justify-content: flex-end;
