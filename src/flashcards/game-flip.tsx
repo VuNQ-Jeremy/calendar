@@ -98,6 +98,8 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
             width: '100%',
             aspectRatio: '3 / 2',
             cursor: 'pointer',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
             transformStyle: 'preserve-3d',
             transition: 'transform .4s',
             transform: flipped ? 'rotateY(180deg)' : 'none',
