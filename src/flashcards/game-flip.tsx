@@ -370,6 +370,9 @@ const playWrap: React.CSSProperties = {
   justifyContent: 'center',
   gap: 20,
   padding: 24,
+  // The fly-out transform extends far past the viewport; without this the page
+  // briefly grows a horizontal scrollbar as the card exits.
+  overflowX: 'clip',
 };
 
 const endWrap: React.CSSProperties = {
