@@ -17,7 +17,7 @@
     "db:migrate": "wrangler d1 migrations apply mochi-class --remote",
     "db:seed:local": "wrangler d1 execute mochi-class --local --file=./seed.sql",
     "db:seed": "wrangler d1 execute mochi-class --remote --file=./seed.sql",
-    "lint": "oxlint src worker workers app",
+    "lint": "oxlint src worker workers app shared scripts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run && vitest run --config vitest.workers.config.js",

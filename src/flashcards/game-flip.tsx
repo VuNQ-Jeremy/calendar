@@ -5,24 +5,20 @@ import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
 import { shuffle, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
+import {
+  COMMIT_RATIO,
+  DRAG_SLOP_PX,
+  EXIT_MS,
+  arcLift,
+  arcRotation,
+  shouldCommit,
+} from '../../shared/logic/flip-gesture';
 
 const { Button: FBtn, IconButton: FIB } = DS;
 
-// ---- Swipe gesture tuning ----
-const DRAG_SLOP_PX = 8; // movement before a press becomes a drag (below this it's a tap)
-const ROT_PER_PX = 0.07; // degrees of tilt per horizontal px dragged
-const MAX_ROT_DEG = 15;
-const ARC_K = 1 / 1600; // pendulum arc: dy = -(dx^2) * ARC_K (card rises as it moves sideways)
-const MAX_LIFT_PX = 140; // cap the rise so the exit toss doesn't fly off the top
-const COMMIT_RATIO = 0.35; // drag distance (fraction of card width) that commits the swipe
-const FLICK_VX = 0.5; // px/ms — a fast flick commits even below the distance threshold
-const EXIT_MS = 280; // fly-out duration
-
 /** Position on the pendulum arc for a horizontal drag offset. */
 function arcTransform(dx: number): string {
-  const rot = Math.max(-MAX_ROT_DEG, Math.min(MAX_ROT_DEG, dx * ROT_PER_PX));
-  const dy = -Math.min(MAX_LIFT_PX, dx * dx * ARC_K);
-  return `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+  return `translate(${dx}px, ${arcLift(dx)}px) rotate(${arcRotation(dx)}deg)`;
 }
 
 const cardEnterCss = `
@@ -184,10 +180,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     g.dragging = false;
     const el = dragRef.current;
     const width = el ? el.offsetWidth : 480;
-    const commit =
-      Math.abs(g.dx) > width * COMMIT_RATIO ||
-      (Math.abs(g.vx) > FLICK_VX && Math.sign(g.vx) === Math.sign(g.dx) && Math.abs(g.dx) > 24);
-    if (commit) flyOut(g.dx > 0);
+    if (shouldCommit(g.dx, g.vx, width)) flyOut(g.dx > 0);
     else settle();
   };
 
@@ -216,7 +209,9 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     const unknown = order.filter((w) => marks.get(w.id) !== true);
     return (
       <div style={endWrap}>
-        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800 }}>{t('fc_round_done')}</div>
+        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800 }}>
+          {t('fc_round_done')}
+        </div>
         <div style={{ fontSize: 'var(--text-lg, 22px)', color: 'var(--text-strong)' }}>
           {t('fc_score')}: {known}/{order.length}
         </div>
@@ -297,7 +292,9 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
             <div style={cardFace}>
               <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800 }}>{w.word}</div>
               {w.ipa && (
-                <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
+                <div
+                  style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}
+                >
                   {w.ipa}
                 </div>
               )}
@@ -313,7 +310,9 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
               </FIB>
             </div>
             <div style={{ ...cardFace, transform: 'rotateY(180deg)' }}>
-              <div style={{ fontSize: 'var(--text-lg, 24px)', fontWeight: 700 }}>{meaningOf(w)}</div>
+              <div style={{ fontSize: 'var(--text-lg, 24px)', fontWeight: 700 }}>
+                {meaningOf(w)}
+              </div>
               {w.meaningVi && w.definitionEn && (
                 <div style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: '80%' }}>
                   {w.definitionEn}
@@ -354,7 +353,11 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
         <FBtn variant="danger" iconLeft={<MIcon name="x" size={16} />} onClick={() => mark(false)}>
           {t('fc_unknown')}
         </FBtn>
-        <FBtn variant="primary" iconLeft={<MIcon name="check" size={16} />} onClick={() => mark(true)}>
+        <FBtn
+          variant="primary"
+          iconLeft={<MIcon name="check" size={16} />}
+          onClick={() => mark(true)}
+        >
           {t('fc_known')}
         </FBtn>
       </div>

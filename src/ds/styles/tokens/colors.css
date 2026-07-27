@@ -1,5 +1,7 @@
 /* ============================================================
    MOCHI · COLORS
+   MIRRORED in shared/tokens.ts for the mobile app, which cannot
+   read CSS custom properties. Change one, change the other.
    Warm, cozy, family-education palette.
    Primary = "Mochi orange" (the cat). Pastel accents for
    subject / category coding: violet, green, blue, + the orange.

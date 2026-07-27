@@ -7,3 +7,10 @@ build/
 .vite/
 .wrangler/
 .react-router/
+
+# Mobile app (Expo) — added in phase 0 so phase 2 can't commit these by accident.
+# mobile/ keeps its own node_modules: Metro fights hoisted workspace deps.
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/

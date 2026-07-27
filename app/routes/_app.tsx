@@ -94,7 +94,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     feedbackSvc.countNew(db),
     uiPrefsSvc.getUiPrefs(db),
   ]);
-  return { homeworkDueCount, unusedInviteCount, newFeedbackCount, uiPrefs, user: { ...user, kind } };
+  return {
+    homeworkDueCount,
+    unusedInviteCount,
+    newFeedbackCount,
+    uiPrefs,
+    user: { ...user, kind },
+  };
 }
 
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;

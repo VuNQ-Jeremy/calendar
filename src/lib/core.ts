@@ -50,16 +50,9 @@ export const ICON_TINT = (
 export const TODAY = new Date();
 TODAY.setHours(0, 0, 0, 0);
 
-export const iso = (d: Date | string | number): string => {
-  const x = new Date(d);
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-};
-
-export const addDays = (d: Date | string | number, n: number): Date => {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-};
+// Date helpers live in shared/logic/dates.ts so the mobile app uses the identical
+// implementations. Re-exported here — ~20 files import them from this module.
+export { iso, addDays, parseISO, startOfWeek, toMin, addMin } from '../../shared/logic/dates';
 
 export function makeCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

@@ -23,7 +23,10 @@ const CHANGELOG = join(root, 'CHANGELOG.md');
 
 const args = process.argv.slice(2);
 const isMajor = args.includes('--major');
-const message = args.filter((a) => a !== '--major').join(' ').trim();
+const message = args
+  .filter((a) => a !== '--major')
+  .join(' ')
+  .trim();
 
 if (!message) {
   console.error('Usage: node scripts/changelog.mjs [--major] "1-2 line summary of the change"');
@@ -62,7 +65,10 @@ try {
   // First run — no CHANGELOG yet.
 }
 
-writeFileSync(CHANGELOG, `${HEADER}\n## ${label} — ${date}\n${message}\n\n${existing}`.trimEnd() + '\n');
+writeFileSync(
+  CHANGELOG,
+  `${HEADER}\n## ${label} — ${date}\n${message}\n\n${existing}`.trimEnd() + '\n',
+);
 
 const staged = ['CHANGELOG.md', ...(isMajor ? ['shared/version.json'] : [])];
 execSync(`git add ${staged.join(' ')}`, { cwd: root, stdio: 'inherit' });
