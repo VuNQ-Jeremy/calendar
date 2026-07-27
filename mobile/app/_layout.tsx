@@ -59,6 +59,8 @@ function Gate() {
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="(app)" />
+      {/* Games sit outside the tab group so they get the whole screen with no tab bar. */}
+      <Stack.Screen name="play/[slug]/[mode]" options={{ animation: 'fade' }} />
     </Stack>
   );
 }

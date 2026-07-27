@@ -7,8 +7,9 @@ import { useLang } from '../lib/i18n.jsx';
 import { fetchDictEntry, fetchDictEntries } from '../lib/dictionary.js';
 import { fetchTranslations } from '../lib/translate-client.js';
 import { playWord } from './audio.js';
-import { shuffle, fmtDuration } from './game-utils.js';
+import { MIN_WORDS, fmtDuration, parseImportLines } from './game-utils.js';
 import type { GameMode, GameResult } from './game-utils.js';
+import { orderWordsByMastery } from '../../shared/logic/flashcards';
 import { FlipGame } from './game-flip.jsx';
 import { QuizGame } from './game-quiz.jsx';
 import { MatchGame } from './game-match.jsx';
@@ -30,8 +31,6 @@ type LoaderData = {
   canTranslate: boolean;
 };
 
-const MIN_WORDS: Record<GameMode, number> = { flip: 1, quiz: 4, match: 3 };
-
 const MODE_META: { id: GameMode; tk: string; icon: 'cards' | 'grid' | 'check' }[] = [
   { id: 'flip', tk: 'fc_mode_flip', icon: 'cards' },
   { id: 'quiz', tk: 'fc_mode_quiz', icon: 'check' },
@@ -48,22 +47,13 @@ export function FlashcardTopicScreen() {
   const [playing, setPlaying] = React.useState<GameMode | null>(null);
   const isStaff = kind === 'staff';
 
-  // Flip mode prioritizes words the student answered wrong most often, then
-  // words not seen for the longest. Students with no history (or staff preview)
-  // get a plain shuffle.
-  const orderedWords = React.useMemo(() => {
-    if (kind !== 'student' || mastery.length === 0) return shuffle(words);
-    const by = new Map(mastery.map((m) => [m.wordId, m]));
-    const ratio = (m?: MasteryRow) => (m ? m.wrong / Math.max(1, m.correct + m.wrong) : 0);
-    return words.slice().sort((a, b) => {
-      const ra = ratio(by.get(a.id));
-      const rb = ratio(by.get(b.id));
-      if (rb !== ra) return rb - ra;
-      const la = by.get(a.id)?.lastSeen ?? '';
-      const lb = by.get(b.id)?.lastSeen ?? '';
-      return la.localeCompare(lb); // '' (never seen) sorts first
-    });
-  }, [words, mastery, kind]);
+  // Flip mode prioritizes words the student answered wrong most often, then words not seen for
+  // the longest. Students with no history (or staff preview) get a plain shuffle. The comparison
+  // moved to shared/logic/flashcards.ts in phase 3 so mobile orders cards identically.
+  const orderedWords = React.useMemo(
+    () => orderWordsByMastery(words, kind === 'student' ? mastery : []),
+    [words, mastery, kind],
+  );
 
   const finish = (r: GameResult) => {
     const fd = new FormData();
@@ -527,30 +517,6 @@ type ImportRow = {
   found: boolean;
   include: boolean;
 };
-
-function parseImportLines(text: string): { word: string; meaningVi: string }[] {
-  const rows: { word: string; meaningVi: string }[] = [];
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    let word = line;
-    let meaningVi = '';
-    const tab = line.indexOf('\t');
-    if (tab >= 0) {
-      word = line.slice(0, tab).trim();
-      meaningVi = line.slice(tab + 1).trim();
-    } else {
-      // " - " protects hyphenated words like "well-known"
-      const dash = line.indexOf(' - ');
-      if (dash >= 0) {
-        word = line.slice(0, dash).trim();
-        meaningVi = line.slice(dash + 3).trim();
-      }
-    }
-    if (word) rows.push({ word, meaningVi });
-  }
-  return rows;
-}
 
 function ImportModal({
   fetcher,

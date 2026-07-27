@@ -12,10 +12,18 @@ export const loader = withAuth('user', async ({ params, db, user }) => {
   const topic = await svc.getTopicBySlug(db, slug);
   if (!topic) throw fail('not_found', 404);
 
-  const words = await svc.listWords(db, topic.id);
-  // Mastery drives adaptive ordering and is per-student; staff plays don't produce it.
-  const mastery =
-    user.kind === 'student' ? await svc.listMasteryForStudent(db, user.user.id, topic.id) : [];
+  const [words, results, mastery] = await Promise.all([
+    svc.listWords(db, topic.id),
+    // `user` level, deliberately: the web's flashcards.$slug loader hands the results and the
+    // leaderboard to students too — "the leaderboard is a student competition"
+    // (src/flashcards/topic.tsx). Withholding them here would give the mobile app a
+    // different, poorer feature than the browser for exactly the people who use it most.
+    svc.listTopicResults(db, topic.id),
+    // Mastery drives adaptive ordering and is per-student; staff plays don't produce it.
+    user.kind === 'student'
+      ? svc.listMasteryForStudent(db, user.user.id, topic.id)
+      : Promise.resolve([]),
+  ]);
 
-  return { topic, words, mastery };
+  return { topic, words, results, mastery };
 });

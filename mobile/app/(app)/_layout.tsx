@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
+import { useSync } from '~/lib/use-sync';
 import { useTheme } from '~/theme';
 
 /**
@@ -32,6 +33,11 @@ export default function AppLayout() {
   const { user } = useAuth();
   const { t } = useLang();
   const th = useTheme();
+
+  // Flushes the offline outbox and refreshes downloaded topics on foreground and on reconnect.
+  // Mounted here rather than in the root layout so it only runs for a signed-in user — a flush
+  // with no token would 401 and burn an attempt on every queued result.
+  useSync(!!user);
 
   // Belt and braces with app/index.tsx: a deep link straight into a tab must not render the
   // shell for a signed-out user.

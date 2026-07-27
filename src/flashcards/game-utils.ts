@@ -1,6 +1,23 @@
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
+import {
+  MIN_WORDS,
+  fmtDuration,
+  meaningOf,
+  parseImportLines,
+  shuffle,
+  type GameMode,
+} from '../../shared/logic/flashcards';
 
-export type GameMode = 'flip' | 'quiz' | 'match';
+/**
+ * The web half of the game helpers.
+ *
+ * The pure logic — `meaningOf`, `shuffle`, `fmtDuration`, `parseImportLines`, `MIN_WORDS` — moved
+ * to shared/logic/flashcards.ts in phase 3 so the mobile app runs the identical implementations.
+ * These re-exports keep this module's original surface intact; nothing that imports from here
+ * had to change.
+ */
+export { MIN_WORDS, fmtDuration, meaningOf, parseImportLines, shuffle };
+export type { GameMode };
 
 export type GameResult = {
   mode: GameMode;
@@ -14,30 +31,4 @@ export interface GameProps {
   words: FlashcardWordRow[];
   onExit: () => void;
   onFinish: (result: GameResult) => void;
-}
-
-/**
- * The text shown as a card's "meaning". Prefers the manual Vietnamese meaning
- * and falls back to the English definition (then the word itself) so cards with
- * no Vietnamese translation still work in every game mode.
- */
-export function meaningOf(w: FlashcardWordRow): string {
-  return w.meaningVi || w.definitionEn || w.word;
-}
-
-/** Fisher–Yates shuffle returning a new array (does not mutate the input). */
-export function shuffle<T>(arr: readonly T[]): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-export function fmtDuration(ms: number): string {
-  const total = Math.round(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
 }

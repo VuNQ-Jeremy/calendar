@@ -611,6 +611,25 @@ const en_strings = {
   m_version: 'Version',
   m_signed_in_as: 'Signed in as',
   m_admin_only: 'Admins only',
+
+  // Offline study (mobile only — the web app is always online by definition).
+  m_download: 'Download',
+  m_downloading: 'Downloading…',
+  m_downloaded: 'Available offline',
+  m_remove_download: 'Remove download',
+  m_not_offline: 'Not available offline',
+  m_not_offline_sub: 'Connect to the internet once to download this topic, then it works anywhere.',
+  m_sync_pending: '{n} waiting to sync',
+  m_synced_ago: 'Updated {ago}',
+  m_offline_banner: 'Offline — your work is saved and will sync later',
+
+  // Relative time. Kept as separate keys rather than a formatted string because Vietnamese
+  // puts the unit before the number ("2 phút trước" vs "2 minutes ago" is fine, but "vừa xong"
+  // has no number at all).
+  m_ago_now: 'just now',
+  m_ago_min: '{n} min ago',
+  m_ago_hour: '{n} h ago',
+  m_ago_day: '{n} d ago',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -1157,6 +1176,22 @@ export const STRINGS = {
     m_version: 'Phiên bản',
     m_signed_in_as: 'Đang đăng nhập bằng',
     m_admin_only: 'Chỉ dành cho quản trị viên',
+
+    m_download: 'Tải về',
+    m_downloading: 'Đang tải…',
+    m_downloaded: 'Dùng được khi offline',
+    m_remove_download: 'Xóa bản tải về',
+    m_not_offline: 'Chưa tải về để dùng offline',
+    m_not_offline_sub:
+      'Hãy kết nối mạng một lần để tải chủ đề này về, sau đó bạn học được ở bất cứ đâu.',
+    m_sync_pending: '{n} đang chờ đồng bộ',
+    m_offline_banner: 'Đang offline — kết quả đã được lưu và sẽ đồng bộ sau',
+    m_synced_ago: 'Cập nhật {ago}',
+
+    m_ago_now: 'vừa xong',
+    m_ago_min: '{n} phút trước',
+    m_ago_hour: '{n} giờ trước',
+    m_ago_day: '{n} ngày trước',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 

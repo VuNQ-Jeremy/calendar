@@ -37,6 +37,8 @@ import type {
   FeedbackRow,
   FlashcardTopicRow,
   FlashcardWordRow,
+  FlashcardResultRow,
+  TopicBundle,
   HomeworkRow,
   InviteRow,
   LoginResponse,
@@ -182,32 +184,32 @@ export const flashcards = {
   removeTopic: (id: string) =>
     apiFetch<FlashcardTopicRow[]>('/api/flashcards/topics', { method: 'DELETE', query: { id } }),
 
-  /** Everything an offline download of one topic needs, in one request. */
+  /**
+   * Everything one topic needs, in one request — and the exact payload the offline store keeps.
+   *
+   * Note the SINGULAR `topic` in the path: /api/flashcards/topics is the collection, and
+   * /api/flashcards/topic/:slug is the one-topic-with-words read. app/routes.ts:38-39.
+   */
   topic: (slug: string) =>
-    apiFetch<{
-      topic: FlashcardTopicRow;
-      words: FlashcardWordRow[];
-      mastery: { wordId: string; known: number; seen: number }[];
-      // Note the SINGULAR `topic` — /api/flashcards/topics is the collection, and
-      // /api/flashcards/topic/:slug is the one-topic-with-words read. app/routes.ts:38-39.
-    }>(`/api/flashcards/topic/${encodeURIComponent(slug)}`),
+    apiFetch<TopicBundle>(`/api/flashcards/topic/${encodeURIComponent(slug)}`),
 
   listWords: (topicId: string) =>
     apiFetch<FlashcardWordRow[]>('/api/flashcards/words', { query: { topicId } }),
+  /** Replies with the topic's refreshed word list — the client needs the generated id. */
   createWord: (topicId: string, input: FlashcardWordInput) =>
-    apiFetch<FlashcardWordRow>('/api/flashcards/words', {
+    apiFetch<FlashcardWordRow[]>('/api/flashcards/words', {
       method: 'POST',
       query: { topicId },
       body: input,
     }),
   updateWord: (id: string, patch: Partial<FlashcardWordInput>) =>
-    apiFetch<FlashcardWordRow>('/api/flashcards/words', {
+    apiFetch<{ ok: true }>('/api/flashcards/words', {
       method: 'PATCH',
       query: { id },
       body: patch,
     }),
   removeWord: (id: string) =>
-    apiFetch<{ ok: true }>('/api/flashcards/words', { method: 'DELETE', query: { id } }),
+    apiFetch<{ id: string }>('/api/flashcards/words', { method: 'DELETE', query: { id } }),
 
   importWords: (topicId: string, input: FlashcardImportInput) =>
     apiFetch<{ imported: number }>('/api/flashcards/import', {
@@ -227,7 +229,17 @@ export const flashcards = {
       { method: 'POST', body: input },
     ),
 
-  stats: (topicId?: string) => apiFetch<unknown>('/api/flashcards/stats', { query: { topicId } }),
+  /**
+   * STAFF only. With `?topicId=` it returns that topic's results; without, per-student
+   * aggregates for the People screen. Students get their topic's results from `topic()`
+   * instead — this endpoint would 403 for them.
+   */
+  topicResults: (topicId: string) =>
+    apiFetch<FlashcardResultRow[]>('/api/flashcards/stats', { query: { topicId } }),
+  studentStats: () =>
+    apiFetch<{ studentId: string; rounds: number; avgPct: number; lastPlayedAt: string | null }[]>(
+      '/api/flashcards/stats',
+    ),
 };
 
 // ---- Profile and settings ----

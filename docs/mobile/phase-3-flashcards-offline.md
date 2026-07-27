@@ -239,6 +239,67 @@ element names.
 - [ ] Every string is translated in both EN and VI.
 - [ ] Committed and pushed to `main`; `eas update --branch preview` shipped.
 
+## As built (2026-07-27)
+
+Built in the order the plan asked: offline plumbing, audio, quiz → match → flip, then the screens.
+
+**Routes.** `app/(app)/flashcards/` is a nested stack inside the tab; the games live at
+`app/play/[slug]/[mode].tsx`, **outside** the tab group, which is what gives them the full screen
+with no tab bar. Topic create/edit and the word editor are pushed screens, not modals — a modal
+over a 360dp viewport is a screen with extra steps, and the keyboard fights it.
+
+**One server change, deliberately.** `/api/flashcards/topic/:slug` now also returns `results`.
+The web's `flashcards.$slug` loader hands the results and the leaderboard to students
+(`requireUser`, and "the leaderboard is a student competition"), but `/api/flashcards/stats` is
+staff-only — so without this a student's Results tab on mobile would 403 while the browser showed
+them the table. It is `user`-level, additive, and exposes nothing the web did not already.
+`docs/api.md` updated. **This needs deploying** before the mobile Results tab works for students.
+
+**Shared, not duplicated.** `shared/logic/flashcards.ts` now holds `meaningOf`, `shuffle`,
+`fmtDuration`, `parseImportLines`, `MIN_WORDS`, `MATCH_ROUND_SIZE` and `orderWordsByMastery`.
+`src/flashcards/game-utils.ts` re-exports them and `topic.tsx` calls them, so the two clients
+cannot disagree about scoring, paste parsing, or adaptive card order. No web behaviour changed.
+
+**The gesture.** `shouldCommit` could NOT be called from the `onEnd` worklet — a worklet may only
+call workletized code, and `shared/logic/flip-gesture.ts` is deliberately plain arithmetic. The
+three-line predicate is restated as `shouldCommitWorklet` in `FlipGame.tsx` with the CONSTANTS
+still imported, which is the same trade-off the plan specifies for `arcLift`/`arcRotation`. The
+px/s → px/ms conversion is in `onEnd` and commented; it is the one line most likely to be wrong.
+`Gesture.Exclusive(pan, tap)` replaces the web's `suppressClick` ref, and
+`activeOffsetX`/`failOffsetY` replace its manual axis arbitration. The three web workarounds the
+plan says not to port (`userSelect`, `overflowX: clip`, the `|dyRaw| > |dx|` bail) are absent.
+
+**Departures:**
+
+1. **`expo-audio`, not `expo-av`** (removed in SDK 57). Same two-tier behaviour; `AudioPlayer` is
+   released on unmount via `useWordAudio`, which is the leak the plan warns about.
+2. **`expo-file-system`'s new `File`/`Directory` API** — `downloadAsync`/`cacheDirectory` are gone
+   in SDK 54+. Cached mp3s live in `Paths.cache`, which the OS may reclaim; that is fine, since
+   `expo-speech` covers a missing file and needs no network.
+3. **The card flips by swapping content, not with a 3D rotation.** `backfaceVisibility` on stacked
+   faces is unreliable across Android versions and its failure mode is a blank card. The swipe,
+   not the flip, is this game's gesture.
+4. **Dictionary auto-fill and AI translation are not ported** (word editor and import). On the web
+   they are a debounced lookup against dictionaryapi.dev plus `/translate`, with partial fills and
+   retry buttons — a curation workflow that belongs on a keyboard. Mobile can add and correct
+   words; bulk authoring stays on the web. `audioUrl` is preserved on edit, so pronunciation for
+   web-authored words still works.
+5. **No charts.** Task 3.5 mentions porting `charts.tsx`, but the web's Results tab has none — the
+   charts belong to the assessments screens, i.e. phase 5.
+6. **A pending-sync count, and no per-topic sync UI beyond the download toggle.** The banner shows
+   "N waiting to sync" only when something is actually queued.
+
+**Verified here:** mobile `tsc --noEmit` clean; a full production Metro bundle of every route
+(3,817 modules); `expo start` boots and expo-router registers all fourteen routes including
+`/play/[slug]/[mode]`; the web app still green (typecheck, lint, 143 tests, build).
+
+**NOT verified — no device, and this is the phase where that hurts.** Every gesture-fidelity
+criterion above needs a physical screen and a side-by-side comparison with the web, and so does
+the whole offline list: airplane-mode play, the reconnect producing exactly one row, killing the
+app mid-flush. The idempotency that makes those safe is enforced by a unique partial index that
+does exist (migration 0014, verified), and the outbox only deletes a row on a confirmed 2xx — but
+"the design is right" is not the same as "it works".
+
 ## Notes for the executor
 
 - Port **quiz → match → flip**, in that order. The first two are trivial and get the screen

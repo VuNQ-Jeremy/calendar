@@ -136,7 +136,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET POST | `/api/homework/:id/grades` | staff | Whole grade set saved in one request |
 | GET | `/api/flashcards/topics/:id?` | **user** | Students play games |
 | POST PATCH DELETE | `/api/flashcards/topics/:id?` | staff | Replies with the refreshed topic list |
-| GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, mastery }` — what an offline download needs |
+| GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, results, mastery }` — one round trip, and exactly what an offline download stores. `results` is user-level because the web gives students the leaderboard too; `mastery` is empty for staff |
 | GET POST PATCH DELETE | `/api/flashcards/words/:id?` | staff | `?topicId=` required on GET and POST |
 | POST | `/api/flashcards/import?topicId=` | staff | `{ words: [...] }`, max 200 |
 | POST | `/api/flashcards/results` | **user** | See idempotency below |

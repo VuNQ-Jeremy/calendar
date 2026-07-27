@@ -46,11 +46,67 @@ export type FeedbackRow = Row<z.infer<typeof FeedbackInput>>;
 export type ScoreRecordRow = Row<z.infer<typeof ScoreRecordInput>>;
 export type BehaviorRecordRow = Row<z.infer<typeof BehaviorRecordInput>>;
 export type AssessmentTypeRow = Row<z.infer<typeof AssessmentTypeInput>>;
-export type FlashcardTopicRow = Row<z.infer<typeof FlashcardTopicInput>> & {
-  slug: string;
-  wordCount?: number;
-};
-export type FlashcardWordRow = Row<z.infer<typeof FlashcardWordInput>> & { topicId: string };
+/**
+ * The flashcard rows are spelled out rather than derived from their input schemas, because the
+ * server adds fields the schemas don't have and `slug` really is nullable — see the exported
+ * types in `server/services/flashcards.ts`, which these mirror exactly.
+ */
+export interface FlashcardTopicRow {
+  id: string;
+  name: string;
+  /** Null on topics created before migration 0011. Fall back to `id` when routing. */
+  slug: string | null;
+  description: string | null;
+  color: string;
+  createdAt: string | null;
+  wordCount: number;
+}
+
+export interface FlashcardWordRow {
+  id: string;
+  topicId: string;
+  word: string;
+  /** May be empty — games fall back to `definitionEn`, then the word itself. */
+  meaningVi: string;
+  definitionEn: string | null;
+  ipa: string | null;
+  audioUrl: string | null;
+  createdAt: string | null;
+}
+
+/** One completed game. Exactly one of the players is staff; `isStaff` says which. */
+export interface FlashcardResultRow {
+  id: string;
+  playerId: string;
+  playerName: string;
+  playerColor: string;
+  isStaff: boolean;
+  topicId: string;
+  mode: string;
+  score: number;
+  total: number;
+  durationMs: number | null;
+  playedAt: string;
+}
+
+/**
+ * Per-(student, word) counters. Staff plays produce NO mastery row — a teacher testing a topic
+ * must not pollute student stats — so this array is always empty for staff.
+ */
+export interface MasteryRow {
+  wordId: string;
+  correct: number;
+  wrong: number;
+  lastSeen: string | null;
+}
+
+/** The whole payload for one topic. This exact object is what gets cached for offline use. */
+export interface TopicBundle {
+  topic: FlashcardTopicRow;
+  words: FlashcardWordRow[];
+  results: FlashcardResultRow[];
+  mastery: MasteryRow[];
+}
 export type ThemeRow = z.infer<typeof ThemeInput>;
 export type UiPrefs = z.infer<typeof UiPrefsInput>;
 
