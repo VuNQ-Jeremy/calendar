@@ -47,6 +47,11 @@ const config: ExpoConfig = {
     'expo-sqlite',
     'expo-sharing',
     'expo-audio',
+    // Phase 4 needs these two: a WebView to show a material (it can send the bearer header,
+    // which expo-web-browser cannot), and the native date/time picker for event times and the
+    // long-press "Move to…" reschedule. Installed BEFORE the first APK on purpose — adding a
+    // native module after one ships means a runtimeVersion bump and a reinstall for every phone.
+    '@react-native-community/datetimepicker',
     [
       'expo-splash-screen',
       { image: './assets/images/splash-icon.png', resizeMode: 'contain', backgroundColor: BRAND },

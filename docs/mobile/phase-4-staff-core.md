@@ -174,6 +174,34 @@ do handle a failed save gracefully: keep the local state, show a retry, never si
 - [ ] Every string translated in both EN and VI.
 - [ ] Committed and pushed to `main`; `eas update --branch preview` shipped.
 
+## Pre-flight, done 2026-07-28 (read this first)
+
+Phase 4 has **not** been started. What has been done is the setup it needs:
+
+- **`react-native-webview` (13.16.1)** and **`@react-native-community/datetimepicker` (9.1.0)** are
+  installed, and the datetimepicker config plugin is registered in `mobile/app.config.ts`. The
+  WebView is for task 4.3's material viewer specifically because it can send the
+  `Authorization: Bearer` header that `/materials/:id/view` requires — `expo-web-browser` cannot.
+  The picker is for event date/time and the long-press "Move to…" reschedule.
+- Installed **before the first APK exists**, deliberately: a native module added after one ships
+  requires a `runtimeVersion` bump in `shared/version.json` and a reinstall on every phone.
+  `runtimeVersion` is still **1** and must NOT be bumped for these — nothing has shipped to orphan.
+- With these two, the native surface is complete through phase 6. Phases 5 and 6 need no further
+  native modules (checked: materials use the already-installed document/image pickers, assessment
+  charts use `react-native-svg`, push uses `expo-notifications`). **If you find yourself adding
+  another native module, stop and check whether an APK has shipped first.**
+- Verified after installing: `tsc --noEmit` clean, full production Metro bundle (3,817 modules),
+  `expo config` resolves.
+
+**Decision already taken, so don't re-open it:** task 4.5's autosave-vs-explicit-save question is
+settled as **autosave, optimistic, with a visible saved/retrying state**. A teacher marking a
+register is standing up and talking and will walk away mid-list; an explicit Save button loses the
+register to a locked screen. Keep local state and offer a retry on failure, as the task requires.
+
+**Also still true:** no part of the mobile app has ever been run on a device. Phases 2 and 3 are
+verified only by typecheck, a full bundle, and route registration. Attendance and the calendar are
+where a layout or gesture problem is most likely to be hiding.
+
 ## Notes for the executor
 
 - Build in this order: **Attendance → Dashboard → Agenda → Event detail → Classes → Homework →
