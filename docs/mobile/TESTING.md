@@ -54,20 +54,23 @@ Write the credentials down somewhere. You will use them in every phase.
 
 ## Day-one check: does `npm run test:worker` actually run here?
 
-**Do this before starting Phase 1.** The Workers test suite runs on
-`@cloudflare/vitest-pool-workers`, which uses workerd internally. On a machine where workerd
-crashes, this may work anyway (the pool ships its own binary) or it may not.
+**Answered on the original machine (2026-07-27): no.** The Workers suite runs on
+`@cloudflare/vitest-pool-workers`, which uses workerd internally, and it fails the same way
+the dev server does:
 
-```bash
-npm run test:worker
+```
+MiniflareCoreError [ERR_RUNTIME_FAILURE]: The Workers runtime failed to start.
 ```
 
-- **If it passes:** you have a fast local feedback loop for Phase 1. Use it heavily.
-- **If it crashes:** Phase 1 loses its only local loop. Everything moves to
-  deploy-and-curl (below), and you should budget more time for that phase. Say so before
-  starting rather than discovering it mid-way.
+**Consequence: Phase 1 has no local feedback loop there.** Every API check is deploy-and-curl.
+Budget accordingly — write endpoints in batches and verify a batch per deploy, rather than
+one-at-a-time.
 
-Either way, tell whoever is executing Phase 1 which result you got.
+`npx vitest run` (the jsdom suite, 59 tests) works fine and stays your fast loop for anything
+client-side.
+
+On a machine where `npm run dev` works, re-run `npm run test:worker` — it should work there,
+and Phase 1 gets much quicker.
 
 ---
 

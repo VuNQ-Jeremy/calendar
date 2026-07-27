@@ -10,6 +10,21 @@
   asked — this is standing authorization for that specific action, not for
   other risky git operations (force-push, reset, etc.).
 
+## Versioning
+
+- **Add a changelog entry on every push to `main`.** Run
+  `node scripts/changelog.mjs "1-2 line summary"` as part of your final commit.
+  It stages `CHANGELOG.md` for you.
+- **The build number is derived from the git commit count** — never store or
+  hand-edit it. `shared/version.json` holds only `major`, `buildOffset`, and
+  `runtimeVersion`, all of which change rarely. This is what keeps parallel work
+  from several machines from conflicting on a counter.
+- **Bump the major only at real milestones**, with
+  `node scripts/changelog.mjs --major "…"`.
+- **`runtimeVersion` is not the app version.** It gates Expo OTA updates: an
+  update only reaches an installed APK whose `runtimeVersion` matches. Bump it by
+  hand, only when native dependencies change.
+
 ## Debugging
 
 - **When a component remounts mysteriously, look up the component tree first.**

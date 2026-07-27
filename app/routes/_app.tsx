@@ -16,6 +16,8 @@ import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
 import { DevInspector } from '../../src/dev-inspector.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
+import { VersionStamp } from '../../src/components/version-stamp.jsx';
+import { BUILD_ID } from '../../src/lib/build-id.js';
 import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as homeworkSvc from '../../server/services/homework';
@@ -160,6 +162,7 @@ function Sidebar({
       <div className="sb__langbar">
         <LanguageToggle />
       </div>
+      <VersionStamp />
       {user.kind === 'staff' && (
         <button className="sb__cta" onClick={onFeedback} title={t('cta_feedback')}>
           <MIcon name="message" size={18} />
@@ -235,6 +238,7 @@ export default function AppLayout() {
     fd.set('author', f.author || '');
     fd.set('status', f.status);
     fd.set('createdAt', f.createdAt || '');
+    fd.set('appVersion', BUILD_ID);
     feedbackFetcher.submit(fd, { action: '/feedback', method: 'post' });
     setFeedbackDraft(null);
   };

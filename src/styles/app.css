@@ -357,6 +357,16 @@ body {
   justify-content: center;
   padding: var(--space-2) 0 var(--space-3);
 }
+.sb__version {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--taupe-400);
+  padding-bottom: var(--space-2);
+  user-select: text;
+}
 .sb__cta {
   display: flex;
   align-items: center;
@@ -471,6 +481,10 @@ body {
     display: none;
   }
   .sb__langbar {
+    display: none;
+  }
+  /* The 64px icon rail has no room for a version string — it would just clip. */
+  .sb__version {
     display: none;
   }
 }

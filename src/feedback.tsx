@@ -5,6 +5,7 @@ import { MIcon } from './icons.jsx';
 import { Modal, MSelect, PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, TODAY } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
+import { BUILD_ID } from './lib/build-id.js';
 import type { FeedbackRow } from '../server/services/feedback.js';
 
 const { Card: FC, Button: FBtn, IconButton: FIB, Tag: FTag, Badge: FBadge } = DS;
@@ -160,6 +161,7 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
       fd.set('author', f.author || '');
       fd.set('status', f.status);
       fd.set('createdAt', f.createdAt || '');
+      fd.set('appVersion', BUILD_ID);
     }
     fetcher.submit(fd, { action: '/feedback', method: 'post' });
     setModal(null);
@@ -240,6 +242,15 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                           month: 'short',
                           day: 'numeric',
                         })}
+                      </span>
+                    )}
+                    {f.appVersion && (
+                      <span
+                        className="m-row"
+                        style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                        title="Build the report came from"
+                      >
+                        {f.appVersion}
                       </span>
                     )}
                   </div>

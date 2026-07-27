@@ -184,8 +184,10 @@ not the repo path). Where that happens:
   stubs `DurableObject`, which the build imports from `cloudflare:workers`. `better-sqlite3`
   does not compile there; `node:sqlite` does. Ask the operator for its location; it lives
   outside the repo.
-- `npm run test:worker` uses workerd internally and **may or may not** work on such a machine.
-  Check it early — it determines whether Phase 1 has a local feedback loop.
+- `npm run test:worker` uses workerd internally and therefore **also fails** — confirmed
+  2026-07-27: `MiniflareCoreError [ERR_RUNTIME_FAILURE]`. **Phase 1 has no local feedback loop
+  on such a machine**; API verification is deploy-and-curl only. `npx vitest run` (the jsdom
+  suite) works fine.
 
 ### Regardless of machine
 

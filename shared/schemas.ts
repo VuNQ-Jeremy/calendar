@@ -140,6 +140,8 @@ export const FeedbackInput = z.object({
   author: z.string().max(200).nullish(),
   status: z.enum(['new', 'reviewed', 'done']).default('new'),
   createdAt: z.string().nullish(),
+  /** Which build the report came from, e.g. "v0.0042 · a1b2c3d". Nullish: older clients omit it. */
+  appVersion: z.string().max(100).nullish(),
 });
 export type FeedbackInput = z.infer<typeof FeedbackInput>;
 

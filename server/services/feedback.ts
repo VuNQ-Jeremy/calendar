@@ -10,6 +10,7 @@ export type FeedbackRow = {
   author: string | null;
   status: string;
   createdAt: string | null;
+  appVersion: string | null;
 };
 
 function map(r: typeof feedback.$inferSelect): FeedbackRow {
@@ -20,6 +21,7 @@ function map(r: typeof feedback.$inferSelect): FeedbackRow {
     author: r.author,
     status: r.status,
     createdAt: r.createdAt,
+    appVersion: r.appVersion,
   };
 }
 
@@ -37,6 +39,7 @@ export async function create(db: Db, input: FeedbackInput): Promise<FeedbackRow>
     author: input.author ?? null,
     status: input.status,
     createdAt: input.createdAt ?? null,
+    appVersion: input.appVersion ?? null,
   });
   const rows = await db.select().from(feedback).where(eq(feedback.id, id));
   return map(rows[0]);

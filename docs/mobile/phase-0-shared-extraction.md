@@ -63,11 +63,17 @@ identifier — but do not treat the number as a stable count of releases.
 ```json
 {
   "major": 0,
+  "buildOffset": 135,
   "runtimeVersion": 1
 }
 ```
 
-Both fields change roughly twice a year, so they effectively never conflict.
+`buildOffset` is the commit count at the moment versioning was introduced (135 — the repo
+already had that much history). Subtracting it makes the first versioned commit `v0.0001`
+rather than `v0.0135`. **Set once; never change it**, or every previously shipped version
+renumbers. `changelog.mjs --major` re-baselines it so a new major starts at `.0000`.
+
+All three fields change rarely, so they effectively never conflict.
 
 > **It lives in `shared/`, not the repo root.** Metro's `watchFolders` (Phase 2) covers
 > `shared/` but not the repo root — a `version.json` at the root would resolve on web and fail
@@ -93,7 +99,13 @@ formats; the build number is injected.
 import v from './version.json';
 
 export const MAJOR = v.major;
+export const BUILD_OFFSET = v.buildOffset;
 export const RUNTIME_VERSION = v.runtimeVersion;
+
+/** Raw `git rev-list --count HEAD` → this project's build number. */
+export function resolveBuild(commitCount: number): number {
+  return Math.max(0, commitCount - BUILD_OFFSET);
+}
 
 /** Display form: formatVersion(42) → "v0.0042". */
 export function formatVersion(build: number): string {
@@ -137,12 +149,21 @@ throwing. Use `git` from `PATH`; do not hardcode a path or assume a shell.
 
 ```ts
 define: {
-  __APP_VERSION__: JSON.stringify(formatVersion(gitBuild())),
+  __APP_VERSION__: JSON.stringify(formatVersion(resolveBuild(gitBuild()))),
   __GIT_SHA__: JSON.stringify(gitSha()),
 }
 ```
 
-Declare both in a `globals.d.ts` so TypeScript knows them.
+Declare both in a root `globals.d.ts` so TypeScript knows them.
+
+> **`vitest.config.js` needs the same `define` block.** Vitest does not load `vite.config.ts`,
+> so without it every test that touches `src/lib/build-id.ts` throws
+> `__APP_VERSION__ is not defined`. Use fixed values there (`'v0.0000'` / `'test'`) so tests
+> never depend on git state.
+
+Consume them through a single `src/lib/build-id.ts` exporting
+``BUILD_ID = `${__APP_VERSION__} · ${__GIT_SHA__}` `` — used by both the sidebar stamp and the
+feedback submissions, so the format is defined once.
 
 **Mobile wiring** — Phase 2, in `app.config.ts`.
 

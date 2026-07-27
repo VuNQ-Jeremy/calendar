@@ -5,6 +5,7 @@ import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
 import { SEEN_INTRO_KEY } from '../src/instructions.jsx';
 import AppLayout from '../app/routes/_app';
+import { DEFAULT_UI_PREFS } from '../server/services/ui-prefs';
 
 const TEST_USER = {
   id: 'staff-001',
@@ -20,6 +21,8 @@ const STUB_LOADER_DATA = {
   homeworkDueCount: 0,
   unusedInviteCount: 0,
   newFeedbackCount: 0,
+  // AppLayout reads uiPrefs.scrollbar in an effect; omitting it throws before render.
+  uiPrefs: DEFAULT_UI_PREFS,
   user: TEST_USER,
 };
 

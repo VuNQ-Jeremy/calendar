@@ -410,7 +410,8 @@ Add to `test-worker/` (the `@cloudflare/vitest-pool-workers` suite, run by
   edge case.
 - The `intent`-based web actions stay exactly as they are. You are adding a second door to the
   same rooms, not moving the furniture.
-- If local D1 is unavailable on your machine (see [README.md](./README.md) → Environment), the
-  Workers test pool supplies its own isolated D1 — **if** it runs there at all, which depends on
-  the same workerd binary. Check `npm run test:worker` before you start. Where it works, it is
-  the only fast feedback loop for this phase; where it doesn't, everything is deploy-and-curl.
+- **On the original machine, `npm run test:worker` does not run** — it uses workerd and fails
+  with `ERR_RUNTIME_FAILURE` (confirmed 2026-07-27). There is no local feedback loop there:
+  write endpoints in batches, deploy, and verify a batch per deploy. Still **write** the tests —
+  they run on any healthy machine and in CI. On a machine where `npm run dev` works, the pool
+  works too and this phase goes much faster.

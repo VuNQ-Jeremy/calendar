@@ -214,6 +214,7 @@ export const feedback = sqliteTable(
     author: text('author'),
     status: text('status').notNull().default('new'),
     createdAt: text('created_at'),
+    appVersion: text('app_version'),
   },
   (t) => [index('idx_feedback_status').on(t.status)],
 );
