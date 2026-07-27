@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireStaff } from '../../server/services/auth';
+import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import { TranslateInput } from '../../shared/schemas';
 
 // Resource route (no default component). Deliberately registered OUTSIDE the
@@ -9,7 +9,7 @@ import { TranslateInput } from '../../shared/schemas';
 // every action). Translation is a read-side enrichment, not a data mutation.
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env); // only staff add/import words
+  await requireStaffCookieOrBearer(request, env); // only staff add/import words
   if (!env.ANTHROPIC_API_KEY) return Response.json({ error: 'disabled' }, { status: 503 });
 
   const formData = await request.formData();

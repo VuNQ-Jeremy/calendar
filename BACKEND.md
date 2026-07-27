@@ -1,8 +1,16 @@
-# Mochi backend — D1 + Worker API
+# Mochi backend — D1 + Worker
 
-The app ships with a Cloudflare Worker (`worker/index.js`) that serves the built
-SPA and a JSON API backed by **Cloudflare D1** (SQLite). This is the first step
-of replacing the in-browser `localStorage` store with a real database.
+> **Partly stale — read this first.**
+>
+> - The Worker entry is **`workers/app.ts`** (React Router SSR), not `worker/index.js`.
+>   `worker/index.js` is a dead 7-line stub kept only for `wrangler.test.jsonc`.
+> - The hand-rolled `/api/state` API this file used to document was **deleted in refactor
+>   phase 3**. All web data now moves through React Router loaders and actions.
+> - A **new** JSON API exists at `/api/*` for the mobile app — different design, different
+>   contract. See [`docs/api.md`](./docs/api.md). It is not the one described below.
+> - PBKDF2 runs at **100 000** iterations (workerd's hard cap), not 210 000.
+>
+> The data model, R2 provisioning, and operational notes below are still accurate.
 
 > Status: **Phase 5 complete.** `db.batch` atomicity verified across all multi-write
 > paths. FK cascade behavior confirmed via miniflare tests; manual join-table cleanup

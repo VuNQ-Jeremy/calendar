@@ -345,11 +345,29 @@ export const flashcardResults = sqliteTable(
     total: integer('total').notNull(),
     durationMs: integer('duration_ms'),
     playedAt: text('played_at').notNull(),
+    /** Device-generated UUID for offline replay. Unique where present — see 0014_mobile.sql. */
+    clientId: text('client_id'),
   },
   (t) => [
     index('idx_flashcard_results_topic').on(t.topicId, t.playedAt),
     index('idx_flashcard_results_student').on(t.studentId, t.playedAt),
   ],
+);
+
+/** One row per installed mobile device. */
+export const pushTokens = sqliteTable(
+  'push_tokens',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    expoToken: text('expo_token').notNull().unique(),
+    platform: text('platform').notNull().default('android'),
+    createdAt: text('created_at').notNull(),
+    lastSeenAt: text('last_seen_at'),
+  },
+  (t) => [index('idx_push_tokens_account').on(t.accountId)],
 );
 
 export const flashcardMastery = sqliteTable(

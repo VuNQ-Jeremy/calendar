@@ -33,20 +33,35 @@ export type SessionUser = {
 
 // ---- Session management ----
 
-export async function createSession(db: Db, accountId: string, remember: boolean): Promise<string> {
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * @param ttlDays overrides the default 1-day / 30-day ("remember me") window. The mobile
+ *   API passes 90 — see server/api/auth.ts. Web callers omit it and are unaffected.
+ */
+export async function createSession(
+  db: Db,
+  accountId: string,
+  remember: boolean,
+  ttlDays?: number,
+): Promise<string> {
   const { token, hash } = await newToken();
-  const expiresAt = remember
-    ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const days = ttlDays ?? (remember ? 30 : 1);
+  const expiresAt = new Date(Date.now() + days * DAY_MS).toISOString();
   await db.insert(sessions).values({ token: hash, accountId, expiresAt });
   return token;
 }
 
-export async function getUser(request: Request, env: Env): Promise<SessionUser | null> {
-  const db = createDb(env);
-  const rawToken = await sessionCookie.parse(request.headers.get('Cookie'));
-  if (!rawToken || typeof rawToken !== 'string') return null;
-
+/**
+ * Resolve a RAW session token to a SessionUser.
+ *
+ * `sessions.token` stores the SHA-256 hash, never the raw value — the raw token only ever
+ * lives in the client's cookie or, for the mobile app, its secure store. Expired sessions
+ * are deleted and yield null.
+ *
+ * Extracted from getUser() so the bearer-token path (server/api/auth.ts) can share it.
+ */
+export async function userFromToken(db: Db, rawToken: string): Promise<SessionUser | null> {
   const tokenHash = await hashToken(rawToken);
   const sessionRow = await db.query.sessions.findFirst({
     where: eq(sessions.token, tokenHash),
@@ -102,6 +117,13 @@ export async function getUser(request: Request, env: Env): Promise<SessionUser |
   }
 
   return null; // parent accounts remain unsupported
+}
+
+export async function getUser(request: Request, env: Env): Promise<SessionUser | null> {
+  const db = createDb(env);
+  const rawToken = await sessionCookie.parse(request.headers.get('Cookie'));
+  if (!rawToken || typeof rawToken !== 'string') return null;
+  return userFromToken(db, rawToken);
 }
 
 export async function requireUser(request: Request, env: Env): Promise<SessionUser> {

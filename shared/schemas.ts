@@ -254,6 +254,11 @@ export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
 
 export const FlashcardResultInput = z.object({
+  /**
+   * Device-generated UUID, sent by the mobile offline outbox so a replayed flush is a no-op.
+   * Optional: the web path omits it and is unaffected.
+   */
+  clientId: z.string().uuid().optional(),
   topicId: z.string().min(1),
   mode: FlashcardMode,
   score: z.coerce.number().int().min(0),
@@ -265,6 +270,56 @@ export const FlashcardResultInput = z.object({
     .default([]),
 });
 export type FlashcardResultInput = z.infer<typeof FlashcardResultInput>;
+
+/** Batch envelope for the mobile offline outbox flush. */
+export const FlashcardResultBatch = z.object({
+  results: z.array(FlashcardResultInput).min(1).max(50),
+});
+export type FlashcardResultBatch = z.infer<typeof FlashcardResultBatch>;
+
+export const PushRegisterInput = z.object({
+  expoToken: z.string().min(1).max(500),
+  platform: z.enum(['android', 'ios']).default('android'),
+});
+export type PushRegisterInput = z.infer<typeof PushRegisterInput>;
+
+export const LoginInput = z.object({
+  email: z.string().min(1).max(320),
+  password: z.string().min(1).max(200),
+});
+export type LoginInput = z.infer<typeof LoginInput>;
+
+export const RedeemInviteInput = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().trim().min(1).max(200),
+  email: z.string().max(320).optional(),
+  password: z.string().min(6).max(200),
+});
+export type RedeemInviteInput = z.infer<typeof RedeemInviteInput>;
+
+export const ChangePasswordInput = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(6).max(200),
+});
+export type ChangePasswordInput = z.infer<typeof ChangePasswordInput>;
+
+export const RequestResetInput = z.object({
+  email: z.string().min(1).max(320),
+});
+export type RequestResetInput = z.infer<typeof RequestResetInput>;
+
+/** Self-service profile edit. Deliberately narrower than StaffInput — no role, no id. */
+export const ProfileInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  email: z
+    .string()
+    .email()
+    .nullish()
+    .or(z.literal('').transform(() => null)),
+  phone: z.string().max(50).nullish(),
+  color: ColorId,
+});
+export type ProfileInput = z.infer<typeof ProfileInput>;
 
 export const ThemeInput = z.object({
   bg: z

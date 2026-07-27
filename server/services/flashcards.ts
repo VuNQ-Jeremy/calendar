@@ -277,11 +277,27 @@ export async function listTopicResults(
   return rows.map((r) => ({ ...r, isStaff: Boolean(r.isStaff) }));
 }
 
+/**
+ * Record one completed game.
+ *
+ * @returns true if a row was written, false if `clientId` had already been recorded.
+ *
+ * Idempotency matters because the mobile offline outbox retries blindly: a flush that
+ * succeeds server-side but drops on the way back would otherwise double-count the score.
+ * The whole batch is skipped on replay, not just the result row — re-applying the mastery
+ * increments would inflate the student's stats even if the result row were deduped.
+ */
 export async function recordResult(
   db: Db,
   player: { kind: 'staff' | 'student'; id: string },
   input: FlashcardResultInput,
-): Promise<void> {
+): Promise<boolean> {
+  if (input.clientId) {
+    const existing = await db.query.flashcardResults.findFirst({
+      where: eq(flashcardResults.clientId, input.clientId),
+    });
+    if (existing) return false;
+  }
   const now = new Date().toISOString();
   const isStudent = player.kind === 'student';
   const ops: BatchItem<'sqlite'>[] = [
@@ -295,6 +311,7 @@ export async function recordResult(
       total: input.total,
       durationMs: input.durationMs ?? null,
       playedAt: now,
+      clientId: input.clientId ?? null,
     }),
     // Mastery tracks per-student adaptive ordering; staff plays don't feed it.
     ...(isStudent
@@ -319,7 +336,31 @@ export async function recordResult(
         )
       : []),
   ];
-  await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+  try {
+    await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+  } catch (err) {
+    // Two concurrent flushes of the same clientId race past the check above; the unique
+    // partial index then rejects the loser. That is the desired outcome, not an error.
+    if (input.clientId && String(err).includes('UNIQUE')) return false;
+    throw err;
+  }
+  return true;
+}
+
+/**
+ * Flush a batch of offline results. Each is independently idempotent.
+ * @returns how many were newly recorded (the rest were already known).
+ */
+export async function recordResults(
+  db: Db,
+  player: { kind: 'staff' | 'student'; id: string },
+  inputs: FlashcardResultInput[],
+): Promise<number> {
+  let recorded = 0;
+  for (const input of inputs) {
+    if (await recordResult(db, player, input)) recorded++;
+  }
+  return recorded;
 }
 
 export async function listMasteryForStudent(
