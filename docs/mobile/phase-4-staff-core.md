@@ -202,6 +202,43 @@ register to a locked screen. Keep local state and offer a retry on failure, as t
 verified only by typecheck, a full bundle, and route registration. Attendance and the calendar are
 where a layout or gesture problem is most likely to be hiding.
 
+## Built, 2026-07-28
+
+All five tasks are implemented. What exists now, and the decisions worth knowing before touching it:
+
+- **Data layer** — `mobile/lib/staff-data.ts` (one query per table, coarse invalidate as the web
+  does) and `mobile/lib/cal.ts` (`fmtTime`, the attendance statuses, and re-exports of
+  `@mochi/shared/logic` — recurrence is NOT reimplemented). `mobile/lib/types.ts` gained
+  `GradeRow` and `DashboardResponse`; `AttendanceRow` lost its `id`, which the table never had.
+- **Attendance** — `components/AttendanceEditor.tsx`, used by both `app/(app)/attendance.tsx`
+  (deep-linked from the dashboard) and the event detail's Attendance tab. Autosave, optimistic,
+  with an explicit saved / saving / not-saved state and a retry that keeps the local marks. Status
+  buttons are icon-only with a legend above them: four Vietnamese status labels cannot sit in a row
+  at 360dp without clipping.
+- **Calendar** — `app/(app)/calendar.tsx`. Agenda (SectionList, sticky headers, forward-only
+  infinite scroll), Month (dots, tap-to-reveal), Day (single-column time grid). **Week is not
+  built**, deliberately. Long-press anywhere an event appears opens
+  `components/MoveEventSheet.tsx`; a recurring event's date is locked there, because rewriting it
+  would move every occurrence. `bgImage`/`bgOpacity` are honoured, not skipped.
+- **Event detail** — `app/(app)/event/[id].tsx`, with `id: 'new'` for creation and a `date` param
+  carrying the occurrence. Materials hand off to `app/(app)/material/[id].tsx`: images and text
+  render in a `WebView` (which can send the `Authorization` header `/materials/:id/view` requires),
+  and .docx/.pdf download with the bearer header and go to the platform viewer via `expo-sharing`.
+- **Classes** — `app/(app)/classes/` list → detail → pushed roster picker. The detail's PATCH
+  deliberately omits `studentIds`; the picker owns that field and writes it directly. The schedule
+  editor is new — `class_schedule` had no web UI at all. `day` is 0–6 with 0 = Sunday, per
+  `seed.sql`.
+- **Homework** — `app/(app)/homework/` list → edit → grading. Grading uses an **explicit** Save
+  (unlike the register) and posts the whole roster in one request, which is what `saveGrades` and
+  its `score_records` invariant expect.
+- New i18n keys live in a marked Phase-4 block at the end of both dictionaries in
+  `shared/i18n/strings.ts`.
+
+**Verified:** `tsc --noEmit` clean in `mobile/`, `tsc -b` clean at the root, all 144 root tests
+pass, and a full production Metro bundle exports. **Still not run on a device** — every layout and
+gesture claim above is a design argument, not an observation. The register and the day grid are
+where a problem is most likely hiding.
+
 ## Notes for the executor
 
 - Build in this order: **Attendance → Dashboard → Agenda → Event detail → Classes → Homework →

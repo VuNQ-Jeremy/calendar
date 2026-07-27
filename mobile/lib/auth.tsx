@@ -58,6 +58,13 @@ async function readToken(): Promise<string | null> {
 let unauthorizedHandler: (() => void) | null = null;
 configureApi({ getToken: readToken, onUnauthorized: () => unauthorizedHandler?.() });
 
+/**
+ * The session token, for the two consumers that cannot go through `apiFetch`: the WebView that
+ * renders `/materials/:id/view` and `File.downloadFileAsync`, both of which need to set the
+ * `Authorization` header themselves. Everything else must use `~/lib/endpoints`.
+ */
+export const getToken = readToken;
+
 async function writeToken(token: string | null): Promise<void> {
   cachedToken = token;
   try {

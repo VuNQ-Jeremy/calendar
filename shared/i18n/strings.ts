@@ -630,6 +630,35 @@ const en_strings = {
   m_ago_min: '{n} min ago',
   m_ago_hour: '{n} h ago',
   m_ago_day: '{n} d ago',
+
+  // ---- Phase 4: the mobile staff core ----
+  // Screens rebuilt for the phone need vocabulary the desktop layouts never had to express: the
+  // register's live count, "Move to…" in place of drag-to-reschedule, and the reasons a screen
+  // has nothing to show. Added to both languages, as the rule requires.
+  att_take: 'Take attendance',
+  att_saving: 'Saving…',
+  att_save_failed: 'Not saved',
+  att_none_marked: 'No one marked yet',
+  att_marked_of: '{done} of {total} marked',
+  att_empty_roster_sub: 'Add students to this class, then come back to mark a register.',
+  att_no_class_sub: 'This event has no class, so there is no roster to mark.',
+  att_no_event: 'Event not found',
+  att_no_event_sub: "Open one of today's class events to mark its register.",
+  cal_upcoming: 'Upcoming',
+  cal_day_empty: 'Nothing on this day',
+  cal_day_count: '{n} events',
+  ev_move_to: 'Move to…',
+  ev_move_recurring_note:
+    'This event repeats, so only its time can change here — moving the date would move every occurrence.',
+  ev_delete_q: 'Delete event?',
+  cls_roster_edit: 'Edit roster',
+  cls_roster_search: 'Search students…',
+  cls_roster_after_save: 'Save the class first, then add students to it.',
+  hw_unsaved: 'Unsaved changes',
+  mat_open_in_viewer: 'No in-app preview for this file type — open it in a document viewer.',
+  mat_open_in_viewer_btn: 'Open in viewer',
+  mat_open_link_sub: 'This material is a link.',
+  mat_open_failed: 'Could not open the file. Check your connection and try again.',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -1192,6 +1221,32 @@ export const STRINGS = {
     m_ago_min: '{n} phút trước',
     m_ago_hour: '{n} giờ trước',
     m_ago_day: '{n} ngày trước',
+
+    // ---- Giai đoạn 4: các màn hình chính cho giáo viên ----
+    att_take: 'Điểm danh',
+    att_saving: 'Đang lưu…',
+    att_save_failed: 'Chưa lưu được',
+    att_none_marked: 'Chưa điểm danh ai',
+    att_marked_of: 'Đã điểm danh {done}/{total}',
+    att_empty_roster_sub: 'Hãy thêm học sinh vào lớp này, rồi quay lại để điểm danh.',
+    att_no_class_sub: 'Sự kiện này không thuộc lớp nào nên không có danh sách để điểm danh.',
+    att_no_event: 'Không tìm thấy sự kiện',
+    att_no_event_sub: 'Hãy mở một buổi học của hôm nay để điểm danh.',
+    cal_upcoming: 'Sắp tới',
+    cal_day_empty: 'Ngày này không có gì',
+    cal_day_count: '{n} sự kiện',
+    ev_move_to: 'Chuyển sang…',
+    ev_move_recurring_note:
+      'Sự kiện này lặp lại nên ở đây chỉ đổi được giờ — đổi ngày sẽ làm chuyển toàn bộ các buổi.',
+    ev_delete_q: 'Xóa sự kiện?',
+    cls_roster_edit: 'Sửa danh sách lớp',
+    cls_roster_search: 'Tìm học sinh…',
+    cls_roster_after_save: 'Hãy lưu lớp trước, rồi thêm học sinh vào lớp.',
+    hw_unsaved: 'Có thay đổi chưa lưu',
+    mat_open_in_viewer: 'Định dạng này không xem trước được trong ứng dụng — hãy mở bằng ứng dụng đọc tài liệu.',
+    mat_open_in_viewer_btn: 'Mở bằng ứng dụng khác',
+    mat_open_link_sub: 'Tài liệu này là một đường liên kết.',
+    mat_open_failed: 'Không mở được tệp. Hãy kiểm tra kết nối và thử lại.',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 

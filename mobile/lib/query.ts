@@ -27,8 +27,14 @@ export const qk = {
   events: ['events'] as const,
   classes: ['classes'] as const,
   people: ['people'] as const,
+  students: ['students'] as const,
   homework: ['homework'] as const,
   materials: ['materials'] as const,
+  /** The calendar theme (`--cal-bg` and friends), from /api/settings/theme. */
+  calTheme: ['calTheme'] as const,
+  assessmentTypes: ['assessmentTypes'] as const,
+  /** Grades for one homework. The web holds the whole table; the phone fetches per assignment. */
+  homeworkGrades: (homeworkId: string) => ['homeworkGrades', homeworkId] as const,
   feedback: ['feedback'] as const,
   assessments: ['assessments'] as const,
   profile: ['profile'] as const,

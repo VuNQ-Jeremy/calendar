@@ -14,6 +14,7 @@ export { Badge } from './Badge';
 export { Button } from './Button';
 export { Card } from './Card';
 export { Checkbox } from './Checkbox';
+export { ColorPicker, COLOR_IDS } from './ColorPicker';
 export { IconButton } from './IconButton';
 export { Input } from './Input';
 export { ProgressBar } from './ProgressBar';

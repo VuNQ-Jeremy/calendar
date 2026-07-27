@@ -156,12 +156,39 @@ export interface Bootstrap extends MeResponse {
   theme?: ThemeRow;
 }
 
+/**
+ * No `id`: the table's primary key is the (event_id, date, student_id) triple and the service
+ * does not project a surrogate — see `server/services/attendance.ts`.
+ */
 export interface AttendanceRow {
-  id: string;
   eventId: string;
   date: string;
   studentId: string;
   status: AttendanceStatus;
+}
+
+/**
+ * One homework grade. `scoreRecordId` is set when the grade also produced a `score_records` row
+ * for the Assessment charts — the invariant is that one exists iff `score != null`
+ * (`server/services/homework.ts`). The phone never writes it directly.
+ */
+export interface GradeRow {
+  id: string;
+  homeworkId: string;
+  studentId: string;
+  score: number | null;
+  comment: string | null;
+  gradedAt: string | null;
+  scoreRecordId: string | null;
+}
+
+/** `/api/dashboard` — the mirror of the web's /dashboard loader. */
+export interface DashboardResponse {
+  /** The server's idea of today, as `YYYY-MM-DD`. */
+  today: string;
+  todayEvents: EventRow[];
+  homeworkDueToday: HomeworkRow[];
+  classes: { id: string; name: string; color: string }[];
 }
 
 export interface ProfileRow extends AuthUser {

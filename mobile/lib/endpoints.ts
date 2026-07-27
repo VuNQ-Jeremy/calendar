@@ -30,6 +30,8 @@ import type {
 import type {
   AssessmentTypeRow,
   AttendanceRow,
+  DashboardResponse,
+  GradeRow,
   BehaviorRecordRow,
   Bootstrap,
   ClassRow,
@@ -90,7 +92,7 @@ export const changePassword = (input: ChangePasswordInput) =>
 
 export const bootstrap = () => apiFetch<Bootstrap>('/api/bootstrap');
 
-export const dashboard = () => apiFetch<unknown>('/api/dashboard');
+export const dashboard = () => apiFetch<DashboardResponse>('/api/dashboard');
 
 // ---- Collections ----
 //
@@ -148,25 +150,33 @@ export const uploadMaterial = (form: FormData) =>
 export const listAttendance = (eventId: string, date: string) =>
   apiFetch<AttendanceRow[]>('/api/attendance', { query: { eventId, date } });
 
-/** Delete-then-insert: a student omitted from `marks` is UNMARKED, not left as they were. */
+/**
+ * Delete-then-insert: a student omitted from `records` is UNMARKED, not left as they were.
+ * Replies with the occurrence's refreshed record set.
+ */
 export const saveAttendance = (input: AttendanceSaveInput) =>
-  apiFetch<{ ok: true }>('/api/attendance', { method: 'POST', body: input });
+  apiFetch<AttendanceRow[]>('/api/attendance', { method: 'POST', body: input });
 
-export const listEventMaterials = (eventId?: string) =>
-  apiFetch<{ eventId: string; materialId: string }[]>('/api/event-materials', {
-    query: { eventId },
-  });
+/**
+ * Two shapes, two functions: with `?eventId=` the server returns that event's material ids
+ * (`listForEvent` -> `string[]`); without it, the whole join table. One function typed as the
+ * join-table shape would be a lie in the common case.
+ */
+export const listEventMaterials = (eventId: string) =>
+  apiFetch<string[]>('/api/event-materials', { query: { eventId } });
+
+export const listAllEventMaterials = () =>
+  apiFetch<{ eventId: string; materialId: string }[]>('/api/event-materials');
 
 export const saveEventMaterials = (input: EventMaterialsSaveInput) =>
   apiFetch<{ ok: true }>('/api/event-materials', { method: 'POST', body: input });
 
 export const listHomeworkGrades = (homeworkId: string) =>
-  apiFetch<
-    { homeworkId: string; studentId: string; score: number | null; comment: string | null }[]
-  >(`/api/homework/${homeworkId}/grades`);
+  apiFetch<GradeRow[]>(`/api/homework/${homeworkId}/grades`);
 
+/** Replies with the homework's refreshed grade set — save the whole roster, as the web does. */
 export const saveHomeworkGrades = (homeworkId: string, input: HomeworkGradesSaveInput) =>
-  apiFetch<{ ok: true }>(`/api/homework/${homeworkId}/grades`, { method: 'POST', body: input });
+  apiFetch<GradeRow[]>(`/api/homework/${homeworkId}/grades`, { method: 'POST', body: input });
 
 // ---- Flashcards ----
 

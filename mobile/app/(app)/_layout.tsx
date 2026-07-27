@@ -107,6 +107,14 @@ export default function AppLayout() {
 
       {/* Pushed detail screens: reachable from More, never in the tab bar. */}
       <Tabs.Screen name="people" options={{ href: null }} />
+      {/*
+        Phase 4's pushed routes. `attendance` is a route of its own rather than a screen inside
+        the calendar stack because the dashboard deep-links straight into it — that shortcut is
+        what makes marking a register two taps from a cold launch.
+      */}
+      <Tabs.Screen name="attendance" options={{ href: null }} />
+      <Tabs.Screen name="event" options={{ href: null }} />
+      <Tabs.Screen name="material" options={{ href: null }} />
       <Tabs.Screen name="homework" options={{ href: null }} />
       <Tabs.Screen name="materials" options={{ href: null }} />
       <Tabs.Screen name="assessments" options={{ href: null }} />
