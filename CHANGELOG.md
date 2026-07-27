@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0005 — 2026-07-27
+Fix CI version stamp: deploy workflow now checks out full history so the derived build number is not v0.0000.
+
 ## v0.0004 — 2026-07-27
 Accept a JSON body on /translate so the mobile client can use it, alongside the FormData the web screen posts.
 
