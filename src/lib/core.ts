@@ -54,9 +54,6 @@ TODAY.setHours(0, 0, 0, 0);
 // implementations. Re-exported here — ~20 files import them from this module.
 export { iso, addDays, parseISO, startOfWeek, toMin, addMin } from '../../shared/logic/dates';
 
-export function makeCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s = '';
-  for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s.slice(0, 3) + '-' + s.slice(3);
-}
+// Invite codes moved to shared/logic/invite-code.ts in phase 5 — the phone generates them too,
+// and the XXX-XXX format is validated server-side.
+export { makeInviteCode as makeCode } from '../../shared/logic/invite-code';

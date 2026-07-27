@@ -80,6 +80,68 @@ function buildUrl(path: string, query?: ApiInit['query']): string {
   return s ? `${url}?${s}` : url;
 }
 
+/**
+ * A multipart upload that reports progress.
+ *
+ * `fetch` cannot do this — the Fetch standard has no upload-progress event, and React Native's
+ * polyfill is no exception. `XMLHttpRequest.upload.onprogress` does, and React Native implements
+ * it, so this is the one place in the app that does not go through `apiFetch`. It keeps the same
+ * contract: bearer auth, the `{ data }` / `{ error }` envelope, and the shared 401 handling.
+ *
+ * The 15-second timeout does NOT apply here. A 20 MB worksheet over Vietnamese mobile data can
+ * legitimately take a minute, and aborting a nearly-complete upload is worse than waiting.
+ */
+export async function apiUpload<T>(
+  path: string,
+  form: FormData,
+  opts: { method?: 'POST' | 'PATCH'; query?: ApiInit['query']; onProgress?: (pct: number) => void } = {},
+): Promise<T> {
+  if (!BASE) throw new ApiError(0, 'no_base_url', 'm_server_error');
+  const token = await readToken();
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(opts.method ?? 'POST', buildUrl(path, opts.query));
+    xhr.setRequestHeader('Accept', 'application/json');
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    // No Content-Type: XHR derives the multipart boundary from the FormData, exactly as with
+    // fetch. Setting it by hand omits the boundary and the server sees a malformed body.
+
+    if (opts.onProgress) {
+      xhr.upload.onprogress = (e) => {
+        // `lengthComputable` is false for a stream of unknown size; reporting 0 forever is worse
+        // than an indeterminate bar, so the caller gets -1 and can decide.
+        opts.onProgress!(e.lengthComputable ? Math.round((e.loaded / e.total) * 100) : -1);
+      };
+    }
+
+    xhr.onerror = () => reject(new ApiError(0, 'network_error', messageKeyFor(0, 'network_error')));
+    xhr.onabort = () => reject(new ApiError(0, 'aborted', messageKeyFor(0, 'network_error')));
+
+    xhr.onload = () => {
+      let parsed: unknown = undefined;
+      if (xhr.responseText) {
+        try {
+          parsed = JSON.parse(xhr.responseText);
+        } catch {
+          reject(new ApiError(xhr.status || 500, 'non_json_response', 'm_server_error'));
+          return;
+        }
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const env = (parsed ?? {}) as { error?: string; issues?: unknown };
+        const code = env.error ?? `http_${xhr.status}`;
+        if (xhr.status === 401) onUnauthorized();
+        reject(new ApiError(xhr.status, code, messageKeyFor(xhr.status, code), env.issues));
+        return;
+      }
+      resolve(((parsed ?? {}) as { data?: T }).data as T);
+    };
+
+    xhr.send(form as unknown as Document);
+  });
+}
+
 export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> {
   const { auth = true, body, query, headers, ...rest } = init;
 

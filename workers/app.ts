@@ -7,6 +7,8 @@ import { cloudflareCtx } from '../app/load-context';
 // module for Cloudflare to register the class.
 export { TranslateProxy } from './translate-proxy';
 
+import { runScheduled } from '../server/services/notify';
+
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
   import.meta.env.MODE,
@@ -36,5 +38,25 @@ export default {
       });
       throw err;
     }
+  },
+
+  /**
+   * Cron Triggers (see `triggers.crons` in wrangler.jsonc).
+   *
+   *   `*​/15 * * * *`  — class-starting-soon sweep
+   *   `0 1 * * *`     — 01:00 UTC = 08:00 Vietnam (ICT, UTC+7), the daily digest
+   *
+   * `waitUntil` rather than a bare await so a slow Expo response cannot make the invocation
+   * itself look like a timeout; the work still runs to completion.
+   */
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      runScheduled(event.cron, env, new Date(event.scheduledTime)).catch((err) => {
+        // A throwing cron is retried by Cloudflare, which for a notification job means
+        // duplicates. The ledger makes that safe, but logging and swallowing is still the
+        // honest behaviour: there is no user waiting on this.
+        console.error('[cron] failed', { cron: event.cron, err: String(err) });
+      }),
+    );
   },
 } satisfies ExportedHandler<Env>;

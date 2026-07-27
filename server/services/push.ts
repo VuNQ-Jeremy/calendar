@@ -1,16 +1,13 @@
-import { eq, inArray } from 'drizzle-orm';
-import { pushTokens } from '../db/schema';
+import { eq, inArray, lt } from 'drizzle-orm';
+import { accounts, pushTokens, sentNotifications } from '../db/schema';
 import type { Db } from '../db/index';
 
 /**
- * Expo push token registry.
+ * Expo push: the device registry, the sender, and the "already sent" ledger.
  *
- * Sending happens in phase 6 (a Cron Trigger in workers/app.ts POSTing to
- * https://exp.host/--/api/v2/push/send). This module is just the registry, so phase 2 has
- * somewhere to register a device on login.
- *
- * Note: Expo's push service is called DIRECTLY from the Worker — unlike Anthropic, it has no
- * Cloudflare-egress restriction, so it must not go through TRANSLATE_DO.
+ * Sending is a plain HTTPS POST to https://exp.host/--/api/v2/push/send — no SDK, no
+ * credentials. It is called DIRECTLY from the Worker: unlike Anthropic, Expo has no problem with
+ * Cloudflare's Hong Kong egress, so it must NOT go through TRANSLATE_DO.
  */
 
 export type PushTokenRow = {
@@ -64,4 +61,128 @@ export async function tokensForAccounts(db: Db, accountIds: string[]): Promise<s
 export async function pruneTokens(db: Db, expoTokens: string[]): Promise<void> {
   if (!expoTokens.length) return;
   await db.delete(pushTokens).where(inArray(pushTokens.expoToken, expoTokens));
+}
+
+/** Account ids for a set of student records. A student with no account has no device. */
+export async function accountIdsForStudents(db: Db, studentIds: string[]): Promise<string[]> {
+  if (!studentIds.length) return [];
+  const rows = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(inArray(accounts.studentId, studentIds));
+  return rows.map((r) => r.id);
+}
+
+/** Account ids for a set of staff records. */
+export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<string[]> {
+  if (!staffIds.length) return [];
+  const rows = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(inArray(accounts.staffId, staffIds));
+  return rows.map((r) => r.id);
+}
+
+// ---- Sending ----
+
+/** The three Android channels. Each can be muted independently in system settings. */
+export type PushChannel = 'reminders' | 'homework' | 'study';
+
+export interface ExpoPushMessage {
+  to: string;
+  title: string;
+  body: string;
+  /** Consumed by the app's notification-tap handler to deep-link. Keep it small. */
+  data?: Record<string, string>;
+  channelId: PushChannel;
+}
+
+interface ExpoPushTicket {
+  status: 'ok' | 'error';
+  id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+/** Expo's documented cap. A school of a few hundred accounts is one or two requests. */
+const BATCH = 100;
+
+/**
+ * Send, then act on the receipts.
+ *
+ * Returns the tokens Expo rejected with `DeviceNotRegistered` — the app was uninstalled or the
+ * token rotated. Callers pass them to `pruneTokens`. This is the piece of push plumbing that is
+ * always skipped and always regretted: without it the table grows forever with tokens that can
+ * never deliver, and every subsequent send pays for them.
+ */
+export async function sendPush(messages: ExpoPushMessage[]): Promise<{ dead: string[] }> {
+  const dead: string[] = [];
+
+  for (let i = 0; i < messages.length; i += BATCH) {
+    const batch = messages.slice(i, i + BATCH);
+    let tickets: ExpoPushTicket[] = [];
+    try {
+      const res = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(batch),
+      });
+      if (!res.ok) {
+        console.error('[push] send failed', { status: res.status });
+        continue;
+      }
+      tickets = ((await res.json()) as { data?: ExpoPushTicket[] }).data ?? [];
+    } catch (err) {
+      // A failed send is not worth failing the whole cron for: the next tick tries again, and
+      // the idempotency ledger is only written for messages that were actually handed over.
+      console.error('[push] send threw', { err: String(err) });
+      continue;
+    }
+
+    // Tickets come back positionally, one per message in the batch.
+    tickets.forEach((ticket, idx) => {
+      if (ticket.status === 'ok') return;
+      const token = batch[idx]?.to;
+      if (ticket.details?.error === 'DeviceNotRegistered' && token) dead.push(token);
+      else console.error('[push] ticket error', { error: ticket.details?.error, message: ticket.message });
+    });
+  }
+
+  return { dead };
+}
+
+// ---- Idempotency ledger ----
+
+/**
+ * Which of these keys have already been notified.
+ *
+ * Read as a set rather than one query per candidate: a 15-minute sweep over a 30-minute window
+ * checks every upcoming occurrence each time it runs.
+ */
+export async function alreadySent(db: Db, keys: string[]): Promise<Set<string>> {
+  if (!keys.length) return new Set();
+  const rows = await db
+    .select({ key: sentNotifications.key })
+    .from(sentNotifications)
+    .where(inArray(sentNotifications.key, keys));
+  return new Set(rows.map((r) => r.key));
+}
+
+/** Record keys as sent. `DO NOTHING` on conflict: two overlapping ticks must not throw. */
+export async function markSent(db: Db, keys: string[]): Promise<void> {
+  if (!keys.length) return;
+  const sentAt = new Date().toISOString();
+  await db
+    .insert(sentNotifications)
+    .values(keys.map((key) => ({ key, sentAt })))
+    .onConflictDoNothing();
+}
+
+/**
+ * Drop ledger rows older than `days`. The ledger only has to outlive the window a job can still
+ * re-fire in; keeping it forever would turn an idempotency check into a growing table scan.
+ */
+export async function pruneLedger(db: Db, days = 30): Promise<void> {
+  const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+  await db.delete(sentNotifications).where(lt(sentNotifications.sentAt, cutoff));
 }

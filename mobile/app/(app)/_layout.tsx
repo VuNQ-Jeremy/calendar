@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
+import { usePushRegistration, useNotificationRouting } from '~/lib/push';
 import { useSync } from '~/lib/use-sync';
 import { useTheme } from '~/theme';
 
@@ -38,6 +39,14 @@ export default function AppLayout() {
   // Mounted here rather than in the root layout so it only runs for a signed-in user — a flush
   // with no token would 401 and burn an attempt on every queued result.
   useSync(!!user);
+
+  // Phase 6. Re-registers the Expo token on every sign-in (tokens rotate, and one handset can
+  // serve several accounts) — but only if permission was already granted. It never prompts:
+  // the ask belongs somewhere the user has context for it, not at launch.
+  usePushRegistration(!!user);
+  // A tapped notification opens the event, assignment or topic it is about. Mounted here, inside
+  // the signed-in shell, so a deep link can never push a screen behind a login gate.
+  useNotificationRouting(!!user);
 
   // Belt and braces with app/index.tsx: a deep link straight into a tab must not render the
   // shell for a signed-out user.
@@ -121,6 +130,7 @@ export default function AppLayout() {
       <Tabs.Screen name="feedback" options={{ href: null }} />
       <Tabs.Screen name="config" options={{ href: null }} />
       <Tabs.Screen name="language" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }

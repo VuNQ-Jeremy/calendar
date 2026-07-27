@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { NotifPrompt } from '~/components/NotifPrompt';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
 import { Body, Button, Muted, Title } from '~/ui';
@@ -42,6 +43,15 @@ export function GameEnd({
         <Button variant="secondary" onPress={onExit}>
           {t('fc_exit')}
         </Button>
+      </View>
+
+      {/*
+        Phase 6's contextual permission ask. Here, and not on first launch: the user has just
+        finished a round, so "we can remind you to practise" is a sentence with a referent.
+        Renders nothing once the ask has been spent — see components/NotifPrompt.tsx.
+      */}
+      <View style={{ alignSelf: 'stretch', marginTop: th.spacing[4] }}>
+        <NotifPrompt />
       </View>
     </View>
   );

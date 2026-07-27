@@ -41,7 +41,12 @@ export type StaffRow = Row<z.infer<typeof StaffInput>>;
 export type ParentRow = Row<z.infer<typeof ParentInput>>;
 export type InviteRow = Row<z.infer<typeof InviteInput>>;
 export type HomeworkRow = Row<z.infer<typeof HomeworkInput>>;
-export type MaterialRow = Row<z.infer<typeof MaterialInput>>;
+/**
+ * The one row the API returns with a field its input schema does not have: `fileKey` is the R2
+ * object key, assigned server-side on upload. It is the only way to tell "this material has a
+ * file to download" apart from "this material is a link", so the list screen needs it.
+ */
+export type MaterialRow = Row<z.infer<typeof MaterialInput>> & { fileKey?: string | null };
 export type FeedbackRow = Row<z.infer<typeof FeedbackInput>>;
 export type ScoreRecordRow = Row<z.infer<typeof ScoreRecordInput>>;
 export type BehaviorRecordRow = Row<z.infer<typeof BehaviorRecordInput>>;
@@ -87,6 +92,17 @@ export interface FlashcardResultRow {
   total: number;
   durationMs: number | null;
   playedAt: string;
+}
+
+/**
+ * One student's flashcard activity, aggregated across every topic. Shown on the student detail
+ * screen — the mobile home of the block the web puts inside its Student modal.
+ */
+export interface StudentFlashcardStats {
+  studentId: string;
+  rounds: number;
+  avgPct: number;
+  lastPlayedAt: string | null;
 }
 
 /**

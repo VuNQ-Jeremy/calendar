@@ -3,12 +3,14 @@ import { Link, router } from 'expo-router';
 import type { Href } from 'expo-router';
 import {
   BarChart3,
+  Bell,
   ChevronRight,
   ClipboardList,
   FolderOpen,
   Languages,
   LogOut,
   MessageSquare,
+  Send,
   Settings,
   UserRound,
   Users,
@@ -68,6 +70,14 @@ export default function More() {
       icon: <MessageSquare size={20} color={iconColor} />,
     },
     {
+      // The web puts "Give feedback" in the sidebar, opening a modal from the app shell. A phone
+      // has no persistent shell, so the compose form is a query param on the inbox screen.
+      key: 'feedback_send',
+      tk: 'fb_share',
+      href: '/feedback?compose=1',
+      icon: <Send size={20} color={iconColor} />,
+    },
+    {
       key: 'config',
       tk: 'nav_config',
       href: '/config',
@@ -79,6 +89,12 @@ export default function More() {
       tk: 'prof_title',
       href: '/profile',
       icon: <UserRound size={20} color={iconColor} />,
+    },
+    {
+      key: 'notifications',
+      tk: 'm_notifications',
+      href: '/notifications',
+      icon: <Bell size={20} color={iconColor} />,
     },
     {
       key: 'language',
@@ -142,6 +158,14 @@ export default function More() {
           <Body style={{ flex: 1, color: th.status.danger }}>{t('prof_logout')}</Body>
         </Pressable>
       </Card>
+
+      {/*
+        Stated, not silently dropped: the web's scrollbar-style preference has no Android
+        equivalent (there is no styleable scrollbar to apply it to). A user who set it on the web
+        and comes looking for it here gets an answer instead of concluding the app is incomplete.
+        Full list of deliberate omissions: docs/mobile-parity.md.
+      */}
+      <Muted style={{ paddingHorizontal: th.spacing[2] }}>{t('m_web_only_note')}</Muted>
 
       {/*
         The build stamp: v0.00NN · rtN · <sha> · <updateId>.

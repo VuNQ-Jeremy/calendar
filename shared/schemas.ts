@@ -350,3 +350,18 @@ export const UiPrefsInput = z.object({
   scrollbar: z.enum(SCROLLBAR_STYLES).optional(),
 });
 export type UiPrefsInput = z.infer<typeof UiPrefsInput>;
+
+/**
+ * What the cron jobs are allowed to send.
+ *
+ * `classLeadMinutes` is capped at 120 and floored at 15 because the class sweep runs every 15
+ * minutes: a 5-minute lead cannot be honoured, and pretending otherwise would silently drop
+ * reminders rather than send them late.
+ */
+export const NotifPrefsInput = z.object({
+  classReminders: z.coerce.boolean().default(true),
+  classLeadMinutes: z.coerce.number().int().min(15).max(120).default(30),
+  homeworkReminders: z.coerce.boolean().default(true),
+  studyNudges: z.coerce.boolean().default(false),
+});
+export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;

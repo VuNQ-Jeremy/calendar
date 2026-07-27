@@ -12,7 +12,7 @@ import type {
   StudentRow,
   ThemeRow,
 } from './types';
-import type { EventInput } from '@mochi/shared/schemas';
+import type { EventInput, MaterialInput } from '@mochi/shared/schemas';
 
 /**
  * The staff screens' reads and writes, in one place.
@@ -53,6 +53,40 @@ export function useMaterials() {
 
 export function useAssessmentTypes() {
   return useQuery({ queryKey: qk.assessmentTypes, queryFn: api.assessmentTypes.list });
+}
+
+// ---- Phase 5 reads: the rest of People, Assessments and Feedback ----
+
+export function useStaff() {
+  return useQuery({ queryKey: qk.staff, queryFn: api.staff.list });
+}
+
+export function useParents() {
+  return useQuery({ queryKey: qk.parents, queryFn: api.parents.list });
+}
+
+export function useInvites() {
+  return useQuery({ queryKey: qk.invites, queryFn: api.invites.list });
+}
+
+export function useScores() {
+  return useQuery({ queryKey: qk.scores, queryFn: api.scores.list });
+}
+
+export function useBehavior() {
+  return useQuery({ queryKey: qk.behavior, queryFn: api.behavior.list });
+}
+
+export function useFeedback() {
+  return useQuery({ queryKey: qk.feedback, queryFn: api.feedback.list });
+}
+
+/**
+ * Per-student flashcard aggregates. STAFF-only on the server, so this is never mounted on a
+ * student's device — the student detail screen it feeds is behind the More menu.
+ */
+export function useStudentFlashcardStats() {
+  return useQuery({ queryKey: qk.flashcardStudentStats, queryFn: api.flashcards.studentStats });
 }
 
 export function useDashboard() {
@@ -146,6 +180,103 @@ export function useSaveGrades(homeworkId: string) {
       void qc.invalidateQueries({ queryKey: qk.assessments });
     },
   });
+}
+
+/**
+ * Create / update / delete for one of the `collection()` endpoints, with the coarse refresh.
+ *
+ * People, assessments and feedback are all the same three verbs over the same envelope, and
+ * writing that out five times was the bulk of the web's 1049-line people.tsx. One hook, five
+ * call sites.
+ */
+export function useCollectionMutations<Row, Input>(coll: {
+  create: (input: Input) => Promise<Row>;
+  update: (id: string, patch: Partial<Input>) => Promise<Row>;
+  remove: (id: string) => Promise<{ ok: true }>;
+}) {
+  const qc = useQueryClient();
+  const done = () => qc.invalidateQueries();
+
+  const create = useMutation({ mutationFn: coll.create, onSuccess: done });
+  const update = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Input> }) => coll.update(id, patch),
+    onSuccess: done,
+  });
+  const remove = useMutation({ mutationFn: coll.remove, onSuccess: done });
+
+  return { create, update, remove };
+}
+
+/**
+ * Materials, with the one optimisation the web made deliberately.
+ *
+ * `app/routes/materials.tsx:90-120` writes the mutated row straight back into the route cache so
+ * the post-action revalidation is a cache hit rather than a second round trip — the note there
+ * says the download button depends on the fresh `fileKey`. `setQueryData` in `onSuccess` is the
+ * React Query spelling of exactly that, and it matters more here than on the web: a 20 MB upload
+ * over Vietnamese mobile data should not be followed by a refetch of the whole list.
+ *
+ * The blanket invalidate still runs alongside it, because a material can be attached to an event
+ * and `['eventMaterials']` would otherwise go stale — the web invalidates `evmat:` for the same
+ * reason.
+ */
+export function useMaterialMutations() {
+  const qc = useQueryClient();
+
+  const writeRow = (row: MaterialRow) => {
+    qc.setQueryData<MaterialRow[]>(qk.materials, (prev) => {
+      if (!prev) return [row];
+      return prev.some((m) => m.id === row.id)
+        ? prev.map((m) => (m.id === row.id ? row : m))
+        : [...prev, row];
+    });
+    void qc.invalidateQueries({ queryKey: ['eventMaterials'] });
+  };
+
+  const save = useMutation({
+    mutationFn: (args: {
+      id?: string;
+      input: MaterialInput;
+      form?: FormData;
+      onProgress?: (pct: number) => void;
+    }) =>
+      args.form
+        ? args.id
+          ? api.updateMaterialForm(args.id, args.form, args.onProgress)
+          : api.uploadMaterial(args.form, args.onProgress)
+        : args.id
+          ? api.materials.update(args.id, args.input)
+          : api.materials.create(args.input),
+    onSuccess: writeRow,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.materials.remove(id),
+    onSuccess: (_res, id) => {
+      qc.setQueryData<MaterialRow[]>(qk.materials, (prev) => prev?.filter((m) => m.id !== id));
+      void qc.invalidateQueries({ queryKey: ['eventMaterials'] });
+    },
+  });
+
+  /** The star toggle. Optimistic, because a favourite that waits for a round trip feels broken. */
+  const toggleFavorite = useMutation({
+    mutationFn: ({ id, favorite }: { id: string; favorite: boolean }) =>
+      api.materials.update(id, { favorite }),
+    onMutate: async ({ id, favorite }) => {
+      await qc.cancelQueries({ queryKey: qk.materials });
+      const prev = qc.getQueryData<MaterialRow[]>(qk.materials);
+      qc.setQueryData<MaterialRow[]>(qk.materials, (rows) =>
+        rows?.map((m) => (m.id === id ? { ...m, favorite } : m)),
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(qk.materials, ctx.prev);
+    },
+    onSuccess: writeRow,
+  });
+
+  return { save, remove, toggleFavorite };
 }
 
 // ---- Derivations every screen needs ----

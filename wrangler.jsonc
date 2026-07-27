@@ -37,6 +37,17 @@
     "bindings": [{ "name": "TRANSLATE_DO", "class_name": "TranslateProxy" }],
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TranslateProxy"] }],
+  // Phase 6 push notifications — handled by `scheduled()` in workers/app.ts, which branches on
+  // event.cron. Cron Triggers are available on the free Workers plan.
+  //
+  // The daily job is 01:00 UTC because the school is in Vietnam (ICT, UTC+7, no DST), which
+  // makes it 08:00 local. The offset is hardcoded there too; see server/services/notify.ts.
+  "triggers": {
+    "crons": [
+      "*/15 * * * *", // class starting soon
+      "0 1 * * *", // 08:00 ICT daily digest
+    ],
+  },
   "observability": {
     "enabled": true,
   },

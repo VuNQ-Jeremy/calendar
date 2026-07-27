@@ -28,6 +28,19 @@ export const qk = {
   classes: ['classes'] as const,
   people: ['people'] as const,
   students: ['students'] as const,
+  /**
+   * The web loads students, staff, parents and invites together under `route:people`. The phone
+   * splits them so the People tabs, the class roster and the assessment picker can each fetch
+   * only what they show — but they all stay under the same `['people', …]` prefix, so one
+   * `invalidateQueries({ queryKey: ['people'] })` still refreshes the whole screen.
+   */
+  staff: ['people', 'staff'] as const,
+  parents: ['people', 'parents'] as const,
+  invites: ['people', 'invites'] as const,
+  /** Per-student flashcard aggregates, for the student detail screen. */
+  flashcardStudentStats: ['flashcards', 'studentStats'] as const,
+  scores: ['assessments', 'scores'] as const,
+  behavior: ['assessments', 'behavior'] as const,
   homework: ['homework'] as const,
   materials: ['materials'] as const,
   /** The calendar theme (`--cal-bg` and friends), from /api/settings/theme. */

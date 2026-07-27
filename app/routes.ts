@@ -45,8 +45,10 @@ export default [
   route('api/profile', 'routes/api.profile.tsx'),
   route('api/settings/theme', 'routes/api.settings.theme.tsx'),
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
+  route('api/settings/notifications', 'routes/api.settings.notifications.tsx'),
   route('api/push/register', 'routes/api.push.register.tsx'),
   route('api/push/unregister', 'routes/api.push.unregister.tsx'),
+  route('api/push/run', 'routes/api.push.run.tsx'),
 
   layout('routes/_app.tsx', [
     index('routes/home.tsx'),

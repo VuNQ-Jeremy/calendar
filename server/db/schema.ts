@@ -370,6 +370,20 @@ export const pushTokens = sqliteTable(
   (t) => [index('idx_push_tokens_account').on(t.accountId)],
 );
 
+/**
+ * What has already been pushed, so a repeating cron sweep does not repeat itself.
+ *
+ * Key: `{kind}:{subjectId}:{occurrenceDate}` — see migrations/0015_notifications.sql.
+ */
+export const sentNotifications = sqliteTable(
+  'sent_notifications',
+  {
+    key: text('key').primaryKey(),
+    sentAt: text('sent_at').notNull(),
+  },
+  (t) => [index('idx_sent_notifications_sent_at').on(t.sentAt)],
+);
+
 export const flashcardMastery = sqliteTable(
   'flashcard_mastery',
   {

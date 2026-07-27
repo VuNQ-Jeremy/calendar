@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { ApiError, configureApi } from './api';
 import * as api from './endpoints';
+import { unregisterToken } from './push';
 import type { AuthAccount, AuthUser } from './types';
 import type { LoginInput, RedeemInviteInput } from '@mochi/shared/schemas';
 
@@ -165,13 +166,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const doLogout = React.useCallback(async () => {
+    // BEFORE the session token is discarded: /api/push/unregister is authenticated, and a device
+    // left registered keeps receiving notifications for an account nobody is signed into.
+    await unregisterToken();
     try {
       await api.logout(); // Ends only this device's session row.
     } catch {
       // Signing out locally must succeed even with no network. The server row expires anyway.
     }
-    // Phase 6: unregister the push token here, BEFORE the token is discarded — otherwise this
-    // device keeps receiving notifications for an account nobody is signed into.
     endSession({ expired: false });
   }, [endSession]);
 

@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ChevronRight, Plus, Trash2, Users } from 'lucide-react-native';
 import { ChipSelect } from '~/components/ChipSelect';
 import { DateTimeField } from '~/components/DateTimeField';
+import { NotifPrompt } from '~/components/NotifPrompt';
 import { ScreenHeader } from '~/components/ScreenHeader';
 import { getCal, useLang } from '~/lib/i18n';
 import * as api from '~/lib/endpoints';
@@ -253,6 +254,13 @@ export default function ClassDetail() {
             {t('delete')}
           </Button>
         ) : null}
+
+        {/*
+          The other contextual moment for the notification ask (phase 6.1): a teacher who has
+          just opened a class is being offered reminders about that class. Renders nothing once
+          the single ask has been spent.
+        */}
+        <NotifPrompt />
 
         <View style={{ height: th.spacing[10] }} />
       </ScrollView>

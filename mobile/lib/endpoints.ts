@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiFetch, apiUpload } from './api';
 import type {
   AssessmentTypeInput,
   AttendanceSaveInput,
@@ -17,6 +17,7 @@ import type {
   InviteInput,
   LoginInput,
   MaterialInput,
+  NotifPrefsInput,
   ParentInput,
   ProfileInput,
   PushRegisterInput,
@@ -141,9 +142,19 @@ export const reorderAssessmentTypes = (ids: string[]) =>
  * A material with a file. Must be FormData, and the file part must be the
  * `{ uri, name, type }` shape React Native's FormData understands — see docs/api.md for the
  * 20 MB cap (413 over it).
+ *
+ * Goes through `apiUpload` rather than `apiFetch` so the screen can show real progress: a
+ * 20 MB upload on mobile data takes long enough that a spinner reads as a hang.
  */
-export const uploadMaterial = (form: FormData) =>
-  apiFetch<MaterialRow>('/api/materials', { method: 'POST', body: form });
+export const uploadMaterial = (form: FormData, onProgress?: (pct: number) => void) =>
+  apiUpload<MaterialRow>('/api/materials', form, { onProgress });
+
+/** The same, for editing an existing material (optionally replacing its file). */
+export const updateMaterialForm = (
+  id: string,
+  form: FormData,
+  onProgress?: (pct: number) => void,
+) => apiUpload<MaterialRow>('/api/materials', form, { method: 'PATCH', query: { id }, onProgress });
 
 // ---- Attendance, event materials, grades ----
 
@@ -268,6 +279,10 @@ export const settings = {
   getUiPrefs: () => apiFetch<UiPrefs>('/api/settings/ui-prefs'),
   updateUiPrefs: (patch: Partial<UiPrefsInput>) =>
     apiFetch<UiPrefs>('/api/settings/ui-prefs', { method: 'PATCH', body: patch }),
+  /** What the cron jobs may send. School-wide today — see server/services/notif-prefs.ts. */
+  getNotifPrefs: () => apiFetch<NotifPrefsInput>('/api/settings/notifications'),
+  updateNotifPrefs: (patch: Partial<NotifPrefsInput>) =>
+    apiFetch<NotifPrefsInput>('/api/settings/notifications', { method: 'PATCH', body: patch }),
 };
 
 // ---- Push (wired up in phase 6) ----

@@ -59,6 +59,19 @@ directory here — Expo's forked file map ignores roots outside the project root
 `@mochi/shared/tokens`, not a relative path or a tsconfig alias. `metro.config.js` explains it in
 full. Do not "simplify" it.
 
+**A stale typed-routes file produces impossible `tsc` errors.** `.expo/types/router.d.ts` is
+generated from Metro's file map, and with a warm cache after you add files, expo-router's typegen
+mis-enumerates them — it emits entries like `/../components/Charts` and types real dynamic routes
+as static, so `router.push('/people/student/abc')` fails to typecheck against a route that plainly
+exists. The file is gitignored, so this is only ever local. The fix is a cold regeneration:
+
+```sh
+rm -rf .expo/types && npx expo start --clear   # wait for Metro, then Ctrl-C
+npm run typecheck
+```
+
+`npx expo export` does NOT regenerate it; only `expo start` does.
+
 **Screen components live at module scope.** Defining a component inline in a parent's render or
 in a navigator's `options` gives it a new identity every render, which remounts the screen and
 wipes its state. This already bit the web app once — see `CLAUDE.md`.
