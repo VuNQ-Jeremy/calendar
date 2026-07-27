@@ -25,8 +25,14 @@ npm run build:preview               # -> a download URL to send people
 ```
 
 Set `EXPO_PUBLIC_API_URL` in **both** `.env.local` (for `expo start`) and the matching profile's
-`env` block in `eas.json` (for builds). A build with the placeholder URL still installs and then
-fails every request.
+`env` block in `eas.json` (for builds). It is inlined into the bundle at build time and is public
+— fine for a base URL, never for a secret.
+
+> **Changing it does not invalidate Metro's transform cache.** The old value stays baked into the
+> cached module and the next local bundle silently ships it — confirmed, not theoretical. After
+> editing the URL, run `npx expo export --clear` (or `npx expo start --clear`). EAS builds are
+> unaffected; they start from a clean cache. To check what a bundle really contains:
+> `grep -ao 'https://[A-Za-z0-9.-]*workers\.dev' .expo/export-check/_expo/static/js/android/*.hbc`
 
 JS-only changes ship over the air with `npm run update:preview` — no reinstall. A new APK is only
 needed when native config changes, and `runtimeVersion` in `shared/version.json` must be bumped

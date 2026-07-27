@@ -125,7 +125,7 @@ That number must match what the sidebar stamp shows (`v0.0042`). Then:
 After `npm run deploy`:
 
 ```bash
-BASE=https://<your-worker>.workers.dev    # or http://localhost:5173 if `npm run dev` works
+BASE=https://calendar.ngqv0712.workers.dev    # or http://localhost:5173 if `npm run dev` works
 
 # 1. Log in, grab a token
 curl -s -X POST $BASE/api/auth/login \

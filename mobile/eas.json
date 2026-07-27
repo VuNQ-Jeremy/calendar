@@ -9,14 +9,14 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "channel": "development",
-      "env": { "EXPO_PUBLIC_API_URL": "https://REPLACE-ME.workers.dev" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://calendar.ngqv0712.workers.dev" }
     },
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "channel": "preview",
       // APK, not AAB: this is distributed as a download link, not through Play.
-      "env": { "EXPO_PUBLIC_API_URL": "https://REPLACE-ME.workers.dev" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://calendar.ngqv0712.workers.dev" }
     }
   },
   "submit": {}

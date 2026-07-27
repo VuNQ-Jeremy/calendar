@@ -193,7 +193,7 @@ or plain JSON for link-only materials. Files go to R2 and are served back throug
 ## Example
 
 ```bash
-BASE=https://<your-worker>.workers.dev
+BASE=https://calendar.ngqv0712.workers.dev
 
 TOKEN=$(curl -s -X POST $BASE/api/auth/login \
   -H 'content-type: application/json' \

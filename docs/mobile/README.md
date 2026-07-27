@@ -235,7 +235,7 @@ not the repo path). Where that happens:
 
 - All acceptance criteria in the phase file pass.
 - `npm run lint`, `npm run typecheck`, `npm run test` all green.
-- Deployed to `https://<your-worker>.workers.dev` and manually clicked through (rule 3)
+- Deployed to `https://calendar.ngqv0712.workers.dev` and manually clicked through (rule 3)
   with no regression.
 - From Phase 2 on: the change is verified **on a physical Android device**, not just a
   simulator.

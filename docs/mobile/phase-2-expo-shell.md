@@ -416,11 +416,17 @@ Six deliberate departures from the plan above. Everything else was built as writ
 `tsconfig.json` at the repo root now excludes `mobile` — the Expo app has its own tsconfig and
 typechecking it from the web project resolves neither its lib types nor its paths.
 
-**Not verified, and cannot be from this machine:** everything in the acceptance list that needs a
-deployed URL, an Expo account, or a physical device — live login, the role-based tab counts, the
-APK build and install, and the OTA update. `EXPO_PUBLIC_API_URL` is a placeholder in `eas.json`
-and `.env.example`; the production Worker URL is recorded nowhere in the repo. What *was* verified
-here: `npx tsc --noEmit` clean, a full production Metro bundle of every route
+**The API base URL is `https://calendar.ngqv0712.workers.dev`** — the same origin as the web app,
+because `/api/*` are resource routes inside the same Worker (`app/routes.ts`, and `wrangler.jsonc`
+declares no custom domain). It is set in `mobile/.env.example` and in both `eas.json` build
+profiles. It is a public value: `EXPO_PUBLIC_*` is inlined into the APK.
+
+**Not verified, and cannot be from this machine:** everything in the acceptance list that needs an
+Expo account or a physical device — the APK build and install, the OTA update, and therefore live
+login and the role-based tab counts on a real device. The endpoint itself was checked live:
+unauthenticated `GET /api/bootstrap` returns `401 {"error":"unauthorized"}` as
+`application/json` — not a redirect, not HTML — which is exactly the contract `lib/api.ts`
+depends on. What *else* was verified here: `npx tsc --noEmit` clean, a full production Metro bundle of every route
 (`npm run bundle`, 3,669 modules), `npx expo config` resolving the derived version, and the web
 app untouched — `npm run typecheck`, `npm run lint`, `npm test` (143 tests) and `npm run build`
 all green.
