@@ -12,10 +12,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
   await requireStaffCookieOrBearer(request, env); // only staff add/import words
   if (!env.ANTHROPIC_API_KEY) return Response.json({ error: 'disabled' }, { status: 503 });
 
-  const formData = await request.formData();
+  // The web screen posts FormData with an `items` JSON string; the mobile client posts a
+  // plain JSON body. Accept either, so both clients share this one route.
   let items: unknown;
   try {
-    items = JSON.parse((formData.get('items') as string) ?? '[]');
+    if ((request.headers.get('content-type') ?? '').includes('application/json')) {
+      items = ((await request.json()) as { items?: unknown }).items ?? [];
+    } else {
+      const formData = await request.formData();
+      items = JSON.parse((formData.get('items') as string) ?? '[]');
+    }
   } catch {
     return Response.json({ error: 'invalid json' }, { status: 400 });
   }
