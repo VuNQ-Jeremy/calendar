@@ -1,0 +1,23 @@
+{
+  "cli": { "version": ">= 5.0.0", "appVersionSource": "local" },
+  "build": {
+    // Keep a development-client APK installed on the test device alongside the preview build.
+    // Expo Go is fine for fast UI iteration on phases 2-5, but it CANNOT faithfully test push
+    // notifications (phase 6) or expo-secure-store.
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "channel": "development",
+      "env": { "EXPO_PUBLIC_API_URL": "https://REPLACE-ME.workers.dev" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "channel": "preview",
+      // APK, not AAB: this is distributed as a download link, not through Play.
+      "env": { "EXPO_PUBLIC_API_URL": "https://REPLACE-ME.workers.dev" }
+    }
+  },
+  "submit": {}
+}

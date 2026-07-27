@@ -1,0 +1,14 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // app.config.ts must import ../shared/version-math.ts with its extension — see the comment
+    // there: Node's extensionless resolution would find version.json instead.
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "~/*": ["./*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
+}

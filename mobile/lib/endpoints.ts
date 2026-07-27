@@ -1,0 +1,258 @@
+import { apiFetch } from './api';
+import type {
+  AssessmentTypeInput,
+  AttendanceSaveInput,
+  BehaviorRecordInput,
+  ChangePasswordInput,
+  ClassInput,
+  EventInput,
+  EventMaterialsSaveInput,
+  FeedbackInput,
+  FlashcardImportInput,
+  FlashcardResultBatch,
+  FlashcardTopicInput,
+  FlashcardWordInput,
+  HomeworkGradesSaveInput,
+  HomeworkInput,
+  InviteInput,
+  LoginInput,
+  MaterialInput,
+  ParentInput,
+  ProfileInput,
+  PushRegisterInput,
+  RedeemInviteInput,
+  ScoreRecordInput,
+  StaffInput,
+  StudentInput,
+  ThemeInput,
+  UiPrefsInput,
+} from '@mochi/shared/schemas';
+import type {
+  AssessmentTypeRow,
+  AttendanceRow,
+  BehaviorRecordRow,
+  Bootstrap,
+  ClassRow,
+  EventRow,
+  FeedbackRow,
+  FlashcardTopicRow,
+  FlashcardWordRow,
+  HomeworkRow,
+  InviteRow,
+  LoginResponse,
+  MaterialRow,
+  MeResponse,
+  ParentRow,
+  ProfileRow,
+  ScoreRecordRow,
+  StaffRow,
+  StudentRow,
+  ThemeRow,
+  UiPrefs,
+} from './types';
+
+/**
+ * One function per endpoint in docs/api.md. Screens call these; nothing outside this file
+ * calls `apiFetch` directly, so a path or verb only ever appears once.
+ *
+ * Inputs are the Zod-inferred types from shared/schemas.ts — the exact same types the server
+ * validates against, which is what stops the two clients drifting.
+ *
+ * Phase 2 only uses the auth, bootstrap, and profile calls. The rest are here because the
+ * endpoints exist and phases 3-5 are pure-JS OTA updates that should not have to add plumbing.
+ */
+
+// ---- Auth ----
+
+export const login = (input: LoginInput) =>
+  apiFetch<LoginResponse>('/api/auth/login', { method: 'POST', body: input, auth: false });
+
+export const redeemInvite = (input: RedeemInviteInput) =>
+  apiFetch<LoginResponse>('/api/auth/redeem-invite', { method: 'POST', body: input, auth: false });
+
+export const requestReset = (email: string) =>
+  apiFetch<{ ok: true; devUrl?: string | null }>('/api/auth/request-reset', {
+    method: 'POST',
+    body: { email },
+    auth: false,
+  });
+
+export const me = () => apiFetch<MeResponse>('/api/auth/me');
+
+export const logout = () => apiFetch<{ ok: true }>('/api/auth/logout', { method: 'POST' });
+
+export const changePassword = (input: ChangePasswordInput) =>
+  apiFetch<{ ok: true }>('/api/auth/change-password', { method: 'POST', body: input });
+
+// ---- Bootstrap and dashboard ----
+
+export const bootstrap = () => apiFetch<Bootstrap>('/api/bootstrap');
+
+export const dashboard = () => apiFetch<unknown>('/api/dashboard');
+
+// ---- Collections ----
+//
+// `id` may be a path segment or ?id= — docs/api.md. These use the query form so one function
+// covers every verb without string interpolation.
+
+function collection<Row, Input>(path: string) {
+  return {
+    list: () => apiFetch<Row[]>(path),
+    create: (input: Input) => apiFetch<Row>(path, { method: 'POST', body: input }),
+    /** PATCH is a true partial: keys you omit are left alone, not reset to Zod defaults. */
+    update: (id: string, patch: Partial<Input>) =>
+      apiFetch<Row>(path, { method: 'PATCH', query: { id }, body: patch }),
+    remove: (id: string) => apiFetch<{ ok: true }>(path, { method: 'DELETE', query: { id } }),
+  };
+}
+
+export const events = collection<EventRow, EventInput>('/api/events');
+export const classes = collection<ClassRow, ClassInput>('/api/classes');
+export const students = collection<StudentRow, StudentInput>('/api/students');
+export const staff = collection<StaffRow, StaffInput>('/api/staff');
+export const parents = collection<ParentRow, ParentInput>('/api/parents');
+export const homework = collection<HomeworkRow, HomeworkInput>('/api/homework');
+export const materials = collection<MaterialRow, MaterialInput>('/api/materials');
+export const feedback = collection<FeedbackRow, FeedbackInput>('/api/feedback');
+export const scores = collection<ScoreRecordRow, ScoreRecordInput>('/api/assessments/scores');
+export const behavior = collection<BehaviorRecordRow, BehaviorRecordInput>(
+  '/api/assessments/behavior',
+);
+export const assessmentTypes = collection<AssessmentTypeRow, AssessmentTypeInput>(
+  '/api/assessment-types',
+);
+
+/** Invites have no PATCH — a code is issued or revoked, never edited. */
+export const invites = {
+  list: () => apiFetch<InviteRow[]>('/api/invites'),
+  create: (input: InviteInput) =>
+    apiFetch<InviteRow>('/api/invites', { method: 'POST', body: input }),
+  remove: (id: string) => apiFetch<{ ok: true }>('/api/invites', { method: 'DELETE', query: { id } }),
+};
+
+export const reorderAssessmentTypes = (ids: string[]) =>
+  apiFetch<AssessmentTypeRow[]>('/api/assessment-types/reorder', { method: 'POST', body: { ids } });
+
+/**
+ * A material with a file. Must be FormData, and the file part must be the
+ * `{ uri, name, type }` shape React Native's FormData understands — see docs/api.md for the
+ * 20 MB cap (413 over it).
+ */
+export const uploadMaterial = (form: FormData) =>
+  apiFetch<MaterialRow>('/api/materials', { method: 'POST', body: form });
+
+// ---- Attendance, event materials, grades ----
+
+export const listAttendance = (eventId: string, date: string) =>
+  apiFetch<AttendanceRow[]>('/api/attendance', { query: { eventId, date } });
+
+/** Delete-then-insert: a student omitted from `marks` is UNMARKED, not left as they were. */
+export const saveAttendance = (input: AttendanceSaveInput) =>
+  apiFetch<{ ok: true }>('/api/attendance', { method: 'POST', body: input });
+
+export const listEventMaterials = (eventId?: string) =>
+  apiFetch<{ eventId: string; materialId: string }[]>('/api/event-materials', {
+    query: { eventId },
+  });
+
+export const saveEventMaterials = (input: EventMaterialsSaveInput) =>
+  apiFetch<{ ok: true }>('/api/event-materials', { method: 'POST', body: input });
+
+export const listHomeworkGrades = (homeworkId: string) =>
+  apiFetch<
+    { homeworkId: string; studentId: string; score: number | null; comment: string | null }[]
+  >(`/api/homework/${homeworkId}/grades`);
+
+export const saveHomeworkGrades = (homeworkId: string, input: HomeworkGradesSaveInput) =>
+  apiFetch<{ ok: true }>(`/api/homework/${homeworkId}/grades`, { method: 'POST', body: input });
+
+// ---- Flashcards ----
+
+export const flashcards = {
+  /** `user` level — students play the games. */
+  listTopics: () => apiFetch<FlashcardTopicRow[]>('/api/flashcards/topics'),
+  createTopic: (input: FlashcardTopicInput) =>
+    apiFetch<FlashcardTopicRow[]>('/api/flashcards/topics', { method: 'POST', body: input }),
+  updateTopic: (id: string, patch: Partial<FlashcardTopicInput>) =>
+    apiFetch<FlashcardTopicRow[]>('/api/flashcards/topics', {
+      method: 'PATCH',
+      query: { id },
+      body: patch,
+    }),
+  removeTopic: (id: string) =>
+    apiFetch<FlashcardTopicRow[]>('/api/flashcards/topics', { method: 'DELETE', query: { id } }),
+
+  /** Everything an offline download of one topic needs, in one request. */
+  topic: (slug: string) =>
+    apiFetch<{
+      topic: FlashcardTopicRow;
+      words: FlashcardWordRow[];
+      mastery: { wordId: string; known: number; seen: number }[];
+      // Note the SINGULAR `topic` — /api/flashcards/topics is the collection, and
+      // /api/flashcards/topic/:slug is the one-topic-with-words read. app/routes.ts:38-39.
+    }>(`/api/flashcards/topic/${encodeURIComponent(slug)}`),
+
+  listWords: (topicId: string) =>
+    apiFetch<FlashcardWordRow[]>('/api/flashcards/words', { query: { topicId } }),
+  createWord: (topicId: string, input: FlashcardWordInput) =>
+    apiFetch<FlashcardWordRow>('/api/flashcards/words', {
+      method: 'POST',
+      query: { topicId },
+      body: input,
+    }),
+  updateWord: (id: string, patch: Partial<FlashcardWordInput>) =>
+    apiFetch<FlashcardWordRow>('/api/flashcards/words', {
+      method: 'PATCH',
+      query: { id },
+      body: patch,
+    }),
+  removeWord: (id: string) =>
+    apiFetch<{ ok: true }>('/api/flashcards/words', { method: 'DELETE', query: { id } }),
+
+  importWords: (topicId: string, input: FlashcardImportInput) =>
+    apiFetch<{ imported: number }>('/api/flashcards/import', {
+      method: 'POST',
+      query: { topicId },
+      body: input,
+    }),
+
+  /**
+   * Always a batch, so the phase-3 offline outbox can flush several at once. Every result
+   * carries a `clientId` from the device: a retry after a dropped response is then a no-op
+   * instead of double-counting the student's score.
+   */
+  recordResults: (input: FlashcardResultBatch) =>
+    apiFetch<{ received: number; recorded: number; duplicates: number }>(
+      '/api/flashcards/results',
+      { method: 'POST', body: input },
+    ),
+
+  stats: (topicId?: string) => apiFetch<unknown>('/api/flashcards/stats', { query: { topicId } }),
+};
+
+// ---- Profile and settings ----
+
+export const profile = {
+  get: () => apiFetch<ProfileRow>('/api/profile'),
+  /** Cannot change `role` — ProfileInput has no such field, on purpose. */
+  update: (patch: Partial<ProfileInput>) =>
+    apiFetch<ProfileRow>('/api/profile', { method: 'PATCH', body: patch }),
+};
+
+export const settings = {
+  getTheme: () => apiFetch<ThemeRow>('/api/settings/theme'),
+  updateTheme: (patch: Partial<ThemeInput>) =>
+    apiFetch<ThemeRow>('/api/settings/theme', { method: 'PATCH', body: patch }),
+  getUiPrefs: () => apiFetch<UiPrefs>('/api/settings/ui-prefs'),
+  updateUiPrefs: (patch: Partial<UiPrefsInput>) =>
+    apiFetch<UiPrefs>('/api/settings/ui-prefs', { method: 'PATCH', body: patch }),
+};
+
+// ---- Push (wired up in phase 6) ----
+
+export const push = {
+  register: (input: PushRegisterInput) =>
+    apiFetch<{ ok: true }>('/api/push/register', { method: 'POST', body: input }),
+  unregister: (expoToken: string) =>
+    apiFetch<{ ok: true }>('/api/push/unregister', { method: 'POST', body: { expoToken } }),
+};

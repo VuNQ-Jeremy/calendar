@@ -1,0 +1,8 @@
+{
+  "name": "@mochi/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Code shared by the web app and the mobile app: Zod schemas, the bilingual string dictionary, design tokens, date/recurrence logic, and version formatting.",
+  "//": "This package.json exists ONLY so mobile/ can depend on this directory as `file:../shared`. Expo's forked Metro file map ignores watchFolders outside the project root, so a sibling directory cannot be resolved any other way — see mobile/metro.config.js. The web app imports these files by relative path and is unaffected."
+}

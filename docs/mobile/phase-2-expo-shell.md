@@ -386,6 +386,45 @@ module, permission, or an `app.json` plugin change) or `runtimeVersion` bumps.
 - [ ] The web app is untouched — `git diff` outside `mobile/` and `.gitignore` is empty.
 - [ ] Committed and pushed to `main`.
 
+## As built (2026-07-27)
+
+Six deliberate departures from the plan above. Everything else was built as written.
+
+1. **`shared/` is consumed as `@mochi/shared`, an npm `file:../shared` dependency — not the
+   `@shared/*` alias over `watchFolders`.** The alias approach cannot work with Expo SDK 57:
+   Expo's forked Metro file map is constructed with `rootDir: projectRoot` and silently ignores
+   every root outside it (`@expo/cli/.../createFileMap-fork.js`), so `../shared` never enters the
+   file map. Neither `extraNodeModules`, nor a custom `resolveRequest`, nor plain relative imports
+   resolve; only `server.unstable_serverRoot = <repo root>` fixed resolution, and that broke the
+   entry point. `shared/package.json` was added so npm can link the directory. The plan's rule is
+   intact — one source of truth, no copy — only the specifier changed. `mobile/metro.config.js`
+   carries the full explanation.
+2. **`expo-audio`, not `expo-av`.** `expo-av` is removed in this SDK.
+3. **Invite redemption is one form, not two steps.** The web does an `intent=redeem-check` round
+   trip to show the role before asking for a password; the JSON API has no such endpoint
+   (`POST /api/auth/redeem-invite` takes everything at once). An invalid code still fails with the
+   same message.
+4. **Reset-with-token is not shipped** — the plan's sanctioned fallback. Android app links need a
+   verified intent filter plus `assetlinks.json` served from the domain, which is not phase-2
+   work. The forgot-password screen says so via the `m_reset_on_web` string.
+5. **No "remember me" switch.** `api.auth.login.tsx` sets `ttlDays: 90` unconditionally, so the
+   control would toggle nothing.
+6. **`shared/version-math.ts` was extracted** so `app.config.ts` can use the version formulas from
+   Node. `version.ts` does a bare `import v from './version.json'`, which Node's ESM loader
+   rejects without an import attribute. `version.ts` keeps its exact public surface.
+
+`tsconfig.json` at the repo root now excludes `mobile` — the Expo app has its own tsconfig and
+typechecking it from the web project resolves neither its lib types nor its paths.
+
+**Not verified, and cannot be from this machine:** everything in the acceptance list that needs a
+deployed URL, an Expo account, or a physical device — live login, the role-based tab counts, the
+APK build and install, and the OTA update. `EXPO_PUBLIC_API_URL` is a placeholder in `eas.json`
+and `.env.example`; the production Worker URL is recorded nowhere in the repo. What *was* verified
+here: `npx tsc --noEmit` clean, a full production Metro bundle of every route
+(`npm run bundle`, 3,669 modules), `npx expo config` resolving the derived version, and the web
+app untouched — `npm run typecheck`, `npm run lint`, `npm test` (143 tests) and `npm run build`
+all green.
+
 ## Notes for the executor
 
 - **The remount lesson applies here too** (`CLAUDE.md`). In React Navigation / expo-router,

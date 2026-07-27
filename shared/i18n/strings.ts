@@ -594,6 +594,23 @@ const en_strings = {
   fc_stats_avg: 'Average score',
   fc_stats_last: 'Last played',
   fc_stats_none: 'No flashcard activity yet',
+
+  // ---- Mobile app (m_*) ----
+  // Added by docs/mobile/phase-2-expo-shell.md. The rule is: no hardcoded strings in any
+  // screen, in any phase — so a string the phone needs is added to BOTH languages here, and
+  // the web app gets it too. Only these `m_*` keys are mobile-only in practice.
+  m_more: 'More',
+  m_coming_soon: 'Arriving in phase {phase}.',
+  m_session_expired: 'Your session has ended. Please sign in again.',
+  m_offline: 'No connection. Check your network and try again.',
+  m_timeout: 'The server took too long to answer. Try again.',
+  m_server_error: 'Something went wrong on our end. Try again shortly.',
+  m_retry: 'Try again',
+  m_loading: 'Loading…',
+  m_reset_on_web: 'Password resets open in your browser. Reset there, then sign in here.',
+  m_version: 'Version',
+  m_signed_in_as: 'Signed in as',
+  m_admin_only: 'Admins only',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -1125,6 +1142,21 @@ export const STRINGS = {
     fc_stats_avg: 'Điểm trung bình',
     fc_stats_last: 'Chơi gần nhất',
     fc_stats_none: 'Chưa chơi thẻ từ vựng',
+
+    // ---- Mobile app (m_*) ----
+    m_more: 'Thêm',
+    m_coming_soon: 'Sẽ có ở giai đoạn {phase}.',
+    m_session_expired: 'Phiên đăng nhập đã kết thúc. Vui lòng đăng nhập lại.',
+    m_offline: 'Không có kết nối. Kiểm tra mạng rồi thử lại.',
+    m_timeout: 'Máy chủ phản hồi quá lâu. Vui lòng thử lại.',
+    m_server_error: 'Đã có lỗi từ phía chúng tôi. Vui lòng thử lại sau.',
+    m_retry: 'Thử lại',
+    m_loading: 'Đang tải…',
+    m_reset_on_web:
+      'Đặt lại mật khẩu được mở trên trình duyệt. Hãy đặt lại ở đó rồi đăng nhập tại đây.',
+    m_version: 'Phiên bản',
+    m_signed_in_as: 'Đang đăng nhập bằng',
+    m_admin_only: 'Chỉ dành cho quản trị viên',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 

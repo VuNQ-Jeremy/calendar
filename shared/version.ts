@@ -1,4 +1,5 @@
 import v from './version.json';
+import { formatVersionWith, resolveBuildWith, versionCodeWith } from './version-math';
 
 /**
  * Version formatting, shared by the web app and the mobile app.
@@ -30,20 +31,20 @@ export const BUILD_OFFSET = v.buildOffset;
  */
 export const RUNTIME_VERSION = v.runtimeVersion;
 
+// The formulas live in version-math.ts so mobile/app.config.ts can use them from Node
+// without pulling in the JSON import. These wrappers just bind the stored numbers.
+
 /** Raw `git rev-list --count HEAD` -> this project's build number. */
 export function resolveBuild(commitCount: number): number {
-  return Math.max(0, commitCount - BUILD_OFFSET);
+  return resolveBuildWith(BUILD_OFFSET, commitCount);
 }
 
 /** formatVersion(42) === 'v0.0042' */
 export function formatVersion(build: number): string {
-  return `v${MAJOR}.${String(build).padStart(4, '0')}`;
+  return formatVersionWith(MAJOR, build);
 }
 
-/**
- * Android requires a monotonically increasing integer. `major * 10000 + build` stays
- * monotonic across major bumps: v0.9999 -> 9999, v1.0000 -> 10000.
- */
+/** Monotonic integer for Android's versionCode. */
 export function versionCode(build: number): number {
-  return MAJOR * 10_000 + build;
+  return versionCodeWith(MAJOR, build);
 }
