@@ -20,7 +20,22 @@ const BRAND = '#F79A4E'; // ramp.orange[400] — shared/tokens.ts
 
 const config: ExpoConfig = {
   name: 'Mochi',
-  slug: 'mochi',
+  /**
+   * `mochi-class`, not `mochi`, and it has to stay that way.
+   *
+   * This must match the slug of the EAS project named by `extra.eas.projectId` below, and Expo
+   * does not allow a project slug to be renamed after creation. The project was created as
+   * `mochi-class`, so this follows it. Nothing user-facing is affected: the app is named "Mochi"
+   * (`name` above), installs as `com.mochi.lms`, and deep-links on the `mochi://` scheme. The
+   * slug only appears in expo.dev URLs.
+   */
+  slug: 'mochi-class',
+  /**
+   * The EAS account that owns this project. Required because the config is dynamic: with a
+   * static app.json, `eas init` writes this itself; with app.config.ts it cannot, and without it
+   * EAS cannot tell which of the signed-in accounts to publish to.
+   */
+  owner: 'vu-nguyens-team',
   scheme: 'mochi',
   version: formatVersionWith(stored.major, build), // "v0.0042"
   orientation: 'portrait',
@@ -63,7 +78,19 @@ const config: ExpoConfig = {
   ],
   experiments: { typedRoutes: true },
   extra: {
-    // eas.projectId is written here by `eas init` — do not hand-edit it.
+    /**
+     * The EAS project this app publishes to.
+     *
+     * Hand-written, and it has to be: `eas init` can only auto-write a STATIC app.json, and this
+     * config is a .ts file (it has to be — it reads shared/version.json). Run from the wrong
+     * directory, `eas init` silently creates an app.json at the repo root instead, which links
+     * the web app rather than this one. If you ever re-run it, run it from `mobile/` and copy the
+     * id it prints to here.
+     *
+     * `lib/push.ts` passes this to `getExpoPushTokenAsync` — without it, no push token, no
+     * notifications.
+     */
+    eas: { projectId: '83251f6c-1fa9-4724-ba61-39a9eb806aab' },
     gitSha: gitSha(),
     build,
     // Mirrored into `extra` so a build that forgot the env var fails loudly at startup with a
