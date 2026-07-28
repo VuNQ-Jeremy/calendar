@@ -5,19 +5,20 @@
 Clicking a sidebar link has a noticeable delay before the page transition. Investigation found the delay is real (blocking network on most navigations) **and** unacknowledged (zero pending UI). Root causes, all verified in source:
 
 1. **No pending feedback.** `useNavigation` is used nowhere; between click and loader resolution the UI is completely inert.
-2. **Blanket cache wipe.** Every route `clientAction` runs `invalidate('route:')` ([cache.ts](src/lib/cache.ts)), so after *any* mutation, every subsequent navigation is a cold, blocking `.data` fetch (auth + 1–6 D1 queries).
+2. **Blanket cache wipe.** 9 of the 12 route `clientAction`s run `invalidate('route:')` ([cache.ts](src/lib/cache.ts)), so after *any* mutation, every subsequent navigation is a cold, blocking `.data` fetch (auth + 1–6 D1 queries). Exceptions: `flashcards.tsx` / `flashcards.$slug.tsx` already scope to `'route:flashcards'`, `logout.tsx` deliberately calls `clearCache()`, and `dashboard.tsx` has no `clientAction`. `materials.tsx` blanket-wipes but then re-seeds its own key, so only the *other* routes go cold after a material mutation.
 3. **SSR data never seeded.** No route sets `clientLoader.hydrate = true`, so the first-visited route is never cached — navigating away and back re-fetches it.
 4. **No prefetching.** No `prefetch` prop on any `NavLink`; the click is the first moment the route's JS chunks are requested. (Note: React Router never prefetches *data* for routes with a `clientLoader` — verified in `node_modules/react-router/dist/development/lib/dom/ssr/components.js:293-296` — so `prefetch="intent"` warms chunks only.)
 5. **Slow auth on every `.data` request.** `userFromToken` ([server/services/auth.ts:64-120](server/services/auth.ts#L64-L120)) makes **3 sequential D1 round trips** (sessions → accounts → staff/students), unmemoised; paid twice on cold document loads (`_app` loader + child loader in the same request).
-6. **`routes/materials` chunk split is broken.** Built manifest shows `hasClientLoader:true` but no `clientLoaderModule` — because `CACHE_KEY`/`MAX_FILE_SIZE` are module-scope consts shared between `clientLoader`/`clientAction` and other exports ([materials.tsx:17-18](app/routes/materials.tsx#L17-L18)). Shared **imports** are fine; shared module-scope **locals** defeat the splitter.
+6. **`routes/materials` chunk split is broken.** Built manifest shows `hasClientLoader:true`/`hasClientAction:true` but neither `clientLoaderModule` nor `clientActionModule` — because the module-scope `const CACHE_KEY` ([materials.tsx:18](app/routes/materials.tsx#L18)) is referenced by **both** `clientLoader` (:29, :32) and `clientAction` (:91, :113, :116). Any top-level non-module statement reachable from two exports makes both non-chunkable (`vite.js:489-503`; the comparison set is built at `:307`, which explicitly excludes `ImportDeclaration`s). So shared **imports** are fine; shared module-scope **locals** defeat the splitter. `MAX_FILE_SIZE` (:17) is *not* part of the problem — it is used only by the server `action` (:61) and can stay.
 7. `_app` layout loader (badge counts) re-runs on every mutation and on clicking the current page's link; no `shouldRevalidate` anywhere.
 
 **Approach:** keep the existing `cache.ts` architecture, extend it with stale-while-revalidate (SWR). Mutations hard-invalidate only their own route's cache and mark dependent routes *stale* — stale data is served instantly and refreshed in the background. Add pending indicators, `prefetch="intent"`, hydrate-seeding, a single-query memoised auth, and a `shouldRevalidate` allowlist for the layout. Rejected: defer/streaming (high complexity, SWR makes warm navs instant), isolate-level session TTL cache (logout staleness risk), hover data-warming (follow-up; only helps first visit per route).
 
-Verified safe foundations (from react-router v8 source):
-- `clientLoader.hydrate = true` with SSR data present → clientLoader runs during hydration with **no fallback flash** and `serverLoader()` returns the SSR'd data **without a network request** (`lib/dom/ssr/routes.js:146-153`, `router.js:2046-2049`). No `HydrateFallback` needed.
-- Calling `serverLoader()` fire-and-forget *after* the clientLoader resolves works: it's a plain `fetch('<path>.data?_routes=<id>')`, not tied to an aborted signal (`single-fetch.js:234-241`).
-- The chunk splitter handles `clientLoader.hydrate = true` assignment statements correctly (`@react-router/dev` vite.js:238-243).
+Verified safe foundations (react-router **8.2.0**, the installed version):
+- `clientLoader.hydrate = true` with SSR data present → clientLoader runs during hydration with **no fallback flash** and `serverLoader()` returns the SSR'd data **without a network request** (`lib/dom/ssr/routes.js:133,148-152`, `router.js:2046-2049`). No `HydrateFallback` needed.
+  - ⚠️ **Never add a `HydrateFallback` to these routes.** `lib/dom/ssr/hydration.js:23` *deletes* the SSR loader data from the hydration payload when a route has both a fallback and a hydrating clientLoader — which reintroduces the network fetch and causes the very flash the fallback was meant to cover.
+- Calling `serverLoader()` fire-and-forget *after* the clientLoader resolves works, though not for the reason you'd guess: the request init **does** carry the navigation's abort signal (`lib/dom/ssr/data.js:12-13`), but the router nulls its pending controller *without* aborting on normal completion (`router.js:559`), so a call made after the navigation resolved can never be aborted. It's a plain `fetch('<path>.data?_routes=<id>')` (`single-fetch.js:234-241`, target routes from `:143-145`). A refresh fired while a navigation is *still* pending can be aborted by an immediately following navigation (`router.js:490`) — harmless: the stale flag is restored quietly and retried on the next visit.
+- The chunk splitter handles `clientLoader.hydrate = true` assignment statements correctly — when `clientLoader` is stripped from a chunk its `.hydrate` assignment goes with it (`@react-router/dev` vite.js:237-243), and the statement travels into the clientLoader chunk rather than colliding with other exports (`:392-405`).
 
 ---
 
@@ -70,6 +71,19 @@ export function markStale(...prefixes: string[]): void {
   }
 }
 
+/**
+ * Re-flag one exact key as stale WITHOUT notifying subscribers.
+ *
+ * Used only when a background SWR refresh fails. markStale() would notify ->
+ * useStaleRouteRefresh revalidates -> clientLoader -> swrLoad claims the stale
+ * flag and refetches -> fails -> notify -> ... an unbounded retry loop for as
+ * long as the server keeps failing and the user sits on the route. Restoring
+ * the flag silently means the retry waits for the next visit or mutation.
+ */
+export function markStaleQuiet(key: string): void {
+  if (store.has(key)) staleKeys.add(key);
+}
+
 /** Delete every key that starts with any of the given prefixes. */
 export function invalidate(...prefixes: string[]): void {
   for (const key of store.keys()) {
@@ -99,6 +113,8 @@ export function subscribe(key: string, cb: () => void): () => void {
 }
 ```
 
+Every existing export keeps its signature, so current consumers need no change. Worth knowing about two of them: `src/lib/use-cached-load.ts` is the only `subscribe` consumer today, and it is what makes `markStale`'s `notify()` reach modal-level data (`hw:modal`, `evmat:<eventId>`). And the `att:<eventId>:<date>` keys written by `src/calendar/event-modal.tsx:48,68` are never invalidated today and still aren't under this plan (`profile`'s `stale: ['route:']` doesn't match them) — no regression, just called out because `evmat:`/`hw:` are enumerated below and `att:` is not.
+
 ## Step 2 — New module `src/lib/route-cache.ts`
 
 Centralizes cache keys (this is also what fixes the materials chunk split — route files import keys instead of declaring module-scope consts), the SWR loader, the mutation→invalidation map, and pathname→key mapping. Full content:
@@ -115,7 +131,15 @@ Centralizes cache keys (this is also what fixes the materials chunk split — ro
  * routes/materials split — its CACHE_KEY was used by both clientLoader and
  * clientAction). Values imported from another module are safe to share.
  */
-import { cacheGet, cacheSet, invalidate, isStale, markFresh, markStale } from './cache.js';
+import {
+  cacheGet,
+  cacheSet,
+  invalidate,
+  isStale,
+  markFresh,
+  markStale,
+  markStaleQuiet,
+} from './cache.js';
 
 export const K = {
   dashboard: 'route:dashboard',
@@ -147,7 +171,10 @@ export async function swrLoad<T>(key: string, serverLoader: () => Promise<T>): P
       markFresh(key); // claim the refresh so parallel loads don't duplicate it
       serverLoader().then(
         (data) => cacheSet(key, data),
-        () => markStale(key), // failed refresh (offline / expired session): retry on next visit
+        // Failed refresh (offline / 5xx / expired session): restore the flag
+        // QUIETLY. markStale() here would notify -> useStaleRouteRefresh
+        // revalidates -> refetch -> fail -> notify -> infinite retry loop.
+        () => markStaleQuiet(key),
       );
     }
     return cached;
@@ -182,6 +209,15 @@ export type MutationDomain =
  *   materials:   materials, classesLite
  *   homework:    homework, classes, students, grades, assessment types
  *   assessments: scores, behavior, students, classesLite, assessment types
+ *
+ * Note the two-way homework <-> assessments coupling (verified in source):
+ *   - saving/deleting homework grades WRITES score_records
+ *     (server/services/homework.ts:97-119, :176-212), which is exactly what
+ *     the assessments loader reads via assessSvc.listScores;
+ *   - deleting a score on /assessments SET NULLs homework_grades.score_record_id
+ *     (schema.ts:293-295), and scoreRecordId/score are fields of the GradeRow
+ *     the homework loader returns (homework.ts:20-26, :42-52).
+ * So each domain must mark the other stale.
  *   flashcards:  topics (list) / topic+words+results+mastery (slug pages)
  *   config:      assessment types, uiPrefs
  *   feedback:    feedback
@@ -199,8 +235,8 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // routes/materials patches its own cache in its clientAction; 'evmat:' rows
   // (event-material joins shown in the calendar event modal) must be hard.
   materials: { hard: ['evmat:'], stale: [K.dashboard, K.calendar, K.classes] },
-  homework: { hard: [K.homework, 'hw:'], stale: [K.dashboard, K.classes] },
-  assessments: { hard: [K.assessments], stale: [] },
+  homework: { hard: [K.homework, 'hw:'], stale: [K.dashboard, K.classes, K.assessments] },
+  assessments: { hard: [K.assessments], stale: [K.homework] },
   // 'route:flashcards' is a prefix of every 'route:flashcards:<slug>' key, so
   // topic CRUD also drops all cached topic pages (slug may have changed).
   flashcards: { hard: [K.flashcards], stale: [K.people] },
@@ -263,7 +299,7 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
 
 Per-file changes (in each: **delete the local `const CACHE_KEY = ...`**, trim the `cache.js` import to what's still used, add `import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';` trimmed to what the file uses):
 
-- [dashboard.tsx](app/routes/dashboard.tsx) — clientLoader with `K.dashboard`. No clientAction.
+- [dashboard.tsx](app/routes/dashboard.tsx) — clientLoader with `K.dashboard`. No clientAction. **Remove the `cache.js` import entirely** (currently `{ cacheGet, cacheSet }` at :14 — nothing from it survives).
 - [calendar.tsx](app/routes/calendar.tsx) — `K.calendar` + `invalidateAfterMutation('calendar')`; remove the `cacheGet, cacheSet, invalidate` import entirely.
 - [classes.tsx](app/routes/classes.tsx) — `K.classes` + `'classes'`.
 - [people.tsx](app/routes/people.tsx) — `K.people` + `'people'`.
@@ -273,6 +309,8 @@ Per-file changes (in each: **delete the local `const CACHE_KEY = ...`**, trim th
 - [feedback.tsx](app/routes/feedback.tsx) — `K.feedback` + `'feedback'`.
 - [flashcards.tsx](app/routes/flashcards.tsx) — `K.flashcards` + `'flashcards'`.
 - [profile.tsx](app/routes/profile.tsx) — clientAction only: `invalidateAfterMutation('profile')`; remove the `invalidate` import.
+- [logout.tsx](app/routes/logout.tsx) — **unchanged, deliberately.** Its clientAction (:17-20) calls `clearCache()`, which the Step 1 rewrite extends to clear `staleKeys` too, so a logout still wipes both data and flags. Listed here only so it's clear it wasn't overlooked.
+- Not touched (no cache involvement): `home.tsx`, `login.tsx`, `attendance.tsx`, `event-materials.tsx`, `translate.tsx`, `materials.$id.*`, and the 37 `api.*.tsx` resource routes. Attendance/event-materials caches are written imperatively from the event modal, which is why Step 6 edits that component instead of a route.
 
 **[flashcards.$slug.tsx](app/routes/flashcards.$slug.tsx)** — parameterized key; delete the local `keyFor`; imports: `import { invalidate, markStale } from '../../src/lib/cache.js';` and `import { K, flashcardTopicKey, swrLoad } from '../../src/lib/route-cache.js';`:
 
@@ -290,7 +328,12 @@ export async function clientAction({ serverAction, params }: ClientActionFunctio
     return await serverAction();
   } finally {
     invalidate(flashcardTopicKey(params.slug!));
-    // topic list shows word counts; people shows per-student flashcard stats
+    // topic list shows word counts; people shows per-student flashcard stats.
+    // NOTE markStale is prefix-based like invalidate, so K.flashcards
+    // ('route:flashcards') also stales every OTHER cached topic page
+    // ('route:flashcards:<slug>'). That's intended — sibling topic pages show
+    // shared mastery/stats — and it is cheap, since stale pages still render
+    // instantly and only refresh when actually visited.
     markStale(K.flashcards, K.people);
   }
 }
@@ -356,12 +399,24 @@ Extend the react-router import with `useNavigation, useRevalidator, useLocation`
 // countDue is unaffected).
 const APP_DATA_MUTATION_PATHS = ['/homework', '/people', '/feedback', '/config', '/profile'];
 
-export function shouldRevalidate({ formAction, formMethod }: ShouldRevalidateFunctionArgs) {
+export function shouldRevalidate({
+  formAction,
+  formMethod,
+  formData,
+}: ShouldRevalidateFunctionArgs) {
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
   const path = formAction.split('?')[0];
-  return APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'));
+  if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
+  // Grade auto-save posts to /homework on every edit (src/calendar/homework-tab.tsx:160)
+  // but countDue filters on done/due only, so grades can never move the badge.
+  if (path === '/homework' && formData?.get('intent') === 'save-grades') return false;
+  return true;
 }
 ```
+
+Verified write-surface audit behind the allowlist — the layout loader's five inputs and everything that can write them: `homework` rows (`/homework`, incl. the calendar's homework tab which submits with an explicit `action: '/homework'`), `invites` (`/people`), `feedback` (`/feedback`, incl. the sidebar feedback modal in `_app.tsx:248`), `settings['ui-prefs']` (`/config` — note `/calendar`'s theme write targets a *different* settings row key, `'theme'`, so it cannot clobber it), and the session user's name/color/role (`/profile`, `/people`). Every non-allowlisted route action was checked and none can reach those five.
+
+Accepted tradeoff to be explicit about: because plain GET navigations no longer revalidate the layout, badge counts changed by *another device* won't appear until a relevant local mutation or a page reload.
 
 **4b. `NavProgress` + `useStaleRouteRefresh`** — module-level, before `AppLayout`:
 
@@ -416,9 +471,11 @@ function useStaleRouteRefresh() {
 }
 ```
 
-No infinite loop: revalidate → clientLoader → fresh cache hit → swrLoad only calls `cacheSet` on miss → no notify.
+No infinite loop, on two counts: revalidate → clientLoader → fresh cache hit → `swrLoad` only calls `cacheSet` on a miss → no notify; and a *failed* background refresh restores the stale flag via `markStaleQuiet` (Step 1), which deliberately does not notify. Both guards are needed — dropping either one turns a persistently failing route into an unbounded `.data` retry loop.
 
-**4c. In `AppLayout`**: call `useStaleRouteRefresh();` as the first statement, and render `<NavProgress />` as the first child inside the `.app` div (must be inside `.app` to inherit `--brand`).
+Known benign race: a notify that arrives while `revalidator.state !== 'idle'` is dropped. The fresh data is already in the cache, so the UI picks it up on the next navigation or revalidation rather than immediately.
+
+**4c. In `AppLayout`**: call `useStaleRouteRefresh();` as the first statement, and render `<NavProgress />` as the first child inside the `.app` div. (`--brand` is a global `:root` token — `src/ds/styles/tokens/colors.css:95` — so it resolves anywhere; putting the bar inside `.app` just picks up the `TWEAKS.accent` inline override set at `_app.tsx:255-257`.)
 
 **4d. NavLinks** — main loop (line ~151):
 
@@ -437,7 +494,7 @@ Profile footer (line ~178): add `prefetch="intent"` and the same `+ (isPending ?
 
 ## Step 5 — CSS
 
-Append to `src/styles/app.css` near the `.sb__item` block (~line 349):
+Append to `src/styles/app.css` after the `.sb__item` block (which spans 325-351, ending with `.sb__item .count`), before the `.sb__langbar` section at :352. `.is-pending` matches the file's existing `.is-active` convention; `.sb__foot` already exists (:394-426) and its transitions only touch `background`/`border-color`, so an `opacity` animation won't fight them.
 
 ```css
 /* ---- navigation pending feedback ---- */
@@ -447,7 +504,9 @@ Append to `src/styles/app.css` near the `.sb__item` block (~line 349):
   left: 0;
   right: 0;
   height: 3px;
-  z-index: 9999;
+  /* 9998, not 9999: .dev-inspector already owns 9999 (app.css:1889). Still far
+     above the modal/overlay ceiling of 1100, so the bar shows over modals. */
+  z-index: 9998;
   pointer-events: none;
   background: var(--brand, #f79a4e);
   transform-origin: left;
@@ -470,7 +529,7 @@ Append to `src/styles/app.css` near the `.sb__item` block (~line 349):
 
 ## Step 6 — `src/calendar/event-modal.tsx`
 
-In `saveJoin` (line ~195), replace `invalidate('route:calendar');` with `markStale('route:calendar');`. Update the cache import: add `markStale`, drop `invalidate` if now unused in the file. This turns every material attach/detach in the event modal from a blocking 6-query calendar refetch into an instant update + background refresh.
+In `saveJoin` (:192-201), replace `invalidate('route:calendar');` (:195) with `markStale('route:calendar');`. `invalidate` occurs exactly once in this file, so the import at :14 becomes `import { cacheSet, markStale } from '../lib/cache.js';` — `cacheSet` stays (used at :68 and :194). This turns every material attach/detach in the event modal from a blocking 6-query calendar refetch into an instant update + background refresh.
 
 ## Step 7 — `server/services/auth.ts`: single-query auth + per-request memo
 
@@ -555,11 +614,22 @@ export function getUser(request: Request, env: Env): Promise<SessionUser | null>
 }
 ```
 
-`requireUser`/`requireStaff`/`requireAdmin` (lines 129-156) and the mobile bearer path (`server/api/auth.ts` calls `userFromToken` directly) are unchanged. Check that `staff`/`students` tables are already imported in auth.ts's drizzle schema imports; add if missing.
+`requireUser`/`requireStaff`/`requireAdmin` (lines 129-**157**) and the mobile bearer path (`server/api/auth.ts:54` calls `userFromToken` directly) are unchanged. `staff` and `students` are **already imported** (auth.ts:5-13) — no import change needed.
+
+Three semantics to preserve deliberately:
+- `students` has **no phone column** (schema.ts:20-27), so the student branch's `phone: null` and `role: 'Student'` stay hard-coded literals — do not try `row.studentRow.phone`.
+- `expiresAt` is TEXT ISO-8601 (schema.ts:190), so the `new Date(...) < new Date()` comparison must stay a Date comparison, not a string one.
+- With `innerJoin(accounts)`, an expired session whose account row was missing would no longer be deleted (today the delete happens before accounts is read). Unreachable in practice: `sessions.account_id` is `ON DELETE CASCADE` (schema.ts:193), so orphan sessions cannot exist.
+
+Why the memo is safe: all loaders in one data-strategy pass receive the **identical** `Request` instance (`router.js:2421-2440`), so `_app` + child dedupe correctly. On a document POST the router builds a *fresh* Request for post-action revalidation (`router.js:1695-1699`), so loaders still see post-mutation state. Existing `test-worker/services.test.js` cases each construct a new Request before calling `getUser`, so none of them share a memo entry.
+
+Payoff: a cold `/calendar` document load currently costs ~16 D1 round trips, **6 of them pure auth** (3 in the `_app` loader + 3 in the child). After this step that auth component is 1.
 
 ## Step 8 — Tests
 
-New `test/cache.test.ts` (default vitest project). The existing worker-pool tests (`test-worker/api-auth.test.js`, `test-worker/services.test.js`) exercise the auth path against miniflare D1 and validate the join rewrite.
+New `test/cache.test.ts`, picked up by the jsdom suite (`vitest.config.js`, `include: ['test/**/*.test.{js,jsx,ts,tsx}']`). Note there is no vitest `projects`/workspace key — the repo runs **two separate config files**, and `npm test` runs both sequentially (`vitest run && vitest run --config vitest.workers.config.js`). The worker-pool config globs `test-worker/**/*.test.js` (4 files today), of which `api-auth.test.js` and `services.test.js` exercise the auth path against miniflare D1 and so validate the Step 7 join — including the expiry-delete and the "phone token survives / browser token revoked" cases.
+
+**Also update the one existing cache test.** `test/hw-tab-repro.test.tsx:95` builds a fake `/homework` route action that hard-codes `invalidate('route:', 'hw:')` to reproduce the blanked-section bug. Behaviour is unchanged by this plan (`hard: [K.homework, 'hw:']`), so it will still pass — but change the fixture to call `invalidateAfterMutation('homework')` so the regression test keeps mirroring the code it guards. The local-copy workaround documented at `src/calendar/homework-tab.tsx:24-27` remains necessary, since `hw:` is still hard-invalidated.
 
 ```ts
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -645,6 +715,22 @@ describe('swrLoad', () => {
     expect(cacheGet('route:x')).toBe('old');
     expect(isStale('route:x')).toBe(true);
   });
+
+  // Guards the retry-loop fix: a failed refresh must NOT notify, or
+  // useStaleRouteRefresh revalidates -> refetch -> fail -> notify -> forever.
+  it('does not notify subscribers when the background refresh fails', async () => {
+    cacheSet('route:x', 'old');
+    markStale('route:x');
+    let calls = 0;
+    const unsub = subscribe('route:x', () => calls++);
+    await swrLoad('route:x', async () => {
+      throw new Error('offline');
+    });
+    await tick();
+    expect(isStale('route:x')).toBe(true);
+    expect(calls).toBe(0);
+    unsub();
+  });
 });
 
 describe('invalidateAfterMutation', () => {
@@ -657,6 +743,21 @@ describe('invalidateAfterMutation', () => {
     expect(isStale(K.dashboard)).toBe(true);
     expect(cacheGet(K.dashboard)).toBe('d');
     expect(isStale(K.feedback)).toBe(false);
+  });
+
+  // homework grades write score_records and score deletion SET NULLs
+  // homework_grades.score_record_id, so the two domains must stale each other.
+  it('couples homework and assessments in both directions', () => {
+    cacheSet(K.homework, 'h');
+    cacheSet(K.assessments, 'a');
+    invalidateAfterMutation('homework');
+    expect(isStale(K.assessments)).toBe(true);
+
+    clearCache();
+    cacheSet(K.homework, 'h');
+    cacheSet(K.assessments, 'a');
+    invalidateAfterMutation('assessments');
+    expect(isStale(K.homework)).toBe(true);
   });
 });
 
@@ -673,9 +774,9 @@ describe('cacheKeyForPath', () => {
 
 ## Step 9 — Local verification
 
-1. `npm run typecheck`
-2. `npm run lint` (remove any now-unused imports it flags)
-3. `npm test` (both vitest projects)
+1. `npm run typecheck` (`react-router typegen && tsc --noEmit`)
+2. `npm run lint` (oxlint — will flag the now-unused cache imports; `dashboard.tsx` loses its import entirely, `event-modal.tsx` loses `invalidate`)
+3. `npm test` (runs the jsdom config then the workers config)
 4. `npm run build`, then assert the materials chunk split is fixed:
    ```
    node -e "const fs=require('fs');const f=fs.readdirSync('build/client/assets').find(n=>/^manifest-/.test(n));const m=fs.readFileSync('build/client/assets/'+f,'utf8');const i=m.indexOf('\"routes/materials\":');const seg=m.slice(i,i+900);if(!seg.includes('clientLoaderModule'))throw new Error('materials split STILL broken');console.log('materials split OK');"
@@ -693,6 +794,9 @@ describe('cacheKeyForPath', () => {
 5. Create homework → sidebar homework badge updates (`shouldRevalidate` allowlist); create a calendar event → **no** `_app.data` request fires (layout skip works).
 6. Log out / log in; change password — auth join regression check. Also verify the mobile API still authenticates (any `api/*` call with a bearer token).
 7. `/materials` cold navigation → the `.data` fetch starts without waiting for the full route chunk.
+8. **Retry-loop check (the `markStaleQuiet` fix).** Sit on `/dashboard`, mutate something on `/calendar` so dashboard is stale, go offline in DevTools, then navigate to `/dashboard`: the page must render instantly from cache and fire **exactly one** failed `.data` request — not a repeating stream. Back online, navigate away and back → one successful refresh.
+9. **homework ↔ assessments coupling.** Save a homework grade, then open `/assessments` → the score appears without a reload. Delete that score on `/assessments`, then open `/homework` → the grade shows as ungraded.
+10. **Cross-route submit.** From `/classes`, attach a material via the classes screen (`src/screens-manage/classes.tsx:217` posts to `/materials`) → the visible `/classes` page updates in the background via the stale bridge.
 
 ## Finish (project rules)
 
