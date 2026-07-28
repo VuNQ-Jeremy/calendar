@@ -118,6 +118,32 @@ const config: ExpoConfig = {
   },
 
   /**
+   * The EAS Update endpoint. Hand-written for the same reason `extra.eas.projectId` is:
+   * `eas update:configure` can only edit a static app.json, and this config is a .ts file.
+   *
+   * Without this the `expo-updates` plugin still runs and still writes
+   * EXPO_UPDATES_CHECK_ON_LAUNCH into the manifest — it just has no server to ask, so every
+   * published update is silently ignored. Verified absent from build 4's APK (no EXPO_UPDATE_URL,
+   * no `u.expo.dev`); see docs/mobile/phase-7-dev-loop-and-delivery.md.
+   *
+   * The project id must match `extra.eas.projectId` above. The CHANNEL is not set here — each
+   * eas.json build profile declares its own and EAS stamps it into the binary at build time.
+   *
+   * Deliberately no `runtimeVersion` key inside this object: it is already a top-level field
+   * sourced from shared/version.json, and two copies would drift.
+   */
+  updates: {
+    url: 'https://u.expo.dev/83251f6c-1fa9-4724-ba61-39a9eb806aab',
+    /**
+     * 0, not a timeout: never block the splash screen waiting on the network. The app launches
+     * from the cached bundle immediately, fetches any update in the background, and applies it
+     * on the NEXT launch. A student on a slow connection at the start of class must not stare at
+     * a splash screen while we poll a CDN.
+     */
+    fallbackToCacheTimeout: 0,
+  },
+
+  /**
    * NOT `{ policy: 'appVersion' }`, and NOT the build number.
    *
    * An OTA update only reaches an installed APK whose runtimeVersion MATCHES. The build

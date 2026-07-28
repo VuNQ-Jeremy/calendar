@@ -185,7 +185,8 @@ Phase 4 has **not** been started. What has been done is the setup it needs:
   The picker is for event date/time and the long-press "Move to…" reschedule.
 - Installed **before the first APK exists**, deliberately: a native module added after one ships
   requires a `runtimeVersion` bump in `shared/version.json` and a reinstall on every phone.
-  `runtimeVersion` is still **1** and must NOT be bumped for these — nothing has shipped to orphan.
+  `runtimeVersion` was **1** at the time and correctly NOT bumped for these — nothing had shipped
+  to orphan. (It went to **2** in phase 7, for the `updates.url` + FCM native changes.)
 - With these two, the native surface is complete through phase 6. Phases 5 and 6 need no further
   native modules (checked: materials use the already-installed document/image pickers, assessment
   charts use `react-native-svg`, push uses `expo-notifications`). **If you find yourself adding

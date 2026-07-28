@@ -88,7 +88,13 @@ this without `adb logcat` would lose a day to it.
 
 ---
 
-## Task 7.1 — Add the EAS Update endpoint
+## Task 7.1 — Add the EAS Update endpoint ✅ done 2026-07-28
+
+**Status:** applied. `updates.url` is in `app.config.ts` and `shared/version.json` is on
+`runtimeVersion: 2`. Verified with `npx expo config --type public` (both fields resolve) and
+`tsc --noEmit` (clean, after regenerating `.expo/types` — trap 6 below). **Not yet in any binary:**
+the manifest check in the Evidence section still fails until an APK is built, which waits on 7.2.
+
 
 `expo-updates` is listed in `plugins` at `app.config.ts:73`, but there is no `updates` object
 anywhere in the config. The plugin therefore configures a client that checks *nothing*.
@@ -196,12 +202,19 @@ Once `mobile/google-services.json` exists:
     ...
 ```
 
-Then bump `shared/version.json`:
+The bump to `shared/version.json` is **already done** — it went in with task 7.1:
 
 ```diff
 -  "runtimeVersion": 1
 +  "runtimeVersion": 2
 ```
+
+**One bump covers both changes, and only because nothing has been built in between.** `updates.url`
+and `googleServicesFile` are two native changes, but a runtimeVersion only needs to change when a
+binary carrying the *old* native surface exists in someone's hands. No APK has been built on `2`
+yet, so both changes land in the same first `2` binary. **If a preview APK on runtimeVersion 2 is
+distributed before `google-services.json` is added, FCM then requires a bump to 3** — the rule is
+per shipped native surface, not per config edit.
 
 **Why the bump is mandatory, not tidiness.** `runtimeVersion` identifies the *native* layer.
 Adding FCM changes it: an OTA bundle built expecting a working `getExpoPushTokenAsync` would, if

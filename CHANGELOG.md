@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0021 — 2026-07-28
+Give the mobile app an EAS Update endpoint to check, and bump runtimeVersion to 2 for it. Verified absent from the shipped APK's manifest, so every published OTA had been a silent no-op.
+
 ## v0.0014 — 2026-07-28
 Fix the version stamp always showing v0.0000: Workers Builds is the sole deployer now and its shallow clone is deepened before the build number is derived.
 
