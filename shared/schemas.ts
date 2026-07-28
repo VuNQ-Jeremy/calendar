@@ -18,6 +18,24 @@ export function parsePatch<S extends z.ZodObject<z.ZodRawShape>>(
   return { success: true, data };
 }
 
+/**
+ * A boolean that survives the trip through a form post. Booleans in a FormData
+ * body arrive as strings, and Zod's own boolean coercion is plain JS truthiness
+ * — so the string `'false'` coerces to `true`, the exact opposite of what the
+ * client sent. Toggles that send `String(value)` were therefore write-only: they could
+ * turn a flag on but never off. JSON bodies (the mobile API) still send real
+ * booleans, which pass straight through.
+ */
+export const FormBool = z.preprocess((v) => {
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (s === 'false' || s === '0' || s === 'off' || s === 'no' || s === '') return false;
+    return true;
+  }
+  if (typeof v === 'number') return v !== 0;
+  return v;
+}, z.boolean());
+
 export const ColorId = z.enum(['violet', 'green', 'blue', 'orange', 'cocoa', 'rose']);
 
 export const EventInput = z.object({
@@ -107,7 +125,7 @@ export const HomeworkInput = z.object({
   points: z.coerce.number().int().min(0).nullish(),
   notes: z.string().max(2000).nullish(),
   color: ColorId.nullish(),
-  done: z.coerce.boolean().default(false),
+  done: FormBool.default(false),
   assessmentTypeId: z.string().nullish(),
 });
 export type HomeworkInput = z.infer<typeof HomeworkInput>;
@@ -118,7 +136,7 @@ export const MaterialInput = z.object({
   classId: z.string().nullish(),
   url: z.string().max(2000).nullish(),
   fileName: z.string().max(500).nullish(),
-  favorite: z.coerce.boolean().default(false),
+  favorite: FormBool.default(false),
   addedAt: z.string().nullish(),
   scope: z.enum(['class', 'event']).default('class'),
 });
@@ -130,7 +148,7 @@ export const InviteInput = z.object({
   name: z.string().max(200).nullish(),
   classId: z.string().nullish(),
   createdAt: z.string().nullish(),
-  used: z.coerce.boolean().default(false),
+  used: FormBool.default(false),
 });
 export type InviteInput = z.infer<typeof InviteInput>;
 
@@ -167,7 +185,7 @@ export type ScoreRecordInput = z.infer<typeof ScoreRecordInput>;
 
 export const AssessmentTypeInput = z.object({
   name: z.string().trim().min(1).max(100),
-  active: z.coerce.boolean().default(true),
+  active: FormBool.default(true),
   sortOrder: z.coerce.number().int().nullish(),
 });
 export type AssessmentTypeInput = z.infer<typeof AssessmentTypeInput>;
@@ -359,9 +377,9 @@ export type UiPrefsInput = z.infer<typeof UiPrefsInput>;
  * reminders rather than send them late.
  */
 export const NotifPrefsInput = z.object({
-  classReminders: z.coerce.boolean().default(true),
+  classReminders: FormBool.default(true),
   classLeadMinutes: z.coerce.number().int().min(15).max(120).default(30),
-  homeworkReminders: z.coerce.boolean().default(true),
-  studyNudges: z.coerce.boolean().default(false),
+  homeworkReminders: FormBool.default(true),
+  studyNudges: FormBool.default(false),
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;
