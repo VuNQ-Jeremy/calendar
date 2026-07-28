@@ -377,6 +377,31 @@ TOKEN=$(curl -s -X POST $BASE/api/auth/login -H 'content-type: application/json'
 curl -s -X POST "$BASE/api/push/run?job=class" -H "Authorization: Bearer $TOKEN"
 ```
 
+### Preconditions for checks 5 and 6 — and the order matters
+
+`runClassReminders` only sends for an occurrence **due to start inside the lead window**:
+`server/services/notify.ts:68-72` keeps events where `startMin > nowMin && startMin <= nowMin +
+lead`, with `lead` = `classLeadMinutes`, default **30** (`notif-prefs.ts:21`; `classReminders`
+defaults to `true`, so nothing needs enabling). A bare `?job=class` on a quiet afternoon therefore
+returns `sent: 0` **correctly**, and looks exactly like the bug this phase just fixed.
+
+In this order:
+
+1. **Student logs in on the device first**, so a token reaches `/api/push/register` (check 3).
+   This must happen before step 3 — see below.
+2. In the web app, create an event **on today's date**, assigned to a **class whose `studentIds`
+   include that student**, starting **10–25 minutes in the future**. Times are ICT, which is this
+   machine's local +07. Strictly future: an event that has already started is filtered out.
+3. `POST /api/push/run?job=class` → `sent: 1`, notification arrives on the closed app.
+4. The same call again → `sent: 0` (check 6).
+
+**Why step 1 cannot come second.** `notify.ts:92-94` marks the ledger key `class:<eventId>:<date>`
+done **even when no tokens are registered** — the occurrence has been processed, and re-processing
+it on the next tick would just re-find nobody. That is right for the cron and a trap for
+verification: firing the job before the student has a token **permanently consumes that
+occurrence.** Every later run returns `sent: 0`, no amount of re-triggering recovers it, and the
+fix is to create a *new* event, because ledger keys are per event **and** date.
+
 Check 6 is the cheap stand-in for "the cron fires exactly once across three ticks" — same code
 path, same ledger, no 45-minute wait.
 
@@ -412,6 +437,7 @@ builds on 2026-07-28.
 | tsc fails on valid `router.push()` calls | stale `.expo/types/router.d.ts`; `expo export` does not regenerate it | `rm -rf .expo/types && npx expo start --clear` |
 | 179 stray `.js` files appear in the repo | `tsc -b` has no `noEmit` | `git clean -f -- '*.js'`, never commit them |
 | expo-doctor fails on `disableHierarchicalLookup` | deliberate — it keeps the web's `node_modules` out of the native bundle | ignore it; it will fail on every build forever |
+| `?job=class` returns `sent: 0` when a send was expected | either no class occurrence starts within the 30-minute lead window, or that occurrence's ledger key was already consumed by an earlier run made before any token existed | create a **new** event — keys are per event+date and are marked done even when nobody was registered |
 
 ---
 
