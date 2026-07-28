@@ -64,9 +64,9 @@
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/make-icons.mjs",
     "bundle": "expo export --platform android --output-dir .expo/export-check",
-    "build:preview": "eas build -p android --profile preview",
-    "build:dev": "eas build -p android --profile development",
-    "update:preview": "eas update --branch preview"
+    "build:preview": "npx eas-cli build -p android --profile preview",
+    "build:dev": "npx eas-cli build -p android --profile development",
+    "update:preview": "npx eas-cli update --branch preview"
   },
   "private": true
 }
