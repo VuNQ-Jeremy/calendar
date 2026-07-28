@@ -5,7 +5,9 @@ import type { ExpoConfig } from 'expo/config';
 // source of truth. The `.ts` extension is required: Node's extensionless resolution would find
 // ../shared/version.json before ../shared/version.ts and hand back an object with no functions.
 import stored from '../shared/version.json';
-import { formatVersionWith, versionCodeWith, resolveBuildWith } from '../shared/version-math.ts';
+// versionCodeWith() is deliberately not imported: EAS owns android.versionCode now. The web
+// build still uses it via shared/version.ts.
+import { formatVersionWith, resolveBuildWith } from '../shared/version-math.ts';
 import { gitBuild, gitSha } from '../scripts/git-version.mjs';
 
 /**
@@ -43,7 +45,15 @@ const config: ExpoConfig = {
   icon: './assets/images/icon.png',
   android: {
     package: 'com.mochi.lms',
-    versionCode: versionCodeWith(stored.major, build), // monotonic integer — Android rejects a repeat
+    /**
+     * NO `versionCode` here on purpose.
+     *
+     * eas.json sets `appVersionSource: "remote"`, which makes EAS the owner of this value —
+     * Expo's docs are explicit that a versionCode in app config is then ignored, so leaving one
+     * would be a number that looks authoritative and is not. It was removed because the derived
+     * one collapsed to 0 on the build machine (no `.git` in the uploaded archive) and Gradle
+     * rejects `versionCode 0`. The long version is in eas.json.
+     */
     adaptiveIcon: {
       foregroundImage: './assets/images/adaptive-icon.png',
       backgroundColor: BRAND,

@@ -40,7 +40,20 @@ export function gitBuild() {
   return Number(git('git rev-list --count HEAD', '0')) || 0;
 }
 
-/** Short commit SHA, or 'dev' outside a git checkout. */
+/**
+ * Short commit SHA, or 'dev' outside a git checkout.
+ *
+ * EAS Build is the one place that is "outside a git checkout" while still building a real,
+ * distributable app: it uploads an archive of the committed files WITHOUT `.git`, so every git
+ * command there fails. It does export the commit it built from as an environment variable, and
+ * using it matters — the sha is what makes a bug report from an installed APK traceable to a
+ * line of code, and 'dev' on a shipped build would throw that away.
+ *
+ * The commit COUNT has no such fallback, which is why the Android versionCode is EAS's job
+ * rather than this file's. See the comment in mobile/eas.json.
+ */
 export function gitSha() {
+  const fromEas = process.env.EAS_BUILD_GIT_COMMIT_HASH;
+  if (fromEas) return fromEas.slice(0, 7);
   return git('git rev-parse --short HEAD', 'dev');
 }

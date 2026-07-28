@@ -1,5 +1,17 @@
 {
-  "cli": { "version": ">= 5.0.0", "appVersionSource": "local" },
+  // `remote`, not `local`, and this is a correction rather than a preference.
+  //
+  // The build number everywhere else in this repo is DERIVED from `git rev-list --count HEAD`
+  // (scripts/git-version.mjs) so that any clone of a given commit computes the same version.
+  // That cannot work on an EAS build machine: EAS uploads an archive of the committed files
+  // WITHOUT `.git`, then re-evaluates app.config.ts there — the count comes back 0, and Gradle
+  // rejects `versionCode 0` outright ("should be a positive integer"). The first preview build
+  // died exactly there.
+  //
+  // With `remote`, EAS owns android.versionCode, stores it server-side and increments it per
+  // build, which is also the only thing Android actually requires of it: monotonicity. Note the
+  // git count never guaranteed that across branches anyway.
+  "cli": { "version": ">= 5.0.0", "appVersionSource": "remote" },
   "build": {
     // Keep a development-client APK installed on the test device alongside the preview build.
     // Expo Go is fine for fast UI iteration on phases 2-5, but it CANNOT faithfully test push
@@ -9,12 +21,14 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "channel": "development",
+      "autoIncrement": true,
       "env": { "EXPO_PUBLIC_API_URL": "https://calendar.ngqv0712.workers.dev" }
     },
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "channel": "preview",
+      "autoIncrement": true,
       // APK, not AAB: this is distributed as a download link, not through Play.
       "env": { "EXPO_PUBLIC_API_URL": "https://calendar.ngqv0712.workers.dev" }
     }
