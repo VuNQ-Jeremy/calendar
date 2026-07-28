@@ -63,55 +63,54 @@ export async function createSession(
  */
 export async function userFromToken(db: Db, rawToken: string): Promise<SessionUser | null> {
   const tokenHash = await hashToken(rawToken);
-  const sessionRow = await db.query.sessions.findFirst({
-    where: eq(sessions.token, tokenHash),
-  });
-  if (!sessionRow) return null;
+  // One joined query instead of 3 sequential D1 round-trips. The account join is
+  // inner (sessions.account_id is ON DELETE CASCADE, so orphan sessions cannot
+  // exist); staff/students are left joins because exactly one of them applies.
+  const rows = await db
+    .select({ session: sessions, account: accounts, staffRow: staff, studentRow: students })
+    .from(sessions)
+    .innerJoin(accounts, eq(accounts.id, sessions.accountId))
+    .leftJoin(staff, eq(staff.id, accounts.staffId))
+    .leftJoin(students, eq(students.id, accounts.studentId))
+    .where(eq(sessions.token, tokenHash))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
 
-  if (new Date(sessionRow.expiresAt) < new Date()) {
+  if (new Date(row.session.expiresAt) < new Date()) {
     await db.delete(sessions).where(eq(sessions.token, tokenHash));
     return null;
   }
 
-  const accountRow = await db.query.accounts.findFirst({
-    where: eq(accounts.id, sessionRow.accountId),
-  });
-  if (!accountRow) return null;
-
-  if (accountRow.staffId) {
-    const staffRow = await db.query.staff.findFirst({
-      where: eq(staff.id, accountRow.staffId),
-    });
-    if (!staffRow) return null;
+  const { account } = row;
+  if (account.staffId) {
+    if (!row.staffRow) return null;
     return {
       kind: 'staff',
-      account: { id: accountRow.id, email: accountRow.email },
+      account: { id: account.id, email: account.email },
       user: {
-        id: staffRow.id,
-        name: staffRow.name,
-        email: staffRow.email ?? null,
-        role: staffRow.role,
-        color: staffRow.color,
-        phone: staffRow.phone ?? null,
+        id: row.staffRow.id,
+        name: row.staffRow.name,
+        email: row.staffRow.email ?? null,
+        role: row.staffRow.role,
+        color: row.staffRow.color,
+        phone: row.staffRow.phone ?? null,
       },
     };
   }
 
-  if (accountRow.studentId) {
-    const studentRow = await db.query.students.findFirst({
-      where: eq(students.id, accountRow.studentId),
-    });
-    if (!studentRow) return null;
+  if (account.studentId) {
+    if (!row.studentRow) return null;
     return {
       kind: 'student',
-      account: { id: accountRow.id, email: accountRow.email },
+      account: { id: account.id, email: account.email },
       user: {
-        id: studentRow.id,
-        name: studentRow.name,
-        email: studentRow.email ?? null,
+        id: row.studentRow.id,
+        name: row.studentRow.name,
+        email: row.studentRow.email ?? null,
         role: 'Student',
-        color: studentRow.color,
-        phone: null,
+        color: row.studentRow.color,
+        phone: null, // students have no phone column
       },
     };
   }
@@ -119,11 +118,24 @@ export async function userFromToken(db: Db, rawToken: string): Promise<SessionUs
   return null; // parent accounts remain unsupported
 }
 
-export async function getUser(request: Request, env: Env): Promise<SessionUser | null> {
-  const db = createDb(env);
-  const rawToken = await sessionCookie.parse(request.headers.get('Cookie'));
-  if (!rawToken || typeof rawToken !== 'string') return null;
-  return userFromToken(db, rawToken);
+// On a cold document load the layout loader and the page loader run in the
+// same request — memoise per Request object so the session resolves once.
+// WeakMap keyed on the Request instance cannot leak across requests, and the
+// router builds a fresh Request for post-action revalidation, so loaders still
+// observe post-mutation state.
+const userByRequest = new WeakMap<Request, Promise<SessionUser | null>>();
+
+export function getUser(request: Request, env: Env): Promise<SessionUser | null> {
+  const memo = userByRequest.get(request);
+  if (memo) return memo;
+  const promise = (async () => {
+    const db = createDb(env);
+    const rawToken = await sessionCookie.parse(request.headers.get('Cookie'));
+    if (!rawToken || typeof rawToken !== 'string') return null;
+    return userFromToken(db, rawToken);
+  })();
+  userByRequest.set(request, promise);
+  return promise;
 }
 
 export async function requireUser(request: Request, env: Env): Promise<SessionUser> {

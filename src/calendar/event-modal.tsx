@@ -11,7 +11,7 @@ import { HomeworkTab } from './homework-tab.jsx';
 import { MaterialsTab } from './materials-tab.jsx';
 import { MaterialSearchDropdown } from '../material-search.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
-import { cacheSet, invalidate } from '../lib/cache.js';
+import { cacheSet, markStale } from '../lib/cache.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
@@ -192,7 +192,9 @@ function EventMaterialsPicker({
   const saveJoin = (next: string[]) => {
     setIds(next);
     cacheSet(evmatKey, { materialIds: next });
-    invalidate('route:calendar');
+    // Stale, not invalidate: the calendar keeps rendering instantly and
+    // refreshes its 6-query loader in the background.
+    markStale('route:calendar');
     const fd = new FormData();
     fd.set('intent', 'save');
     fd.set('eventId', eventId);

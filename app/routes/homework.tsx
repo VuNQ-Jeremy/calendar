@@ -13,9 +13,7 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as typesSvc from '../../server/services/assessment-types';
 import { HomeworkInput, HomeworkGradesSaveInput, parsePatch } from '../../shared/schemas';
-import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
-
-const CACHE_KEY = 'route:homework';
+import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -32,12 +30,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
-  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
-  if (cached !== undefined) return cached;
-  const data = await serverLoader();
-  cacheSet(CACHE_KEY, data);
-  return data;
+  return swrLoad(K.homework, () => serverLoader() as Promise<Awaited<ReturnType<typeof loader>>>);
 }
+clientLoader.hydrate = true as const;
 
 function preprocessHwRaw(raw: Record<string, unknown>) {
   const out = { ...raw };
@@ -101,7 +96,7 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {
     return await serverAction();
   } finally {
-    invalidate('route:', 'hw:');
+    invalidateAfterMutation('homework');
   }
 }
 

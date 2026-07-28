@@ -13,9 +13,12 @@ import type { MaterialRow } from '../../server/services/materials';
 import * as classesSvc from '../../server/services/classes';
 import { MaterialInput, parsePatch } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
+import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
+// Only referenced by the server `action`, so it does not block chunk splitting.
+// Never introduce a module-scope local shared by clientLoader AND clientAction:
+// that is what kept this route's client chunks from splitting (see route-cache.ts).
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
-const CACHE_KEY = 'route:materials';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -26,12 +29,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
-  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
-  if (cached !== undefined) return cached;
-  const data = await serverLoader();
-  cacheSet(CACHE_KEY, data);
-  return data;
+  return swrLoad(K.materials, () => serverLoader() as Promise<Awaited<ReturnType<typeof loader>>>);
 }
+clientLoader.hydrate = true as const;
 
 function preprocessMatRaw(raw: Record<string, unknown>) {
   const out = { ...raw };
@@ -88,13 +88,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
-  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
+  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(K.materials);
   let data: Awaited<ReturnType<typeof serverAction>>;
   try {
     data = await serverAction();
-  } finally {
-    invalidate('route:', 'evmat:');
+  } catch (e) {
+    invalidate(K.materials);
+    invalidateAfterMutation('materials');
+    throw e;
   }
+  invalidateAfterMutation('materials'); // hard: 'evmat:'; stale: dashboard/calendar/classes
   // Write the mutated row back into the materials route cache so the
   // post-action revalidation is a cache hit instead of a second server
   // round-trip (the download button depends on the fresh fileKey).
@@ -110,11 +113,15 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
       const materials = exists
         ? cached.materials.map((m) => (m.id === row.id ? row : m))
         : [...cached.materials, row];
-      cacheSet(CACHE_KEY, { ...cached, materials });
+      cacheSet(K.materials, { ...cached, materials });
     } else if (result.deletedId) {
       const materials = cached.materials.filter((m) => m.id !== result.deletedId);
-      cacheSet(CACHE_KEY, { ...cached, materials });
+      cacheSet(K.materials, { ...cached, materials });
+    } else {
+      invalidate(K.materials); // ok but no row echoed back: refetch to be safe
     }
+  } else {
+    invalidate(K.materials);
   }
   return data;
 }

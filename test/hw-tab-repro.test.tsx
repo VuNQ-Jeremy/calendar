@@ -5,7 +5,8 @@ import { createRoutesStub, Outlet } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
 import { CalendarScreen } from '../src/calendar/index.jsx';
 import { iso, TODAY } from '../src/lib/core.js';
-import { cacheGet, cacheSet, invalidate, clearCache } from '../src/lib/cache.js';
+import { cacheGet, cacheSet, clearCache } from '../src/lib/cache.js';
+import { invalidateAfterMutation } from '../src/lib/route-cache.js';
 
 const CLASSES = [{ id: 'c1', name: 'Studio Art', color: 'orange', studentIds: ['s1'] }];
 const STUDENTS = [{ id: 's1', name: 'Alice' }];
@@ -92,7 +93,8 @@ function makeStub() {
               ok: true,
               grades: [{ homeworkId: 'hw1', studentId: 's1', score: 7, comment: null }],
             };
-            invalidate('route:', 'hw:');
+            // Mirrors the real /homework clientAction (app/routes/homework.tsx).
+            invalidateAfterMutation('homework');
             return res;
           },
         },

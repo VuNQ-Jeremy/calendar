@@ -4,10 +4,15 @@ import {
   Outlet,
   useLoaderData,
   useFetcher,
+  useNavigation,
+  useRevalidator,
+  useLocation,
   isRouteErrorResponse,
   useRouteError,
 } from 'react-router';
-import type { LoaderFunctionArgs } from 'react-router';
+import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from 'react-router';
+import { cacheGet, subscribe } from '../../src/lib/cache.js';
+import { cacheKeyForPath } from '../../src/lib/route-cache.js';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
 import type { IconName } from '../../src/icons.jsx';
@@ -103,6 +108,31 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   };
 }
 
+// The layout loader feeds the sidebar badge counts (homework due, unused
+// invites, new feedback), uiPrefs, and the session user. Only mutations under
+// these paths can change that data — skip the layout .data round-trip for
+// everything else: plain GET navigations (incl. clicking the current page's
+// nav link), revalidator.revalidate() calls from useStaleRouteRefresh, and
+// unrelated mutations (calendar/classes/materials/assessments/flashcards —
+// note class deletion SET NULLs homework rows, it doesn't delete them, so
+// countDue is unaffected, and /calendar's theme write targets a different
+// settings row key than uiPrefs).
+const APP_DATA_MUTATION_PATHS = ['/homework', '/people', '/feedback', '/config', '/profile'];
+
+export function shouldRevalidate({
+  formAction,
+  formMethod,
+  formData,
+}: ShouldRevalidateFunctionArgs) {
+  if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
+  const path = formAction.split('?')[0];
+  if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
+  // Grade auto-save posts to /homework on every edit (src/calendar/homework-tab.tsx)
+  // but countDue filters on done/due only, so grades can never move the badge.
+  if (path === '/homework' && formData?.get('intent') === 'save-grades') return false;
+  return true;
+}
+
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
 
 export type SessionUser = AppLoaderData['user'];
@@ -151,7 +181,10 @@ function Sidebar({
               <NavLink
                 key={n.id}
                 to={n.path}
-                className={({ isActive }) => 'sb__item' + (isActive ? ' is-active' : '')}
+                prefetch="intent"
+                className={({ isActive, isPending }) =>
+                  'sb__item' + (isActive ? ' is-active' : '') + (isPending ? ' is-pending' : '')
+                }
               >
                 <MIcon name={n.icon as IconName} size={20} />
                 <span>{t(n.tk)}</span>
@@ -177,7 +210,10 @@ function Sidebar({
       )}
       <NavLink
         to="/profile"
-        className={({ isActive }) => 'sb__foot' + (isActive ? ' is-active' : '')}
+        prefetch="intent"
+        className={({ isActive, isPending }) =>
+          'sb__foot' + (isActive ? ' is-active' : '') + (isPending ? ' is-pending' : '')
+        }
         title="Manage your profile"
       >
         <ShAv name={user.name} color={user.color} size="md" />
@@ -195,11 +231,61 @@ function Sidebar({
   );
 }
 
+function NavProgress() {
+  const navigation = useNavigation();
+  const busy = navigation.state !== 'idle';
+  const [visible, setVisible] = React.useState(false);
+  React.useEffect(() => {
+    if (!busy) {
+      setVisible(false);
+      return;
+    }
+    // Only show for navigations that take noticeable time; cache-hit
+    // navigations settle before the delay elapses and never flash the bar.
+    const id = window.setTimeout(() => setVisible(true), 150);
+    return () => window.clearTimeout(id);
+  }, [busy]);
+  if (!visible) return null;
+  return <div className="nav-progress" aria-hidden="true" />;
+}
+
+/**
+ * When the currently displayed route's cache entry changes underneath it
+ * (a stale-while-revalidate refresh landing, or another screen's mutation
+ * marking it stale), revalidate so useLoaderData picks up the new data.
+ * Nearly free: shouldRevalidate above skips the layout loader and the child
+ * clientLoader is a cache hit (or stale hit that kicks its own refresh).
+ * Skips when the key was hard-deleted (cacheGet undefined) — React Router's
+ * automatic post-action revalidation already covers that case.
+ */
+function useStaleRouteRefresh() {
+  const revalidator = useRevalidator();
+  const navigation = useNavigation();
+  const location = useLocation();
+  const key = cacheKeyForPath(location.pathname);
+  const ref = React.useRef({ revalidator, navigation });
+  ref.current = { revalidator, navigation };
+  React.useEffect(() => {
+    if (!key) return;
+    return subscribe(key, () => {
+      const cur = ref.current;
+      if (
+        cacheGet(key) !== undefined &&
+        cur.navigation.state === 'idle' &&
+        cur.revalidator.state === 'idle'
+      ) {
+        cur.revalidator.revalidate();
+      }
+    });
+  }, [key]);
+}
+
 export type AppContext = {
   user: SessionUser;
 };
 
 export default function AppLayout() {
+  useStaleRouteRefresh();
   const { user, uiPrefs } = useLoaderData<typeof loader>();
   const feedbackFetcher = useFetcher();
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
@@ -264,6 +350,7 @@ export default function AppLayout() {
 
   return (
     <div className="app" style={shellStyle} data-density={TWEAKS.density}>
+      <NavProgress />
       <Sidebar user={user} onFeedback={openFeedback} onHelp={() => setIntroOpen(true)} />
       <div className="main">
         <Outlet context={{ user } satisfies AppContext} />

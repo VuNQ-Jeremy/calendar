@@ -10,7 +10,7 @@ import { sessionCookie } from '../../server/session';
 import { hashToken } from '../../server/services/crypto';
 import * as peopleSvc from '../../server/services/people';
 import { ColorId } from '../../shared/schemas';
-import { invalidate } from '../../src/lib/cache.js';
+import { invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -75,7 +75,7 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {
     return await serverAction();
   } finally {
-    invalidate('route:');
+    invalidateAfterMutation('profile');
   }
 }
 

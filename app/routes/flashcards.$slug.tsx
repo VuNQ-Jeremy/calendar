@@ -15,9 +15,8 @@ import {
   FlashcardResultInput,
   parsePatch,
 } from '../../shared/schemas';
-import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
-
-const keyFor = (slug: string) => `route:flashcards:${slug}`;
+import { invalidate, markStale } from '../../src/lib/cache.js';
+import { K, flashcardTopicKey, swrLoad } from '../../src/lib/route-cache.js';
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -43,13 +42,12 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
 }
 
 export async function clientLoader({ serverLoader, params }: ClientLoaderFunctionArgs) {
-  const cacheKey = keyFor(params.slug!);
-  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(cacheKey);
-  if (cached !== undefined) return cached;
-  const data = await serverLoader();
-  cacheSet(cacheKey, data);
-  return data;
+  return swrLoad(
+    flashcardTopicKey(params.slug!),
+    () => serverLoader() as Promise<Awaited<ReturnType<typeof loader>>>,
+  );
 }
+clientLoader.hydrate = true as const;
 
 function preprocessWord(raw: Record<string, unknown>) {
   const out = { ...raw };
@@ -148,11 +146,16 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
 
-export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+export async function clientAction({ serverAction, params }: ClientActionFunctionArgs) {
   try {
     return await serverAction();
   } finally {
-    invalidate('route:flashcards');
+    invalidate(flashcardTopicKey(params.slug!));
+    // topic list shows word counts; people shows per-student flashcard stats.
+    // NOTE markStale is prefix-based like invalidate, so K.flashcards
+    // ('route:flashcards') also stales every OTHER cached topic page
+    // ('route:flashcards:<slug>') — intended, they share mastery/stats.
+    markStale(K.flashcards, K.people);
   }
 }
 

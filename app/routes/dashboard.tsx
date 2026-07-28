@@ -11,9 +11,7 @@ import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import { iso, TODAY } from '../../src/lib/core.js';
 import { requireStaff } from '../../server/services/auth';
-import { cacheGet, cacheSet } from '../../src/lib/cache.js';
-
-const CACHE_KEY = 'route:dashboard';
+import { K, swrLoad } from '../../src/lib/route-cache.js';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -37,12 +35,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
-  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
-  if (cached !== undefined) return cached;
-  const data = await serverLoader();
-  cacheSet(CACHE_KEY, data);
-  return data;
+  return swrLoad(K.dashboard, () => serverLoader() as Promise<Awaited<ReturnType<typeof loader>>>);
 }
+clientLoader.hydrate = true as const;
 
 export default function Dashboard() {
   const { user } = useOutletContext<AppContext>();

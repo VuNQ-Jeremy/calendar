@@ -349,6 +349,55 @@ body {
 .sb__item .count {
   margin-left: auto;
 }
+/* ---- navigation pending feedback ---- */
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  /* 9998, not 9999: .dev-inspector already owns 9999. Still far above the
+     modal/overlay ceiling of 1100, so the bar shows over open modals. */
+  z-index: 9998;
+  pointer-events: none;
+  background: var(--brand, #f79a4e);
+  transform-origin: left;
+  animation: nav-progress-grow 1.2s ease-out forwards;
+}
+@keyframes nav-progress-grow {
+  0% {
+    transform: scaleX(0);
+  }
+  60% {
+    transform: scaleX(0.7);
+  }
+  100% {
+    transform: scaleX(0.92);
+  }
+}
+.sb__item.is-pending,
+.sb__foot.is-pending {
+  animation: nav-pending-pulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes nav-pending-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress {
+    animation: none;
+    transform: scaleX(0.92);
+  }
+  .sb__item.is-pending,
+  .sb__foot.is-pending {
+    animation: none;
+    opacity: 0.6;
+  }
+}
 /* Bottom group: language switch, then the feedback CTA, then the profile footer.
    margin-top:auto on the language bar pins the whole group to the bottom. */
 .sb__langbar {

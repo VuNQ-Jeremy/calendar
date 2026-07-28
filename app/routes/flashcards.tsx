@@ -10,9 +10,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireUser, requireStaff } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
 import { FlashcardTopicInput, parsePatch } from '../../shared/schemas';
-import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
-
-const CACHE_KEY = 'route:flashcards';
+import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -23,12 +21,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
-  const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(CACHE_KEY);
-  if (cached !== undefined) return cached;
-  const data = await serverLoader();
-  cacheSet(CACHE_KEY, data);
-  return data;
+  return swrLoad(K.flashcards, () => serverLoader() as Promise<Awaited<ReturnType<typeof loader>>>);
 }
+clientLoader.hydrate = true as const;
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -69,7 +64,7 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {
     return await serverAction();
   } finally {
-    invalidate('route:flashcards');
+    invalidateAfterMutation('flashcards');
   }
 }
 
