@@ -413,7 +413,7 @@ described in task 7.4 is between EAS builds and *local debug* builds, not betwee
 |---|---|---|---|
 | 1 | Fast Refresh | edit a screen, save | emulator updates in ~1s, navigation state kept |
 | 2 | Firebase initialises | `adb logcat \| grep -i "\[push\]"` | **no** `register failed` line |
-| 3 | Token registers | log in as a **student** | an `ExponentPushToken[...]` reaches `/api/push/register` |
+| 3 | Token registers | as a **student**: sign in, then **More → Notifications → enable** and accept the system dialog | an `ExponentPushToken[...]` reaches `/api/push/register` |
 | 4 | Update URL is in the binary | manifest check from the Evidence section | `u.expo.dev` **present** |
 | 5 | Push delivers | force-close app, then `POST /api/push/run?job=class` | the notification **arrives**. `sent: 1` on its own proves nothing — see below |
 | 6 | Idempotent | run the same call again | `sent: 0` |
@@ -469,8 +469,20 @@ returns `sent: 0` **correctly**, and looks exactly like the bug this phase just 
 
 In this order:
 
-1. **Student logs in on the device first**, so a token reaches `/api/push/register` (check 3).
-   This must happen before step 3 — see below.
+1. **Student signs in AND grants notification permission first**, so a token reaches
+   `/api/push/register` (check 3). This must happen before step 3 — see below.
+
+   **Signing in is not enough, by design.** `usePushRegistration` runs on every launch of a
+   signed-in app but returns early unless permission is *already* granted (`lib/push.ts:161`), and
+   deliberately does not prompt: a cold prompt on first launch gets denied, and on Android 13+ a
+   POST_NOTIFICATIONS denial is **sticky** — `canAskAgain` goes false and the only route back is
+   system settings (`lib/push.ts:72-75`). So the prompt is reserved for a moment with context. On a
+   fresh install the reliable way to reach it is **More → Notifications** (`app/(app)/more.tsx:96`),
+   whose toggle calls `requestAndRegister()`; `components/NotifPrompt.tsx` is the contextual
+   offer, and it fires once and remembers.
+
+   That same call is what runs `ensureChannels()`, so **check 7 depends on this step too** — the
+   three channels do not exist until permission is granted.
 2. In the web app, create an event **on today's date**, assigned to a **class whose `studentIds`
    include that student**, starting **10–25 minutes in the future**. Times are ICT, which is this
    machine's local +07. Strictly future: an event that has already started is filtered out.

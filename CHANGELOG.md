@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0031 — 2026-07-28
+Correct check 3: signing in does not register a push token, because the permission prompt is deliberately deferred to More - Notifications.
+
 ## v0.0030 — 2026-07-28
 Stop the login page revealing a live invite code: the loader now returns only whether an unused code exists, and the hint shows a mask.
 
