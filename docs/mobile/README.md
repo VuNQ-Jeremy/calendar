@@ -61,6 +61,7 @@ never tie it to the build, or every OTA update orphans every installed APK.
 | 4 | [phase-4-staff-core.md](./phase-4-staff-core.md) | 2 | Dashboard, Calendar (agenda-first), Event detail, Classes, Homework, Attendance |
 | 5 | [phase-5-staff-remaining.md](./phase-5-staff-remaining.md) | 4 | People, Materials, Assessments, Config, Feedback |
 | 6 | [phase-6-push-notifications.md](./phase-6-push-notifications.md) | 2 (3 & 4 for content) | Expo push registration, Cron Triggers, notification preferences |
+| 7 | [phase-7-dev-loop-and-delivery.md](./phase-7-dev-loop-and-delivery.md) | 6 | **FCM + EAS Update credentials**, local native build, Fast Refresh loop. Phases 2 and 6 shipped code that cannot deliver until this lands |
 
 **[TESTING.md](./TESTING.md)** — the operator's hands-on verification guide for each phase: exact commands,
 what to click, and what a failure looks like. Read it alongside each phase's acceptance criteria.
