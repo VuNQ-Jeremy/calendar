@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0027 — 2026-07-28
+Build 5 carries both fixes: an aapt2-based APK verifier in mobile/scripts proves the update URL, runtimeVersion 2, the preview channel and the Firebase resources are all compiled in.
+
 ## v0.0026 — 2026-07-28
 Record that the dev build and the preview APK cannot coexist on one device, and that OTA verification must therefore come before installing the dev build.
 

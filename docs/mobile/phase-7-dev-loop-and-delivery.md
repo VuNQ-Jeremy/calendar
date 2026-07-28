@@ -46,16 +46,38 @@ $manifest = [Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes("AndroidM
 $res      = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes("resources.arsc"))
 ```
 
-| Marker | Where | Build 4 | Means |
-|---|---|---|---|
-| `EXPO_UPDATE_URL` | manifest | **absent** | app has no update server to ask |
-| `u.expo.dev` | manifest | **absent** | same, confirming it is not set under another key |
-| `expo-channel-name` | manifest | **absent** | the `channel: "preview"` in eas.json never reached the binary |
-| `EXPO_UPDATES_CHECK_ON_LAUNCH` | manifest | present | the `expo-updates` plugin *did* run — it simply had no URL to write |
-| `EXPO_RUNTIME_VERSION` | manifest | present | runtimeVersion is wired correctly |
-| `FirebaseMessagingService` | manifest | present | `expo-notifications` bundles firebase-messaging unconditionally |
-| `google_app_id` | resources | **absent** | no Firebase config was ever compiled in |
-| `gcm_defaultSenderId` | resources | **absent** | same |
+| Marker | Where | Build 4 | Build 5 | Means |
+|---|---|---|---|---|
+| `EXPO_UPDATE_URL` | manifest | **absent** | `https://u.expo.dev/83251f6c…` | app has an update server to ask |
+| `expo-channel-name` | manifest | **absent** | `{"expo-channel-name":"preview"}` | eas.json's channel now reaches the binary — it could not before, having no URL to attach to |
+| `EXPO_UPDATES_CHECK_ON_LAUNCH` | manifest | present | `ALWAYS` | the plugin ran in both; in build 4 it had no URL to write |
+| `EXPO_UPDATES_LAUNCH_WAIT_MS` | manifest | — | `0` | `fallbackToCacheTimeout: 0` landed |
+| `EXPO_RUNTIME_VERSION` | manifest → resources | present | `2` | see the resource-reference note below |
+| `FirebaseMessagingService` | manifest | present | present | `expo-notifications` bundles firebase-messaging unconditionally, which is why the library's presence proves nothing |
+| `google_app_id` | resources | **absent** | `1:50776955531:android:9021707acb4f18b44d128e` | Firebase config is compiled in |
+| `gcm_defaultSenderId` | resources | **absent** | `50776955531` | same |
+
+### Use aapt2, not a string grep
+
+The commands above are worth keeping because they need nothing installed, but they can only prove a
+marker is **present** — and for the one value most worth checking that is not enough.
+`EXPO_RUNTIME_VERSION`'s manifest attribute is a **resource reference**, `@0x7f1300bd` →
+`string/expo_runtime_version`, so the manifest holds a pointer and the value itself sits in
+`resources.arsc`. A grep sees the name, reports "present", and tells you nothing about whether it
+says 1 or 2. Build 4's row above says exactly that, and it was the weakest line in this table.
+
+`aapt2` decodes both files and ships with build-tools, so any machine that can build the app has
+it. [`mobile/scripts/verify-apk.ps1`](../../mobile/scripts/verify-apk.ps1) wraps the ten assertions
+and exits non-zero on any failure:
+
+```powershell
+cd mobile
+npx eas-cli build:list --platform android --limit 1 --json --non-interactive   # -> artifacts url
+curl -sL -o mochi.apk "<applicationArchiveUrl>"
+powershell -ExecutionPolicy Bypass -File scripts/verify-apk.ps1 -Apk .\mochi.apk
+```
+
+Its `-RuntimeVersion` default must be bumped in step with `shared/version.json`.
 
 The Firebase result is the instructive one. The **library** is in the APK, so nothing fails at
 link time or at install time. The **configuration** is not, so `FirebaseApp.initializeApp()` finds
@@ -365,6 +387,22 @@ distribution.
 cd mobile && npm run build:preview      # first APK on runtimeVersion 2
 ```
 
+**Build 5 (`a753945e`) is that APK** — versionCode 5, channel `preview`, runtimeVersion 2, built
+2026-07-28. All ten binary assertions in `scripts/verify-apk.ps1` pass, which settles acceptance
+criteria 1–3 and matrix check 4 without a device. Everything still open needs one.
+
+Its `versionName` is **`v0.0000`**, and that is expected rather than a regression: EAS re-initialises
+the upload as a 1-commit repo, so `gitBuild()` reports 0 by design and only the printed string
+degrades (`scripts/git-version.mjs:39-55`). `gitSha` comes from `EAS_BUILD_GIT_COMMIT_HASH` and is
+correct, so the build is still traceable. Worth revisiting if a version string ever needs to mean
+something to a user; not a phase 7 problem.
+
+Install it from
+<https://expo.dev/accounts/vu-nguyens-team/projects/mochi-class/builds/a753945e-f446-43bf-bec3-a83dd8c51704>.
+It installs straight **over** build 4 — same EAS keystore (`Build Credentials -HeyhIjsvC`) and a
+higher versionCode, so it is an ordinary upgrade and no uninstall is needed. The signature conflict
+described in task 7.4 is between EAS builds and *local debug* builds, not between two EAS builds.
+
 ### Verification matrix
 
 | # | Check | Command / action | Pass |
@@ -425,9 +463,9 @@ path, same ledger, no 45-minute wait.
 
 ## Acceptance criteria
 
-- [ ] `u.expo.dev` present in the built APK's manifest
-- [ ] `google_app_id` present in the built APK's `resources.arsc`
-- [ ] `runtimeVersion` is `2` in `shared/version.json` and in the manifest
+- [x] `u.expo.dev` present in the built APK's manifest — build 5, `a753945e`
+- [x] `google_app_id` present in the built APK's `resources.arsc` — build 5
+- [x] `runtimeVersion` is `2` in `shared/version.json` and in the manifest — build 5
 - [ ] `npx expo run:android` produces a working app on the emulator, and editing a `.tsx` file
       updates it without a rebuild
 - [ ] A student login produces a push token server-side
