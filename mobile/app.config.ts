@@ -1,14 +1,18 @@
 import type { ExpoConfig } from 'expo/config';
 // version-math.ts, not version.ts: this file is evaluated by Node (Expo's config loader), and
 // version.ts does `import v from './version.json'`, which Node's ESM loader rejects without an
-// import attribute. So the stored numbers are imported here and passed in — same formulas, one
-// source of truth. The `.ts` extension is required: Node's extensionless resolution would find
+// import attribute. So the stored numbers are passed in — same formulas, one source of truth.
+// The `.ts` extension is required: Node's extensionless resolution would find
 // ../shared/version.json before ../shared/version.ts and hand back an object with no functions.
-import stored from '../shared/version.json';
+//
+// The numbers themselves come through a .mjs helper for that same reason, one level down:
+// importing the JSON *here* fails on the EAS build worker with ERR_IMPORT_ATTRIBUTE_MISSING.
+// scripts/version-store.mjs has the full story; a preview build died on it.
 // versionCodeWith() is deliberately not imported: EAS owns android.versionCode now. The web
 // build still uses it via shared/version.ts.
 import { formatVersionWith, resolveBuildWith } from '../shared/version-math.ts';
 import { gitBuild, gitSha } from '../scripts/git-version.mjs';
+import { storedVersion } from '../scripts/version-store.mjs';
 
 /**
  * A TypeScript config, not app.json, so it can read shared/version.ts — the same module the
@@ -17,6 +21,7 @@ import { gitBuild, gitSha } from '../scripts/git-version.mjs';
  * The build number is DERIVED from the git commit count at build time. Nothing stores it, so
  * two machines building the same commit produce the same version.
  */
+const stored = storedVersion();
 const build = resolveBuildWith(stored.buildOffset, gitBuild());
 const BRAND = '#F79A4E'; // ramp.orange[400] — shared/tokens.ts
 
