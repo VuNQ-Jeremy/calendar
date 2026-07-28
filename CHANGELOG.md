@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0030 — 2026-07-28
+Stop the login page revealing a live invite code: the loader now returns only whether an unused code exists, and the hint shows a mask.
+
 ## v0.0029 — 2026-07-28
 Fix invite codes arriving already spent: form booleans posted as the string 'false' were coerced to true. Same fix un-breaks turning off homework done, material favorite, assessment-type active and notification prefs.
 

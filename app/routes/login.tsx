@@ -10,6 +10,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
 import type { InviteRow } from '../../server/services/invites';
+import { MASKED_INVITE_CODE } from '../../shared/logic/invite-code';
 import {
   getUser,
   login,
@@ -30,14 +31,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (user) return redirect('/dashboard');
   const db = createDb(env);
   const url = new URL(request.url);
-  const allInvites = await invitesSvc.list(db);
-  const sampleInvite = allInvites.find((i) => !i.used) ?? null;
+  // Only whether a code is waiting, never which one. This page is unauthenticated, so the code
+  // itself would be readable by anyone who opened /login — including the staff codes an admin
+  // had just generated for named people.
+  const hasOpenInvite = (await invitesSvc.countUnused(db)) > 0;
   return {
     next: url.searchParams.get('next'),
     mode: url.searchParams.get('mode'),
     resetToken: url.searchParams.get('token'),
     resetDone: url.searchParams.get('reset') === 'done',
-    sampleInvite,
+    hasOpenInvite,
   };
 }
 
@@ -155,7 +158,7 @@ export default function Login() {
     mode: urlMode,
     resetToken,
     resetDone,
-    sampleInvite,
+    hasOpenInvite,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { t } = useLang();
@@ -309,16 +312,9 @@ export default function Login() {
           }}
         />
         {checkError && <div className="auth-error">{checkError}</div>}
-        {sampleInvite && (
+        {hasOpenInvite && (
           <div className="auth-hint-code">
-            {t('auth_demo_code')}{' '}
-            <button
-              className="auth-link"
-              type="button"
-              onClick={() => setCodeValue(sampleInvite.code)}
-            >
-              {sampleInvite.code}
-            </button>
+            {t('auth_demo_code')} <span className="m-mono">{MASKED_INVITE_CODE}</span>
           </div>
         )}
         <LBtn
