@@ -82,9 +82,9 @@ this without `adb logcat` would lose a day to it.
 
 | # | Gap | Blocks | Fixable in-repo? |
 |---|---|---|---|
-| 1 | No `updates.url` in app config | OTA — every `npm run update:preview` is a no-op | Yes, task 7.1 |
-| 2 | No FCM credentials (two of them) | All push, on every device | No — needs Firebase console, task 7.2 |
-| 3 | No `developmentClient` build exists | Fast Refresh from VS Code | Yes, task 7.4 |
+| 1 | No `updates.url` in app config | OTA — every `npm run update:preview` is a no-op | Yes — task 7.1, **fixed in config; proved only once an APK is built** |
+| 2 | No FCM credentials (two of them) | All push, on every device | No — needs Firebase console, task 7.2. **Outstanding, and it gates 7.3 and every row of 7.5 except Fast Refresh** |
+| 3 | No `developmentClient` build exists | Fast Refresh from VS Code | Yes — task 7.4, needs an AVD first |
 
 ---
 
@@ -285,11 +285,38 @@ README already notes this.
 
 ### Prerequisites the operator installs
 
-1. **Android Studio** — the setup wizard installs the SDK, `platform-tools` (which provides
-   `adb`), and the emulator. None of it is currently on this machine: no `adb` on `PATH`, no
-   `%LOCALAPPDATA%\Android\Sdk`.
-2. **An AVD with a Google Play system image.** Not "Google APIs", not a plain AOSP image — push
-   requires Play Services on the emulator. Pixel 7 / API 35 is a reasonable default.
+**Re-checked 2026-07-28, after task 7.1.** Android Studio has since been installed, so item 1 is
+done and only the emulator image is outstanding:
+
+| Piece | State | Path |
+|---|---|---|
+| Android Studio | installed | `C:\Program Files\Android\Android Studio` |
+| SDK platform | installed — `android-36.1` | `%LOCALAPPDATA%\Android\Sdk\platforms` |
+| build-tools | installed — `36.0.0` | `…\Sdk\build-tools` |
+| `adb` | present (1.0.41 / 37.0.0), **not on `PATH`** | `…\Sdk\platform-tools\adb.exe` |
+| emulator binary | present | `…\Sdk\emulator\emulator.exe` |
+| JDK | present (Android Studio's bundled JBR) | `…\Android Studio\jbr` |
+| **system image** | **none installed** | `…\Sdk\system-images` is absent |
+| **AVD** | **none created** | `%USERPROFILE%\.android\avd` is absent |
+| `cmdline-tools` | absent | so there is no CLI `sdkmanager` / `avdmanager` |
+
+1. **An AVD with a Google Play system image.** Not "Google APIs", not a plain AOSP image — push
+   requires Play Services on the emulator. Pixel 7 / API 35 or 36, x86_64, is a reasonable default.
+   With `cmdline-tools` absent this goes through **Android Studio → Device Manager**, not the CLI;
+   the GUI downloads the image as part of creating the device.
+2. **`ANDROID_HOME`.** Not currently set (nor `ANDROID_SDK_ROOT`, nor `JAVA_HOME`). React Native's
+   Gradle plugin resolves the SDK from it, so `npx expo run:android` fails with "SDK location not
+   found" until it is exported, or a `local.properties` with `sdk.dir` exists in the generated
+   `android/` folder. Set it once, at the user level:
+   ```powershell
+   [Environment]::SetEnvironmentVariable('ANDROID_HOME', "$env:LOCALAPPDATA\Android\Sdk", 'User')
+   ```
+   Adding `%ANDROID_HOME%\platform-tools` to `PATH` is what makes bare `adb logcat` work — every
+   `adb` line in this document assumes it.
+
+One thing to watch on the first local build: the installed platform is `android-36.1`, and RN 0.86
+targets `compileSdk 36`. If Gradle asks for a plain `android-36` it will try to fetch it and, with
+no `cmdline-tools`, may need the missing package added from Android Studio's SDK Manager instead.
 
 The APK is universal — build 4 compiled `armeabi-v7a`, `arm64-v8a` **and** `x86_64` — so a
 standard x86_64 emulator will install it rather than failing `INSTALL_FAILED_NO_MATCHING_ABIS`.
