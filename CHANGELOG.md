@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0014 — 2026-07-28
+Fix the version stamp always showing v0.0000: Workers Builds is the sole deployer now and its shallow clone is deepened before the build number is derived.
+
 ## v0.0010 — 2026-07-27
 Mobile phase 4: staff core on the phone — dashboard with a two-tap attendance shortcut, agenda-first calendar with month and day views, long-press reschedule, full-screen event detail with attendance/homework/materials tabs, class schedule and roster editors, and homework grading.
 

@@ -8,9 +8,9 @@
  */
 import { execSync } from 'node:child_process';
 
-function git(cmd, fallback) {
+function git(cmd, fallback, timeout) {
   try {
-    return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'] })
+    return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'], timeout })
       .toString()
       .trim();
   } catch {
@@ -20,8 +20,23 @@ function git(cmd, fallback) {
   }
 }
 
+/**
+ * Cloudflare Workers Builds — the deployer — clones at depth 1, and offers no clone-depth
+ * setting to turn that off. A depth-1 clone counts 1 commit, which collapses the version to
+ * v0.0000; that is exactly what shipped before this existed. So deepen the clone ourselves
+ * before counting. The repo is public, so the fetch needs no credentials.
+ *
+ * Best-effort by design: if it fails, the count stays short and `resolveBuildWith` throws,
+ * which fails the build loudly rather than deploying a wrong version number.
+ */
+function deepenShallowClone() {
+  if (git('git rev-parse --is-shallow-repository', 'false') !== 'true') return;
+  git('git fetch --unshallow --quiet origin', '', 120_000);
+}
+
 /** Commit count on the current branch. 0 outside a git checkout. */
 export function gitBuild() {
+  deepenShallowClone();
   return Number(git('git rev-list --count HEAD', '0')) || 0;
 }
 

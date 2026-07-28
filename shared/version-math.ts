@@ -12,6 +12,20 @@
 
 /** Raw `git rev-list --count HEAD` -> this project's build number. */
 export function resolveBuildWith(buildOffset: number, commitCount: number): number {
+  // A count of 0 is the legitimate no-git case (tarball, or a checkout without .git) and
+  // resolves to build 0 — "v0.0000 · dev". But a NON-ZERO count below the offset is
+  // impossible in a complete checkout: the commit that set the offset is an ancestor of
+  // every commit that follows it. It means truncated history, i.e. a shallow CI clone.
+  // Throw rather than clamp — silently clamping to 0 is how every deploy shipped v0.0000.
+  if (commitCount > 0 && commitCount < buildOffset) {
+    throw new Error(
+      `Refusing to build: git history is truncated (${commitCount} commits, build offset ` +
+        `${buildOffset}), so the build number would collapse to 0. Run ` +
+        `\`git fetch --unshallow\` — see deepenShallowClone in scripts/git-version.mjs.`
+    );
+  }
+  // A count EQUAL to the offset is build 0 on purpose: scripts/changelog.mjs --major
+  // re-baselines the offset so the new major starts at .0000.
   return Math.max(0, commitCount - buildOffset);
 }
 
