@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0034 — 2026-07-28
+Fix the More screen rendering as an unstyled vertical stack: Link asChild routes through Radix Slot, which destroys a Pressable's function-form style prop.
+
 ## v0.0033 — 2026-07-28
 Branded bottom tab bar for the mobile app with three admin-selectable styles (soft pill, floating dock, top indicator), and a fix for the tab bar being drawn underneath Android's navigation buttons.
 

@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import type { Href } from 'expo-router';
 import {
   BarChart3,
@@ -120,26 +120,41 @@ export default function More() {
 
       <Card flat style={{ padding: 0, overflow: 'hidden' }}>
         {visible.map((row, i) => (
-          <Link key={row.key} href={row.href!} asChild>
-            <Pressable
-              accessibilityRole="link"
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: th.spacing[4],
-                minHeight: TOUCH + 4,
-                paddingHorizontal: th.spacing[5],
-                borderTopWidth: i === 0 ? 0 : 1,
-                borderTopColor: th.color.borderSubtle,
-                backgroundColor: pressed ? th.color.surfaceHover : 'transparent',
-              })}
-            >
-              {row.icon}
-              <Body style={{ flex: 1 }}>{t(row.tk)}</Body>
-              {row.adminOnly ? <Muted style={{ fontSize: 11 }}>{t('m_admin_only')}</Muted> : null}
-              <ChevronRight size={18} color={th.color.textDisabled} />
-            </Pressable>
-          </Link>
+          /*
+            `router.push` on a plain Pressable, NOT `<Link asChild>`.
+
+            `asChild` renders through @radix-ui/react-slot, whose `mergeProps` merges the slot's
+            style into the child's with `{ ...slotStyle, ...childStyle }`. Spreading a FUNCTION
+            yields `{}` — a function has no enumerable own properties — so a child whose `style` is
+            the `({ pressed }) => …` form silently loses every rule in it. These rows rendered as a
+            bare vertical stack, flush to the left edge with no dividers and no row height, because
+            `flexDirection: 'row'` and everything beside it was being discarded on the way in.
+
+            Object styles merge correctly and array styles throw a dev-time error, so the function
+            form is the one broken case — and it is the form anything with press feedback needs.
+            Not worth trading the feedback away to keep the anchor semantics, which do nothing on a
+            phone; `accessibilityRole="link"` still tells a screen reader what the row is.
+          */
+          <Pressable
+            key={row.key}
+            accessibilityRole="link"
+            onPress={() => router.push(row.href!)}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: th.spacing[4],
+              minHeight: TOUCH + 4,
+              paddingHorizontal: th.spacing[5],
+              borderTopWidth: i === 0 ? 0 : 1,
+              borderTopColor: th.color.borderSubtle,
+              backgroundColor: pressed ? th.color.surfaceHover : 'transparent',
+            })}
+          >
+            {row.icon}
+            <Body style={{ flex: 1 }}>{t(row.tk)}</Body>
+            {row.adminOnly ? <Muted style={{ fontSize: 11 }}>{t('m_admin_only')}</Muted> : null}
+            <ChevronRight size={18} color={th.color.textDisabled} />
+          </Pressable>
         ))}
 
         <Pressable
