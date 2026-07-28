@@ -310,6 +310,10 @@ That matters for ordering, not just as trivia: the preview APK is the **only** a
 prove OTA, because a debug build has no channel and `expo-updates` is inert in it. Installing the
 dev build first therefore destroys the ability to run checks 4 and 9.
 
+Taking option A instead does not dodge this. An EAS `development` build is signed with the *same*
+project keystore, so it installs without complaint — and simply **replaces** the preview APK,
+because the package name is identical. Silent replacement rather than a refused install, same loss.
+
 **So: run the 7.5 matrix on the preview APK first, then switch the device to the dev build.** Two
 devices — a phone for preview, an emulator for development — is the only way to hold both at once,
 and is the one real argument for creating an AVD. A physical phone over USB serves the dev loop
@@ -411,7 +415,7 @@ described in task 7.4 is between EAS builds and *local debug* builds, not betwee
 | 2 | Firebase initialises | `adb logcat \| grep -i "\[push\]"` | **no** `register failed` line |
 | 3 | Token registers | log in as a **student** | an `ExponentPushToken[...]` reaches `/api/push/register` |
 | 4 | Update URL is in the binary | manifest check from the Evidence section | `u.expo.dev` **present** |
-| 5 | Push delivers | force-close app, then `POST /api/push/run?job=class` | `sent: 1` and the notification arrives |
+| 5 | Push delivers | force-close app, then `POST /api/push/run?job=class` | the notification **arrives**. `sent: 1` on its own proves nothing — see below |
 | 6 | Idempotent | run the same call again | `sent: 0` |
 | 7 | Channels | Settings → Apps → Mochi → Notifications | **three** separate channels |
 | 8 | Cold-start deep link | kill the app, tap a notification | lands on the right screen, not home |
@@ -430,6 +434,30 @@ TOKEN=$(curl -s -X POST $BASE/api/auth/login -H 'content-type: application/json'
   | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).data.token")
 curl -s -X POST "$BASE/api/push/run?job=class" -H "Authorization: Bearer $TOKEN"
 ```
+
+### `sent: 1` is not proof of delivery — and which check proves which credential
+
+`runClassReminders` ends in `return messages.length` (`notify.ts:111`): the count of messages
+**handed to Expo**, not tickets Expo accepted. `sendPush` does inspect the tickets, but it only
+harvests `DeviceNotRegistered` tokens for pruning and `console.error`s everything else
+(`push.ts:151-155`). Nothing about a rejected ticket reaches the HTTP response.
+
+So a missing FCM V1 key on EAS produces: token registers fine, `sent: 1`, nothing on the phone, and
+the only evidence in the Worker log. Watch for it while testing:
+
+```bash
+npx wrangler tail --format pretty      # look for '[push] ticket error'
+```
+
+The two credentials from task 7.2 fail independently and are proved by different checks:
+
+| Credential | Proved by | Failure signature |
+|---|---|---|
+| `google-services.json` (in the APK) | **check 3** — a token reaches `/api/push/register` | no token server-side; `[push] register failed` in logcat |
+| FCM V1 service account key (on EAS) | **check 5** — the notification actually arrives | token exists, `sent: 1`, nothing delivered, `[push] ticket error` in `wrangler tail` |
+
+Getting a token is therefore *not* evidence the send path works — the device talks to FCM directly,
+while Expo's push service needs its own credential to hand the message on.
 
 ### Preconditions for checks 5 and 6 — and the order matters
 
@@ -491,6 +519,7 @@ builds on 2026-07-28.
 | tsc fails on valid `router.push()` calls | stale `.expo/types/router.d.ts`; `expo export` does not regenerate it | `rm -rf .expo/types && npx expo start --clear` |
 | 179 stray `.js` files appear in the repo | `tsc -b` has no `noEmit` | `git clean -f -- '*.js'`, never commit them |
 | expo-doctor fails on `disableHierarchicalLookup` | deliberate — it keeps the web's `node_modules` out of the native bundle | ignore it; it will fail on every build forever |
+| `sent: 1` but no notification arrives | the count is messages handed to Expo, not tickets accepted; most likely the FCM V1 key never reached EAS | `npx wrangler tail` and look for `[push] ticket error` |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` installing a build | debug keystore vs EAS keystore on the same package name | uninstall the other build first — and run the OTA checks before you give up the preview APK |
 | `?job=class` returns `sent: 0` when a send was expected | either no class occurrence starts within the 30-minute lead window, or that occurrence's ledger key was already consumed by an earlier run made before any token existed | create a **new** event — keys are per event+date and are marked done even when nobody was registered |
 
