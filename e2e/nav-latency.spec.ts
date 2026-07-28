@@ -53,10 +53,34 @@ async function clickNav(page: Page, href: string) {
   await expect(page).toHaveURL(new RegExp(`${href}(\\?|$)`));
 }
 
+/**
+ * Keep only the requests that load a given route's own data.
+ *
+ * Single fetch tags each request with `_routes`, and a request for
+ * `_routes=routes/_app` is the *layout* loader, not the page: mutations under
+ * APP_DATA_MUTATION_PATHS legitimately revalidate the sidebar badge counts, and
+ * React Router may attach that pending revalidation to whichever navigation
+ * happens next. Filtering by route id keeps these assertions about the route
+ * cache rather than about the layout's revalidation policy.
+ */
+function scopedTo(requests: string[], routeId: string) {
+  return requests.filter((u) => u.includes(`_routes=routes%2F${routeId}`));
+}
+
 test.describe('navigation latency', () => {
   test.skip(!HAVE_CREDS, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 
   test.beforeEach(async ({ page }) => {
+    // A fresh browser profile has no localStorage, so AppLayout opens the
+    // first-visit instructions modal, whose .m-overlay swallows every click.
+    // Mark it seen before any page script runs (src/instructions.tsx).
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('mochi_seen_intro_v1', '1');
+      } catch {
+        /* storage unavailable */
+      }
+    });
     await page.goto('/login');
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
@@ -133,6 +157,87 @@ test.describe('navigation latency', () => {
     await expect(page).toHaveURL(/\/people(\?|$)/, { timeout: 30_000 });
     await expect(page.locator('.nav-progress')).toHaveCount(0);
     await expect(page.locator('.sb a.is-pending')).toHaveCount(0);
+  });
+
+  // The bug this guards: swrLoad used to re-flag a failed refresh with
+  // markStale(), which notifies -> useStaleRouteRefresh revalidates -> refetch
+  // -> fails -> notifies -> one .data request per round trip, forever, while
+  // the user sits on the route. markStaleQuiet() restores the flag silently.
+  test('a failed background refresh does not retry-storm', async ({ page, context }) => {
+    // Cache /assessments (and load its chunk, so navigating to it works offline).
+    await clickNav(page, '/assessments');
+    await page.waitForLoadState('networkidle');
+
+    // Stale it via the idempotent /config write (see the scoped test below).
+    // Profile's "Save changes" would stale everything but stays disabled until
+    // the form is dirty, so it cannot be used without changing real data.
+    await clickNav(page, '/config');
+    await page.click('button.preset.preset--sb.is-active');
+    await page.waitForLoadState('networkidle');
+
+    // Settle somewhere neutral and let the layout revalidation that the /config
+    // mutation triggered actually finish. React Router queues it in an effect,
+    // so networkidle can resolve before it even starts; if it is still pending
+    // when the network goes away it fails and trips the layout error boundary.
+    await clickNav(page, '/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3_000);
+
+    const attempts: string[] = [];
+    const onRequest = (r: Request) => {
+      const u = new URL(r.url());
+      if (u.pathname === '/assessments.data') attempts.push(u.pathname + u.search);
+    };
+    page.on('request', onRequest);
+
+    await context.setOffline(true);
+    try {
+      await clickNav(page, '/assessments');
+      // Stale data must still render instantly with no network at all.
+      await expect(page.locator('.sb a[href="/assessments"].is-active')).toHaveCount(1);
+      // Give a retry loop ample room to reveal itself.
+      await page.waitForTimeout(6_000);
+    } finally {
+      await context.setOffline(false);
+      page.off('request', onRequest);
+    }
+
+    const refreshes = scopedTo(attempts, 'assessments');
+    expect(
+      refreshes.length,
+      `expected exactly 1 background refresh attempt, saw ${refreshes.length} of ${attempts.length} total: ${attempts.join(', ')}`,
+    ).toBe(1);
+  });
+
+  // Scoped invalidation is the core of this change: before it, every
+  // clientAction ran invalidate('route:') and wiped the entire cache, so ANY
+  // mutation made every later navigation a cold blocking fetch.
+  test('a mutation stales only the routes that depend on it', async ({ page }) => {
+    await clickNav(page, '/assessments');
+    await page.waitForLoadState('networkidle');
+    await clickNav(page, '/people');
+    await page.waitForLoadState('networkidle');
+
+    // Idempotent write: re-click the scrollbar preset that is already active,
+    // which rewrites settings['ui-prefs'] with its current value.
+    await clickNav(page, '/config');
+    await page.click('button.preset.preset--sb.is-active');
+    await page.waitForLoadState('networkidle');
+
+    // A /config mutation stales homework + assessments (shared assessment types)...
+    const staled = await recordDataRequests(page, () => clickNav(page, '/assessments'), 2500);
+    expect(
+      scopedTo(staled, 'assessments').length,
+      `expected a background refresh of /assessments, saw: ${staled.join(', ') || '(none)'}`,
+    ).toBe(1);
+
+    // ...and nothing else. /people has no dependency on ui-prefs, so it must
+    // still be served from cache.
+    const untouched = await recordDataRequests(page, () => clickNav(page, '/people'), 2500);
+    expect(
+      scopedTo(untouched, 'people'),
+      `expected /people to stay cached, saw: ${untouched.join(', ')}`,
+    ).toEqual([]);
   });
 
   // The 150 ms delay exists so instant (cached) navigations never flash the bar.

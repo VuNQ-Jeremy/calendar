@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0040 — 2026-07-28
+Verify the navigation-latency work in a real browser: the e2e suite now passes against production and covers the offline retry-storm guard and scoped cache invalidation
+
 ## v0.0039 — 2026-07-28
 Add a Playwright suite for the navigation-latency behaviours: cache-hit navigations, hover prefetch, and the pending progress bar, run against a real deployment
 
