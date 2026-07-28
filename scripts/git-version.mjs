@@ -36,6 +36,24 @@ function deepenShallowClone() {
 
 /** Commit count on the current branch. 0 outside a git checkout. */
 export function gitBuild() {
+  /**
+   * EAS Build is a special case, and not the one `deepenShallowClone` handles.
+   *
+   * EAS uploads an archive of the committed files and re-initialises it on the worker as a fresh
+   * repository with a SINGLE synthetic commit. So the count is 1 — not 0 — and it describes
+   * nothing about this project's history. There is no `origin` to unshallow from, either.
+   *
+   * Left alone, that 1 hits the truncation guard in `resolveBuildWith` (1 < buildOffset) and
+   * throws, which is what the guard is for: on Cloudflare's depth-1 clone a low count really does
+   * mean lost history and really should fail the deploy. Here it is an artifact of how the
+   * archive is shipped, so report the honest answer instead: no usable history, build 0.
+   *
+   * The consequence is contained. Android's versionCode comes from EAS (mobile/eas.json), and
+   * `gitSha()` below reads the real commit from EAS_BUILD_GIT_COMMIT_HASH — so a build is still
+   * identifiable. Only the printed version string degrades, to v0.0000.
+   */
+  if (process.env.EAS_BUILD === 'true' || process.env.EAS_BUILD_ID) return 0;
+
   deepenShallowClone();
   return Number(git('git rev-list --count HEAD', '0')) || 0;
 }
