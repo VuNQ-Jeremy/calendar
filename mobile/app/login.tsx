@@ -132,7 +132,9 @@ export default function Login() {
   );
 
   return (
-    <Screen edges={{ top: true }}>
+    // Both insets: this screen is outside the tab group, so there is no tab bar below it to pad
+    // the bottom one.
+    <Screen edges={{ top: true, bottom: true }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

@@ -107,7 +107,9 @@ export default function More() {
   const visible = rows.filter((r) => !r.adminOnly || user?.role === 'Admin');
 
   return (
-    <Screen scroll>
+    // `top`, because this screen has no ScreenHeader to own the status-bar inset — the title is
+    // the first thing in it, and on an edge-to-edge Android it renders under the clock otherwise.
+    <Screen scroll edges={{ top: true }}>
       <Title>{t('m_more')}</Title>
 
       {account ? (

@@ -364,8 +364,20 @@ export type ThemeInput = z.infer<typeof ThemeInput>;
 export const SCROLLBAR_STYLES = ['slim', 'inset', 'brand', 'ghost'] as const;
 export type ScrollbarStyle = (typeof SCROLLBAR_STYLES)[number];
 
+/**
+ * How the phone's bottom tab bar looks. The mirror image of `SCROLLBAR_STYLES`: that one is
+ * meaningless on Android, this one is meaningless on the web — the web shell has a sidebar, not
+ * a tab bar. Both live in `ui-prefs` anyway, because one settings row per client would mean two
+ * places to look for "how does this school's UI behave".
+ *
+ * The variants are rendered by mobile/components/TabBar.tsx; these ids are its `variant` prop.
+ */
+export const TAB_BAR_STYLES = ['pill', 'dock', 'indicator'] as const;
+export type TabBarStyle = (typeof TAB_BAR_STYLES)[number];
+
 export const UiPrefsInput = z.object({
   scrollbar: z.enum(SCROLLBAR_STYLES).optional(),
+  mobileTabBar: z.enum(TAB_BAR_STYLES).optional(),
 });
 export type UiPrefsInput = z.infer<typeof UiPrefsInput>;
 

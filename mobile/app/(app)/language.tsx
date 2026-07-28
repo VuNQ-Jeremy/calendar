@@ -17,7 +17,8 @@ export default function Language() {
   const { t, lang, setLang } = useLang();
 
   return (
-    <Screen scroll>
+    // `top`: no ScreenHeader here, so the title would sit under the status bar without it.
+    <Screen scroll edges={{ top: true }}>
       <Title>{t('language')}</Title>
       <Muted>{t('prof_lang_sub')}</Muted>
 

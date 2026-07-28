@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { settings } from '../db/schema';
 import type { Db } from '../db/index';
-import type { ScrollbarStyle } from '../../shared/schemas';
+import type { ScrollbarStyle, TabBarStyle } from '../../shared/schemas';
 
-export type UiPrefs = { scrollbar: ScrollbarStyle };
+export type UiPrefs = { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
 
-export const DEFAULT_UI_PREFS: UiPrefs = { scrollbar: 'slim' };
+export const DEFAULT_UI_PREFS: UiPrefs = { scrollbar: 'slim', mobileTabBar: 'pill' };
 
 export async function getUiPrefs(db: Db): Promise<UiPrefs> {
   const rows = await db.select().from(settings).where(eq(settings.key, 'ui-prefs'));

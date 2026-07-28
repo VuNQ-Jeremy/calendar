@@ -1742,6 +1742,84 @@ body {
   border-radius: 999px;
 }
 
+/* mobile tab-bar style picker on /config.
+   Previews a phone's bottom edge: the tab bar sitting above the system nav pill. The nav pill is
+   in every mock on purpose — clearing it is half the point of the setting's existence. */
+.preset--tb {
+  width: 128px;
+}
+.tbmock {
+  height: 44px;
+  padding: 4px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--cream-200);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 3px;
+}
+.tbmock__bar {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--surface-card);
+  border-top: 1px solid var(--sand-300);
+}
+.tbmock__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 0;
+  border-radius: 999px;
+}
+.tbmock__item i {
+  display: block;
+  background: var(--taupe-400);
+}
+.tbmock__ico {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+}
+.tbmock__lbl {
+  width: 11px;
+  height: 2px;
+  border-radius: 999px;
+}
+.tbmock__item.is-active i {
+  background: var(--brand);
+}
+/* The phone's system navigation row. Every variant leaves it uncovered. */
+.tbmock__nav {
+  height: 3px;
+  width: 38%;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: var(--taupe-400);
+}
+/* pill — soft-orange pill behind the active icon, on a white bar */
+.tbmock--pill .tbmock__item.is-active {
+  background: var(--orange-100);
+}
+/* dock — detached rounded card, floating clear of the nav row */
+.tbmock--dock .tbmock__bar {
+  margin: 0 3px 3px;
+  border: 1px solid var(--sand-300);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+/* indicator — bar blends into the page, orange line above the active tab */
+.tbmock--indicator .tbmock__bar {
+  background: transparent;
+  border-top: none;
+}
+.tbmock--indicator .tbmock__item.is-active {
+  box-shadow: inset 0 2px 0 var(--brand);
+}
+
 /* schedule editor */
 .sched-row {
   display: grid;

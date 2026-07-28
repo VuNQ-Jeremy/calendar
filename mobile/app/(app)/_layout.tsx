@@ -8,11 +8,13 @@ import {
   MoreHorizontal,
   UserRound,
 } from 'lucide-react-native';
+import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
+import { TabBar } from '~/components/TabBar';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import { usePushRegistration, useNotificationRouting } from '~/lib/push';
 import { useSync } from '~/lib/use-sync';
-import { useTheme } from '~/theme';
+import { useTabBarStyle } from '~/lib/use-ui-prefs';
 
 /**
  * The signed-in shell.
@@ -33,7 +35,10 @@ import { useTheme } from '~/theme';
 export default function AppLayout() {
   const { user } = useAuth();
   const { t } = useLang();
-  const th = useTheme();
+  // Chosen by an admin in System Config, school-wide. Falls back to 'pill' until the value has
+  // been fetched once — after that the query cache is persisted to AsyncStorage, so a cold start
+  // renders the right variant immediately, offline included.
+  const tabBarVariant = useTabBarStyle();
 
   // Flushes the offline outbox and refreshes downloaded topics on foreground and on reconnect.
   // Mounted here rather than in the root layout so it only runs for a signed-in user — a flush
@@ -55,21 +60,23 @@ export default function AppLayout() {
 
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: th.color.brand,
-        tabBarInactiveTintColor: th.color.textMuted,
-        tabBarStyle: {
-          backgroundColor: th.color.surfaceCard,
-          borderTopColor: th.color.borderSubtle,
-          // The bar itself sits above the gesture bar; safe-area padding is handled by
-          // react-navigation, but the height needs to clear a 48dp touch target.
-          height: 60,
-          paddingTop: 6,
-          paddingBottom: 6,
-        },
-        tabBarLabelStyle: { fontFamily: th.font.bodyBold, fontSize: 11 },
-      }}
+      /*
+        A custom bar — components/TabBar.tsx explains why at length, but the short version is that
+        it owns both the branding (three admin-selectable variants) and the safe-area padding that
+        the old `tabBarStyle: { height: 60 }` was silently defeating, leaving the tabs underneath
+        Android's navigation buttons.
+
+        The bar's own tint/height/label options are gone with it: they configured the default bar,
+        which no longer renders. TabBar reads the design tokens directly instead of laundering two
+        of them through navigator options.
+
+        `tabBar` is CALLED, not mounted as an element type
+        (expo-router/build/react-navigation/bottom-tabs/views/BottomTabView.js:154), so this inline
+        arrow is not the remount hazard that an inline `tabBarIcon` would be — the component whose
+        identity React reconciles is the module-scope TabBar.
+      */
+      tabBar={(props: BottomTabBarProps) => <TabBar {...props} variant={tabBarVariant} />}
+      screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen
         name="dashboard"

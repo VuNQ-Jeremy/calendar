@@ -143,7 +143,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/flashcards/stats` | staff | `?topicId=` for one topic's results, else per-student stats |
 | GET PATCH | `/api/profile` | user | `ProfileInput` — deliberately cannot change `role` |
 | GET PATCH | `/api/settings/theme` | staff | `ThemeInput`; nulls mean "leave unchanged" |
-| GET PATCH | `/api/settings/ui-prefs` | user | `UiPrefsInput` |
+| GET PATCH | `/api/settings/ui-prefs` | GET user, PATCH **admin** | `UiPrefsInput` — school-wide, so every client reads it but only an admin writes it. `scrollbar` is web-only, `mobileTabBar` phone-only |
 | POST | `/api/push/register` | user | `{ expoToken, platform }` — upserts, moving the token between accounts |
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
 

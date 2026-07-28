@@ -1,14 +1,18 @@
 import React from 'react';
 import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react-native';
+import { TAB_BAR_STYLES, type TabBarStyle, type UiPrefsInput } from '@mochi/shared/schemas';
+import { ChipSelect } from '~/components/ChipSelect';
 import { DragReorderList } from '~/components/DragReorderList';
 import { ScreenHeader } from '~/components/ScreenHeader';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import * as api from '~/lib/endpoints';
+import { qk } from '~/lib/query';
 import { useAssessmentTypes, useInvalidateStaff } from '~/lib/staff-data';
-import type { AssessmentTypeRow } from '~/lib/types';
+import type { AssessmentTypeRow, UiPrefs } from '~/lib/types';
+import { useTabBarStyle } from '~/lib/use-ui-prefs';
 import { useTheme } from '~/theme';
 import { Badge, Body, Button, Card, Heading, IconButton, Input, Muted, Screen } from '~/ui';
 
@@ -24,16 +28,48 @@ import { Badge, Body, Button, Card, Heading, IconButton, Input, Muted, Screen } 
  * desktop scrollbar; Android's is not styleable, so the setting cannot do anything on a phone.
  * The value is left untouched so the web keeps working, and the omission is stated in the More
  * screen rather than silently dropped — see docs/mobile-parity.md.
+ *
+ * Its mirror image IS here: `uiPrefs.mobileTabBar` shapes this app's bottom tab bar and does
+ * nothing on the web. Both settings are school-wide, both are editable from either client's
+ * config screen, and each client applies the half that concerns it.
  */
 const ROW_HEIGHT = 64;
+
+/** The tab-bar variants, in the order the web's /config picker shows them. */
+const TB_LABEL: Record<TabBarStyle, string> = {
+  pill: 'cfg_tb_pill',
+  dock: 'cfg_tb_dock',
+  indicator: 'cfg_tb_indicator',
+};
 
 export default function Config() {
   const th = useTheme();
   const { t } = useLang();
   const { user } = useAuth();
   const invalidate = useInvalidateStaff();
+  const qc = useQueryClient();
 
   const { data: types, isLoading } = useAssessmentTypes();
+
+  // The variant this device is rendering right now, which is also what the picker shows as
+  // selected — the same hook the signed-in shell uses, reading the same cache entry.
+  const tabBarStyle = useTabBarStyle();
+  const setUiPrefs = useMutation({
+    mutationFn: (patch: Partial<UiPrefsInput>) => api.settings.updateUiPrefs(patch),
+    // Optimistic, unlike the other mutations on this screen, because what this setting changes is
+    // visible on this very screen: the tab bar along the bottom of it. Waiting for the round trip
+    // would leave a tap looking unacknowledged for as long as the network takes.
+    onMutate: (patch) => {
+      const previous = qc.getQueryData<UiPrefs>(qk.uiPrefs);
+      qc.setQueryData<UiPrefs>(qk.uiPrefs, (cur) => ({ ...cur, ...patch }));
+      return { previous };
+    },
+    onSuccess: (next) => qc.setQueryData(qk.uiPrefs, next),
+    onError: (_err, _patch, ctx) => {
+      qc.setQueryData(qk.uiPrefs, ctx?.previous);
+      Alert.alert(t('err_generic_title'), t('err_generic_msg'));
+    },
+  });
   const [draft, setDraft] = React.useState<{ id?: string; name: string } | null>(null);
   /** Set while a reorder is in flight, so the list shows the dragged order, not the server's. */
   const [localOrder, setLocalOrder] = React.useState<string[] | null>(null);
@@ -210,6 +246,16 @@ export default function Config() {
             </View>
           )}
         />
+
+        <Card style={{ gap: th.spacing[3] }}>
+          <Heading>{t('cfg_tb_title')}</Heading>
+          <Muted>{t('cfg_tb_sub')}</Muted>
+          <ChipSelect
+            value={tabBarStyle}
+            onChange={(v) => setUiPrefs.mutate({ mobileTabBar: v as TabBarStyle })}
+            options={TAB_BAR_STYLES.map((key) => ({ value: key, label: t(TB_LABEL[key]) }))}
+          />
+        </Card>
 
         <View style={{ height: th.spacing[8] }} />
       </ScrollView>

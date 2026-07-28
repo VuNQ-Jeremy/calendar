@@ -45,6 +45,14 @@ Android has no styleable scrollbar. The setting cannot do anything on a phone. T
 left untouched so the web keeps working, and the More screen says the setting is web-only rather
 than leaving someone hunting for it.
 
+Its mirror image is a *web* omission rather than a mobile one: **`uiPrefs.mobileTabBar`** picks
+between three bottom-tab-bar variants (`pill`, `dock`, `indicator` — rendered by
+`mobile/components/TabBar.tsx`) and does nothing on the web, whose shell is a sidebar. Both live in
+the one `ui-prefs` settings row and both are editable from either client's System Config screen, so
+neither client hides a setting the other can change; each simply applies the half that concerns it.
+GET on `/api/settings/ui-prefs` is `user`-level because every client renders from it; PATCH is
+`admin`, because these are school-wide values.
+
 **Parent invite codes** (web People → Generate invite → role "Parent").
 A Parent invite creates an `accounts` row with a `parentId`, and `userFromToken` returns `null` for
 exactly that shape (`server/services/auth.ts:118`, "parent accounts remain unsupported"). The code

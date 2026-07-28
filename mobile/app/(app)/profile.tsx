@@ -79,7 +79,8 @@ export default function Profile() {
   if (!user) return null;
 
   return (
-    <Screen scroll>
+    // `top`: no ScreenHeader here, so the title would sit under the status bar without it.
+    <Screen scroll edges={{ top: true }}>
       <View style={{ gap: th.spacing[1] }}>
         <Title>{t('prof_title')}</Title>
         <Muted>{t('prof_sub')}</Muted>

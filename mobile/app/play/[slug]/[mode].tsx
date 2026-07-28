@@ -81,7 +81,7 @@ export default function PlayScreen() {
 
   if (unavailableOffline) {
     return (
-      <Screen edges={{ top: true }}>
+      <Screen edges={{ top: true, bottom: true }}>
         <View style={{ flex: 1, justifyContent: 'center', padding: th.spacing[6], gap: th.spacing[3] }}>
           <Body>{t('m_not_offline')}</Body>
           <Muted>{t('m_not_offline_sub')}</Muted>
@@ -95,7 +95,7 @@ export default function PlayScreen() {
 
   if (!bundle || words.length === 0) {
     return (
-      <Screen edges={{ top: true }}>
+      <Screen edges={{ top: true, bottom: true }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: th.spacing[4] }}>
           {loading ? (
             <ActivityIndicator color={th.color.brand} />
@@ -113,7 +113,9 @@ export default function PlayScreen() {
   }
 
   return (
-    <Screen edges={{ top: true }}>
+    // Both insets, here and in the two early returns above: the player is outside the tab group
+    // (app/play/, not app/(app)/), so there is no tab bar below it to pad the bottom one.
+    <Screen edges={{ top: true, bottom: true }}>
       <StatusBar style="dark" />
 
       {/* Header: topic name and a way out. Deliberately minimal — the card is the screen. */}

@@ -5,13 +5,14 @@ import { MIcon } from './icons.jsx';
 import { PageHeader, Empty, Modal, useConfirm } from './ui.jsx';
 import { useLang } from './lib/i18n.jsx';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
-import type { ScrollbarStyle } from '../shared/schemas.js';
+import { TAB_BAR_STYLES } from '../shared/schemas.js';
+import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
 
 const { Card, Button, IconButton, Badge } = DS;
 
 interface ConfigLoaderData {
   types: AssessmentTypeRow[];
-  uiPrefs: { scrollbar: ScrollbarStyle };
+  uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
 }
 
 // Mock colors are hardcoded hex (same values as the DS tokens) so each card
@@ -21,6 +22,17 @@ const SB_PRESETS: Record<ScrollbarStyle, { tk: string; track: string; thumb: str
   inset: { tk: 'cfg_sb_inset', track: '#F6EDDF', thumb: '#DBCBB4', barW: 9 },
   brand: { tk: 'cfg_sb_brand', track: 'transparent', thumb: '#F79A4E', barW: 6 },
   ghost: { tk: 'cfg_sb_ghost', track: 'transparent', thumb: 'rgba(184,168,147,0.35)', barW: 6 },
+};
+
+/**
+ * Labels for the phone's tab-bar variants. Unlike the scrollbar presets there is nothing to
+ * preview inline — the styling lives in mobile/components/TabBar.tsx and cannot run here — so
+ * each mock is drawn in CSS (`.tbmock--<id>`) instead, keyed off the same ids the phone uses.
+ */
+const TB_LABEL: Record<TabBarStyle, string> = {
+  pill: 'cfg_tb_pill',
+  dock: 'cfg_tb_dock',
+  indicator: 'cfg_tb_indicator',
 };
 
 type TypeDraft = { id?: string; name: string };
@@ -43,6 +55,19 @@ function SystemConfigScreen() {
     const fd = new FormData();
     fd.set('intent', 'ui-prefs');
     fd.set('scrollbar', key);
+    submit(fd);
+  };
+
+  // Optimistic local state as above, but there is nothing to preview on this screen — the change
+  // shows up on a phone, which picks it up on its next fetch of /api/settings/ui-prefs.
+  const [tbLocal, setTbLocal] = React.useState<TabBarStyle | null>(null);
+  const mobileTabBar = tbLocal ?? uiPrefs.mobileTabBar;
+
+  const pickTabBar = (key: TabBarStyle) => {
+    setTbLocal(key);
+    const fd = new FormData();
+    fd.set('intent', 'ui-prefs');
+    fd.set('mobileTabBar', key);
     submit(fd);
   };
 
@@ -227,6 +252,38 @@ function SystemConfigScreen() {
               </button>
             );
           })}
+        </div>
+      </Card>
+
+      <Card style={{ padding: 18, marginTop: 16 }}>
+        <div style={{ marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_tb_title')}</h2>
+          <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+            {t('cfg_tb_sub')}
+          </p>
+        </div>
+        <div className="theme-preset">
+          {TAB_BAR_STYLES.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className={'preset preset--tb' + (mobileTabBar === key ? ' is-active' : '')}
+              onClick={() => pickTabBar(key)}
+            >
+              <div className={'tbmock tbmock--' + key}>
+                <div className="tbmock__bar">
+                  {[0, 1, 2, 3].map((i) => (
+                    <span key={i} className={'tbmock__item' + (i === 1 ? ' is-active' : '')}>
+                      <i className="tbmock__ico" />
+                      <i className="tbmock__lbl" />
+                    </span>
+                  ))}
+                </div>
+                <div className="tbmock__nav" />
+              </div>
+              <div className="preset__name">{t(TB_LABEL[key])}</div>
+            </button>
+          ))}
         </div>
       </Card>
 

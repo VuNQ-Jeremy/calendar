@@ -10,7 +10,8 @@ export default function NotFound() {
   const { t } = useLang();
 
   return (
-    <Screen edges={{ top: true }}>
+    // Outside the tab group: no tab bar below, so this screen owns the bottom inset.
+    <Screen edges={{ top: true, bottom: true }}>
       <View
         style={{
           flex: 1,
