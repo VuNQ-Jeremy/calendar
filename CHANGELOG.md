@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0035 — 2026-07-28
+Fix npm run update:preview, which could never succeed: scope the OTA export to Android (the web export fails on expo-sqlite's wasm import) and pass the environment that non-interactive mode requires.
+
 ## v0.0034 — 2026-07-28
 Fix the More screen rendering as an unstyled vertical stack: Link asChild routes through Radix Slot, which destroys a Pressable's function-form style prop.
 

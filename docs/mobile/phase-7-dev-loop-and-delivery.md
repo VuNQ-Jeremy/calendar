@@ -117,6 +117,28 @@ this without `adb logcat` would lose a day to it.
 `tsc --noEmit` (clean, after regenerating `.expo/types` — trap 6 below). **Not yet in any binary:**
 the manifest check in the Evidence section still fails until an APK is built, which waits on 7.2.
 
+### The first real publish, and the two flags it needed — 2026-07-28
+
+`eas update --branch preview` as written in the phase docs **cannot succeed in this repo**, for two
+unrelated reasons. `npm run update:preview` now carries both flags so the bare command is never the
+one anyone runs:
+
+- **`--platform android`.** The default is `--platform all`, which exports web too, and the web
+  export fails outright: `expo-sqlite/web/worker.ts` imports `wa-sqlite.wasm`, which Metro cannot
+  resolve for the web platform. The import chain runs `app/(app)/_layout.tsx → lib/use-sync →
+  lib/outbox → lib/db → expo-sqlite`, so every screen drags it in and there is nothing to
+  tree-shake. Android is the only platform this app ships to, so scoping the export is the fix
+  rather than a workaround.
+- **`--environment preview`.** Required whenever `--non-interactive` is set; EAS will not guess
+  which env-var set to build against. Interactive runs prompt instead, which is why this never came
+  up before.
+
+The first published update was update group `61b54dd0-08c8-49a1-aba4-28136ef376ed`, runtime 2. Note
+that before it, `npx eas-cli update:list --branch preview` failed with *"Could not find branch
+preview"* — a branch does not exist until something is published to it. That error means "no OTA has
+ever shipped", not "the channel is misconfigured", and it is worth knowing which of the two you are
+looking at when an APK appears to be running stale JS.
+
 
 `expo-updates` is listed in `plugins` at `app.config.ts:73`, but there is no `updates` object
 anywhere in the config. The plugin therefore configures a client that checks *nothing*.

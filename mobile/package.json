@@ -67,7 +67,7 @@
     "bundle": "expo export --platform android --output-dir .expo/export-check",
     "build:preview": "npx eas-cli build -p android --profile preview",
     "build:dev": "npx eas-cli build -p android --profile development",
-    "update:preview": "npx eas-cli update --branch preview"
+    "update:preview": "npx eas-cli update --branch preview --platform android --environment preview"
   },
   "private": true
 }
