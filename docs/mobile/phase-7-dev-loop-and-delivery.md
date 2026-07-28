@@ -168,6 +168,12 @@ points in the lifecycle, and having only one of them fails just as completely as
    npx eas-cli credentials -p android
    # → production/preview → Push Notifications (FCM V1) → upload the service account key
    ```
+6. **Only if the Firebase API key was restricted** — Google Cloud console → APIs & Services →
+   Credentials → the auto-created "Android key". If it has API restrictions applied, **FCM
+   Registration API** and **Firebase Installations API** must both be in the allowed list. Expo's
+   FCM credentials page calls this out explicitly. A key restricted without them registers no
+   tokens and, like everything else in this phase, fails quietly. A brand-new project leaves the
+   key unrestricted, so this step is usually a no-op — check it rather than assume it.
 
 ### Should `google-services.json` be committed?
 

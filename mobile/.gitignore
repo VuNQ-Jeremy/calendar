@@ -18,6 +18,19 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# google-services.json is deliberately NOT ignored. It is Firebase CLIENT config, not a secret:
+# every copy of the APK contains it and it can be extracted from any downloaded binary in about
+# thirty seconds (docs/mobile/phase-7-dev-loop-and-delivery.md shows how). Its API key is scoped
+# to the Firebase project and restricted by package name and signing certificate.
+#
+# Ignoring it would mean a fresh clone builds an APK that contains firebase-messaging but none of
+# the google_app_id / gcm_defaultSenderId resources it needs, so FirebaseApp never initialises,
+# getExpoPushTokenAsync throws into the catch at lib/push.ts:110, and push silently does nothing
+# on every device. That is the exact bug phase 7 exists to fix — do not re-introduce it here.
+#
+# The FCM service ACCOUNT KEY is the opposite: a real secret. It lives on EAS and never in the
+# repo; the *.key / *.p8 / *.p12 / *.jks patterns above are what keep it out.
+
 # Metro
 .metro-health-check*
 

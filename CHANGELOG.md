@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0023 — 2026-07-28
+Document the Google Cloud API-restriction trap for FCM keys, and record in mobile/.gitignore why google-services.json must stay committed.
+
 ## v0.0022 — 2026-07-28
 Re-check phase 7's Android prerequisites against the machine: Studio and the SDK are installed, the emulator image and AVD are not, and ANDROID_HOME is unset.
 
