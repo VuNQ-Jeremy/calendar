@@ -74,7 +74,7 @@ function StatCard({
   label: string;
 }) {
   return (
-    <SC interactive style={{ padding: 0 }}>
+    <SC interactive style={{ padding: 0, cursor: 'default' }}>
       <div className="statcard">
         <div className="statcard__icon" style={ICON_TINT(color)}>
           <MIcon name={icon} size={24} />
