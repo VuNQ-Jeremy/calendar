@@ -51,6 +51,22 @@ const config: ExpoConfig = {
   android: {
     package: 'com.mochi.lms',
     /**
+     * Required for push, and its absence is invisible.
+     *
+     * `expo-notifications` bundles firebase-messaging unconditionally, so without this the APK
+     * still contains all the Firebase CODE and none of the google_app_id / gcm_defaultSenderId
+     * string RESOURCES the google-services Gradle plugin generates from this file. FirebaseApp
+     * then fails to initialise, getExpoPushTokenAsync throws, and lib/push.ts:110 catches it and
+     * logs a warning — correctly, so a Play-less handset still gets a working app. The cost is
+     * that push is dead while the app looks healthy and the server reports `sent: 0`. Verified
+     * absent from build 4's resources.arsc; see docs/mobile/phase-7-dev-loop-and-delivery.md.
+     *
+     * The file is COMMITTED on purpose — client config, not a secret, extractable from any APK.
+     * mobile/.gitignore explains at length why it must not be ignored. The package_name inside it
+     * must equal `package` above exactly, or the app builds cleanly and never registers a token.
+     */
+    googleServicesFile: './google-services.json',
+    /**
      * NO `versionCode` here on purpose.
      *
      * eas.json sets `appVersionSource: "remote"`, which makes EAS the owner of this value —
