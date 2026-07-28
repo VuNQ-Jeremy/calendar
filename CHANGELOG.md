@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0039 — 2026-07-28
+Add a Playwright suite for the navigation-latency behaviours: cache-hit navigations, hover prefetch, and the pending progress bar, run against a real deployment
+
 ## v0.0038 — 2026-07-28
 Speed up navigation: SWR route cache, scoped invalidation, prefetch, pending indicators, single-query auth
 

@@ -14,3 +14,9 @@ mobile/node_modules/
 mobile/.expo/
 mobile/android/
 mobile/ios/
+
+# Playwright e2e (nav-latency suite runs against a real deployment)
+test-results/
+playwright-report/
+blob-report/
+.playwright/

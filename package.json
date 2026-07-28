@@ -22,7 +22,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run && vitest run --config vitest.workers.config.js",
     "test:watch": "vitest",
-    "test:worker": "vitest run --config vitest.workers.config.js"
+    "test:worker": "vitest run --config vitest.workers.config.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",
@@ -49,6 +50,7 @@
     "@cloudflare/vite-plugin": "^1.44.0",
     "@cloudflare/vitest-pool-workers": "^0.18.4",
     "@cloudflare/workers-types": "^5.20260713.1",
+    "@playwright/test": "^1.62.0",
     "@react-router/dev": "^8.2.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^6.9.1",
