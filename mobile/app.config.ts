@@ -62,6 +62,10 @@ const config: ExpoConfig = {
     'expo-sqlite',
     'expo-sharing',
     'expo-audio',
+    // A required peer of expo-audio, not a direct import of ours. `expo-doctor` flags it as
+    // missing because a native peer must be a direct dependency — outside Expo Go it is not
+    // hoisted for you, and the app crashes when audio first loads an asset.
+    'expo-asset',
     // Phase 4 needs these two: a WebView to show a material (it can send the bearer header,
     // which expo-web-browser cannot), and the native date/time picker for event times and the
     // long-press "Move to…" reschedule. Installed BEFORE the first APK on purpose — adding a
