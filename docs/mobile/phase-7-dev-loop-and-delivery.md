@@ -277,6 +277,22 @@ npx expo run:android
 Compiles natively on the PC, installs straight to the running emulator, and starts Metro — one
 command. Generates `mobile/android/`, which `.gitignore` already excludes (`/android`).
 
+### The dev build and the preview APK cannot coexist on one device
+
+`expo run:android` signs with the local **debug** keystore; EAS signs with the project keystore
+(`Build Credentials -HeyhIjsvC`). Same `com.mochi.lms` package, different signature, so Android
+refuses the second install outright — `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — and the only way
+forward is uninstalling the other one.
+
+That matters for ordering, not just as trivia: the preview APK is the **only** artifact that can
+prove OTA, because a debug build has no channel and `expo-updates` is inert in it. Installing the
+dev build first therefore destroys the ability to run checks 4 and 9.
+
+**So: run the 7.5 matrix on the preview APK first, then switch the device to the dev build.** Two
+devices — a phone for preview, an emulator for development — is the only way to hold both at once,
+and is the one real argument for creating an AVD. A physical phone over USB serves the dev loop
+perfectly well otherwise, and skips the Play system-image download.
+
 **Prefer B for this phase specifically.** Tasks 7.2 and 7.3 are native-config changes, and native
 config is exactly the kind of thing that needs two or three attempts to get right. At 15 minutes
 per EAS round trip that is a bad afternoon; locally it is two minutes with `adb logcat` open
@@ -437,6 +453,7 @@ builds on 2026-07-28.
 | tsc fails on valid `router.push()` calls | stale `.expo/types/router.d.ts`; `expo export` does not regenerate it | `rm -rf .expo/types && npx expo start --clear` |
 | 179 stray `.js` files appear in the repo | `tsc -b` has no `noEmit` | `git clean -f -- '*.js'`, never commit them |
 | expo-doctor fails on `disableHierarchicalLookup` | deliberate — it keeps the web's `node_modules` out of the native bundle | ignore it; it will fail on every build forever |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` installing a build | debug keystore vs EAS keystore on the same package name | uninstall the other build first — and run the OTA checks before you give up the preview APK |
 | `?job=class` returns `sent: 0` when a send was expected | either no class occurrence starts within the 30-minute lead window, or that occurrence's ledger key was already consumed by an earlier run made before any token existed | create a **new** event — keys are per event+date and are marked done even when nobody was registered |
 
 ---

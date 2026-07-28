@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0026 — 2026-07-28
+Record that the dev build and the preview APK cannot coexist on one device, and that OTA verification must therefore come before installing the dev build.
+
 ## v0.0025 — 2026-07-28
 Document the two ordering traps in push verification: the 30-minute lead window, and a ledger key consumed by firing a job before any device has registered.
 
