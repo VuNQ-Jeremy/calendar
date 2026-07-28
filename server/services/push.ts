@@ -73,7 +73,15 @@ export async function accountIdsForStudents(db: Db, studentIds: string[]): Promi
   return rows.map((r) => r.id);
 }
 
-/** Account ids for a set of staff records. */
+/**
+ * Account ids for a set of staff records.
+ *
+ * **Called by nothing today, and kept deliberately.** Phase 6 asks for class reminders to reach
+ * "the enrolled students and the class's staff"; only the students half shipped, because no table
+ * links a staff member to a class — `classes` has no teacher column and there is no `class_staff`
+ * join. This is the half of the lookup that does exist. When the relation lands, the caller is one
+ * line in `runClassReminders`. See docs/mobile-parity.md, "Knowingly not built".
+ */
 export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<string[]> {
   if (!staffIds.length) return [];
   const rows = await db

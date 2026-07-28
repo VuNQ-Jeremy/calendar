@@ -92,6 +92,23 @@ Not parity, but worth recording, because they are why the app is native:
 - **Camera capture as a material** — photograph the whiteboard, attach it to the class.
 - **Swipe gestures** in the flashcard games.
 
+## Knowingly not built
+
+- **Class reminders reach students only, not staff.** The phase-6 plan says "notify the enrolled
+  students and the class's staff", and `runClassReminders` does the first half. The second half has
+  no data behind it: nothing in the schema links a staff member to a class. `classes` is
+  `(id, name, subject, color, room)`, `events` carries a `classId` but no staff, and there is no
+  `class_staff` join table. `push.accountIdsForStaff` exists and is currently called by nothing —
+  it maps staff records to accounts, which is the second half of the lookup; the missing first half
+  is "which staff teach this class".
+
+  Closing it means a `class_staff` table, an assignment control on the class editor in both
+  clients, and one extra token lookup in `runClassReminders`. It is a feature, not a patch, so it
+  is recorded here rather than half-built.
+
+  **Consequence for testing:** a staff or admin account receives nothing from any job. Test push
+  from a student account.
+
 ## Not verified in this session
 
 These acceptance criteria need a physical device and a deployed Worker, and are honestly
