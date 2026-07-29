@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import type { TabBarStyle } from '@mochi/shared/schemas';
 // Type-only, and it has to be this deep path: expo-router VENDORS react-navigation (there is no
 // `@react-navigation/bottom-tabs` in node_modules to import from, and installing one would give
@@ -16,7 +15,7 @@ import { useTheme, TOUCH } from '~/theme';
  *
  * Two reasons, and the second is a bug fix.
  *
- * 1. Branding. The default bar can be tinted but not shaped: no soft-pill active state, no
+ * 1. Branding. The default bar can be tinted but not shaped: no outlined-pill active state, no
  *    floating dock, no top indicator. Those are the three variants an admin picks between in
  *    System Config (`uiPrefs.mobileTabBar`).
  * 2. Safe area. The old `screenOptions.tabBarStyle` set `height: 60`, and a NUMERIC height makes
@@ -99,9 +98,9 @@ export function TabBar({ state, descriptors, navigation, insets, variant = 'pill
         testID={options.tabBarButtonTestID}
         icon={options.tabBarIcon}
         onPress={() => {
-          // Fire-and-forget: no haptic engine on an emulator, and a rejected promise there must
-          // not turn a tab press into an unhandled rejection.
-          void Haptics.selectionAsync().catch(() => {});
+          // No haptic here by design: a tab press is a navigation, and the screen change is its own
+          // feedback. (Haptics stay where the gesture has no other confirmation — drag-reorder and
+          // the flashcard games.)
           const event = navigation.emit({
             type: 'tabPress',
             target: route.key,
@@ -234,7 +233,9 @@ function TabItem({
         />
       ) : null}
 
-      {/* pill: a soft-brand lozenge behind the icon */}
+      {/* pill: an outlined lozenge around the active icon — no fill, and the ring takes the icon's
+          own colour, so the active state reads as one brand-coloured unit against the bar. RN puts
+          the border INSIDE the box, so the 56x32 footprint is identical focused or not. */}
       {variant === 'pill' ? (
         <View
           style={{
@@ -243,7 +244,8 @@ function TabItem({
             borderRadius: th.radius.pill,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: focused ? th.color.brandSoft : 'transparent',
+            borderWidth: 1,
+            borderColor: focused ? color : 'transparent',
           }}
         >
           {glyph}
