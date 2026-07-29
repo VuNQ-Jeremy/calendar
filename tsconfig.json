@@ -7,6 +7,10 @@
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": [],
+    // Vite/react-router does the transpiling. `tsc` is only ever a type checker here, so
+    // never let a bare `tsc` emit .js next to the sources — the `.js` import extensions
+    // would then resolve to stale output instead of the .ts files.
+    "noEmit": true,
     "isolatedModules": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",

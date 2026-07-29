@@ -1,0 +1,9 @@
+{
+  "extends": ["development"],
+  "hints": {
+    // The Edge Tools extension bundles an outdated webhint schema that rejects
+    // `"module": "preserve"` (valid since TS 5.4, inherited by mobile/tsconfig.json
+    // from expo/tsconfig.base). tsc 6.0 and 5.9 both accept the config; the hint is wrong.
+    "typescript-config/is-valid": "off"
+  }
+}

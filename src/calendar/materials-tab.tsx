@@ -3,6 +3,7 @@ import { Empty } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { MaterialPreview } from './material-preview.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
+import { MAT_TYPES } from '../lib/mat-types.js';
 import type { MaterialRow } from '../../server/services/materials.js';
 
 interface MaterialsTabProps {
@@ -46,6 +47,7 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
         <div className="m-stack" style={{ gap: 6 }}>
           {mats.map((m) => {
             const active = selectedId === m.id;
+            const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
             return (
               <button
                 key={m.id}
@@ -59,8 +61,13 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
                   border: active ? '1.5px solid var(--brand)' : '1.5px solid var(--border-subtle)',
                 }}
               >
-                <span style={{ flex: 1, minWidth: 0 }} className="lrow__title">
-                  {m.title}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="lrow__title" style={{ display: 'block' }}>
+                    {m.title}
+                  </span>
+                  <span className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
+                    {t(mt.tk)}
+                  </span>
                 </span>
               </button>
             );

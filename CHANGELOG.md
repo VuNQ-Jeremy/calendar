@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0049 — 2026-07-29
+Materials tab in the event modal now labels each material with its type; tsconfig pins noEmit so a bare tsc can never emit stray .js beside the sources; silence a bogus webhint typescript-config rule
+
 ## v0.0048 — 2026-07-29
 Fix the sidebar badge freezing after a mutation: swrLoad's cache fill notified subscribers, which cancelled React Router's in-flight layout revalidation and discarded the fresh badge counts
 
