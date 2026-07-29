@@ -2,26 +2,23 @@ import React from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { ChevronRight, Plus, Trash2, Users } from 'lucide-react-native';
-import { ChipSelect } from '~/components/ChipSelect';
-import { DateTimeField } from '~/components/DateTimeField';
+import { ChevronRight, Trash2, Users } from 'lucide-react-native';
 import { NotifPrompt } from '~/components/NotifPrompt';
 import { ScreenHeader } from '~/components/ScreenHeader';
-import { getCal, useLang } from '~/lib/i18n';
+import { useLang } from '~/lib/i18n';
 import * as api from '~/lib/endpoints';
 import { rosterOf, useClasses, useInvalidateStaff, useStudents } from '~/lib/staff-data';
 import { useTheme, TOUCH } from '~/theme';
-import { Avatar, Body, Button, Card, ColorPicker, Heading, IconButton, Input, Muted, Screen } from '~/ui';
+import { Avatar, Body, Button, Card, ColorPicker, Heading, Input, Muted, Screen } from '~/ui';
 import type { ColorIdValue } from '~/lib/types';
-import type { ClassInput, ScheduleItem } from '@mochi/shared/schemas';
+import type { ClassInput } from '@mochi/shared/schemas';
 
 /**
- * Task 4.4 — one class: identity, weekly schedule, roster.
+ * Task 4.4 — one class: identity and roster.
  *
- * The schedule editor is new on the phone. `class_schedule` has existed since the first migration
- * and `ScheduleItem` validates it (`shared/schemas.ts:42`), but no web screen ever edited it — the
- * rows only arrived through the seed. `day` is 0–6 with **0 = Sunday**, matching `Date.getDay()` and
- * the seed data (`seed.sql:39-43`, weekdays 1–5), which is also what the `dow` label array uses.
+ * This screen used to carry a weekly-schedule editor and a Room field. Both are gone: they were
+ * phone-only, the web had no equivalent, and a field only one client can set is a field that
+ * silently diverges. `class_schedule` and `classes.room` survive in the database, dormant.
  *
  * The roster is a separate pushed screen. A searchable multi-select of every student in the school
  * is not an inline list on a 360dp screen, and it writes directly — which is why `studentIds` is
@@ -29,8 +26,7 @@ import type { ClassInput, ScheduleItem } from '@mochi/shared/schemas';
  */
 export default function ClassDetail() {
   const th = useTheme();
-  const { t, lang } = useLang();
-  const { dow } = getCal(lang);
+  const { t } = useLang();
   const invalidate = useInvalidateStaff();
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const id = rawId ?? 'new';
@@ -42,9 +38,7 @@ export default function ClassDetail() {
 
   const [name, setName] = React.useState('');
   const [subject, setSubject] = React.useState('');
-  const [room, setRoom] = React.useState('');
   const [color, setColor] = React.useState<ColorIdValue>('green');
-  const [schedule, setSchedule] = React.useState<ScheduleItem[]>([]);
 
   const seeded = React.useRef<string | null>(null);
   React.useEffect(() => {
@@ -52,9 +46,7 @@ export default function ClassDetail() {
     seeded.current = cls.id;
     setName(cls.name);
     setSubject(cls.subject ?? '');
-    setRoom(cls.room ?? '');
     setColor((cls.color ?? 'green') as ColorIdValue);
-    setSchedule(cls.schedule);
   }, [cls]);
 
   const save = useMutation({
@@ -62,9 +54,7 @@ export default function ClassDetail() {
       const base = {
         name: name.trim() || t('cls_default_name'),
         subject: subject || null,
-        room: room || null,
         color,
-        schedule,
       };
       if (isNew) {
         // A new class starts with an empty roster; the picker fills it once there is an id.
@@ -95,9 +85,6 @@ export default function ClassDetail() {
 
   const roster = rosterOf(cls, students);
 
-  const setRow = (i: number, patch: Partial<ScheduleItem>) =>
-    setSchedule((rows) => rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-
   return (
     <Screen edges={{ top: true }}>
       <ScreenHeader
@@ -121,66 +108,7 @@ export default function ClassDetail() {
           value={subject}
           onChangeText={setSubject}
         />
-        <Input
-          label={t('cls_room')}
-          placeholder={t('cls_room_ph')}
-          value={room}
-          onChangeText={setRoom}
-        />
         <ColorPicker label={t('color')} value={color} onChange={setColor} />
-
-        {/* ---- Weekly schedule ---- */}
-        <Heading style={{ ...th.text.base, marginTop: th.spacing[2] }}>
-          {t('cls_weekly_schedule')}
-        </Heading>
-
-        {schedule.length ? (
-          schedule.map((row, i) => (
-            <Card key={i} flat style={{ padding: th.spacing[3], gap: th.spacing[3] }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
-                <View style={{ flex: 1 }}>
-                  <ChipSelect
-                    value={String(row.day)}
-                    options={dow.map((label, d) => ({ value: String(d), label }))}
-                    onChange={(v) => setRow(i, { day: Number(v) })}
-                  />
-                </View>
-                <IconButton
-                  label={t('remove')}
-                  onPress={() => setSchedule((rows) => rows.filter((_, j) => j !== i))}
-                >
-                  <Trash2 size={18} color={th.status.danger} />
-                </IconButton>
-              </View>
-              <View style={{ flexDirection: 'row', gap: th.spacing[3] }}>
-                <DateTimeField
-                  mode="time"
-                  label={t('ev_start')}
-                  value={row.start}
-                  onChange={(v) => setRow(i, { start: v })}
-                />
-                <DateTimeField
-                  mode="time"
-                  label={t('ev_end')}
-                  value={row.end}
-                  onChange={(v) => setRow(i, { end: v })}
-                />
-              </View>
-            </Card>
-          ))
-        ) : (
-          <Muted>{t('cls_no_schedule_yet')}</Muted>
-        )}
-
-        <Button
-          variant="secondary"
-          iconLeft={<Plus size={16} color={th.color.textStrong} />}
-          onPress={() =>
-            setSchedule((rows) => [...rows, { day: 1, start: '09:00', end: '10:00' }])
-          }
-        >
-          {t('cls_add_time')}
-        </Button>
 
         {/* ---- Roster ---- */}
         <Heading style={{ ...th.text.base, marginTop: th.spacing[2] }}>

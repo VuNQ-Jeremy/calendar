@@ -819,7 +819,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 10px;
   border-radius: var(--radius-md);
   font-size: var(--text-md);
@@ -862,8 +862,9 @@ body {
   color: var(--text-strong);
 }
 .m-datepicker__nav {
-  width: 30px;
-  height: 30px;
+  /* 44px is the touch floor; the arrow inside stays its old size. */
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-pill);
@@ -896,8 +897,9 @@ body {
   gap: 2px;
 }
 .m-datepicker__day {
-  width: 34px;
-  height: 34px;
+  /* 7 x 44 + gaps + the menu's 12px padding = ~344px, so the popover still fits at 390px. */
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border-radius: var(--radius-pill);
@@ -954,8 +956,8 @@ body {
   flex-wrap: wrap;
 }
 .m-swatch {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-pill);
   border: 2.5px solid transparent;
   cursor: pointer;
@@ -1700,7 +1702,7 @@ body {
 }
 .colorrow__swatch {
   width: 44px;
-  height: 32px;
+  height: 44px;
   border-radius: var(--radius-sm);
   border: var(--border-width) solid var(--border-subtle);
   cursor: pointer;
@@ -1709,7 +1711,7 @@ body {
 }
 .colorrow input[type='color'] {
   width: 60px;
-  height: 36px;
+  height: 44px;
   border: none;
   background: none;
   cursor: pointer;

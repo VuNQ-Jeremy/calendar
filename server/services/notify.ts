@@ -98,7 +98,9 @@ export async function runClassReminders(db: Db, at: Date = new Date()): Promise<
       messages.push({
         to,
         title: cls.name,
-        body: `${ev.title} · ${ev.start}${cls.room ? ` · ${cls.room}` : ''}`,
+        // The event's own "Room or place", not the class's — `classes.room` is gone from the
+        // product. Same information for anyone who filled the field in, and it is per-occurrence.
+        body: `${ev.title} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}`,
         // Deep link straight to the occurrence, not the app's home screen.
         data: { url: `/event/${ev.id}`, kind: 'class' },
         channelId: 'reminders',

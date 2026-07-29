@@ -75,6 +75,10 @@
   justify-content: center;
   width: 44px;
   height: 44px;
+  /* Floor, not a suggestion: a caller passing width/height (or `is-sm`) must not drop the hit
+     box below the W3C/Apple 44px minimum. 44 rather than 48 so modal headers do not grow. */
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-pill);
   border: none;
   background: transparent;
@@ -85,7 +89,10 @@
 .mochi-icon-btn:hover { background: var(--surface-sunken); }
 .mochi-icon-btn:active { transform: scale(0.92); }
 .mochi-icon-btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
-.mochi-icon-btn.is-sm { width: 36px; height: 36px; }
+/* `is-sm` used to draw 36x36, and on the web there is no hitSlop — the drawn box IS the touch
+   target, so it measured 36x36 too. The variant is kept (call sites still pass it, and callers
+   pass smaller icons alongside) but it no longer shrinks the box below the floor. */
+.mochi-icon-btn.is-sm { width: 44px; height: 44px; }
 .mochi-icon-btn.is-solid { background: var(--brand); color: #fff; }
 .mochi-icon-btn.is-solid:hover { background: var(--brand-hover); }
 

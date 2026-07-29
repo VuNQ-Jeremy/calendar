@@ -1,16 +1,19 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import { classes, classSchedule, classStudents } from '../db/schema';
+import { classes, classStudents } from '../db/schema';
 import type { Db } from '../db/index';
 import type { ClassInput } from '../../shared/schemas';
 
+/**
+ * `class_schedule` is deliberately absent from every read below. Weekly schedules were a
+ * phone-only editor with no web counterpart; the field is gone from the product and the table
+ * is dormant, kept only so the decision stays reversible without a migration.
+ */
 export type ClassRow = {
   id: string;
   name: string;
   subject: string | null;
   color: string;
-  room: string | null;
-  schedule: { day: number; start: string; end: string }[];
   studentIds: string[];
 };
 
@@ -18,7 +21,6 @@ export type ClassLite = { id: string; name: string; color: string };
 
 function assembleClass(
   cls: typeof classes.$inferSelect,
-  schedRows: (typeof classSchedule.$inferSelect)[],
   csRows: (typeof classStudents.$inferSelect)[],
 ): ClassRow {
   return {
@@ -26,21 +28,16 @@ function assembleClass(
     name: cls.name,
     subject: cls.subject,
     color: cls.color,
-    room: cls.room,
-    schedule: schedRows
-      .filter((s) => s.classId === cls.id)
-      .map((s) => ({ day: s.day, start: s.startTime, end: s.endTime })),
     studentIds: csRows.filter((cs) => cs.classId === cls.id).map((cs) => cs.studentId),
   };
 }
 
 export async function list(db: Db): Promise<ClassRow[]> {
-  const [clsRows, schedRows, csRows] = await db.batch([
+  const [clsRows, csRows] = await db.batch([
     db.select().from(classes),
-    db.select().from(classSchedule),
     db.select().from(classStudents),
   ]);
-  return clsRows.map((c) => assembleClass(c, schedRows, csRows));
+  return clsRows.map((c) => assembleClass(c, csRows));
 }
 
 export async function listLite(db: Db): Promise<ClassLite[]> {
@@ -48,13 +45,12 @@ export async function listLite(db: Db): Promise<ClassLite[]> {
 }
 
 export async function get(db: Db, id: string): Promise<ClassRow | null> {
-  const [clsRows, schedRows, csRows] = await db.batch([
+  const [clsRows, csRows] = await db.batch([
     db.select().from(classes).where(eq(classes.id, id)),
-    db.select().from(classSchedule).where(eq(classSchedule.classId, id)),
     db.select().from(classStudents).where(eq(classStudents.classId, id)),
   ]);
   if (!clsRows[0]) return null;
-  return assembleClass(clsRows[0], schedRows, csRows);
+  return assembleClass(clsRows[0], csRows);
 }
 
 export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
@@ -66,22 +62,8 @@ export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
       name: input.name,
       subject: input.subject ?? null,
       color: input.color,
-      room: input.room ?? null,
     }),
   ];
-
-  if (input.schedule.length > 0) {
-    ops.push(
-      db.insert(classSchedule).values(
-        input.schedule.map((s) => ({
-          classId: id,
-          day: s.day,
-          startTime: s.start,
-          endTime: s.end,
-        })),
-      ),
-    );
-  }
 
   if (input.studentIds.length > 0) {
     ops.push(
@@ -103,25 +85,8 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
   if (input.name !== undefined) scalarSet.name = input.name;
   if (input.subject !== undefined) scalarSet.subject = input.subject ?? null;
   if (input.color !== undefined) scalarSet.color = input.color;
-  if (input.room !== undefined) scalarSet.room = input.room ?? null;
   if (Object.keys(scalarSet).length) {
     ops.push(db.update(classes).set(scalarSet).where(eq(classes.id, id)));
-  }
-
-  if (input.schedule !== undefined) {
-    ops.push(db.delete(classSchedule).where(eq(classSchedule.classId, id)));
-    if (input.schedule.length > 0) {
-      ops.push(
-        db.insert(classSchedule).values(
-          input.schedule.map((s) => ({
-            classId: id,
-            day: s.day,
-            startTime: s.start,
-            endTime: s.end,
-          })),
-        ),
-      );
-    }
   }
 
   if (input.studentIds !== undefined) {

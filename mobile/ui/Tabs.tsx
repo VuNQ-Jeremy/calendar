@@ -50,7 +50,7 @@ export function Tabs({ tabs, value, onChange, style }: TabsProps) {
               onPress={() => onChange?.(tab.id)}
               style={[
                 {
-                  minHeight: 40,
+                  minHeight: th.touch,
                   paddingHorizontal: th.spacing[4],
                   justifyContent: 'center',
                   borderRadius: th.radius.pill,

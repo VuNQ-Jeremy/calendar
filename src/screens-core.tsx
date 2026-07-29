@@ -471,9 +471,11 @@ function HomeworkScreen() {
   const openNew = () =>
     setModal({
       title: '',
-      classId: classes[0]?.id || '',
+      // No class, not the first one. Defaulting to whichever class happens to sort first files
+      // the task against a class nobody chose. `HomeworkInput.classId` is .nullish().
+      classId: '',
       due: today,
-      color: classes[0]?.color || 'orange',
+      color: 'orange',
       done: false,
       points: 10,
       notes: '',
@@ -599,7 +601,10 @@ function HomeworkScreen() {
                 const cls = classes.find((x) => x.id === v);
                 setModal((m) => (m ? { ...m, classId: v, color: cls ? cls.color : m.color } : m));
               }}
-              options={classes.map((c) => ({ value: c.id, label: c.name }))}
+              options={[
+                { value: '', label: t('no_class') },
+                ...classes.map((c) => ({ value: c.id, label: c.name })),
+              ]}
             />
             <MDatePicker
               label={t('hw_due')}

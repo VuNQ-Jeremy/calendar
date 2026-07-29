@@ -57,19 +57,10 @@ export const EventInput = z.object({
 });
 export type EventInput = z.infer<typeof EventInput>;
 
-export const ScheduleItem = z.object({
-  day: z.coerce.number().int().min(0).max(6),
-  start: z.string().regex(/^\d{2}:\d{2}$/),
-  end: z.string().regex(/^\d{2}:\d{2}$/),
-});
-export type ScheduleItem = z.infer<typeof ScheduleItem>;
-
 export const ClassInput = z.object({
   name: z.string().trim().min(1).max(200),
   subject: z.string().max(200).nullish(),
   color: ColorId.default('green'),
-  room: z.string().max(200).nullish(),
-  schedule: z.array(ScheduleItem).default([]),
   studentIds: z.array(z.string()).default([]),
 });
 export type ClassInput = z.infer<typeof ClassInput>;

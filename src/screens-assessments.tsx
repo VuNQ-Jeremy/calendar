@@ -134,11 +134,11 @@ function AssessmentsScreen() {
 
   const classById = (id: string | null) => classes.find((c) => c.id === id);
   const typeById = (id: string | null) => types.find((tp) => tp.id === id);
-  const defaultClassId = () => {
-    if (classFilter !== 'all') return classFilter;
-    const st = students.find((s) => s.id === activeStudentId);
-    return st?.classIds[0] ?? '';
-  };
+  // An active class filter IS an explicit choice, so honour it. With no filter, default to no
+  // class rather than the student's first one — `ScoreRecordInput.classId` and
+  // `BehaviorRecordInput.classId` are both .nullish(), and guessing files the record against a
+  // class nobody picked.
+  const defaultClassId = () => (classFilter === 'all' ? '' : classFilter);
 
   const fmtShort = (d: string) =>
     new Date(d).toLocaleDateString(locale(lang), { day: 'numeric', month: 'short' });

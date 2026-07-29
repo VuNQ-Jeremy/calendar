@@ -27,7 +27,6 @@ type ClassDraft = {
   name: string;
   subject?: string | null;
   color: string;
-  room?: string | null;
   studentIds: string[];
 };
 
@@ -41,8 +40,7 @@ export function ClassesScreen() {
 
   const studentsOf = (c: ClassRow) => students.filter((s) => c.studentIds.includes(s.id));
 
-  const openNew = () =>
-    setModal({ name: '', subject: '', color: 'green', room: '', studentIds: [] });
+  const openNew = () => setModal({ name: '', subject: '', color: 'green', studentIds: [] });
 
   const save = (f: ClassDraft) => {
     const name = f.name.trim() || t('cls_default_name');
@@ -52,7 +50,6 @@ export function ClassesScreen() {
     fd.set('name', name);
     if (f.subject) fd.set('subject', f.subject);
     fd.set('color', f.color || 'green');
-    if (f.room) fd.set('room', f.room);
     fd.set('studentIds', JSON.stringify(f.studentIds || []));
     fetcher.submit(fd, { action: '/classes', method: 'post' });
     setModal(null);
@@ -124,12 +121,6 @@ export function ClassesScreen() {
                       <MIcon name="trash" size={16} />
                     </MIB>
                   </div>
-                </div>
-                <div className="lrow__meta" style={{ margin: '14px 0' }}>
-                  <span className="m-row" style={{ gap: 5 }}>
-                    <MIcon name="mapPin" size={14} />
-                    {c.room || t('cls_no_room')}
-                  </span>
                 </div>
                 <div className="m-spread">
                   <div className="avatar-stack">
@@ -274,10 +265,6 @@ function ClassDetailModal({
     >
       <div className="m-row" style={{ gap: 10, marginBottom: 16 }}>
         <MTag color={cls.color}>{cls.subject || t('cls_general')}</MTag>
-        <span className="m-row m-muted" style={{ gap: 5, fontSize: 'var(--text-sm)' }}>
-          <MIcon name="mapPin" size={14} />
-          {cls.room || t('cls_no_room')}
-        </span>
       </div>
       <div className="m-row" style={{ gap: 10, marginBottom: 20 }}>
         {Stat('users', t('stat_students'), roster.length)}

@@ -143,7 +143,9 @@ export default function FlashcardTopics() {
                   accessibilityRole="switch"
                   accessibilityState={{ checked: isDownloaded, busy }}
                   accessibilityLabel={isDownloaded ? t('m_remove_download') : t('m_download')}
-                  hitSlop={12}
+                  // Draws 18dp tall, so hitSlop 12 gave 42dp effective — under the 48dp floor.
+                  // 15 makes it exactly 48 without moving a pixel visually.
+                  hitSlop={15}
                   disabled={busy}
                   onPress={() =>
                     isDownloaded

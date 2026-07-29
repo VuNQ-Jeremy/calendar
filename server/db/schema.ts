@@ -40,9 +40,19 @@ export const classes = sqliteTable('classes', {
   name: text('name').notNull(),
   subject: text('subject'),
   color: text('color').notNull().default('green'),
+  /**
+   * DORMANT. `room` was removed from the product (only the phone could ever set it, and the web
+   * displayed it without an input). The column stays so no migration is needed and the four
+   * existing values survive — nothing reads or writes it. Delete the field, not the data.
+   */
   room: text('room'),
 });
 
+/**
+ * DORMANT, like `classes.room`. Weekly schedules were editable only on the phone; the field was
+ * removed from the product rather than built twice. Nothing reads or writes these rows — the
+ * table and its seed data stay so the decision is reversible without a migration.
+ */
 export const classSchedule = sqliteTable(
   'class_schedule',
   {

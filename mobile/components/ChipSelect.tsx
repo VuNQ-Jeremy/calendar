@@ -15,7 +15,8 @@ export interface ChipOption {
  * scroll horizontally rather than wrap, so the field's height never depends on how many classes a
  * school has.
  *
- * Chips are 44dp tall inside a 48dp row: the row is the touch target, and it meets the floor.
+ * Chips are `theme.touch` tall. They were 44dp on the theory that the row was the target, but a
+ * dump sweep measured the chip's own bounds at 44dp — the row is not clickable, the chip is.
  */
 export function ChipSelect({
   label,
@@ -51,7 +52,7 @@ export function ChipSelect({
               accessibilityLabel={opt.label}
               onPress={() => onChange(opt.value)}
               style={{
-                minHeight: 44,
+                minHeight: th.touch,
                 justifyContent: 'center',
                 paddingHorizontal: th.spacing[4],
                 borderRadius: th.radius.pill,

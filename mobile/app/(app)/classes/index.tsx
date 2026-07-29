@@ -1,6 +1,6 @@
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { ChevronRight, MapPin, Plus } from 'lucide-react-native';
+import { ChevronRight, Plus } from 'lucide-react-native';
 import { useLang } from '~/lib/i18n';
 import { useClasses, useInvalidateStaff, useStudents } from '~/lib/staff-data';
 import { useTheme } from '~/theme';
@@ -12,8 +12,8 @@ import type { ColorIdKey } from '@mochi/shared/tokens';
  *
  * The web is a `.cols-3` card grid whose cards open a 600px detail modal
  * (`src/screens-manage/classes.tsx`). Here it is one column of cards that push a detail screen: the
- * modal held a roster, a schedule, a stats row and a material picker, none of which fit in a sheet
- * on a phone.
+ * modal held a roster, a stats row and a material picker, none of which fit in a sheet on a
+ * phone.
  */
 export default function ClassesList() {
   const th = useTheme();
@@ -99,10 +99,6 @@ export default function ClassesList() {
                   }}
                 >
                   <Tag color={c.color}>{c.subject || t('cls_general')}</Tag>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[1] }}>
-                    <MapPin size={13} color={th.color.textMuted} />
-                    <Muted>{c.room || t('cls_no_room')}</Muted>
-                  </View>
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[3] }}>
@@ -119,11 +115,6 @@ export default function ClassesList() {
                     ))}
                   </View>
                   <Muted style={{ flex: 1 }}>{t('cls_students_n', { n: roster.length })}</Muted>
-                  <Muted>
-                    {c.schedule.length
-                      ? t('cls_per_week', { n: c.schedule.length })
-                      : t('cls_no_schedule')}
-                  </Muted>
                 </View>
               </View>
             </Card>

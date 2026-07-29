@@ -102,10 +102,19 @@ Not parity, but worth recording, because they are why the app is native:
 
 ## Knowingly not built
 
+- **Class weekly schedules, and the class Room field, are gone from both clients.** Both were
+  phone-only: the schedule editor existed nowhere on the web, and although `classes.room` was in
+  `ClassInput`, the web modal had no input for it and merely displayed it. The 2026-07-29 audit
+  (`docs/audit-2026-07-29.md`, phases 2 and 3) removed both rather than building each twice. The
+  `class_schedule` table and the `classes.room` column are left in place and dormant, so the
+  decision is reversible without a migration and the existing values survive. The class-reminder
+  push now shows the **event's** own "Room or place" instead of the class room.
+
 - **Class reminders reach students only, not staff.** The phase-6 plan says "notify the enrolled
   students and the class's staff", and `runClassReminders` does the first half. The second half has
   no data behind it: nothing in the schema links a staff member to a class. `classes` is
-  `(id, name, subject, color, room)`, `events` carries a `classId` but no staff, and there is no
+  `(id, name, subject, color)` — plus the dormant `room` column noted above — `events` carries a
+  `classId` but no staff, and there is no
   `class_staff` join table. `push.accountIdsForStaff` exists and is currently called by nothing —
   it maps staff records to accounts, which is the second half of the lookup; the missing first half
   is "which staff teach this class".

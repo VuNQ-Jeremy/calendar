@@ -146,7 +146,9 @@ function MaterialsScreen() {
     setModal({
       title: '',
       type: 'notes',
-      classId: classes[0]?.id || '',
+      // Unfiled, not the first class — the picker already offers `mat_unfiled` and
+      // `MaterialInput.classId` is .nullish().
+      classId: '',
       url: '',
       fileName: '',
       favorite: false,

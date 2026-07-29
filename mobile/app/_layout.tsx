@@ -3,6 +3,7 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
@@ -81,18 +82,23 @@ export default function RootLayout() {
   // than a white flash. Text rendered before the fonts land would reflow visibly.
   if (!fontsLoaded) return null;
 
+  // RNGH v2 needs the tree actually wrapped — the line-1 side-effect import was enough under the
+  // old architecture but no longer is. Wrapped at the root, not per call site, so the next
+  // GestureDetector added anywhere does not silently stop firing.
   return (
-    <SafeAreaProvider>
-      <ThemeProvider value={theme}>
-        <PersistQueryClientProvider client={queryClient} persistOptions={{ persister }}>
-          <LanguageProvider>
-            <AuthProvider>
-              <StatusBar style="dark" />
-              <Gate />
-            </AuthProvider>
-          </LanguageProvider>
-        </PersistQueryClientProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider value={theme}>
+          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister }}>
+            <LanguageProvider>
+              <AuthProvider>
+                <StatusBar style="dark" />
+                <Gate />
+              </AuthProvider>
+            </LanguageProvider>
+          </PersistQueryClientProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
