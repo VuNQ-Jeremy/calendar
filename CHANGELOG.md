@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0046 — 2026-07-29
+Document the push-equals-publish invariant: EAS workflow auto-publishes OTA on main pushes, with post-push verification steps in CLAUDE.md
+
 ## v0.0043 — 2026-07-29
 Mobile tab bar: no haptic on tab press; the soft-pill variant is now an outlined ring in the icon's colour instead of a filled lozenge.
 
