@@ -10,11 +10,18 @@ import Constants from 'expo-constants';
 /**
  * EXPO_PUBLIC_* is INLINED INTO THE BUNDLE at build time and is therefore public. A base URL
  * is fine; a secret would not be. Never put one here.
+ *
+ * The `typeof` guard is load-bearing. `eas update` evaluates app.config.ts with whatever env
+ * the EAS "environment" provides — publish without EXPO_PUBLIC_API_URL there and `extra.apiUrl`
+ * arrives as `{}`, and `{}.replace` threw BEFORE THE FIRST FRAME. A pre-frame crash in an OTA
+ * bundle is the worst kind: expo-updates' error recovery silently rolls back to the previous
+ * bundle, so the update looks like it never arrived (2026-07-29; an hour of logcat to find).
+ * With the guard the app boots with BASE='' and every API call fails visibly instead.
  */
+const rawExtraApiUrl = (Constants.expoConfig?.extra as { apiUrl?: unknown } | undefined)?.apiUrl;
 export const BASE = (
   process.env.EXPO_PUBLIC_API_URL ??
-  (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl ??
-  ''
+  (typeof rawExtraApiUrl === 'string' ? rawExtraApiUrl : '')
 ).replace(/\/$/, '');
 
 /** ~15s. Vietnamese mobile connections drop silently; a fetch with no timeout is a frozen screen. */

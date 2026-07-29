@@ -19,7 +19,11 @@ export function versionStamp(): string {
   const version = cfg?.version ?? 'v?';
   const runtime = cfg?.runtimeVersion ?? '?';
   const sha = extra.gitSha ?? 'dev';
-  const update = Updates.updateId ? Updates.updateId.slice(0, 8) : 'embedded';
+  // `isEmbeddedLaunch`, NOT `updateId ? … : 'embedded'` — updateId is non-null on an embedded
+  // launch too (it is the embedded manifest's own id), so the old check could never say
+  // `embedded` and an APK that had never applied an OTA looked like it was running one
+  // (2026-07-29: that misread cost a debugging detour).
+  const update = Updates.isEmbeddedLaunch ? 'embedded' : (Updates.updateId?.slice(0, 8) ?? '?');
   return `${version} · rt${runtime} · ${sha} · ${update}`;
 }
 
