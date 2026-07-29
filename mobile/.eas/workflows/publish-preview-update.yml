@@ -1,0 +1,27 @@
+# Push to main => publish an OTA update to the `preview` branch (channel `preview` serves it).
+#
+# This exists because a git push does NOT publish an update by itself — v0.0043 sat on GitHub
+# for an hour while every installed APK kept asking EAS and being served the previous bundle
+# (2026-07-29). This workflow makes the push itself the publish.
+#
+# Requires the Expo GitHub app: expo.dev -> project mochi-class -> GitHub -> install + select
+# VuNQ-Jeremy/calendar, base directory `mobile`. Until that is connected, this file is inert.
+#
+# `environment: preview` is load-bearing: it loads the EAS preview environment's variables,
+# which is where EXPO_PUBLIC_API_URL lives. Publishing WITHOUT it inlines undefined, the bundle
+# used to crash pre-frame, and expo-updates silently rolled back — see mobile/lib/api.ts.
+# The update message defaults to the triggering commit's message.
+name: Publish preview update
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  publish_preview_update:
+    name: Publish update to preview
+    type: update
+    environment: preview
+    params:
+      branch: preview
+      platform: android
