@@ -12,6 +12,7 @@
 import {
   cacheGet,
   cacheSet,
+  cacheSetQuiet,
   invalidate,
   isStale,
   markFresh,
@@ -58,7 +59,10 @@ export async function swrLoad<T>(key: string, serverLoader: () => Promise<T>): P
     return cached;
   }
   const data = await serverLoader();
-  cacheSet(key, data);
+  // Quiet: we are about to hand this same data back to React Router, and
+  // notifying here would cancel its in-flight post-action revalidation of the
+  // layout (see cacheSetQuiet in src/lib/cache.ts).
+  cacheSetQuiet(key, data);
   return data;
 }
 

@@ -16,6 +16,26 @@ export function cacheSet(key: string, data: unknown): void {
   notify(key);
 }
 
+/**
+ * Store data WITHOUT notifying subscribers.
+ *
+ * For swrLoad's blocking cache-miss path (src/lib/route-cache.ts): the loader
+ * that just filled this key is about to return the very same data to React
+ * Router, so the visible route gets it either way. Notifying instead makes
+ * useStaleRouteRefresh (app/routes/_app.tsx) call revalidator.revalidate()
+ * while React Router's own post-action revalidation is still in flight. The
+ * explicit revalidation supersedes it, and because shouldRevalidate excludes
+ * the layout from non-mutation revalidations, the freshly loaded sidebar badge
+ * counts are discarded — the badge then never moves until a full page load.
+ *
+ * Background SWR refreshes must keep using cacheSet: there nobody is awaiting
+ * the data, so the notify is the only thing that surfaces it.
+ */
+export function cacheSetQuiet(key: string, data: unknown): void {
+  store.set(key, data);
+  staleKeys.delete(key);
+}
+
 /** Is the cached value flagged for background refresh? */
 export function isStale(key: string): boolean {
   return staleKeys.has(key);
