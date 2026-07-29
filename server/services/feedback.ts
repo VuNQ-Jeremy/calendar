@@ -1,4 +1,4 @@
-import { eq, desc } from 'drizzle-orm';
+import { eq, ne, desc } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import type { Db } from '../db/index';
 import type { FeedbackInput } from '../../shared/schemas';
@@ -66,7 +66,13 @@ export async function remove(db: Db, id: string): Promise<void> {
   await db.delete(feedback).where(eq(feedback.id, id));
 }
 
-export async function countNew(db: Db): Promise<number> {
-  const rows = await db.select().from(feedback).where(eq(feedback.status, 'new'));
+/**
+ * Feedback still awaiting action — anything not resolved, i.e. 'new' or 'reviewed'.
+ *
+ * Counting `!== 'done'` rather than `=== 'new'` is what makes the sidebar badge agree with
+ * the resolve button: marking a reviewed item resolved has to move the number too.
+ */
+export async function countUnresolved(db: Db): Promise<number> {
+  const rows = await db.select().from(feedback).where(ne(feedback.status, 'done'));
   return rows.length;
 }

@@ -41,7 +41,9 @@ export const loader = withAuth('user', async ({ user, db }) => {
       themeSvc.getTheme(db),
       homeworkSvc.countDue(db, today),
       invitesSvc.countUnused(db),
-      feedbackSvc.countNew(db),
+      // `newFeedback` is the historical wire name; it counts unresolved (new + reviewed),
+      // matching the web sidebar badge. Renaming the field would break shipped OTA bundles.
+      feedbackSvc.countUnresolved(db),
     ]);
 
   return {

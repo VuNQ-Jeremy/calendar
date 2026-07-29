@@ -113,6 +113,19 @@ describe('FeedbackScreen', () => {
     await renderStub(Stub);
     expect(screen.getByText('Feedback')).toBeInTheDocument();
   });
+
+  it('shows release notes on the Changelog tab, without row actions', async () => {
+    const Stub = makeStub({ feedback: [] }, FeedbackScreen, { user: TEST_USER });
+    await renderStub(Stub);
+    // __CHANGELOG__ is stubbed in vitest.config.js.
+    expect(screen.queryByText('Test entry')).not.toBeInTheDocument();
+    await act(async () => {
+      screen.getByText('Changelog').click();
+    });
+    expect(screen.getByText('Test entry')).toBeInTheDocument();
+    expect(screen.getByText('v0.0001')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Mark resolved')).not.toBeInTheDocument();
+  });
 });
 
 describe('ProfileScreen', () => {

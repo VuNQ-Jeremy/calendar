@@ -113,8 +113,24 @@ describe('theme service', () => {
 describe('feedback service', () => {
   it('creates and counts new feedback', async () => {
     await feedbackSvc.create(db(), { message: 'Great app!', category: 'praise', status: 'new' });
-    const count = await feedbackSvc.countNew(db());
+    const count = await feedbackSvc.countUnresolved(db());
     expect(count).toBeGreaterThanOrEqual(1);
+  });
+
+  // The sidebar badge counts this, so resolving a *reviewed* item has to move it too.
+  it('counts reviewed as unresolved and drops resolved', async () => {
+    const before = await feedbackSvc.countUnresolved(db());
+    await feedbackSvc.create(db(), { message: 'a', category: 'idea', status: 'new' });
+    await feedbackSvc.create(db(), { message: 'b', category: 'bug', status: 'reviewed' });
+    const third = await feedbackSvc.create(db(), {
+      message: 'c',
+      category: 'other',
+      status: 'new',
+    });
+    expect(await feedbackSvc.countUnresolved(db())).toBe(before + 3);
+
+    await feedbackSvc.update(db(), third.id, { status: 'done' });
+    expect(await feedbackSvc.countUnresolved(db())).toBe(before + 2);
   });
 });
 

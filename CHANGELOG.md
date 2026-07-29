@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0047 — 2026-07-29
+Feedback page: centre the status badge with the row actions, drop the All tab (defaults to New), sidebar badge now counts unresolved (new + reviewed) so resolving anything updates it, and add a Changelog tab sourced from CHANGELOG.md at build time
+
 ## v0.0046 — 2026-07-29
 Document the push-equals-publish invariant: EAS workflow auto-publishes OTA on main pushes, with post-push verification steps in CLAUDE.md
 

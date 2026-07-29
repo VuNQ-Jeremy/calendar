@@ -46,7 +46,7 @@ function makeStub() {
       // _app layout loader: uncached, revalidates over "network" after actions
       loader: async () => {
         await sleep(15);
-        return { homeworkDueCount: 1, unusedInviteCount: 0, newFeedbackCount: 0 };
+        return { homeworkDueCount: 1, unusedInviteCount: 0, unresolvedFeedbackCount: 0 };
       },
       children: [
         {

@@ -6,6 +6,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify('v0.0000'),
     __GIT_SHA__: JSON.stringify('test'),
+    __CHANGELOG__: JSON.stringify([{ version: 'v0.0001', date: '2026-01-01', body: 'Test entry' }]),
   },
   test: {
     environment: 'jsdom',

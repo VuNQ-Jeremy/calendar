@@ -2,3 +2,5 @@
 declare const __APP_VERSION__: string;
 /** Injected by vite `define` — short git SHA, or "dev" outside a git checkout. */
 declare const __GIT_SHA__: string;
+/** Injected by vite `define` — CHANGELOG.md parsed at build time, newest first. */
+declare const __CHANGELOG__: import('./shared/changelog').ChangelogEntry[];

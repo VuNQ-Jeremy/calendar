@@ -87,29 +87,31 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     return {
       homeworkDueCount: 0,
       unusedInviteCount: 0,
-      newFeedbackCount: 0,
+      unresolvedFeedbackCount: 0,
       uiPrefs,
       user: { ...user, kind },
     };
   }
   const today = iso(TODAY);
-  const [homeworkDueCount, unusedInviteCount, newFeedbackCount, uiPrefs] = await Promise.all([
-    homeworkSvc.countDue(db, today),
-    invitesSvc.countUnused(db),
-    feedbackSvc.countNew(db),
-    uiPrefsSvc.getUiPrefs(db),
-  ]);
+  const [homeworkDueCount, unusedInviteCount, unresolvedFeedbackCount, uiPrefs] = await Promise.all(
+    [
+      homeworkSvc.countDue(db, today),
+      invitesSvc.countUnused(db),
+      feedbackSvc.countUnresolved(db),
+      uiPrefsSvc.getUiPrefs(db),
+    ],
+  );
   return {
     homeworkDueCount,
     unusedInviteCount,
-    newFeedbackCount,
+    unresolvedFeedbackCount,
     uiPrefs,
     user: { ...user, kind },
   };
 }
 
 // The layout loader feeds the sidebar badge counts (homework due, unused
-// invites, new feedback), uiPrefs, and the session user. Only mutations under
+// invites, unresolved feedback), uiPrefs, and the session user. Only mutations under
 // these paths can change that data — skip the layout .data round-trip for
 // everything else: plain GET navigations (incl. clicking the current page's
 // nav link), revalidator.revalidate() calls from useStaleRouteRefresh, and
@@ -146,12 +148,13 @@ function Sidebar({
   onFeedback: () => void;
   onHelp: () => void;
 }) {
-  const { homeworkDueCount, unusedInviteCount, newFeedbackCount } = useLoaderData<typeof loader>();
+  const { homeworkDueCount, unusedInviteCount, unresolvedFeedbackCount } =
+    useLoaderData<typeof loader>();
   const { t } = useLang();
   const counts: Record<string, number> = {
     homework: homeworkDueCount,
     people: unusedInviteCount,
-    feedback: newFeedbackCount,
+    feedback: unresolvedFeedbackCount,
   };
 
   return (

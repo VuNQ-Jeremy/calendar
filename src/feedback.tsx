@@ -6,6 +6,7 @@ import { Modal, MSelect, PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, TODAY } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { BUILD_ID } from './lib/build-id.js';
+import { CHANGELOG } from './lib/changelog.js';
 import type { FeedbackRow } from '../server/services/feedback.js';
 
 const { Card: FC, Button: FBtn, IconButton: FIB, Tag: FTag, Badge: FBadge } = DS;
@@ -127,16 +128,64 @@ interface FeedbackScreenProps {
   user: { name?: string } | null;
 }
 
+/**
+ * Release notes for the running build, from CHANGELOG.md (baked in at build time).
+ *
+ * Deliberately untranslated, like the version stamp: entries are written once per push in
+ * English and describe code, not UI. Sits on this page because the version chip on a
+ * feedback report is only useful if you can look up what that version changed.
+ */
+function ChangelogList() {
+  return (
+    <div className="m-stack">
+      {CHANGELOG.map((e) => (
+        <div key={e.version} className="lrow" style={{ alignItems: 'flex-start' }}>
+          <div className="iconwrap" style={{ width: 40, height: 40, ...ICON_TINT('blue') }}>
+            <MIcon name="sparkle" size={18} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontWeight: 700,
+                color: 'var(--text-strong)',
+                fontSize: 'var(--text-md)',
+                textWrap: 'pretty' as React.CSSProperties['textWrap'],
+              }}
+            >
+              {e.body}
+            </div>
+            <div className="lrow__meta">
+              <span
+                className="m-row"
+                style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+              >
+                {e.version}
+              </span>
+              <span className="m-row" style={{ gap: 5 }}>
+                <MIcon name="clock" size={13} />
+                {new Date(e.date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function FeedbackScreen({ user }: FeedbackScreenProps) {
   const { feedback: list } = useLoaderData() as { feedback: FeedbackRow[] };
   const fetcher = useFetcher();
   const { t } = useLang();
-  const [filter, setFilter] = React.useState('all');
+  const [filter, setFilter] = React.useState('new');
   const [modal, setModal] = React.useState<FeedbackDraft | null>(null);
 
-  const shown = list.filter((f) => (filter === 'all' ? true : f.status === filter));
+  const shown = list.filter((f) => f.status === filter);
   const counts = {
-    all: list.length,
     new: list.filter((f) => f.status === 'new').length,
     reviewed: list.filter((f) => f.status === 'reviewed').length,
     done: list.filter((f) => f.status === 'done').length,
@@ -197,13 +246,16 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
         value={filter}
         onChange={setFilter}
         tabs={[
-          { id: 'all', label: t('fb_tab_all', { n: counts.all }) },
           { id: 'new', label: t('fb_tab_new', { n: counts.new }) },
           { id: 'reviewed', label: t('fb_tab_reviewed', { n: counts.reviewed }) },
           { id: 'done', label: t('fb_tab_done', { n: counts.done }) },
+          // No count: the others size a work queue, "32 releases" is just noise.
+          { id: 'changelog', label: t('fb_tab_changelog') },
         ]}
       />
-      {shown.length ? (
+      {filter === 'changelog' ? (
+        <ChangelogList />
+      ) : shown.length ? (
         <div className="m-stack">
           {shown.map((f) => {
             const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
@@ -255,21 +307,35 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                     )}
                   </div>
                 </div>
-                <FBadge color={st.badge as 'brand'}>{t(st.tk)}</FBadge>
-                <div className="lrow__actions">
-                  <FIB
-                    label={f.status === 'done' ? t('fb_reopen') : t('fb_resolve')}
-                    size="sm"
-                    onClick={() => toggleDone(f)}
-                  >
-                    <MIcon name="check" size={16} />
-                  </FIB>
-                  <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
-                    <MIcon name="edit" size={16} />
-                  </FIB>
-                  <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
-                    <MIcon name="trash" size={16} />
-                  </FIB>
+                {/* Badge and buttons ride in one group: the row is top-aligned for
+                    multi-line messages, but these two must stay centred on each other,
+                    and the auto-margin belongs to the group so the badge can't drift
+                    left with a short message. */}
+                <div
+                  style={{
+                    marginLeft: 'auto',
+                    alignSelf: 'center',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <FBadge color={st.badge as 'brand'}>{t(st.tk)}</FBadge>
+                  <div className="lrow__actions" style={{ marginLeft: 0 }}>
+                    <FIB
+                      label={f.status === 'done' ? t('fb_reopen') : t('fb_resolve')}
+                      size="sm"
+                      onClick={() => toggleDone(f)}
+                    >
+                      <MIcon name="check" size={16} />
+                    </FIB>
+                    <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
+                      <MIcon name="edit" size={16} />
+                    </FIB>
+                    <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
+                      <MIcon name="trash" size={16} />
+                    </FIB>
+                  </div>
                 </div>
               </div>
             );
