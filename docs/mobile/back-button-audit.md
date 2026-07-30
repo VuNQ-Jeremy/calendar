@@ -6,9 +6,17 @@ recording where it actually went. Pre-fix results are from the **preview APK** (
 (`npx expo run:android`) serving the same commit off Metro. Both on the same AVD, **Android 16,
 1080x2400**, driven by `adb shell input keyevent 4` with a screenshot before and after every press.
 
-**The rule being tested** (the product decision): back retraces the screens you actually visited,
-in order — `A → B → C`, back in `C` goes to `B`. This applies to tab switches too, not just detail
-screens. When history runs out, back exits the app.
+**The rule being tested** (the product decision), in two halves:
+
+1. **A tab is a root.** Back on one of the tab bar's own screens leaves the app. It does **not** hop
+   to whichever tab you were on before — Dashboard → Calendar → back exits, it does not return to
+   Dashboard. Five such screens for staff (Dashboard, Calendar, Classes, Flashcards, More), two for a
+   student (Flashcards, Your profile).
+2. **Everything else retraces.** `A → B → C`, back in `C` goes to `B`. More → People → back → More;
+   Calendar → event → back → Calendar; and inside a nested stack, one step per press.
+
+Note that `/profile` sits on both sides of that line: a root for a student, whose tab it is, and a
+pushed screen for staff, who reach it through More. It is tested both ways.
 
 Accounts: staff `dev@mochi.edu`, student `vunq@mochi.edu`.
 
@@ -16,19 +24,22 @@ Accounts: staff `dev@mochi.edu`, student `vunq@mochi.edu`.
 
 ## Verdict
 
-**20 of 32 checks failed before the fix; all 32 pass after it.** Every failure was one bug: back
-went to **Dashboard** from everywhere, because the tab navigator was rewriting its history on every
-navigation instead of appending to it. Nested stacks (Classes, People, Homework, Materials,
-Flashcards) were always correct, which is why the bug reads as "only some screens are broken".
+**21 of 31 checks failed before the fix; all 31 pass after it.** Every one of those failures was the
+same bug: back went to **Dashboard** from everywhere, because the tab navigator was rewriting its
+history on every navigation instead of appending to it. Nested stacks (Classes, People, Homework,
+Materials, Flashcards) were always correct, which is why the bug reads as "only some screens are
+broken".
 
 One failure was worse than a wrong back target: **a student pressing back on their home screen
 landed on the staff Dashboard.**
 
-Fixed by `backBehavior="fullHistory"` on the `(app)` Tabs navigator, plus a role guard on the
-Dashboard screen. `npm run typecheck` and `npm run bundle` both clean.
+Fixed by three things in two files: `backBehavior="fullHistory"` on the `(app)` Tabs navigator so
+detail screens can find the screen that opened them, `useTabRootsEndTheBackStack` so a press on a
+tab's own screen goes to Android instead of that history, and a role guard on the Dashboard screen.
+`npm run typecheck` and `npm run bundle` both clean.
 
 Two further cases (C4, C6) were **not testable** on this dataset and remain unverified on a device —
-see the cross-tab table.
+see the cross-tab table. They are excluded from the 31.
 
 ---
 
@@ -79,16 +90,23 @@ but it is a broken screen a student should never reach.
 
 ### Tab switching
 
-| # | Steps | Back should go to | Pre-fix actual | Pre | Post |
-|---|-------|-------------------|----------------|-----|------|
-| T1 | launch → Dashboard | exit app | exit (launcher resumed) | PASS | PASS |
-| T2 | Dashboard → Calendar | Dashboard | Dashboard | PASS | PASS |
-| T3 | Dashboard → Calendar → Classes | **Calendar** | **Dashboard** | FAIL | PASS |
-| T4 | Dashboard → Classes → Flashcards → More | **Flashcards** | **Dashboard** | FAIL | PASS |
-| T5 | T3, then keep pressing back | Calendar → Dashboard → exit | Dashboard → exit (2 presses) | FAIL | PASS (3 presses, in order) |
+A tab is a root, so every one of these should **exit the app**. Verified with
+`dumpsys activity activities | grep topResumedActivity` rather than by screenshot.
 
-T2 passed only by coincidence: Dashboard *is* `routes[0]`, so the wrong answer and the right answer
-were the same screen.
+| # | Steps | Back should | Pre-fix actual | Pre | Post |
+|---|-------|-------------|----------------|-----|------|
+| T1 | launch → Dashboard | exit | exit (launcher resumed) | PASS | PASS |
+| T2 | Dashboard → Calendar | exit | **Dashboard** | FAIL | PASS (exits) |
+| T3 | Dashboard → Calendar → Classes | exit | **Dashboard** | FAIL | PASS (exits) |
+| T4 | Dashboard → Classes → Flashcards → More | exit | **Dashboard** | FAIL | PASS (exits) |
+
+Pre-fix, T2 looked like a pass under an earlier reading of the rule — but only by coincidence, since
+Dashboard *is* `routes[0]`, so "wrong target" and "the screen before" were the same screen. Under the
+rule as settled it is a failure: back on a tab should not have gone anywhere.
+
+An intermediate version of this fix used `fullHistory` alone, which made back retrace tab switches
+(Classes → Calendar → Dashboard → exit). That was the literal reading of "A → B → C" but wrong for
+the tab bar, and it is what `useTabRootsEndTheBackStack` now suppresses.
 
 ### More menu (every row)
 
@@ -103,7 +121,7 @@ Each row: Dashboard → More → tap row → back. Should return to **More** eve
 | M5 | Feedback | `/feedback` | Dashboard | FAIL | PASS |
 | M6 | Share feedback | `/feedback?compose=1` | Dashboard | FAIL | PASS |
 | M7 | System Config | `/config` | Dashboard | FAIL | PASS |
-| M8 | Your profile | `/profile` | Dashboard | FAIL | PASS |
+| M8 | Your profile | `/profile` | Dashboard | FAIL | PASS (→ More, because `/profile` is not a *staff* tab) |
 | M9 | Notifications | `/notifications` | Dashboard | FAIL | PASS |
 | M10 | Language | `/language` | Dashboard | FAIL | PASS |
 
@@ -119,7 +137,7 @@ and only dismiss when it is actually up; the verdict is the first press after th
 |---|-------|-------------------|----------------|-----|------|
 | C1 | Calendar → tap event (Biology 9A) | Calendar | Dashboard | FAIL | PASS |
 | C2 | Calendar → `+` new event | Calendar | Dashboard | FAIL | PASS |
-| C3 | Dashboard → "Calendar ›" inline link | Dashboard | Dashboard | PASS | PASS |
+| C3 | Dashboard → "Calendar ›" inline link | exit (lands on a tab) | Dashboard | FAIL | PASS (exits) |
 | C5 | More → Materials → "Open" (viewer, `/material/:id`) | Materials list | Dashboard | FAIL | PASS |
 | C7 | Calendar → event → Homework tab → grade | **event detail** | Dashboard | FAIL | PASS |
 
@@ -128,7 +146,8 @@ the fix it returns to the event **with its Homework sub-tab still selected** —
 tabs in `ui/Tabs.tsx` hold local state and are untouched by navigation, so the screen comes back as
 you left it.
 
-C3 passed for the same coincidental reason as T2.
+C3 is not really a cross-tab jump: the Dashboard's "Calendar ›" link lands you on the Calendar
+**tab**, so under the settled rule back exits rather than returning to Dashboard.
 
 **C4** (Dashboard → Take attendance) and **C6** (event → attached material) were **not testable**
 on this dataset — nothing is scheduled today, and the Biology 9A event has no materials attached.
@@ -151,7 +170,9 @@ Expected to pass before *and* after; they are the regression check on the fix.
 | G1 | Flashcards → topic → Flip cards game → back → topic | PASS | PASS |
 
 N3 at depth 2 (back again from the People list) went to Dashboard instead of More pre-fix — that is
-M1, not a nested-stack failure.
+M1, not a nested-stack failure. Post-fix the whole chain was walked in one go and each press lands
+one step back: student editor → People list → More → exit. That is the clearest single demonstration
+of both halves of the rule at once — two retracing steps, then the root ends it.
 
 G1 always worked because `/play/:slug/:mode` lives in the **root** Stack
 (`mobile/app/_layout.tsx`), so its push is a real push.
@@ -165,29 +186,59 @@ G1 always worked because `/play/:slug/:mode` lives in the **root** Stack
 
 ### Student role
 
+A student's two tabs are Flashcards and Your profile, so both are roots.
+
 | # | Steps | Expected | Pre-fix actual | Pre | Post |
 |---|-------|----------|----------------|-----|------|
-| S1 | launch as student → Flashcards → back | exit app | **staff Dashboard** | **FAIL** | PASS (exits) |
-| S2 | Flashcards → Your profile → back | Flashcards | **staff Dashboard** | **FAIL** | PASS |
-| S3 | Flashcards → topic → back → list | Flashcards list | Flashcards list | PASS | PASS |
+| S1 | launch as student → Flashcards → back | exit | **staff Dashboard** | **FAIL** | PASS (exits) |
+| S2 | Flashcards → Your profile → back | exit (Profile is their tab) | **staff Dashboard** | **FAIL** | PASS (exits) |
+| S3 | Flashcards → topic → back, then back | list, then exit | list, then staff Dashboard | FAIL | PASS |
 
 S1/S2 pre-fix rendered "Good morning, Vu" over the staff dashboard layout — Today's schedule, Due
 today, and `Active classes 0 / Students 0 / Open homework 0 / Materials 0` — with a stuck spinner
 and no active tab.
 
+Contrast S2 with **M8**: the same `/profile` screen, and back exits for a student but returns to More
+for staff, because the role decides whether it is a tab. Those two rows together are the check that
+the role-dependent list actually works.
+
 ---
 
 ## The fix
 
-**`mobile/app/(app)/_layout.tsx`** — `backBehavior="fullHistory"` on the `<Tabs>`.
+**`mobile/app/(app)/_layout.tsx`, part 1** — `backBehavior="fullHistory"` on the `<Tabs>`.
+
+This is for the **detail screens**, not the tab bar. Since they are hidden tabs, the tab history is
+the only place a record of "what opened this" can live.
 
 `fullHistory`, not `history`: `history` de-duplicates, keeping each route at most once
-(`TabRouter.js:63-66`), so revisiting a tab drops the earlier visit and back stops retracing what
-actually happened. `fullHistory` appends every visit (`:67-83`), which is the literal rule.
+(`TabRouter.js:63-66`), so revisiting a screen drops the earlier visit and back stops retracing what
+actually happened. `fullHistory` appends every visit (`:67-83`).
 
 This also removes the student leak on its own — `fullHistory` never unshifts `routes[0]`
 (`getRouteHistory`, `:52-55`), so a student's history starts at the screen they landed on and
 `GO_BACK` with a single entry returns `null` and exits the app (`:258-261`).
+
+**`mobile/app/(app)/_layout.tsx`, part 2** — `useTabRootsEndTheBackStack`.
+
+`fullHistory` also records plain tab switches, which would make Dashboard → Calendar → back return to
+Dashboard. A tab is a root, so that is wrong. The hook subscribes to `hardwareBackPress` only while a
+tab's own URL is focused (matched exactly against a role-dependent list, so `/classes` is a root but
+`/classes/:id` is not) and hands the press to Android.
+
+`backBehavior="none"` would say this declaratively — it is a real option, and with no matching `case`
+in `getRouteHistory` the history stays at one entry forever — but it would apply to the eleven detail
+screens too and strand them, so it cannot be used here.
+
+Two things make the hook safe rather than a hack:
+
+- **`BackHandler.exitApp()` is misnamed.** It calls `invokeDefaultBackPressHandler`, i.e.
+  MainActivity's `invokeDefaultOnBackPressed` → `moveTaskToBack` — the same backgrounding back on
+  Dashboard already did. It is **not** `finish()`, so the task stays warm in recents.
+- **Registration order gives it priority.** RN calls `hardwareBackPress` subscribers in reverse order
+  of registration, and this mounts after the NavigationContainer. On every other screen the hook is
+  not subscribed at all, so react-navigation handles the press exactly as before — which is what
+  keeps the nested stacks popping.
 
 **`mobile/app/(app)/dashboard.tsx`** — role guard. `dashboard` is hidden for a student, not
 removed, so the route stays focusable by anything that names it (a `mochi:///dashboard` deep link).
@@ -197,13 +248,14 @@ all. Same role split as `app/index.tsx`.
 
 ### Consequences worth knowing
 
-- **Back now retraces tab switches literally, and that is measurable.** Measured as a student:
-  5 tab switches (Flashcards → Profile → Flashcards → Profile → Flashcards → Profile) then back
-  repeatedly — it stepped through Flashcards, Profile, Flashcards, Profile, Flashcards, and the
-  **6th** press exited. So exiting costs one press per switch made. That is the rule as
-  specified — strict previous screen, tabs included. If exiting from a tab root should instead
-  always be one press, `backBehavior` is the single knob to revisit (`'history'` de-duplicates,
-  `'firstRoute'` is the old behaviour).
+- **Exiting is always one press from a tab, however you got there.** No matter how many tab switches
+  or how deep a detail screen you came back through, once a tab's own screen is showing, back leaves.
+  That is the point of the second half of the rule.
+- **The two lists in `_layout.tsx` must track the `href` values, not the file tree.** They name the
+  screens that *appear in the tab bar* for each role. If a screen is added to or removed from the bar
+  — or its `href: staff ? … : null` flips, as `profile` does — the corresponding list has to change
+  with it, or that screen will either wrongly exit the app or wrongly retrace. This is the one
+  maintenance cost of the approach.
 - **Tab-scoped stacks still keep their own state, unchanged by this fix.** Jumping Event → grade
   homework leaves the grade screen on the `homework` tab's stack; opening More → Homework later
   resumes on that grade screen rather than the list. Pre-existing, orthogonal, not addressed here.

@@ -1,5 +1,6 @@
-import { Redirect, Tabs } from 'expo-router';
-import type { ColorValue } from 'react-native';
+import React from 'react';
+import { Redirect, Tabs, usePathname } from 'expo-router';
+import { BackHandler, type ColorValue } from 'react-native';
 import {
   BookOpen,
   CalendarDays,
@@ -15,6 +16,53 @@ import { useLang } from '~/lib/i18n';
 import { usePushRegistration, useNotificationRouting } from '~/lib/push';
 import { useSync } from '~/lib/use-sync';
 import { useTabBarStyle } from '~/lib/use-ui-prefs';
+
+/**
+ * The tab bar's own screens, by URL. A tab is a ROOT: back on one leaves the app.
+ *
+ * Note what is NOT here. `/profile` is a root for a student (it is one of their two tabs) but a
+ * pushed screen for staff (they reach it through More), which is exactly the split in the
+ * `<Tabs.Screen name="profile">` options below — so the two lists have to stay in step with the
+ * `href` values, not with the file tree.
+ */
+const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/flashcards', '/more'];
+const STUDENT_TAB_ROOTS = ['/flashcards', '/profile'];
+
+/**
+ * Back on a tab is a dead end, not a hop to the tab you were on before.
+ *
+ * The tab router below runs `backBehavior="fullHistory"` so that the eleven detail screens — which
+ * are hidden TABS rather than stack screens, see the note on the navigator — can find the screen
+ * that opened them: More → People → back → More. The cost of that history is that it also records
+ * plain tab switches, so Dashboard → Calendar → back would return to Dashboard. Tabs are roots;
+ * that is wrong.
+ *
+ * So we intercept the press only while a tab's own URL is focused and hand it to Android. Every
+ * other screen falls through to react-navigation untouched, which is what keeps the nested stacks
+ * (`/classes/:id`, `/flashcards/:slug/...`) popping normally — their URLs are not in the lists
+ * above, so this hook is inert there.
+ *
+ * `exitApp()` is a misleading name: it calls `invokeDefaultBackPressHandler`, i.e. MainActivity's
+ * `invokeDefaultOnBackPressed` → `moveTaskToBack`. It backgrounds the task exactly as back on
+ * Dashboard already did; it is NOT `finish()`, so the app stays warm in recents.
+ *
+ * Registering later than the NavigationContainer is what gives this priority — RN calls
+ * hardwareBackPress subscribers in reverse order of registration.
+ */
+function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | undefined) {
+  const pathname = usePathname();
+  const roots = kind === 'staff' ? STAFF_TAB_ROOTS : kind === 'student' ? STUDENT_TAB_ROOTS : [];
+  const onTabRoot = roots.includes(pathname);
+
+  React.useEffect(() => {
+    if (!onTabRoot) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      BackHandler.exitApp();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onTabRoot]);
+}
 
 /**
  * The signed-in shell.
@@ -53,6 +101,10 @@ export default function AppLayout() {
   // the signed-in shell, so a deep link can never push a screen behind a login gate.
   useNotificationRouting(!!user);
 
+  // Above the early return, like the three hooks before it: hook order cannot depend on `user`.
+  // Passing undefined while signed out leaves it inert.
+  useTabRootsEndTheBackStack(user?.kind);
+
   // Belt and braces with app/index.tsx: a deep link straight into a tab must not render the
   // shell for a signed-out user.
   if (!user) return <Redirect href="/login" />;
@@ -61,30 +113,32 @@ export default function AppLayout() {
   return (
     <Tabs
       /*
-        Android's back button retraces the screens you actually visited, in order.
+        This history exists for the DETAIL screens, not for the tab bar.
 
-        The default is `backBehavior: 'firstRoute'`, and it does NOT mean "keep a history" — on
-        every navigation TabRouter.changeIndex REWRITES history as [routes[0], current]
-        (expo-router/build/react-navigation/routers/TabRouter.js:34-41, :86). routes[0] is the
-        `dashboard` screen declared first below, so back went to Dashboard from everywhere and
-        the screen you came from was unreachable: More → People → back landed on Dashboard, and
-        so did Calendar → event → back and event → grade homework → back.
+        The eleven `href: null` screens at the bottom of this file are SIBLING TABS, not stack
+        screens. `router.push` to a sibling tab is downgraded to a tab NAVIGATE
+        (expo-router/build/global-state/getNavigationAction.js:51-53), so those pushes never build
+        a stack for back to pop — More → People goes through the TAB history or nowhere at all.
 
-        That is not a niche case here, because the eleven `href: null` screens at the bottom of
-        this file are SIBLING TABS, not stack screens. `router.push` to a sibling tab is
-        downgraded to a tab NAVIGATE (getNavigationAction.js:51-53), so those pushes never built
-        a stack for back to pop — every one of them went through the tab history.
+        The default `backBehavior: 'firstRoute'` does NOT keep a history: on every navigation
+        TabRouter.changeIndex rewrites it as [routes[0], current] (TabRouter.js:34-41, :86).
+        routes[0] is `dashboard`, declared first below, so back went to Dashboard from
+        everywhere — from every More row, from Calendar → event, from event → grade homework —
+        and the screen you came from was unreachable.
 
-        `fullHistory` (not `history`) because `history` de-duplicates: it keeps each route at
-        most once, so revisiting a tab drops the earlier visit and back stops retracing what
-        actually happened. `fullHistory` appends every visit, which is the literal A → B → C,
-        back-in-C-goes-to-B rule.
+        `fullHistory` rather than `history` because `history` de-duplicates, keeping each route at
+        most once (TabRouter.js:63-66); revisiting a screen then drops the earlier visit and back
+        stops retracing what happened. `fullHistory` appends every visit (:67-83).
 
-        It also fixes a role leak. `firstRoute` unshifted routes[0] into a STUDENT's history too
+        It also closes a role leak: `firstRoute` unshifted routes[0] into a STUDENT's history too
         (`dashboard` is hidden for them via `href: null`, not removed), so back from Flashcards
-        opened the staff Dashboard — a screen of staff-only queries. `fullHistory` never
-        unshifts routes[0], so a student's history starts at the screen they landed on and back
-        exits the app. dashboard.tsx also guards itself; both are wanted.
+        opened the staff Dashboard — a screen of staff-only queries. `fullHistory` never unshifts
+        routes[0]. dashboard.tsx guards itself as well; both are wanted.
+
+        Because this history also records plain tab switches, and a tab is a root rather than a
+        step, useTabRootsEndTheBackStack above stops the press before it reaches this router
+        whenever a tab's own URL is focused. `backBehavior="none"` would be the declarative way to
+        say that, but it would apply to the eleven detail screens too and strand them.
 
         Back inside the nested Stack layouts (classes, people, homework, materials, flashcards,
         event, material) is unaffected — a nested stack consumes GO_BACK before it reaches here.

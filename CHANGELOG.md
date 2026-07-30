@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0054 — 2026-07-30
+Back on one of the main tabs now leaves the app instead of returning to the previously visited tab. Detail screens still go back to the screen that opened them.
+
 ## v0.0052 — 2026-07-30
 Android back button now retraces the screens you actually visited instead of jumping to Dashboard from everywhere. Also stops a student's back press from opening the staff dashboard.
 
