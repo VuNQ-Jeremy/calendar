@@ -61,6 +61,36 @@ export default function AppLayout() {
   return (
     <Tabs
       /*
+        Android's back button retraces the screens you actually visited, in order.
+
+        The default is `backBehavior: 'firstRoute'`, and it does NOT mean "keep a history" — on
+        every navigation TabRouter.changeIndex REWRITES history as [routes[0], current]
+        (expo-router/build/react-navigation/routers/TabRouter.js:34-41, :86). routes[0] is the
+        `dashboard` screen declared first below, so back went to Dashboard from everywhere and
+        the screen you came from was unreachable: More → People → back landed on Dashboard, and
+        so did Calendar → event → back and event → grade homework → back.
+
+        That is not a niche case here, because the eleven `href: null` screens at the bottom of
+        this file are SIBLING TABS, not stack screens. `router.push` to a sibling tab is
+        downgraded to a tab NAVIGATE (getNavigationAction.js:51-53), so those pushes never built
+        a stack for back to pop — every one of them went through the tab history.
+
+        `fullHistory` (not `history`) because `history` de-duplicates: it keeps each route at
+        most once, so revisiting a tab drops the earlier visit and back stops retracing what
+        actually happened. `fullHistory` appends every visit, which is the literal A → B → C,
+        back-in-C-goes-to-B rule.
+
+        It also fixes a role leak. `firstRoute` unshifted routes[0] into a STUDENT's history too
+        (`dashboard` is hidden for them via `href: null`, not removed), so back from Flashcards
+        opened the staff Dashboard — a screen of staff-only queries. `fullHistory` never
+        unshifts routes[0], so a student's history starts at the screen they landed on and back
+        exits the app. dashboard.tsx also guards itself; both are wanted.
+
+        Back inside the nested Stack layouts (classes, people, homework, materials, flashcards,
+        event, material) is unaffected — a nested stack consumes GO_BACK before it reaches here.
+      */
+      backBehavior="fullHistory"
+      /*
         A custom bar — components/TabBar.tsx explains why at length, but the short version is that
         it owns both the branding (three admin-selectable variants) and the safe-area padding that
         the old `tabBarStyle: { height: 60 }` was silently defeating, leaving the tabs underneath

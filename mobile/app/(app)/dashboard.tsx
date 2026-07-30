@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import {
   BookOpen,
@@ -28,6 +28,25 @@ import type { ColorIdKey } from '@mochi/shared/tokens';
 import type { HomeworkRow } from '~/lib/types';
 
 /**
+ * Role guard.
+ *
+ * `dashboard` is HIDDEN for a student (`href: null` in (app)/_layout.tsx), not removed from the
+ * navigator, so the route stays focusable by anything that names it — a `mochi:///dashboard`
+ * deep link, say. Rendering the staff screen for a student fires every query in
+ * ~/lib/staff-data and paints a grid of 403s, which is what back used to do before the tab
+ * router got `backBehavior="fullHistory"`. Belt and braces with that, and the same role split
+ * as app/index.tsx.
+ *
+ * The staff screen is a separate MODULE-SCOPE component, not an early return inside one: that
+ * way a student never mounts the staff hooks at all.
+ */
+export default function Dashboard() {
+  const { user } = useAuth();
+  if (user?.kind === 'student') return <Redirect href="/flashcards" />;
+  return <StaffDashboard />;
+}
+
+/**
  * Task 4.1 — the teaching day, one screen.
  *
  * Port of `DashboardScreen` in `src/screens-core.tsx`. The web's `.cols-4` stat grid and its
@@ -38,7 +57,7 @@ import type { HomeworkRow } from '~/lib/types';
  * events. That is the whole point of the phone: two taps from a cold launch to marking a register,
  * against the web's open-laptop, find-event, open-modal, find-tab.
  */
-export default function Dashboard() {
+function StaffDashboard() {
   const th = useTheme();
   const { t, lang } = useLang();
   const { user } = useAuth();
