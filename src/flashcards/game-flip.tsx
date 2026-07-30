@@ -41,12 +41,80 @@ type Gesture = {
   raf: number;
 };
 
+/**
+ * A card that has been swiped away and is still flying off screen.
+ *
+ * The game advances the instant a swipe COMMITS rather than when the exit animation ends, so the
+ * next word can fade in underneath while the old card is still travelling. The outgoing card is
+ * detached into one of these and animates itself out. `flipped` and `startDx` are captured at
+ * commit time so it carries on from exactly the pose it was released in, showing the same face.
+ */
+type Ghost = {
+  key: number;
+  word: GameProps['words'][number];
+  flipped: boolean;
+  known: boolean;
+  startDx: number;
+};
+
+/**
+ * One outgoing card. Mounts at the pose it was released in, then animates off on its own timer and
+ * asks the parent to drop it. Independent DOM nodes, so several can be in flight at once — rapid
+ * swipes rain cards off the screen instead of queueing behind one another.
+ */
+function GhostCard({
+  ghost,
+  onDone,
+  children,
+}: {
+  ghost: Ghost;
+  onDone: (key: number) => void;
+  children: React.ReactNode;
+}) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+
+  React.useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) {
+      const width = el.offsetWidth || 480;
+      const exitDx = (ghost.known ? 1 : -1) * (width * 1.4 + 120);
+      // Commit the start pose, then force layout before switching the transition on — without the
+      // reflow the browser coalesces both transforms and the card teleports instead of flying.
+      el.style.transform = arcTransform(ghost.startDx);
+      el.getBoundingClientRect();
+      el.style.transition = `transform ${EXIT_MS}ms ease-out, opacity ${EXIT_MS}ms ease-out`;
+      el.style.transform = arcTransform(exitDx);
+      el.style.opacity = '0';
+    }
+    const timer = window.setTimeout(() => onDone(ghost.key), EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [ghost, onDone]);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        zIndex: 3,
+        transform: arcTransform(ghost.startDx),
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function FlipGame({ words, onExit, onFinish }: GameProps) {
   const { t } = useLang();
   const [order, setOrder] = React.useState(() => words);
   const [idx, setIdx] = React.useState(0);
   const [flipped, setFlipped] = React.useState(false);
   const [marks, setMarks] = React.useState<Map<string, boolean>>(new Map());
+  /** Cards that have been swiped away and are still flying off screen. */
+  const [ghosts, setGhosts] = React.useState<Ghost[]>([]);
+  const ghostKey = React.useRef(0);
   const finished = React.useRef(false);
 
   const dragRef = React.useRef<HTMLDivElement | null>(null);
@@ -63,10 +131,11 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     vx: 0,
     raf: 0,
   });
-  const exiting = React.useRef(false); // fly-out animation in progress
   const suppressClick = React.useRef(false); // a drag happened; swallow the trailing click
 
-  const done = idx >= order.length;
+  // `idx` runs past the end while the last card is still flying out, so the round is only really
+  // over once every ghost has landed. Everything gated on `done` waits for that.
+  const done = idx >= order.length && ghosts.length === 0;
 
   React.useEffect(() => {
     if (done && !finished.current) {
@@ -81,13 +150,26 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     }
   }, [done, order, marks, onFinish]);
 
-  const mark = (known: boolean) => {
-    if (exiting.current) return; // ignore button presses while a card is flying out
+  /**
+   * Detaches the current card as a ghost and moves to the next word, at COMMIT time.
+   *
+   * The ghost keeps painting the outgoing card on top while it finishes flying, so the next word
+   * mounts and fades in underneath straight away instead of the screen sitting empty until the
+   * exit animation reports back.
+   */
+  const advance = (known: boolean, startDx: number) => {
     const w = order[idx];
+    if (!w) return;
+    ghostKey.current += 1;
+    setGhosts((g) => [...g, { key: ghostKey.current, word: w, flipped, known, startDx }]);
     setMarks((m) => new Map(m).set(w.id, known));
     setFlipped(false);
     setIdx((i) => i + 1);
   };
+
+  const dropGhost = React.useCallback((key: number) => {
+    setGhosts((g) => g.filter((x) => x.key !== key));
+  }, []);
 
   const paint = () => {
     const g = gesture.current;
@@ -111,26 +193,24 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     if (unknownBadgeRef.current) unknownBadgeRef.current.style.opacity = '0';
   };
 
-  const flyOut = (known: boolean) => {
-    exiting.current = true;
+  /**
+   * Hands the card off to a ghost, which owns the fly-out from here. The live card is reset to its
+   * resting pose in the same breath — by the time the browser paints, it is already the next word.
+   */
+  const flyOut = (known: boolean, startDx: number) => {
     const el = dragRef.current;
-    const width = el ? el.offsetWidth : 480;
-    const exitDx = (known ? 1 : -1) * (width * 1.4 + 120);
     if (el) {
-      el.style.transition = `transform ${EXIT_MS}ms ease-out, opacity ${EXIT_MS}ms ease-out`;
-      el.style.transform = arcTransform(exitDx);
-      el.style.opacity = '0';
+      el.style.transition = 'none';
+      el.style.transform = '';
+      el.style.opacity = '';
     }
-    const badge = known ? knownBadgeRef.current : unknownBadgeRef.current;
-    if (badge) badge.style.opacity = '1';
-    window.setTimeout(() => {
-      exiting.current = false;
-      mark(known); // advances idx; key={w.id} remounts a clean card with the enter animation
-    }, EXIT_MS);
+    if (knownBadgeRef.current) knownBadgeRef.current.style.opacity = '0';
+    if (unknownBadgeRef.current) unknownBadgeRef.current.style.opacity = '0';
+    advance(known, startDx);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (exiting.current || gesture.current.id !== null) return;
+    if (gesture.current.id !== null) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     suppressClick.current = false;
     const g = gesture.current;
@@ -146,7 +226,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
 
   const onPointerMove = (e: React.PointerEvent) => {
     const g = gesture.current;
-    if (g.id !== e.pointerId || exiting.current) return;
+    if (g.id !== e.pointerId) return;
     const dx = e.clientX - g.startX;
     const dyRaw = e.clientY - g.startY;
     if (!g.dragging) {
@@ -180,7 +260,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     g.dragging = false;
     const el = dragRef.current;
     const width = el ? el.offsetWidth : 480;
-    if (shouldCommit(g.dx, g.vx, width)) flyOut(g.dx > 0);
+    if (shouldCommit(g.dx, g.vx, width)) flyOut(g.dx > 0, g.dx);
     else settle();
   };
 
@@ -202,7 +282,51 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     setOrder(shuffle(words));
     setIdx(0);
     setFlipped(false);
+    setGhosts([]);
   };
+
+  /**
+   * The card's two faces for one word. Shared by the live card and the ghosts so an outgoing card
+   * keeps rendering exactly what it showed at the moment it was swiped.
+   */
+  const renderFaces = (word: Ghost['word'], isFlipped: boolean) => (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        transformStyle: 'preserve-3d',
+        transition: 'transform .4s',
+        transform: isFlipped ? 'rotateY(180deg)' : 'none',
+      }}
+    >
+      <div style={cardFace}>
+        <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800 }}>{word.word}</div>
+        {word.ipa && (
+          <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
+            {word.ipa}
+          </div>
+        )}
+        <FIB
+          label={t('fc_play_audio')}
+          size="md"
+          onClick={(e) => {
+            e.stopPropagation();
+            playWord(word.word, word.audioUrl);
+          }}
+        >
+          <MIcon name="volume" size={22} />
+        </FIB>
+      </div>
+      <div style={{ ...cardFace, transform: 'rotateY(180deg)' }}>
+        <div style={{ fontSize: 'var(--text-lg, 24px)', fontWeight: 700 }}>{meaningOf(word)}</div>
+        {word.meaningVi && word.definitionEn && (
+          <div style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: '80%' }}>
+            {word.definitionEn}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (done) {
     const known = order.filter((w) => marks.get(w.id) === true).length;
@@ -249,114 +373,114 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     <div style={playWrap}>
       <style>{cardEnterCss}</style>
       <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-        {idx + 1} / {order.length}
+        {Math.min(idx + 1, order.length)} / {order.length}
       </div>
-      <div style={{ width: 'min(90vw, 480px)' }}>
-        <div
-          key={w.id}
-          ref={dragRef}
-          className="fc-card-enter"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-          onClick={() => {
-            if (suppressClick.current) {
-              suppressClick.current = false;
-              return;
-            }
-            if (exiting.current) return;
-            setFlipped((f) => !f);
-          }}
-          style={{
-            position: 'relative',
-            width: '100%',
-            aspectRatio: '3 / 2',
-            cursor: 'grab',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            touchAction: 'pan-y',
-            willChange: 'transform',
-            perspective: 1200,
-          }}
-        >
+      {/*
+        Positioned, so the ghosts can overlay the live card in the same slot. It carries the card's
+        aspect ratio itself rather than inheriting height from the live card — after the last word
+        is swiped there IS no live card, and a zero-height wrapper would collapse the ghost still
+        flying out of it.
+      */}
+      <div style={{ position: 'relative', width: 'min(90vw, 480px)', aspectRatio: '3 / 2' }}>
+        {w && (
           <div
+            key={w.id}
+            ref={dragRef}
+            className="fc-card-enter"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
+            onClick={() => {
+              if (suppressClick.current) {
+                suppressClick.current = false;
+                return;
+              }
+              setFlipped((f) => !f);
+            }}
             style={{
-              position: 'absolute',
-              inset: 0,
-              transformStyle: 'preserve-3d',
-              transition: 'transform .4s',
-              transform: flipped ? 'rotateY(180deg)' : 'none',
+              position: 'relative',
+              width: '100%',
+              aspectRatio: '3 / 2',
+              cursor: 'grab',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: 'pan-y',
+              willChange: 'transform',
+              perspective: 1200,
             }}
           >
-            <div style={cardFace}>
-              <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800 }}>{w.word}</div>
-              {w.ipa && (
-                <div
-                  style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}
-                >
-                  {w.ipa}
-                </div>
-              )}
-              <FIB
-                label={t('fc_play_audio')}
-                size="md"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  playWord(w.word, w.audioUrl);
+            {renderFaces(w, flipped)}
+            <div
+              ref={knownBadgeRef}
+              style={{
+                ...swipeBadge,
+                right: 14,
+                top: 14,
+                transform: 'rotate(8deg)',
+                color: 'var(--ok, #16a34a)',
+              }}
+            >
+              {t('fc_known')}
+            </div>
+            <div
+              ref={unknownBadgeRef}
+              style={{
+                ...swipeBadge,
+                left: 14,
+                top: 14,
+                transform: 'rotate(-8deg)',
+                color: 'var(--danger, #dc2626)',
+              }}
+            >
+              {t('fc_unknown')}
+            </div>
+          </div>
+        )}
+
+        {/* Cards already swiped away, still flying. Inert, and stacked above the live card. */}
+        {ghosts.map((gh) => (
+          <GhostCard key={gh.key} ghost={gh} onDone={dropGhost}>
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '3 / 2',
+                perspective: 1200,
+              }}
+            >
+              {renderFaces(gh.word, gh.flipped)}
+              <div
+                style={{
+                  ...swipeBadge,
+                  opacity: 1,
+                  ...(gh.known
+                    ? { right: 14, transform: 'rotate(8deg)', color: 'var(--ok, #16a34a)' }
+                    : { left: 14, transform: 'rotate(-8deg)', color: 'var(--danger, #dc2626)' }),
+                  top: 14,
                 }}
               >
-                <MIcon name="volume" size={22} />
-              </FIB>
-            </div>
-            <div style={{ ...cardFace, transform: 'rotateY(180deg)' }}>
-              <div style={{ fontSize: 'var(--text-lg, 24px)', fontWeight: 700 }}>
-                {meaningOf(w)}
+                {gh.known ? t('fc_known') : t('fc_unknown')}
               </div>
-              {w.meaningVi && w.definitionEn && (
-                <div style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: '80%' }}>
-                  {w.definitionEn}
-                </div>
-              )}
             </div>
-          </div>
-          <div
-            ref={knownBadgeRef}
-            style={{
-              ...swipeBadge,
-              right: 14,
-              top: 14,
-              transform: 'rotate(8deg)',
-              color: 'var(--ok, #16a34a)',
-            }}
-          >
-            {t('fc_known')}
-          </div>
-          <div
-            ref={unknownBadgeRef}
-            style={{
-              ...swipeBadge,
-              left: 14,
-              top: 14,
-              transform: 'rotate(-8deg)',
-              color: 'var(--danger, #dc2626)',
-            }}
-          >
-            {t('fc_unknown')}
-          </div>
-        </div>
+          </GhostCard>
+        ))}
       </div>
       <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', textAlign: 'center' }}>
         {t('fc_flip_hint')} · {t('fc_swipe_hint')}
       </div>
       <div className="m-row" style={{ gap: 12 }}>
-        <FBtn variant="danger" iconLeft={<MIcon name="x" size={16} />} onClick={() => mark(false)}>
+        <FBtn
+          variant="danger"
+          iconLeft={<MIcon name="x" size={16} />}
+          onClick={() => flyOut(false, 0)}
+        >
           {t('fc_unknown')}
         </FBtn>
         <FBtn
           variant="primary"
           iconLeft={<MIcon name="check" size={16} />}
-          onClick={() => mark(true)}
+          onClick={() => flyOut(true, 0)}
         >
           {t('fc_known')}
         </FBtn>

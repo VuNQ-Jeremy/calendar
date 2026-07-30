@@ -28,6 +28,7 @@ import { useWordAudio } from '~/lib/use-word-audio';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
 import { Body, Button, IconButton, Mono, Muted } from '~/ui';
+import type { FlashcardWordRow } from '~/lib/types';
 import type { GameProps } from './types';
 import { GameEnd } from './GameEnd';
 
@@ -77,6 +78,16 @@ function shouldCommitWorklet(dx: number, vx: number, cardWidth: number): boolean
   return farEnough || flicked;
 }
 
+/**
+ * The card that has been swiped away but is still flying off screen.
+ *
+ * The game advances to the next word the instant a swipe COMMITS, not when the exit animation
+ * finishes — otherwise the next word cannot appear until the old card has already gone, which is
+ * the gap this type exists to close. `flipped` is captured at commit time so a card swiped while
+ * showing its meaning keeps showing the meaning on the way out.
+ */
+type Ghost = { word: FlashcardWordRow; flipped: boolean };
+
 export function FlipGame({ words, onExit, onFinish }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
@@ -87,11 +98,25 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
   const [idx, setIdx] = React.useState(0);
   const [flipped, setFlipped] = React.useState(false);
   const [marks, setMarks] = React.useState<Map<string, boolean>>(new Map());
+  /** The outgoing card, mid fly-out. Non-null only during the EXIT_MS window after a commit. */
+  const [ghost, setGhost] = React.useState<Ghost | null>(null);
   const finished = React.useRef(false);
 
-  /** Horizontal drag offset, in px. The single input to every animated style below. */
+  /**
+   * Horizontal offset of the card currently in flight, in px. The single input to every animated
+   * style below. It follows the finger while dragging, then keeps animating out past the commit —
+   * the outgoing card is handed to `ghost` mid-flight and the ghost reads this same value, so the
+   * hand-off is pixel-identical and invisible.
+   */
   const dx = useSharedValue(0);
+  /** Fade of the in-flight card. Only the ghost reads this; the live card is faded by FadeInDown. */
   const opacity = useSharedValue(1);
+  /**
+   * UI-thread mirror of `ghost != null`. The live card holds still while a ghost is flying, since
+   * `dx` belongs to the ghost then. Written from the layout effect, never at commit time — see
+   * the note there for why the timing matters.
+   */
+  const ghosting = useSharedValue(false);
   /** Card width, measured on layout. Shared so the commit test can run on the UI thread. */
   const cardW = useSharedValue(Math.min(screenW - 48, FALLBACK_WIDTH));
   /** True while a card is flying out. Blocks input and the buttons, like the web's `exiting` ref. */
@@ -103,7 +128,9 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
    */
   const dragged = useSharedValue(false);
 
-  const done = idx >= order.length;
+  // `idx` runs past the end while the last card is still flying out, so the round is only really
+  // over once its ghost has landed. Everything gated on `done` waits for that.
+  const done = idx >= order.length && !ghost;
 
   React.useEffect(() => {
     if (done && !finished.current) {
@@ -119,44 +146,55 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
   }, [done, order, marks, onFinish]);
 
   /**
-   * Records a mark and advances. Runs on the JS thread — reached from the gesture via
-   * `runOnJS`, and directly from the two buttons.
+   * Records the mark and moves to the next word — at COMMIT time, not when the fly-out ends.
+   *
+   * The card being left behind is handed to `ghost`, which keeps painting it on top while it
+   * finishes flying off. That is the whole trick: the next word can mount and fade in underneath
+   * immediately, instead of the screen sitting empty until the exit animation reports back.
    */
-  const mark = React.useCallback(
+  const beginAdvance = React.useCallback(
     (known: boolean) => {
       const w = order[idx];
       if (!w) return;
+      setGhost({ word: w, flipped });
       setMarks((m) => new Map(m).set(w.id, known));
       setFlipped(false);
       setIdx((i) => i + 1);
-      // NB: the shared values are deliberately NOT reset here — see the layout effect below.
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     },
-    [order, idx],
+    [order, idx, flipped],
   );
 
+  /** The fly-out has landed: drop the ghost, which releases the shared values (effect below). */
+  const finishExit = React.useCallback(() => setGhost(null), []);
+
   /**
-   * Puts the gesture's shared values back at rest for the incoming card.
+   * Keeps the UI thread's view of "is a ghost flying" in step with React, and parks the shared
+   * values once nothing is flying.
    *
-   * This cannot live in `mark()`. There, `setIdx` only QUEUES a re-render, while a shared-value
-   * write reaches the UI thread right away — so the outgoing card, still the mounted one, snapped
-   * back to centre at full opacity and painted its word face for a frame or two before React
-   * swapped in the next word. (That is the same frame that used to show the MEANING face, back
-   * when a swipe could also trigger the tap; fixing the tap race only changed which side of the
-   * stale card you saw.)
+   * The timing here is the whole ball game, so both halves are deliberate:
    *
-   * As a layout effect it runs after the commit that mounts the new card, so the write lands on
-   * the new card instead. Leaving `opacity` at 0 for that gap is the belt-and-braces half: the
-   * outgoing card is transparent the whole time, so it cannot show anything even if that ordering
-   * ever slips. Worst case is one blank frame at the start of the incoming card's FadeInDown —
-   * never stale content.
+   * - `ghosting` is raised HERE and not at commit time. Between a commit and React's re-render the
+   *   outgoing card is still the mounted live card, and it has to keep following `dx` so it flies;
+   *   raising the flag any earlier would freeze it mid-air for a frame. By the time this effect
+   *   runs the ghost has taken over painting it, so freezing the live card is exactly right — the
+   *   live card is now the NEXT word, which must sit still at centre.
+   * - The reset is withheld until the ghost clears, because `dx`/`opacity` belong to whatever is
+   *   in flight. (Keying this on `idx`, as it was before ghosts existed, would now fire at commit
+   *   time and snap the outgoing card back to centre.)
+   *
+   * A layout effect rather than a plain one: a shared-value write reaches the UI thread right away
+   * while a setState only queues a render, so running it inside the commit keeps the write from
+   * landing a frame early, on the wrong card.
    */
   React.useLayoutEffect(() => {
+    ghosting.value = ghost !== null;
+    if (ghost) return;
     dx.value = 0;
     opacity.value = 1;
     exiting.value = false;
     dragged.value = false;
-  }, [idx, dx, opacity, exiting, dragged]);
+  }, [ghost, dx, opacity, exiting, dragged, ghosting]);
 
   const pan = React.useMemo(
     () =>
@@ -197,16 +235,44 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
               { duration: EXIT_MS, easing: Easing.out(Easing.quad) },
               (completed) => {
                 'worklet';
-                if (completed) runOnJS(mark)(known);
+                if (completed) runOnJS(finishExit)();
               },
             );
+            // Advance NOW, while the card above is still travelling — the next word fades in
+            // underneath it and is fully there by the time it clears the screen.
+            runOnJS(beginAdvance)(known);
           } else {
             // Abort: spring home. The web uses a cubic-bezier with overshoot; this is the
             // Reanimated equivalent of that bounce.
             dx.value = withSpring(0, { damping: 15, stiffness: 180 });
           }
         }),
-    [dx, opacity, cardW, exiting, dragged, mark],
+    [dx, opacity, cardW, exiting, dragged, beginAdvance, finishExit],
+  );
+
+  /**
+   * Button-driven advance. Plays the same toss as a swipe, just from a standing start (dx 0), so
+   * pressing "I know it" and flicking the card right look and feel like the same action.
+   */
+  const advance = React.useCallback(
+    (known: boolean) => {
+      // Check there IS a card before starting anything: `exiting` is only lowered when a ghost
+      // clears, so kicking off a fly-out that no ghost follows would wedge input for good.
+      if (exiting.value || !order[idx]) return;
+      exiting.value = true;
+      const exitDx = (known ? 1 : -1) * (cardW.value * 1.4 + 120);
+      opacity.value = withTiming(0, { duration: EXIT_MS });
+      dx.value = withTiming(
+        exitDx,
+        { duration: EXIT_MS, easing: Easing.out(Easing.quad) },
+        (completed) => {
+          'worklet';
+          if (completed) runOnJS(finishExit)();
+        },
+      );
+      beginAdvance(known);
+    },
+    [dx, opacity, cardW, exiting, beginAdvance, finishExit, order, idx],
   );
 
   // Toggles via the updater form, so the gesture below never depends on `flipped` — otherwise
@@ -238,11 +304,31 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
    * tap's `onEnd` and the pan's `onEnd` land in the SAME touch-release dispatch, so guarding on
    * `exiting` (which the pan sets) is a race, and `runOnJS` then delivers the flip a frame or two
    * into the 280ms exit. Layers 2 and 3 both decide on movement instead, which is not ordered
-   * against the release.
+   * against the release. (A stray flip now lands on the INCOMING card, since the swipe has already
+   * advanced — still wrong, still guarded, just a different wrong.)
    */
   const gesture = React.useMemo(() => Gesture.Exclusive(pan, tap), [pan, tap]);
 
+  /**
+   * The live card: follows the finger, then holds still at centre while a ghost is in flight.
+   *
+   * Deliberately carries NO opacity. The live card's only fade is its FadeInDown entrance, and an
+   * animated `opacity` here would fight it — that is what made the incoming word flash solid for a
+   * frame and then start fading from zero.
+   */
   const cardStyle = useAnimatedStyle(() => {
+    if (ghosting.value) {
+      return { transform: [{ translateX: 0 }, { translateY: 0 }, { rotate: '0deg' }] };
+    }
+    const lift = -Math.min(MAX_LIFT_PX, dx.value * dx.value * ARC_K);
+    const rot = Math.max(-MAX_ROT_DEG, Math.min(MAX_ROT_DEG, dx.value * ROT_PER_PX));
+    return {
+      transform: [{ translateX: dx.value }, { translateY: lift }, { rotate: `${rot}deg` }],
+    };
+  });
+
+  /** The ghost: same arc, same `dx`, plus the fade — it picks up exactly where the live card left off. */
+  const ghostStyle = useAnimatedStyle(() => {
     const lift = -Math.min(MAX_LIFT_PX, dx.value * dx.value * ARC_K);
     const rot = Math.max(-MAX_ROT_DEG, Math.min(MAX_ROT_DEG, dx.value * ROT_PER_PX));
     return {
@@ -256,11 +342,23 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
   // workletized. The shared file stays the numeric source of truth (ARC_K, MAX_LIFT_PX, …) and
   // gains no React Native concepts, which is what the plan asked for.
 
+  // Badges come in pairs: the live card's track the drag and blank out once a ghost owns `dx`,
+  // the ghost's keep showing the verdict it was committed with all the way off screen.
   const knownBadgeStyle = useAnimatedStyle(() => {
     const commitPx = Math.max(1, cardW.value * COMMIT_RATIO);
+    if (ghosting.value) return { opacity: 0 };
     return { opacity: dx.value > 0 ? Math.min(1, dx.value / commitPx) : 0 };
   });
   const unknownBadgeStyle = useAnimatedStyle(() => {
+    const commitPx = Math.max(1, cardW.value * COMMIT_RATIO);
+    if (ghosting.value) return { opacity: 0 };
+    return { opacity: dx.value < 0 ? Math.min(1, -dx.value / commitPx) : 0 };
+  });
+  const ghostKnownBadgeStyle = useAnimatedStyle(() => {
+    const commitPx = Math.max(1, cardW.value * COMMIT_RATIO);
+    return { opacity: dx.value > 0 ? Math.min(1, dx.value / commitPx) : 0 };
+  });
+  const ghostUnknownBadgeStyle = useAnimatedStyle(() => {
     const commitPx = Math.max(1, cardW.value * COMMIT_RATIO);
     return { opacity: dx.value < 0 ? Math.min(1, -dx.value / commitPx) : 0 };
   });
@@ -271,10 +369,103 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
     setOrder(shuffle(words));
     setIdx(0);
     setFlipped(false);
+    setGhost(null);
     dx.value = 0;
     opacity.value = 1;
     exiting.value = false;
+    dragged.value = false;
   };
+
+  /**
+   * The card's contents for one word. Shared by the live card and the ghost so the outgoing card
+   * keeps rendering exactly what it did at the moment it was swiped.
+   *
+   * A real 3D flip needs backfaceVisibility on two stacked faces, which is unreliable across
+   * Android versions. Swapping the content on tap gives the same information with no chance of a
+   * blank card — and the swipe, not the flip, is this game's gesture.
+   */
+  const renderFaces = (word: FlashcardWordRow, isFlipped: boolean) =>
+    isFlipped ? (
+      <>
+        <Text
+          style={{
+            fontFamily: th.font.displayBold,
+            fontSize: th.text.xl.fontSize,
+            color: th.color.textStrong,
+            textAlign: 'center',
+          }}
+        >
+          {meaningOf(word)}
+        </Text>
+        {word.meaningVi && word.definitionEn ? (
+          <Muted style={{ textAlign: 'center' }}>{word.definitionEn}</Muted>
+        ) : null}
+      </>
+    ) : (
+      <>
+        <Text
+          style={{
+            fontFamily: th.font.displayBold,
+            fontSize: th.text.xxl.fontSize,
+            color: th.color.textStrong,
+            textAlign: 'center',
+          }}
+        >
+          {word.word}
+        </Text>
+        {word.ipa ? <Mono>{word.ipa}</Mono> : null}
+        <IconButton label={t('fc_play_audio')} onPress={() => play(word.word, word.audioUrl)}>
+          <Volume2 size={22} color={th.color.textBody} />
+        </IconButton>
+      </>
+    );
+
+  /** Geometry + chrome shared by the live card and the ghost, so they are pixel-identical. */
+  const cardBase = {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: th.radius.lg,
+    borderWidth: 1.5,
+    borderColor: th.color.borderSubtle,
+    backgroundColor: th.color.surfaceCard,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: th.spacing[3],
+    padding: th.spacing[6],
+  };
+
+  /** The two Tinder-style badges, driven straight from dx — the web paints these imperatively. */
+  const renderBadges = (knownStyle: typeof knownBadgeStyle, unknownStyle: typeof knownBadgeStyle) => (
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          badgeBase,
+          { right: 14, borderColor: th.status.success, transform: [{ rotate: '8deg' }] },
+          knownStyle,
+        ]}
+      >
+        <Text style={{ color: th.status.success, fontFamily: th.font.bodyBold, letterSpacing: 1 }}>
+          {t('fc_known').toUpperCase()}
+        </Text>
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          badgeBase,
+          { left: 14, borderColor: th.status.danger, transform: [{ rotate: '-8deg' }] },
+          unknownStyle,
+        ]}
+      >
+        <Text style={{ color: th.status.danger, fontFamily: th.font.bodyBold, letterSpacing: 1 }}>
+          {t('fc_unknown').toUpperCase()}
+        </Text>
+      </Animated.View>
+    </>
+  );
 
   if (done) {
     const known = order.filter((w) => marks.get(w.id) === true).length;
@@ -324,102 +515,44 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
       }}
     >
       <Muted style={{ fontFamily: th.font.bodyBold }}>
-        {idx + 1} / {order.length}
+        {Math.min(idx + 1, order.length)} / {order.length}
       </Muted>
 
       <GestureDetector gesture={gesture}>
-        <Animated.View
-          // Keyed on the word id, exactly like the web: the incoming card is a fresh mount, so
-          // its entry animation plays and no stale transform leaks across cards.
-          key={w.id}
-          entering={FadeInDown.duration(220)}
+        {/*
+          Sizing wrapper. The live card and the ghost both fill it absolutely, so the outgoing card
+          keeps its exact geometry while the incoming one takes its place in the same slot.
+        */}
+        <View
           onLayout={(e) => {
             cardW.value = e.nativeEvent.layout.width;
           }}
-          style={[
-            {
-              width: '100%',
-              maxWidth: FALLBACK_WIDTH,
-              aspectRatio: 3 / 2,
-              borderRadius: th.radius.lg,
-              borderWidth: 1.5,
-              borderColor: th.color.borderSubtle,
-              backgroundColor: th.color.surfaceCard,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: th.spacing[3],
-              padding: th.spacing[6],
-            },
-            th.shadow.md,
-            cardStyle,
-          ]}
+          style={{ width: '100%', maxWidth: FALLBACK_WIDTH, aspectRatio: 3 / 2 }}
         >
-          {/*
-            A real 3D flip needs backfaceVisibility on two stacked faces, which is unreliable
-            across Android versions. Swapping the content on tap gives the same information with
-            no chance of a blank card — and the swipe, not the flip, is this game's gesture.
-          */}
-          {flipped ? (
-            <>
-              <Text
-                style={{
-                  fontFamily: th.font.displayBold,
-                  fontSize: th.text.xl.fontSize,
-                  color: th.color.textStrong,
-                  textAlign: 'center',
-                }}
-              >
-                {meaningOf(w)}
-              </Text>
-              {w.meaningVi && w.definitionEn ? (
-                <Muted style={{ textAlign: 'center' }}>{w.definitionEn}</Muted>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <Text
-                style={{
-                  fontFamily: th.font.displayBold,
-                  fontSize: th.text.xxl.fontSize,
-                  color: th.color.textStrong,
-                  textAlign: 'center',
-                }}
-              >
-                {w.word}
-              </Text>
-              {w.ipa ? <Mono>{w.ipa}</Mono> : null}
-              <IconButton label={t('fc_play_audio')} onPress={() => play(w.word, w.audioUrl)}>
-                <Volume2 size={22} color={th.color.textBody} />
-              </IconButton>
-            </>
-          )}
+          {w ? (
+            <Animated.View
+              // Keyed on the word id, exactly like the web: the incoming card is a fresh mount, so
+              // its entry animation plays and no stale transform leaks across cards.
+              key={w.id}
+              entering={FadeInDown.duration(220)}
+              style={[cardBase, th.shadow.md, cardStyle]}
+            >
+              {renderFaces(w, flipped)}
+              {renderBadges(knownBadgeStyle, unknownBadgeStyle)}
+            </Animated.View>
+          ) : null}
 
-          {/* Tinder-style badges, driven straight from dx — the web paints these imperatively. */}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              badgeBase,
-              { right: 14, borderColor: th.status.success, transform: [{ rotate: '8deg' }] },
-              knownBadgeStyle,
-            ]}
-          >
-            <Text style={{ color: th.status.success, fontFamily: th.font.bodyBold, letterSpacing: 1 }}>
-              {t('fc_known').toUpperCase()}
-            </Text>
-          </Animated.View>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              badgeBase,
-              { left: 14, borderColor: th.status.danger, transform: [{ rotate: '-8deg' }] },
-              unknownBadgeStyle,
-            ]}
-          >
-            <Text style={{ color: th.status.danger, fontFamily: th.font.bodyBold, letterSpacing: 1 }}>
-              {t('fc_unknown').toUpperCase()}
-            </Text>
-          </Animated.View>
-        </Animated.View>
+          {/*
+            The card that was just swiped, still on its way out. Rendered after the live card so it
+            stays on top, and inert so the next word underneath is what receives the next gesture.
+          */}
+          {ghost ? (
+            <Animated.View pointerEvents="none" style={[cardBase, th.shadow.md, ghostStyle]}>
+              {renderFaces(ghost.word, ghost.flipped)}
+              {renderBadges(ghostKnownBadgeStyle, ghostUnknownBadgeStyle)}
+            </Animated.View>
+          ) : null}
+        </View>
       </GestureDetector>
 
       <Muted style={{ textAlign: 'center' }}>
@@ -430,13 +563,13 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
         <Button
           variant="danger"
           iconLeft={<X size={16} color="#fff" />}
-          onPress={() => mark(false)}
+          onPress={() => advance(false)}
         >
           {t('fc_unknown')}
         </Button>
         <Button
           iconLeft={<Check size={16} color={th.color.textOnBrand} />}
-          onPress={() => mark(true)}
+          onPress={() => advance(true)}
         >
           {t('fc_known')}
         </Button>
