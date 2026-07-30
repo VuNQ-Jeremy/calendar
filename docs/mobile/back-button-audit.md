@@ -95,9 +95,9 @@ A tab is a root, so every one of these should **leave the app**. Verified with
 `dumpsys activity activities | grep topResumedActivity` rather than by screenshot.
 
 The Post column below was measured *before* the exit confirmation was added, when back on a tab
-exited immediately. The confirmation now sits in front of that step: the same presses should raise
-the dialog, and choosing **Exit** should produce the results shown. Re-walking these rows through the
-dialog is outstanding — see *Exit confirmation*.
+exited immediately. The confirmation now sits in front of that step: these presses raise the dialog,
+and **Exit** then produces the result shown. Re-walked with the dialog in place — see cases 8-10 and
+14 in *Exit confirmation*.
 
 | # | Steps | Back should | Pre-fix actual | Pre | Post |
 |---|-------|-------------|----------------|-----|------|
@@ -212,41 +212,67 @@ the role-dependent list actually works.
 
 ## Exit confirmation
 
-Back on a tab root raises a native `Alert.alert` — title `m_exit_q` ("Exit Mochi?" / "Thoát Mochi?"),
-buttons `cancel` and `m_exit`. Only **Exit** calls `BackHandler.exitApp()`; Cancel, a tap outside, and
-a second back press all dismiss and leave you where you were.
+Back on a tab root raises **`ExitConfirmDialog`** (`mobile/components/ExitConfirmDialog.tsx`) — the
+design system's own dialog, not the platform's. A centered card: fade-in `Modal`, warm scrim
+(`rgba(60,40,25,0.45)`), `surfaceCard` at `radius.xl`, a `Heading` reading `m_exit_q` ("Exit Mochi?" /
+"Thoát Mochi?"), and a two-button row of secondary `cancel` + primary `m_exit`. Only **Exit** calls
+`BackHandler.exitApp()`; Cancel, a scrim tap, and a second back press all dismiss and leave you where
+you were.
 
-`Alert.alert` rather than a themed sheet because that is what every destructive confirm in this app
-already uses (`classes/[id]/index.tsx:80-84`, `event/[id].tsx:133-142`, the three `people` editors),
-so it inherits the platform dialog, its dark mode and its accessibility. Exit is deliberately **not**
-`style: 'destructive'` — leaving loses nothing, and that style is reserved for deletes here. For the
-same reason the wording is "Exit", not "discard": `exitApp()` is `moveTaskToBack`, so the task stays
-warm and everything is where you left it when you come back.
+It shipped first as a native `Alert.alert` and was replaced on request — the OS dialog didn't belong
+in an app this heavily themed. The card borrows its anatomy from the one existing overlay,
+`components/MoveEventSheet.tsx:72-127` (scrim `Pressable`, an inner `Pressable` with no handler to
+swallow taps, the secondary/primary row), but is centered with a fade rather than a bottom sheet with
+a slide: a leave-or-stay question is a dialog, not an editing surface.
 
-An `asking` ref guards against a double press. `Alert.alert` queues rather than de-duplicates, so
-without it two rapid presses stack two identical dialogs. Every exit path from the dialog — both
-buttons *and* `onDismiss` — clears the flag; miss one and back goes dead for the rest of the session,
-which is why `cancelable: true` is paired with an `onDismiss` handler.
+Exit is `primary`, not `danger`, and the word is "Exit" rather than anything about discarding —
+`exitApp()` is `moveTaskToBack`, so the task stays warm and everything is where you left it. `danger`
+is reserved for deletes.
 
-> **Not yet verified on a device.** `npm run typecheck` passes for both the mobile app and the web app
-> (the shared dictionary's `satisfies Record<'en'|'vi', …>` is what proves the Vietnamese mirror
-> exists), and `npm run bundle` builds. But the emulator's ActivityManager wedged during this change —
-> `am force-stop` and `dumpsys` both hung, and a cold restart did not recover it — so the runtime
-> behaviour was never exercised. Outstanding checks:
->
-> 1. Back on Dashboard → dialog appears; Cancel → still on Dashboard.
-> 2. Back on Dashboard → dialog; Exit → app backgrounds (launcher resumes).
-> 3. Back on Calendar / More after tab hops → dialog, not a hop to the previous tab.
-> 4. Two rapid back presses on a tab root → exactly **one** dialog.
-> 5. Back while the dialog is open → it dismisses; press back again → it reappears (proves
->    `onDismiss` re-armed the guard, the one way this can latch).
-> 6. Detail screens unchanged and silent: More → People → back → More with **no** dialog;
->    Calendar → event → back → Calendar.
-> 7. Nested stacks unchanged: Classes → class → back → list with no dialog, then back on the list →
->    dialog.
-> 8. Both languages: `/language` → EN shows "Exit Mochi?", VI shows "Thoát Mochi?".
-> 9. Student (`vunq@mochi.edu`): dialog on Flashcards **and** on Your profile (both are their tabs);
->    topic → back → list stays silent.
+Moving from `Alert.alert` to React state + `Modal` deleted a whole class of bookkeeping the native
+version needed:
+
+- `Alert.alert` **queues** duplicate dialogs, so the old code carried an `asking` ref that every exit
+  path had to clear — and missing one latched it, killing back for the rest of the session.
+  `setAsking(true)` is idempotent, so a double press simply shows the one dialog.
+- While the `Modal` is visible, Android hands the hardware back press to the Modal **natively**; it
+  arrives as `onRequestClose` (→ cancel) and the JS `BackHandler` subscription never fires. There is
+  no re-entry path to guard.
+
+The hook still clears the flag when the focused route leaves the tab-root set, so a tapped push
+notification navigating to `/event/:id` withdraws a dialog it has made irrelevant rather than leaving
+it floating over the new screen.
+
+### Verified on a device
+
+All 14 cases below were walked on the emulator (Android 16, 1080x2400) against a local dev build
+serving this commit, with a screenshot per step and `dumpsys activity activities` for
+foregrounded-vs-exited. Both roles, both languages. `npm run typecheck` (mobile **and** web — the
+shared dictionary feeds both) and `npm run bundle` also pass.
+
+| # | Case | Result |
+|---|------|--------|
+| 1 | Dialog is the themed card, not the OS dialog | rounded `surfaceCard`, brand-orange Exit pill, bordered Cancel, warm scrim; card midpoint 1197 of 2400 → centered |
+| 2 | Cancel button | dismisses, stays on the tab, app foregrounded |
+| 3 | Exit button | app backgrounds (launcher resumed) |
+| 4 | Back while dialog open | dismisses via `onRequestClose`, does **not** exit |
+| 5 | Back again after that | dialog reappears — proves nothing latched |
+| 6 | Scrim tap | dismisses |
+| 7 | Two rapid back presses | exactly **one** dialog |
+| 8 | Staff Dashboard | dialog |
+| 9 | Staff Dashboard → Calendar → Classes | dialog, not a hop back to Calendar |
+| 10 | Staff More | dialog |
+| 11 | More → People → back | **silent**, lands on More |
+| 12 | Calendar → event → back | **silent**, lands on Calendar |
+| 13 | Classes → class → back → list, then back | **silent** to the list, then dialog on the list |
+| 14 | Student: Flashcards and Your profile | dialog on both (both are their tabs); topic → back → list **silent** |
+
+Language: EN renders "Exit Mochi?" / "Cancel" / "Exit"; VI renders "Thoát Mochi?" / "Hủy" / "Thoát".
+
+> **Emulator note.** The AVD's ActivityManager had wedged during the previous change — `am` and
+> `dumpsys` hanging while `adb devices` still answered instantly. Booting with `-no-snapshot-load`
+> fixed it: quickboot had been restoring the wedged snapshot, which is why an ordinary restart didn't
+> help. Probe with `adb shell am force-stop <pkg>` before trusting a session.
 
 ## The fix
 
@@ -263,8 +289,9 @@ This also removes the student leak on its own — `fullHistory` never unshifts `
 (`getRouteHistory`, `:52-55`), so a student's history starts at the screen they landed on and
 `GO_BACK` with a single entry returns `null` and exits the app (`:258-261`).
 
-**`mobile/app/(app)/_layout.tsx`, part 2** — `useTabRootsEndTheBackStack` (and, later, the exit
-confirmation it now shows before handing the press over — see *Exit confirmation* above).
+**`mobile/app/(app)/_layout.tsx`, part 2** — `useTabRootsEndTheBackStack`. It now holds the
+`asking` state and returns `{ askingExit, cancelExit, confirmExit }`, which `AppLayout` feeds to
+`ExitConfirmDialog` rendered as a sibling of the navigator — see *Exit confirmation* above.
 
 `fullHistory` also records plain tab switches, which would make Dashboard → Calendar → back return to
 Dashboard. A tab is a root, so that is wrong. The hook subscribes to `hardwareBackPress` only while a
