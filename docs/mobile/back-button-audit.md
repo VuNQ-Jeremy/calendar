@@ -8,10 +8,11 @@ recording where it actually went. Pre-fix results are from the **preview APK** (
 
 **The rule being tested** (the product decision), in two halves:
 
-1. **A tab is a root.** Back on one of the tab bar's own screens leaves the app. It does **not** hop
-   to whichever tab you were on before — Dashboard → Calendar → back exits, it does not return to
-   Dashboard. Five such screens for staff (Dashboard, Calendar, Classes, Flashcards, More), two for a
-   student (Flashcards, Your profile).
+1. **A tab is a root.** Back on one of the tab bar's own screens leaves the app — it does **not** hop
+   to whichever tab you were on before. Five such screens for staff (Dashboard, Calendar, Classes,
+   Flashcards, More), two for a student (Flashcards, Your profile). Since a stray press would
+   otherwise drop you out of the app with no warning, it now **asks first**: an "Exit Mochi?" dialog
+   with Cancel / Exit. See *Exit confirmation* below.
 2. **Everything else retraces.** `A → B → C`, back in `C` goes to `B`. More → People → back → More;
    Calendar → event → back → Calendar; and inside a nested stack, one step per press.
 
@@ -90,12 +91,17 @@ but it is a broken screen a student should never reach.
 
 ### Tab switching
 
-A tab is a root, so every one of these should **exit the app**. Verified with
+A tab is a root, so every one of these should **leave the app**. Verified with
 `dumpsys activity activities | grep topResumedActivity` rather than by screenshot.
+
+The Post column below was measured *before* the exit confirmation was added, when back on a tab
+exited immediately. The confirmation now sits in front of that step: the same presses should raise
+the dialog, and choosing **Exit** should produce the results shown. Re-walking these rows through the
+dialog is outstanding — see *Exit confirmation*.
 
 | # | Steps | Back should | Pre-fix actual | Pre | Post |
 |---|-------|-------------|----------------|-----|------|
-| T1 | launch → Dashboard | exit | exit (launcher resumed) | PASS | PASS |
+| T1 | launch → Dashboard | exit | exit (launcher resumed) | PASS | PASS (exits) |
 | T2 | Dashboard → Calendar | exit | **Dashboard** | FAIL | PASS (exits) |
 | T3 | Dashboard → Calendar → Classes | exit | **Dashboard** | FAIL | PASS (exits) |
 | T4 | Dashboard → Classes → Flashcards → More | exit | **Dashboard** | FAIL | PASS (exits) |
@@ -204,6 +210,44 @@ the role-dependent list actually works.
 
 ---
 
+## Exit confirmation
+
+Back on a tab root raises a native `Alert.alert` — title `m_exit_q` ("Exit Mochi?" / "Thoát Mochi?"),
+buttons `cancel` and `m_exit`. Only **Exit** calls `BackHandler.exitApp()`; Cancel, a tap outside, and
+a second back press all dismiss and leave you where you were.
+
+`Alert.alert` rather than a themed sheet because that is what every destructive confirm in this app
+already uses (`classes/[id]/index.tsx:80-84`, `event/[id].tsx:133-142`, the three `people` editors),
+so it inherits the platform dialog, its dark mode and its accessibility. Exit is deliberately **not**
+`style: 'destructive'` — leaving loses nothing, and that style is reserved for deletes here. For the
+same reason the wording is "Exit", not "discard": `exitApp()` is `moveTaskToBack`, so the task stays
+warm and everything is where you left it when you come back.
+
+An `asking` ref guards against a double press. `Alert.alert` queues rather than de-duplicates, so
+without it two rapid presses stack two identical dialogs. Every exit path from the dialog — both
+buttons *and* `onDismiss` — clears the flag; miss one and back goes dead for the rest of the session,
+which is why `cancelable: true` is paired with an `onDismiss` handler.
+
+> **Not yet verified on a device.** `npm run typecheck` passes for both the mobile app and the web app
+> (the shared dictionary's `satisfies Record<'en'|'vi', …>` is what proves the Vietnamese mirror
+> exists), and `npm run bundle` builds. But the emulator's ActivityManager wedged during this change —
+> `am force-stop` and `dumpsys` both hung, and a cold restart did not recover it — so the runtime
+> behaviour was never exercised. Outstanding checks:
+>
+> 1. Back on Dashboard → dialog appears; Cancel → still on Dashboard.
+> 2. Back on Dashboard → dialog; Exit → app backgrounds (launcher resumes).
+> 3. Back on Calendar / More after tab hops → dialog, not a hop to the previous tab.
+> 4. Two rapid back presses on a tab root → exactly **one** dialog.
+> 5. Back while the dialog is open → it dismisses; press back again → it reappears (proves
+>    `onDismiss` re-armed the guard, the one way this can latch).
+> 6. Detail screens unchanged and silent: More → People → back → More with **no** dialog;
+>    Calendar → event → back → Calendar.
+> 7. Nested stacks unchanged: Classes → class → back → list with no dialog, then back on the list →
+>    dialog.
+> 8. Both languages: `/language` → EN shows "Exit Mochi?", VI shows "Thoát Mochi?".
+> 9. Student (`vunq@mochi.edu`): dialog on Flashcards **and** on Your profile (both are their tabs);
+>    topic → back → list stays silent.
+
 ## The fix
 
 **`mobile/app/(app)/_layout.tsx`, part 1** — `backBehavior="fullHistory"` on the `<Tabs>`.
@@ -219,7 +263,8 @@ This also removes the student leak on its own — `fullHistory` never unshifts `
 (`getRouteHistory`, `:52-55`), so a student's history starts at the screen they landed on and
 `GO_BACK` with a single entry returns `null` and exits the app (`:258-261`).
 
-**`mobile/app/(app)/_layout.tsx`, part 2** — `useTabRootsEndTheBackStack`.
+**`mobile/app/(app)/_layout.tsx`, part 2** — `useTabRootsEndTheBackStack` (and, later, the exit
+confirmation it now shows before handing the press over — see *Exit confirmation* above).
 
 `fullHistory` also records plain tab switches, which would make Dashboard → Calendar → back return to
 Dashboard. A tab is a root, so that is wrong. The hook subscribes to `hardwareBackPress` only while a
@@ -248,9 +293,10 @@ all. Same role split as `app/index.tsx`.
 
 ### Consequences worth knowing
 
-- **Exiting is always one press from a tab, however you got there.** No matter how many tab switches
-  or how deep a detail screen you came back through, once a tab's own screen is showing, back leaves.
-  That is the point of the second half of the rule.
+- **Leaving is always one press from a tab, however you got there.** No matter how many tab switches
+  or how deep a detail screen you came back through, once a tab's own screen is showing, back offers
+  to leave. That is the point of the first half of the rule — and the confirmation is what stops that
+  reachability from becoming an accidental exit.
 - **The two lists in `_layout.tsx` must track the `href` values, not the file tree.** They name the
   screens that *appear in the tab bar* for each role. If a screen is added to or removed from the bar
   — or its `href: staff ? … : null` flips, as `profile` does — the corresponding list has to change

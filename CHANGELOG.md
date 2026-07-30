@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0055 — 2026-07-30
+Pressing back on one of the main tabs now asks 'Exit Mochi?' before leaving the app, instead of closing immediately.
+
 ## v0.0054 — 2026-07-30
 Back on one of the main tabs now leaves the app instead of returning to the previously visited tab. Detail screens still go back to the screen that opened them.
 

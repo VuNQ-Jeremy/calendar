@@ -1,6 +1,6 @@
 import React from 'react';
 import { Redirect, Tabs, usePathname } from 'expo-router';
-import { BackHandler, type ColorValue } from 'react-native';
+import { Alert, BackHandler, type ColorValue } from 'react-native';
 import {
   BookOpen,
   CalendarDays,
@@ -29,7 +29,7 @@ const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/flashcards', '
 const STUDENT_TAB_ROOTS = ['/flashcards', '/profile'];
 
 /**
- * Back on a tab is a dead end, not a hop to the tab you were on before.
+ * Back on a tab is a dead end, not a hop to the tab you were on before — so it asks first.
  *
  * The tab router below runs `backBehavior="fullHistory"` so that the eleven detail screens — which
  * are hidden TABS rather than stack screens, see the note on the navigator — can find the screen
@@ -37,31 +37,70 @@ const STUDENT_TAB_ROOTS = ['/flashcards', '/profile'];
  * plain tab switches, so Dashboard → Calendar → back would return to Dashboard. Tabs are roots;
  * that is wrong.
  *
- * So we intercept the press only while a tab's own URL is focused and hand it to Android. Every
- * other screen falls through to react-navigation untouched, which is what keeps the nested stacks
- * (`/classes/:id`, `/flashcards/:slug/...`) popping normally — their URLs are not in the lists
- * above, so this hook is inert there.
+ * So we intercept the press only while a tab's own URL is focused, confirm, and then hand it to
+ * Android. Every other screen falls through to react-navigation untouched, which is what keeps the
+ * nested stacks (`/classes/:id`, `/flashcards/:slug/...`) popping normally — their URLs are not in
+ * the lists above, so this hook is inert there and back never asks anything.
+ *
+ * `Alert.alert` rather than a themed sheet: it is what every destructive confirm in this app already
+ * uses (`classes/[id]/index.tsx`, `event/[id].tsx`, the three `people` editors), so it inherits the
+ * platform's dialog, its dark mode and its accessibility for free. Exit is NOT marked `destructive`
+ * — leaving loses no data, and that style is reserved for deletes here.
  *
  * `exitApp()` is a misleading name: it calls `invokeDefaultBackPressHandler`, i.e. MainActivity's
  * `invokeDefaultOnBackPressed` → `moveTaskToBack`. It backgrounds the task exactly as back on
- * Dashboard already did; it is NOT `finish()`, so the app stays warm in recents.
+ * Dashboard already did; it is NOT `finish()`, so the app stays warm in recents. That is also why
+ * the dialog says "Exit" and not "Close without saving" — nothing is being thrown away.
  *
  * Registering later than the NavigationContainer is what gives this priority — RN calls
  * hardwareBackPress subscribers in reverse order of registration.
  */
 function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | undefined) {
   const pathname = usePathname();
+  const { t } = useLang();
   const roots = kind === 'staff' ? STAFF_TAB_ROOTS : kind === 'student' ? STUDENT_TAB_ROOTS : [];
   const onTabRoot = roots.includes(pathname);
+  /*
+    One dialog at a time. A hardware button is easy to press twice, and Alert.alert queues rather
+    than de-duplicates, so without this a double press stacks two identical dialogs and the user
+    has to dismiss both. Every path out of the dialog — both buttons AND onDismiss — has to clear
+    it, or the flag latches and back goes dead for the rest of the session.
+  */
+  const asking = React.useRef(false);
 
   React.useEffect(() => {
     if (!onTabRoot) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      BackHandler.exitApp();
+      if (!asking.current) {
+        asking.current = true;
+        Alert.alert(
+          t('m_exit_q'),
+          undefined,
+          [
+            { text: t('cancel'), style: 'cancel', onPress: () => void (asking.current = false) },
+            {
+              text: t('m_exit'),
+              onPress: () => {
+                asking.current = false;
+                BackHandler.exitApp();
+              },
+            },
+          ],
+          // cancelable so a tap outside or a second back press dismisses it, which is what the
+          // rest of Android does. onDismiss covers exactly those two, which fire no button.
+          { cancelable: true, onDismiss: () => void (asking.current = false) },
+        );
+      }
       return true;
     });
-    return () => sub.remove();
-  }, [onTabRoot]);
+    return () => {
+      sub.remove();
+      // Belt and braces on the latch. If this effect is torn down while the dialog is still up —
+      // a push-notification route change is the realistic way — nothing would ever fire its
+      // handlers, so the flag would stay set and swallow every later press on a tab root.
+      asking.current = false;
+    };
+  }, [onTabRoot, t]);
 }
 
 /**

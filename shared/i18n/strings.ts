@@ -611,6 +611,11 @@ const en_strings = {
   m_version: 'Version',
   m_signed_in_as: 'Signed in as',
   m_admin_only: 'Admins only',
+  // Android back on one of the tab bar's own screens. There is nothing behind a tab, so the
+  // press would otherwise background the app with no warning — see the hook in
+  // mobile/app/(app)/_layout.tsx. Reuses the shared `cancel` for the dismiss button.
+  m_exit_q: 'Exit Mochi?',
+  m_exit: 'Exit',
 
   // Offline study (mobile only — the web app is always online by definition).
   m_download: 'Download',
@@ -1252,6 +1257,8 @@ export const STRINGS = {
     m_version: 'Phiên bản',
     m_signed_in_as: 'Đang đăng nhập bằng',
     m_admin_only: 'Chỉ dành cho quản trị viên',
+    m_exit_q: 'Thoát Mochi?',
+    m_exit: 'Thoát',
 
     m_download: 'Tải về',
     m_downloading: 'Đang tải…',
