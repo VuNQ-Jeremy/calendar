@@ -96,6 +96,12 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
   const cardW = useSharedValue(Math.min(screenW - 48, FALLBACK_WIDTH));
   /** True while a card is flying out. Blocks input and the buttons, like the web's `exiting` ref. */
   const exiting = useSharedValue(false);
+  /**
+   * True once the finger has moved the card at all. The RN analogue of the web's `suppressClick`
+   * ref — checked by the tap so a release that ended a drag cannot also flip. Cleared on the NEXT
+   * touch-down (pan's `onBegin`), never in the same release dispatch that the tap is guarding.
+   */
+  const dragged = useSharedValue(false);
 
   const done = idx >= order.length;
 
@@ -128,9 +134,10 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
       dx.value = 0;
       opacity.value = 1;
       exiting.value = false;
+      dragged.value = false;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     },
-    [order, idx, dx, opacity, exiting],
+    [order, idx, dx, opacity, exiting, dragged],
   );
 
   const pan = React.useMemo(
@@ -141,18 +148,27 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
         // the finger goes vertical first — so a vertical drag scrolls the screen instead.
         .activeOffsetX([-DRAG_SLOP_PX, DRAG_SLOP_PX])
         .failOffsetY([-DRAG_SLOP_PX, DRAG_SLOP_PX])
+        // Fires on every touch-down, before activation — so this is the one place `dragged` can be
+        // cleared without racing the tap it exists to guard.
+        .onBegin(() => {
+          'worklet';
+          dragged.value = false;
+        })
         .onUpdate((e) => {
           'worklet';
+          dragged.value = true;
           if (exiting.value) return;
           dx.value = e.translationX;
         })
-        .onEnd((e) => {
+        .onEnd((e, success) => {
           'worklet';
           if (exiting.value) return;
           // Reanimated reports velocity in px/SECOND; shouldCommit expects px/MILLISECOND.
           // Forget this /1000 and every flick commits — the most likely bug in this file.
           const vx = e.velocityX / 1000;
-          if (shouldCommitWorklet(dx.value, vx, cardW.value)) {
+          // `success` is false when the system cancels the pan (back-swipe, notification shade).
+          // Without it a cancelled drag could still pass the commit test and throw the card away.
+          if (success && shouldCommitWorklet(dx.value, vx, cardW.value)) {
             const known = dx.value > 0;
             exiting.value = true;
             // Same toss distance as the web: 1.4 card widths plus a margin, so it is fully gone.
@@ -172,7 +188,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
             dx.value = withSpring(0, { damping: 15, stiffness: 180 });
           }
         }),
-    [dx, opacity, cardW, exiting, mark],
+    [dx, opacity, cardW, exiting, dragged, mark],
   );
 
   // Toggles via the updater form, so the gesture below never depends on `flipped` — otherwise
@@ -181,17 +197,30 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
 
   const tap = React.useMemo(
     () =>
-      Gesture.Tap().onEnd((_e, success) => {
-        'worklet';
-        if (!success || exiting.value) return;
-        runOnJS(toggleFlip)();
-      }),
-    [exiting, toggleFlip],
+      Gesture.Tap()
+        // Without this the tap has NO distance limit, and since the card translates under the
+        // finger the pointer never leaves the view either — so a swipe under the 500ms default
+        // duration satisfies the tap recogniser too. Same slop the pan activates on.
+        .maxDistance(DRAG_SLOP_PX)
+        .onEnd((_e, success) => {
+          'worklet';
+          if (!success || exiting.value || dragged.value) return;
+          runOnJS(toggleFlip)();
+        }),
+    [exiting, dragged, toggleFlip],
   );
 
   /**
-   * `Exclusive` is the replacement for the web's `suppressClick` ref: if the pan recognises the
-   * gesture, the tap never fires, so a drag can never also flip the card on release.
+   * Three layers keep a drag from also flipping the card on release, because the obvious one is
+   * not enough on its own:
+   *   1. `Exclusive` — the tap loses if the pan recognises the gesture.
+   *   2. `maxDistance` on the tap — it fails outright past the drag slop.
+   *   3. the `dragged` flag — checked in `tap.onEnd`.
+   * Layer 1 alone was the original implementation and it flashed the back face mid fly-out: the
+   * tap's `onEnd` and the pan's `onEnd` land in the SAME touch-release dispatch, so guarding on
+   * `exiting` (which the pan sets) is a race, and `runOnJS` then delivers the flip a frame or two
+   * into the 280ms exit. Layers 2 and 3 both decide on movement instead, which is not ordered
+   * against the release.
    */
   const gesture = React.useMemo(() => Gesture.Exclusive(pan, tap), [pan, tap]);
 
