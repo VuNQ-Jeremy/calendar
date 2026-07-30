@@ -129,16 +129,34 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
       setMarks((m) => new Map(m).set(w.id, known));
       setFlipped(false);
       setIdx((i) => i + 1);
-      // Reset for the incoming card. The keyed <Animated.View> remounts with FadeInDown, so
-      // these must be back at rest before it appears.
-      dx.value = 0;
-      opacity.value = 1;
-      exiting.value = false;
-      dragged.value = false;
+      // NB: the shared values are deliberately NOT reset here — see the layout effect below.
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     },
-    [order, idx, dx, opacity, exiting, dragged],
+    [order, idx],
   );
+
+  /**
+   * Puts the gesture's shared values back at rest for the incoming card.
+   *
+   * This cannot live in `mark()`. There, `setIdx` only QUEUES a re-render, while a shared-value
+   * write reaches the UI thread right away — so the outgoing card, still the mounted one, snapped
+   * back to centre at full opacity and painted its word face for a frame or two before React
+   * swapped in the next word. (That is the same frame that used to show the MEANING face, back
+   * when a swipe could also trigger the tap; fixing the tap race only changed which side of the
+   * stale card you saw.)
+   *
+   * As a layout effect it runs after the commit that mounts the new card, so the write lands on
+   * the new card instead. Leaving `opacity` at 0 for that gap is the belt-and-braces half: the
+   * outgoing card is transparent the whole time, so it cannot show anything even if that ordering
+   * ever slips. Worst case is one blank frame at the start of the incoming card's FadeInDown —
+   * never stale content.
+   */
+  React.useLayoutEffect(() => {
+    dx.value = 0;
+    opacity.value = 1;
+    exiting.value = false;
+    dragged.value = false;
+  }, [idx, dx, opacity, exiting, dragged]);
 
   const pan = React.useMemo(
     () =>
