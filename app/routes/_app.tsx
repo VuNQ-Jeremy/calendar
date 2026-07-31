@@ -26,6 +26,7 @@ import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as invitesSvc from '../../server/services/invites';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
+import * as testsSvc from '../../server/services/tests';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 
@@ -64,6 +65,14 @@ const NAV = [
         staffOnly: true,
       },
       { id: 'vocabulary', path: '/vocabulary', tk: 'nav_flashcards', icon: 'cards' },
+      // Students only — staff manage tests from /tests instead.
+      {
+        id: 'my-tests',
+        path: '/my-tests',
+        tk: 'nav_my_tests',
+        icon: 'clipboard',
+        studentOnly: true,
+      },
       {
         id: 'config',
         path: '/config',
@@ -86,36 +95,49 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     return {
       unusedInviteCount: 0,
       unresolvedFeedbackCount: 0,
+      needsGradingCount: 0,
       uiPrefs,
       user: { ...user, kind },
     };
   }
-  const [unusedInviteCount, unresolvedFeedbackCount, uiPrefs] = await Promise.all([
+  const [unusedInviteCount, unresolvedFeedbackCount, uiPrefs, summary] = await Promise.all([
     invitesSvc.countUnused(db),
     feedbackSvc.countUnresolved(db),
     uiPrefsSvc.getUiPrefs(db),
+    testsSvc.attemptsSummary(db),
   ]);
+  const needsGradingCount = Object.values(summary).reduce((n, s) => n + s.needsGrading, 0);
   return {
     unusedInviteCount,
     unresolvedFeedbackCount,
+    needsGradingCount,
     uiPrefs,
     user: { ...user, kind },
   };
 }
 
 // The layout loader feeds the sidebar badge counts (unused invites, unresolved
-// feedback), uiPrefs, and the session user. Only mutations under these paths can
-// change that data — skip the layout .data round-trip for everything else: plain
-// GET navigations (incl. clicking the current page's nav link),
-// revalidator.revalidate() calls from useStaleRouteRefresh, and unrelated
-// mutations (calendar/classes/materials/tests/assessments/flashcards — and
-// /calendar's theme write targets a different settings row key than uiPrefs).
-const APP_DATA_MUTATION_PATHS = ['/people', '/feedback', '/config', '/profile'];
+// feedback, attempts needing grading), uiPrefs, and the session user. Only
+// mutations under these paths can change that data — skip the layout .data
+// round-trip for everything else: plain GET navigations (incl. clicking the
+// current page's nav link), revalidator.revalidate() calls from
+// useStaleRouteRefresh, and unrelated mutations (calendar/classes/materials/
+// assessments/flashcards — and /calendar's theme write targets a different
+// settings row key than uiPrefs).
+const APP_DATA_MUTATION_PATHS = ['/people', '/feedback', '/config', '/profile', '/tests'];
 
-export function shouldRevalidate({ formAction, formMethod }: ShouldRevalidateFunctionArgs) {
+export function shouldRevalidate({
+  formAction,
+  formMethod,
+  formData,
+}: ShouldRevalidateFunctionArgs) {
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
   const path = formAction.split('?')[0];
-  return APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'));
+  if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
+  // Paper score entry autosaves to /tests/:id on every keystroke, but a paper
+  // attempt is stored already graded, so it can never move needsGradingCount.
+  if (formData?.get('intent') === 'save-paper-scores') return false;
+  return true;
 }
 
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
@@ -131,11 +153,13 @@ function Sidebar({
   onFeedback: () => void;
   onHelp: () => void;
 }) {
-  const { unusedInviteCount, unresolvedFeedbackCount } = useLoaderData<typeof loader>();
+  const { unusedInviteCount, unresolvedFeedbackCount, needsGradingCount } =
+    useLoaderData<typeof loader>();
   const { t } = useLang();
   const counts: Record<string, number> = {
     people: unusedInviteCount,
     feedback: unresolvedFeedbackCount,
+    tests: needsGradingCount,
   };
 
   return (
@@ -155,6 +179,7 @@ function Sidebar({
         const items = sec.items.filter(
           (n) =>
             (!('staffOnly' in n) || !n.staffOnly || user.kind === 'staff') &&
+            (!('studentOnly' in n) || !n.studentOnly || user.kind === 'student') &&
             (!('adminOnly' in n) || !n.adminOnly || user.role === 'Admin'),
         );
         if (items.length === 0) return null;

@@ -10,6 +10,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as testsSvc from '../../server/services/tests';
+import * as attemptsSvc from '../../server/services/attempts';
 import * as questionsSvc from '../../server/services/questions';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
@@ -19,6 +20,7 @@ import {
   TestInput,
   TestQuestionsSaveInput,
   PaperScoresSaveInput,
+  AttemptGradeInput,
   parsePatch,
 } from '../../shared/schemas';
 import { testDetailKey, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -48,7 +50,24 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     .map((sid) => allStudents.find((s) => s.id === sid))
     .filter((s): s is (typeof allStudents)[number] => !!s);
 
-  return { test, links, questions, students, attempts, classes, gradeLevels, types, totalPoints };
+  // Every attempt's answers up front: the grading modal opens on a row that is already loaded, so
+  // fetching per attempt would cost a round-trip per click for data we can bring along here.
+  const answers = (
+    await Promise.all(attempts.map((a) => attemptsSvc.listAnswers(db, a.id)))
+  ).flat();
+
+  return {
+    test,
+    links,
+    questions,
+    students,
+    attempts,
+    answers,
+    classes,
+    gradeLevels,
+    types,
+    totalPoints,
+  };
 }
 
 export async function clientLoader({ serverLoader, params }: ClientLoaderFunctionArgs) {
@@ -130,9 +149,37 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       return { ok: true, attempts };
     }
 
-    // Phase 3 — online attempt grading lands with the student-facing test runner.
-    if (intent === 'grade-attempt' || intent === 'reset-attempt') {
-      return Response.json({ error: 'not_implemented' }, { status: 501 });
+    // Teacher grading of an online attempt. The grades array travels as JSON in `payload`
+    // because a FormData field cannot carry a nested list.
+    if (intent === 'grade-attempt') {
+      let payload: Record<string, unknown>;
+      try {
+        payload = JSON.parse((formData.get('payload') as string) ?? '{}') as Record<
+          string,
+          unknown
+        >;
+      } catch {
+        return Response.json({ error: 'bad payload json' }, { status: 400 });
+      }
+      const parsed = AttemptGradeInput.safeParse({
+        attemptId: formData.get('attemptId'),
+        grades: payload.grades,
+        normalizedOverride: payload.normalizedOverride,
+        comment: payload.comment,
+      });
+      if (!parsed.success) {
+        return Response.json({ error: 'invalid', errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const attempt = await attemptsSvc.grade(db, parsed.data.attemptId, parsed.data);
+      return { ok: true, attempt };
+    }
+
+    // "Allow retake": drops the attempt, its answers and its gradebook row.
+    if (intent === 'reset-attempt') {
+      const attemptId = (formData.get('attemptId') as string) ?? '';
+      if (!attemptId) return Response.json({ error: 'invalid' }, { status: 400 });
+      await attemptsSvc.reset(db, attemptId);
+      return { ok: true };
     }
 
     if (intent === 'update') {

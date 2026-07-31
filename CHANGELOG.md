@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0066 — 2026-07-31
+Online tests: students take them in-app with a timer; teachers grade essays and reset attempts
+
 ## v0.0065 — 2026-07-31
 Remove homework; the Tests module replaces it
 

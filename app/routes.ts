@@ -70,6 +70,8 @@ export default [
     route('materials', 'routes/materials.tsx'),
     route('tests', 'routes/tests.tsx'),
     route('tests/:id', 'routes/tests.$id.tsx'),
+    route('my-tests', 'routes/my-tests.tsx'),
+    route('my-tests/:id', 'routes/my-tests.$id.tsx'),
     route('questions', 'routes/questions.tsx'),
     route('assessments', 'routes/assessments.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),

@@ -57,6 +57,21 @@ export type StudentQuestion = {
   sortOrder: number;
 };
 
+/**
+ * A question plus its answer key — the post-grading shape. Only ever produced by
+ * `reviewForStudent`, which refuses to build it unless the attempt is graded.
+ */
+export type ReviewQuestion = StudentQuestion & {
+  answerKey: string | string[] | null;
+  explanation: string | null;
+};
+
+export type AttemptReview = {
+  attempt: AttemptRow;
+  questions: ReviewQuestion[];
+  answers: AnswerRow[];
+};
+
 export type StudentTestListItem = {
   test: {
     id: string;
@@ -250,8 +265,14 @@ export async function listOpenForStudent(
   return out;
 }
 
-/** The test's questions in sit order, stripped of everything that would give the answer away. */
-async function studentQuestions(db: Db, testId: string): Promise<StudentQuestion[]> {
+/**
+ * The test's questions in sit order, with the answer key and explanation attached.
+ *
+ * PRIVATE on purpose. The two public projections below narrow it: `studentQuestions` drops the key
+ * fields entirely (the shape a student sitting the test gets) and `reviewQuestions` keeps them (only
+ * ever reached through `reviewForStudent`, which gates on `status === 'graded'`).
+ */
+async function questionsWithKeys(db: Db, testId: string): Promise<ReviewQuestion[]> {
   const rows = await db
     .select({ link: testQuestions, q: questions })
     .from(testQuestions)
@@ -266,7 +287,18 @@ async function studentQuestions(db: Db, testId: string): Promise<StudentQuestion
     options: parseJson<StudentQuestion['options']>(q.options, []),
     points: link.points,
     sortOrder: link.sortOrder,
+    answerKey: parseJson<ReviewQuestion['answerKey']>(q.answerKey, null),
+    explanation: q.explanation ?? null,
   }));
+}
+
+/** The test's questions in sit order, stripped of everything that would give the answer away. */
+async function studentQuestions(db: Db, testId: string): Promise<StudentQuestion[]> {
+  // Destructured rather than deleted so the returned objects genuinely lack the keys — a test
+  // asserts `'answerKey' in q === false`, not merely that it is null.
+  return (await questionsWithKeys(db, testId)).map(
+    ({ answerKey: _answerKey, explanation: _explanation, ...q }) => q,
+  );
 }
 
 /**
@@ -338,6 +370,35 @@ export async function start(
     attempt: await getOwn(db, id, studentId),
     questions: await studentQuestions(db, testId),
     serverNow,
+  };
+}
+
+/**
+ * Post-grading review for the student who sat the attempt. Answer keys and explanations
+ * are included ONLY once the attempt is graded — before that a student could read the
+ * correct answers straight out of the loader payload while classmates are still working.
+ *
+ * Two gates, both here rather than at the route so no caller can skip them:
+ *  1. `getOwn` — a foreign or missing attempt id is an indistinguishable 404.
+ *  2. `status === 'graded'` — `submitted` and `needs_grading` get 409 `not_graded`, and the thrown
+ *     Response carries no question data at all.
+ *
+ * `start()` cannot serve this: it refuses a closed window, and a graded attempt is very often
+ * reviewed after the test has closed.
+ */
+export async function reviewForStudent(
+  db: Db,
+  attemptId: string,
+  studentId: string,
+): Promise<AttemptReview> {
+  const attempt = await getOwn(db, attemptId, studentId);
+  if (attempt.status !== 'graded') {
+    throw Response.json({ error: 'not_graded' }, { status: 409 });
+  }
+  return {
+    attempt,
+    questions: await questionsWithKeys(db, attempt.testId),
+    answers: await listAnswers(db, attemptId),
   };
 }
 

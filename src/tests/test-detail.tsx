@@ -15,6 +15,8 @@ import { useLang } from '../lib/i18n.jsx';
 import { composeUtcFromIct, splitIctFromUtc, isWindowOpen } from '../../shared/logic/tests.js';
 import { QuestionPicker } from './question-picker.jsx';
 import { PaperScoreGrid } from './paper-entry.jsx';
+import { ResultsTable, AttemptGradeModal } from './grading.jsx';
+import type { AnswerRow } from '../../server/services/attempts.js';
 import type { TestRow, TestQuestionRow, TestAttemptRow } from '../../server/services/tests.js';
 import type { QuestionRow } from '../../server/services/questions.js';
 import type { ClassRow } from '../../server/services/classes.js';
@@ -30,6 +32,7 @@ export interface TestDetailLoaderData {
   questions: QuestionRow[];
   students: StudentRow[];
   attempts: TestAttemptRow[];
+  answers: AnswerRow[];
   classes: ClassRow[];
   gradeLevels: GradeLevelRow[];
   types: AssessmentTypeRow[];
@@ -46,12 +49,27 @@ const WIN_TK = {
 
 export function TestDetailScreen() {
   const data = useLoaderData() as TestDetailLoaderData;
-  const { test, links, questions, students, attempts, classes, gradeLevels, types, totalPoints } =
-    data;
+  const {
+    test,
+    links,
+    questions,
+    students,
+    attempts,
+    answers,
+    classes,
+    gradeLevels,
+    types,
+    totalPoints,
+  } = data;
   const params = useParams();
   const { t } = useLang();
   const [tab, setTab] = React.useState<Tab>('setup');
   const action = `/tests/${params.id}`;
+
+  // Which attempt the grading modal is showing. Held as an id so a refetch swaps in fresh data
+  // rather than pinning a stale row.
+  const [gradingId, setGradingId] = React.useState<string | null>(null);
+  const grading = gradingId ? (attempts.find((a) => a.id === gradingId) ?? null) : null;
 
   const cls = classes.find((c) => c.id === test.classId);
   const win =
@@ -114,14 +132,33 @@ export function TestDetailScreen() {
           <Empty icon="users" title={t('att_empty_roster')} />
         ) : test.mode === 'paper' ? (
           <PaperScoreGrid testId={test.id} roster={students} attempts={attempts} action={action} />
-        ) : (
+        ) : test.status !== 'published' && !attempts.length ? (
           <MC style={{ padding: 18 }}>
             <Empty
               icon="clock"
-              title={t('tests_results_online_soon')}
+              title={t('grading_no_attempts_yet')}
               sub={t('tests_total_points', { n: totalPoints })}
             />
           </MC>
+        ) : (
+          <>
+            <ResultsTable
+              roster={students}
+              attempts={attempts}
+              action={action}
+              onReview={(a) => setGradingId(a.id)}
+            />
+            <AttemptGradeModal
+              open={!!grading}
+              onClose={() => setGradingId(null)}
+              attempt={grading}
+              student={students.find((s) => s.id === grading?.studentId)}
+              links={links}
+              questions={questions}
+              answers={answers.filter((a) => a.attemptId === gradingId)}
+              action={action}
+            />
+          </>
         ))}
     </div>
   );

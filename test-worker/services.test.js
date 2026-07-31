@@ -2218,6 +2218,128 @@ describe('attempts service', () => {
     expect(again.attempt.normalizedScore).toBeNull();
   });
 
+  it('reviewForStudent returns answer keys, explanations and marks once the attempt is graded', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, {
+      questions: [
+        { type: 'mcq', prompt: 'Pick b', options: OPTS, answerKey: 'b', points: 2 },
+        { type: 'essay', prompt: 'Discuss', answerKey: null, points: 8 },
+      ],
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [
+        { questionId: qs[0].id, answer: 'a' },
+        { questionId: qs[1].id, answer: 'Some prose.' },
+      ],
+      new Date(),
+    );
+    await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    await attemptsSvc.grade(d, attempt.id, {
+      attemptId: attempt.id,
+      grades: [{ questionId: qs[1].id, manualPoints: 6, feedback: 'Good argument' }],
+      comment: 'Well done',
+    });
+
+    const review = await attemptsSvc.reviewForStudent(d, attempt.id, student.id);
+    expect(review.attempt.id).toBe(attempt.id);
+    expect(review.attempt.status).toBe('graded');
+    expect(review.attempt.comment).toBe('Well done');
+
+    // Questions in sortOrder, WITH the key material.
+    expect(review.questions.map((q) => q.id)).toEqual([qs[0].id, qs[1].id]);
+    expect(review.questions[0].answerKey).toBe('b');
+    expect(review.questions[0].explanation).toBe('Because reasons');
+    expect(review.questions[0].options).toEqual(OPTS);
+    expect(review.questions[1].answerKey).toBeNull(); // essay has no key
+
+    const mcq = review.answers.find((a) => a.questionId === qs[0].id);
+    expect(mcq.answer).toBe('a');
+    expect(mcq.autoCorrect).toBe(false);
+    expect(mcq.autoPoints).toBe(0);
+    const essay = review.answers.find((a) => a.questionId === qs[1].id);
+    expect(essay.manualPoints).toBe(6);
+    expect(essay.feedback).toBe('Good argument');
+  });
+
+  it('reviewForStudent refuses an ungraded attempt with 409 not_graded and leaks nothing', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, {
+      questions: [
+        { type: 'mcq', prompt: 'Pick b', options: OPTS, answerKey: 'b', points: 2 },
+        { type: 'essay', prompt: 'Discuss', answerKey: null, points: 8 },
+      ],
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+
+    // in_progress
+    const open = await expectThrown(() => attemptsSvc.reviewForStudent(d, attempt.id, student.id));
+    expect(open.status).toBe(409);
+    expect(await open.json()).toEqual({ error: 'not_graded' });
+
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[1].id, answer: 'Some prose.' }],
+      new Date(),
+    );
+    const submitted = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    expect(submitted.status).toBe('needs_grading');
+
+    const err = await expectThrown(() => attemptsSvc.reviewForStudent(d, attempt.id, student.id));
+    expect(err.status).toBe(409);
+    // The body is the error code and nothing else — no questions, no keys, no marks.
+    const body = await err.json();
+    expect(body).toEqual({ error: 'not_graded' });
+    expect(JSON.stringify(body)).not.toContain('answerKey');
+    expect(JSON.stringify(body)).not.toContain('Because reasons');
+  });
+
+  it('reviewForStudent 404s for another student, indistinguishable from a missing attempt', async () => {
+    const d = db();
+    const { student, outsider, test, qs } = await setup(d);
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[0].id, answer: 'b' }],
+      new Date(),
+    );
+    const graded = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    expect(graded.status).toBe('graded');
+
+    const stolen = await expectThrown(() =>
+      attemptsSvc.reviewForStudent(d, attempt.id, outsider.id),
+    );
+    expect(stolen.status).toBe(404);
+    expect(await stolen.json()).toEqual({ error: 'attempt_not_found' });
+
+    const missing = await expectThrown(() =>
+      attemptsSvc.reviewForStudent(d, 'no-such-attempt', student.id),
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: 'attempt_not_found' });
+  });
+
+  it('start still hands out key-free questions after the review API was added', async () => {
+    const d = db();
+    const { student, test } = await setup(d, { questions: THREE_Q });
+    const res = await attemptsSvc.start(d, test.id, student.id, new Date());
+    expect(res.questions.length).toBe(3);
+    for (const q of res.questions) {
+      expect('answerKey' in q).toBe(false);
+      expect('explanation' in q).toBe(false);
+      expect(Object.keys(q).sort()).toEqual(
+        ['id', 'options', 'points', 'prompt', 'sortOrder', 'type'].sort(),
+      );
+    }
+  });
+
   it('listOpenForStudent shows open online published tests and hides what the student cannot sit', async () => {
     const d = db();
     const { cls, student, test } = await setup(d);
