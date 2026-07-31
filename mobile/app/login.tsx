@@ -170,7 +170,7 @@ export default function Login() {
               <Tag color="green">{t('chip_classes')}</Tag>
               <Tag color="blue">{t('chip_calendar')}</Tag>
               <Tag color="violet">{t('chip_materials')}</Tag>
-              <Tag color="orange">{t('chip_homework')}</Tag>
+              <Tag color="orange">{t('chip_tests')}</Tag>
             </View>
           </View>
 

@@ -15,8 +15,6 @@ import type {
   FlashcardWordInput,
   EnrichedWord,
   GeneratedWord,
-  HomeworkGradesSaveInput,
-  HomeworkInput,
   InviteInput,
   LoginInput,
   MaterialInput,
@@ -37,7 +35,6 @@ import type {
   AssessmentTypeRow,
   AttendanceRow,
   DashboardResponse,
-  GradeRow,
   BehaviorRecordRow,
   Bootstrap,
   ClassRow,
@@ -48,7 +45,6 @@ import type {
   FlashcardResultRow,
   TopicBundle,
   TopicInfo,
-  HomeworkRow,
   InviteRow,
   LoginResponse,
   MaterialRow,
@@ -122,7 +118,6 @@ export const classes = collection<ClassRow, ClassInput>('/api/classes');
 export const students = collection<StudentRow, StudentInput>('/api/students');
 export const staff = collection<StaffRow, StaffInput>('/api/staff');
 export const parents = collection<ParentRow, ParentInput>('/api/parents');
-export const homework = collection<HomeworkRow, HomeworkInput>('/api/homework');
 export const materials = collection<MaterialRow, MaterialInput>('/api/materials');
 export const feedback = collection<FeedbackRow, FeedbackInput>('/api/feedback');
 export const scores = collection<ScoreRecordRow, ScoreRecordInput>('/api/assessments/scores');
@@ -187,13 +182,6 @@ export const listAllEventMaterials = () =>
 
 export const saveEventMaterials = (input: EventMaterialsSaveInput) =>
   apiFetch<{ ok: true }>('/api/event-materials', { method: 'POST', body: input });
-
-export const listHomeworkGrades = (homeworkId: string) =>
-  apiFetch<GradeRow[]>(`/api/homework/${homeworkId}/grades`);
-
-/** Replies with the homework's refreshed grade set — save the whole roster, as the web does. */
-export const saveHomeworkGrades = (homeworkId: string, input: HomeworkGradesSaveInput) =>
-  apiFetch<GradeRow[]>(`/api/homework/${homeworkId}/grades`, { method: 'POST', body: input });
 
 // ---- Flashcards ----
 

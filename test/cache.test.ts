@@ -8,7 +8,13 @@ import {
   clearCache,
   subscribe,
 } from '../src/lib/cache.js';
-import { swrLoad, invalidateAfterMutation, cacheKeyForPath, K } from '../src/lib/route-cache.js';
+import {
+  swrLoad,
+  invalidateAfterMutation,
+  cacheKeyForPath,
+  testDetailKey,
+  K,
+} from '../src/lib/route-cache.js';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -136,27 +142,27 @@ describe('invalidateAfterMutation', () => {
     expect(isStale(K.feedback)).toBe(false);
   });
 
-  // homework grades write score_records and score deletion SET NULLs
-  // homework_grades.score_record_id, so the two domains must stale each other.
-  it('couples homework and assessments in both directions', () => {
-    cacheSet(K.homework, 'h');
+  // Test scoring writes score_records and score deletion SET NULLs
+  // test_attempts.score_record_id, so the two domains must stale each other.
+  it('couples tests and assessments in both directions', () => {
+    cacheSet(K.tests, 't');
     cacheSet(K.assessments, 'a');
-    invalidateAfterMutation('homework');
+    invalidateAfterMutation('tests');
     expect(isStale(K.assessments)).toBe(true);
 
     clearCache();
-    cacheSet(K.homework, 'h');
+    cacheSet(K.tests, 't');
     cacheSet(K.assessments, 'a');
     invalidateAfterMutation('assessments');
-    expect(isStale(K.homework)).toBe(true);
+    expect(isStale(K.tests)).toBe(true);
   });
 
-  it('hard-invalidates hw: modal rows alongside the homework route', () => {
-    cacheSet(K.homework, 'h');
-    cacheSet('hw:modal', 'm');
-    invalidateAfterMutation('homework');
-    expect(cacheGet(K.homework)).toBeUndefined();
-    expect(cacheGet('hw:modal')).toBeUndefined();
+  it('hard-invalidates cached test detail pages alongside the tests route', () => {
+    cacheSet(K.tests, 't');
+    cacheSet(testDetailKey('t1'), 'd');
+    invalidateAfterMutation('tests');
+    expect(cacheGet(K.tests)).toBeUndefined();
+    expect(cacheGet(testDetailKey('t1'))).toBeUndefined();
   });
 
   it('materials keeps its own cache but drops evmat: joins', () => {

@@ -18,7 +18,6 @@ const TEST_USER = {
 };
 
 const STUB_LOADER_DATA = {
-  homeworkDueCount: 0,
   unusedInviteCount: 0,
   unresolvedFeedbackCount: 0,
   // AppLayout reads uiPrefs.scrollbar in an effect; omitting it throws before render.

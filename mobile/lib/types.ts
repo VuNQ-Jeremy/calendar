@@ -8,7 +8,6 @@ import type {
   FeedbackInput,
   FlashcardTopicInput,
   FlashcardWordInput,
-  HomeworkInput,
   InviteInput,
   MaterialInput,
   ParentInput,
@@ -40,7 +39,6 @@ export type StudentRow = Row<z.infer<typeof StudentInput>>;
 export type StaffRow = Row<z.infer<typeof StaffInput>>;
 export type ParentRow = Row<z.infer<typeof ParentInput>>;
 export type InviteRow = Row<z.infer<typeof InviteInput>>;
-export type HomeworkRow = Row<z.infer<typeof HomeworkInput>>;
 /**
  * The one row the API returns with a field its input schema does not have: `fileKey` is the R2
  * object key, assigned server-side on upload. It is the only way to tell "this material has a
@@ -163,7 +161,6 @@ export interface LoginResponse {
 }
 
 export interface BadgeCounts {
-  homeworkDue: number;
   unusedInvites: number;
   newFeedback: number;
 }
@@ -192,27 +189,11 @@ export interface AttendanceRow {
   status: AttendanceStatus;
 }
 
-/**
- * One homework grade. `scoreRecordId` is set when the grade also produced a `score_records` row
- * for the Assessment charts — the invariant is that one exists iff `score != null`
- * (`server/services/homework.ts`). The phone never writes it directly.
- */
-export interface GradeRow {
-  id: string;
-  homeworkId: string;
-  studentId: string;
-  score: number | null;
-  comment: string | null;
-  gradedAt: string | null;
-  scoreRecordId: string | null;
-}
-
 /** `/api/dashboard` — the mirror of the web's /dashboard loader. */
 export interface DashboardResponse {
   /** The server's idea of today, as `YYYY-MM-DD`. */
   today: string;
   todayEvents: EventRow[];
-  homeworkDueToday: HomeworkRow[];
   classes: { id: string; name: string; color: string }[];
 }
 

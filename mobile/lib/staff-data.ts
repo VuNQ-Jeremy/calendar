@@ -6,8 +6,6 @@ import type {
   ClassRow,
   DashboardResponse,
   EventRow,
-  GradeRow,
-  HomeworkRow,
   MaterialRow,
   StudentRow,
   ThemeRow,
@@ -24,9 +22,9 @@ import type { EventInput, MaterialInput } from '@mochi/shared/schemas';
  *
  * Invalidation follows the web's coarse rule (`invalidate('route:')` after nearly every
  * mutation): classes and students appear in almost every screen, so a blanket refresh costs one
- * round trip and cannot silently rot the way a hand-maintained dependency graph does. The two
- * exceptions are attendance and grades, which are per-occurrence and per-assignment and are
- * written straight back into their own cache entry.
+ * round trip and cannot silently rot the way a hand-maintained dependency graph does. The one
+ * exception is attendance, which is per-occurrence and is written straight back into its own
+ * cache entry.
  */
 
 // ---- Reads ----
@@ -41,10 +39,6 @@ export function useClasses() {
 
 export function useStudents() {
   return useQuery({ queryKey: qk.students, queryFn: api.students.list });
-}
-
-export function useHomework() {
-  return useQuery({ queryKey: qk.homework, queryFn: api.homework.list });
 }
 
 export function useMaterials() {
@@ -118,14 +112,6 @@ export function useAttendance(eventId: string | undefined, date: string | undefi
   });
 }
 
-export function useHomeworkGrades(homeworkId: string | undefined) {
-  return useQuery({
-    queryKey: qk.homeworkGrades(homeworkId ?? ''),
-    queryFn: () => api.listHomeworkGrades(homeworkId!),
-    enabled: !!homeworkId,
-  });
-}
-
 // ---- Writes ----
 
 /** The coarse post-mutation refresh, matching the web's `invalidate('route:')`. */
@@ -165,20 +151,6 @@ export function useSaveAttendance(eventId: string, date: string) {
     mutationFn: (records: { studentId: string; status: AttendanceRow['status'] }[]) =>
       api.saveAttendance({ eventId, date, records }),
     onSuccess: (rows) => qc.setQueryData(qk.attendance(eventId, date), rows),
-  });
-}
-
-/** Same shape for grades: the reply replaces this assignment's grade set. */
-export function useSaveGrades(homeworkId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (records: { studentId: string; score: number | null; comment: string | null }[]) =>
-      api.saveHomeworkGrades(homeworkId, { homeworkId, records }),
-    onSuccess: (rows) => {
-      qc.setQueryData(qk.homeworkGrades(homeworkId), rows);
-      // A score may have created a score_records row for the Assessment screen.
-      void qc.invalidateQueries({ queryKey: qk.assessments });
-    },
   });
 }
 
@@ -297,8 +269,6 @@ export type {
   ClassRow,
   DashboardResponse,
   EventRow,
-  GradeRow,
-  HomeworkRow,
   MaterialRow,
   StudentRow,
   ThemeRow,

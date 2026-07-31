@@ -14,7 +14,7 @@ const FEATURES: { key: string; icon: IconName; color: string }[] = [
   { key: 'classes', icon: 'book', color: 'green' },
   { key: 'people', icon: 'users', color: 'violet' },
   { key: 'materials', icon: 'folder', color: 'cocoa' },
-  { key: 'homework', icon: 'clipboard', color: 'orange' },
+  { key: 'tests', icon: 'clipboard', color: 'orange' },
   { key: 'feedback', icon: 'message', color: 'rose' },
 ];
 

@@ -7,7 +7,7 @@ export interface CheckboxProps {
   checked?: boolean;
   onChange?: (checked: boolean) => void;
   label?: string;
-  /** Strikes the label through, as on the web's `.is-done` completed-homework row. */
+  /** Strikes the label through, as on the web's `.is-done` completed row. */
   done?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;

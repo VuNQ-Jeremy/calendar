@@ -106,21 +106,6 @@ export const ParentInput = z.object({
 });
 export type ParentInput = z.infer<typeof ParentInput>;
 
-export const HomeworkInput = z.object({
-  title: z.string().trim().min(1).max(200),
-  classId: z.string().nullish(),
-  due: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullish(),
-  points: z.coerce.number().int().min(0).nullish(),
-  notes: z.string().max(2000).nullish(),
-  color: ColorId.nullish(),
-  done: FormBool.default(false),
-  assessmentTypeId: z.string().nullish(),
-});
-export type HomeworkInput = z.infer<typeof HomeworkInput>;
-
 export const MaterialInput = z.object({
   title: z.string().trim().min(1).max(200),
   type: z.enum(['notes', 'worksheet', 'video', 'link', 'curriculum']).default('notes'),
@@ -201,18 +186,6 @@ export const EventMaterialsSaveInput = z.object({
   materialIds: z.array(z.string().min(1)),
 });
 export type EventMaterialsSaveInput = z.infer<typeof EventMaterialsSaveInput>;
-
-export const HomeworkGradesSaveInput = z.object({
-  homeworkId: z.string().min(1),
-  records: z.array(
-    z.object({
-      studentId: z.string().min(1),
-      score: z.number().min(0).max(10).nullish(),
-      comment: z.string().max(2000).nullish(),
-    }),
-  ),
-});
-export type HomeworkGradesSaveInput = z.infer<typeof HomeworkGradesSaveInput>;
 
 export const BehaviorRecordInput = z.object({
   studentId: z.string().min(1),
@@ -425,10 +398,11 @@ export type UiPrefsInput = z.infer<typeof UiPrefsInput>;
  * minutes: a 5-minute lead cannot be honoured, and pretending otherwise would silently drop
  * reminders rather than send them late.
  */
+// `homeworkReminders` went away with the homework feature. Zod objects here are non-strict, so a
+// stale mobile build still posting that key is ignored rather than rejected.
 export const NotifPrefsInput = z.object({
   classReminders: FormBool.default(true),
   classLeadMinutes: z.coerce.number().int().min(15).max(120).default(30),
-  homeworkReminders: FormBool.default(true),
   studyNudges: FormBool.default(false),
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;

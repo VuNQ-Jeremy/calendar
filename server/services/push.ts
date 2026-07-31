@@ -33,7 +33,14 @@ export async function registerToken(
   const now = new Date().toISOString();
   await db
     .insert(pushTokens)
-    .values({ id: crypto.randomUUID(), accountId, expoToken, platform, createdAt: now, lastSeenAt: now })
+    .values({
+      id: crypto.randomUUID(),
+      accountId,
+      expoToken,
+      platform,
+      createdAt: now,
+      lastSeenAt: now,
+    })
     .onConflictDoUpdate({
       target: pushTokens.expoToken,
       set: { accountId, platform, lastSeenAt: now },
@@ -93,8 +100,8 @@ export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<st
 
 // ---- Sending ----
 
-/** The three Android channels. Each can be muted independently in system settings. */
-export type PushChannel = 'reminders' | 'homework' | 'study';
+/** The Android channels. Each can be muted independently in system settings. */
+export type PushChannel = 'reminders' | 'study';
 
 export interface ExpoPushMessage {
   to: string;
@@ -152,7 +159,11 @@ export async function sendPush(messages: ExpoPushMessage[]): Promise<{ dead: str
       if (ticket.status === 'ok') return;
       const token = batch[idx]?.to;
       if (ticket.details?.error === 'DeviceNotRegistered' && token) dead.push(token);
-      else console.error('[push] ticket error', { error: ticket.details?.error, message: ticket.message });
+      else
+        console.error('[push] ticket error', {
+          error: ticket.details?.error,
+          message: ticket.message,
+        });
     });
   }
 

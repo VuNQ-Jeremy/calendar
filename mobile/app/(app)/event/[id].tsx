@@ -9,19 +9,15 @@ import { ScreenHeader } from '~/components/ScreenHeader';
 import { useLang } from '~/lib/i18n';
 import { addMin, iso, RECURRENCES, RECURRENCE_TK, todayDate } from '~/lib/cal';
 import {
-  rosterOf,
   useClasses,
   useEventMaterials,
   useEventMutations,
   useEvents,
-  useHomework,
-  useHomeworkGrades,
   useMaterials,
-  useStudents,
 } from '~/lib/staff-data';
 import { useTheme, TOUCH } from '~/theme';
 import { Body, Button, Card, ColorPicker, Heading, Input, Muted, Screen, Tabs } from '~/ui';
-import type { ColorIdValue, EventRow, HomeworkRow, MaterialRow } from '~/lib/types';
+import type { ColorIdValue, EventRow, MaterialRow } from '~/lib/types';
 import type { EventInput } from '@mochi/shared/schemas';
 
 /**
@@ -36,10 +32,10 @@ import type { EventInput } from '@mochi/shared/schemas';
  * invalidating per the phase-2 key map.
  *
  * The tabs appear only for a saved event that has a class — the same `showTabs` rule as the web
- * modal. Attendance, homework and materials all hang off a class; a personal event has none of them.
+ * modal. Attendance and materials both hang off a class; a personal event has neither.
  */
 
-type TabId = 'details' | 'homework' | 'materials' | 'attendance';
+type TabId = 'details' | 'materials' | 'attendance';
 
 interface Draft {
   title: string;
@@ -161,7 +157,6 @@ export default function EventDetail() {
             tabs={[
               { id: 'details', label: t('ev_details') },
               { id: 'attendance', label: t('att_tab') },
-              { id: 'homework', label: t('hw_tab') },
               { id: 'materials', label: t('mat_tab') },
             ]}
           />
@@ -273,8 +268,6 @@ export default function EventDetail() {
             date={occurrence}
             classId={draft.classId || null}
           />
-        ) : tab === 'homework' ? (
-          <EventHomeworkTab classId={draft.classId} />
         ) : (
           <EventMaterialsTab eventId={id} classId={draft.classId} />
         )}
@@ -282,77 +275,6 @@ export default function EventDetail() {
         <View style={{ height: th.spacing[10] }} />
       </ScrollView>
     </Screen>
-  );
-}
-
-/**
- * The class's homework, each row showing how much of the roster is graded — the same
- * `hw_graded_n` summary as `src/calendar/homework-tab.tsx`. Tapping opens the grading screen
- * rather than a side panel: the web's `.evm-split` two-pane layout has nowhere to go at 360dp.
- */
-function EventHomeworkTab({ classId }: { classId: string }) {
-  const th = useTheme();
-  const { t } = useLang();
-  const { data: homework } = useHomework();
-  const { data: classes } = useClasses();
-  const { data: students } = useStudents();
-
-  const roster = rosterOf(
-    classes?.find((c) => c.id === classId),
-    students,
-  );
-  const list = (homework ?? [])
-    .filter((h) => h.classId === classId)
-    .sort((a, b) => (b.due ?? '').localeCompare(a.due ?? ''));
-
-  if (!list.length) {
-    return (
-      <Card>
-        <Muted>{t('hw_list_empty')}</Muted>
-      </Card>
-    );
-  }
-
-  return (
-    <View style={{ gap: th.spacing[3] }}>
-      {list.map((h) => (
-        <HomeworkGradeRow key={h.id} homework={h} rosterSize={roster.length} />
-      ))}
-    </View>
-  );
-}
-
-/** One homework row, with its graded count. Split out so each row owns its own grades query. */
-function HomeworkGradeRow({
-  homework,
-  rosterSize,
-}: {
-  homework: HomeworkRow;
-  rosterSize: number;
-}) {
-  const th = useTheme();
-  const { t } = useLang();
-  const { data: grades } = useHomeworkGrades(homework.id);
-  const graded = (grades ?? []).filter((g) => g.score != null || g.comment).length;
-
-  return (
-    <Card
-      flat
-      onPress={() => router.push(`/homework/${homework.id}/grade`)}
-      style={{ padding: th.spacing[4], flexDirection: 'row', alignItems: 'center', gap: th.spacing[3], minHeight: TOUCH }}
-    >
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Body style={{ fontFamily: th.font.bodyBold }} numberOfLines={2}>
-          {homework.title}
-        </Body>
-        <Muted numberOfLines={1}>
-          {[homework.due ?? '', t('hw_graded_n', { done: graded, total: rosterSize })]
-            .filter(Boolean)
-            .join(' · ')}
-        </Muted>
-      </View>
-      <ChevronRight size={18} color={th.color.textDisabled} />
-    </Card>
   );
 }
 

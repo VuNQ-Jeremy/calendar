@@ -3,9 +3,9 @@
 --   wrangler d1 execute mochi --remote --file=./seed.sql   (deployed DB)
 -- Dates are static (anchored around 2026-06-22, a Monday) for a stable demo.
 
-DELETE FROM attendance_records; DELETE FROM homework_grades;
+DELETE FROM attendance_records;
 DELETE FROM parent_students; DELETE FROM class_students; DELETE FROM class_schedule;
-DELETE FROM events; DELETE FROM homework; DELETE FROM materials; DELETE FROM invites;
+DELETE FROM events; DELETE FROM materials; DELETE FROM invites;
 DELETE FROM parents; DELETE FROM classes; DELETE FROM students; DELETE FROM staff;
 DELETE FROM feedback; DELETE FROM settings;
 DELETE FROM score_records; DELETE FROM behavior_records; DELETE FROM assessment_types;
@@ -74,13 +74,6 @@ INSERT INTO assessment_types (id, name, active, sort_order) VALUES
   ('at5', 'Essay draft',      1, 5),
   ('at6', 'Essay final',      1, 6);
 
-INSERT INTO homework (id, title, class_id, due, points, notes, color, done, assessment_type_id) VALUES
-  ('h1', 'Cell diagram lab',  'c1', '2026-06-22', 20, 'Label all organelles.',           'green',  0, 'at3'),
-  ('h2', 'Quadratics, set 4', 'c2', '2026-06-23', 15, 'Questions 1-12, show working.',    'blue',   0, 'at2'),
-  ('h3', 'Read chapters 5-6', 'c3', '2026-06-24', 10, 'Be ready to discuss memory.',      'violet', 0, NULL),
-  ('h4', 'Color wheel study', 'c4', '2026-06-21', 25, 'Primary/secondary/tertiary.',      'orange', 0, NULL),
-  ('h5', 'Vocab quiz prep',   'c3', '2026-06-22', 10, '',                                 'violet', 1, 'at1');
-
 INSERT INTO materials (id, title, type, class_id, url, file_name, favorite, added_at) VALUES
   ('m1', 'Photosynthesis slides', 'notes',     'c1', '',                        'photosynthesis.pdf', 1, '2026-06-22'),
   ('m2', 'Khan: Quadratics',      'link',      'c2', 'https://khanacademy.org', '',                   0, '2026-06-22'),
@@ -133,6 +126,3 @@ INSERT INTO attendance_records (event_id, student_id, date, status) VALUES
   ('e1', 's2', '2026-06-22', 'late'),
   ('e1', 's3', '2026-06-22', 'absent');
 
-INSERT INTO homework_grades (id, homework_id, student_id, score, comment, graded_at, score_record_id) VALUES
-  ('hg1', 'h2', 's2', 7.5, 'Good working shown.',        '2026-06-23', 'sc13'),
-  ('hg2', 'h2', 's4', 6.0, 'Check sign errors in Q7-9.', '2026-06-23', 'sc14');

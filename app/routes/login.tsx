@@ -209,7 +209,7 @@ export default function Login() {
         <LTag color="green">{t('chip_classes')}</LTag>
         <LTag color="blue">{t('chip_calendar')}</LTag>
         <LTag color="violet">{t('chip_materials')}</LTag>
-        <LTag color="orange">{t('chip_homework')}</LTag>
+        <LTag color="orange">{t('chip_tests')}</LTag>
       </div>
       <div className="auth-brand__paws">
         <MIcon name="paw" size={16} />

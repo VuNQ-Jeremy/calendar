@@ -101,7 +101,7 @@ Students can reach only `user`-level endpoints — mirroring the web, where they
 | Method | Path | Level | Notes |
 |---|---|---|---|
 | GET | `/api/bootstrap` | user | Everything a cold start needs in one round trip. **Students get only `{ user, account, uiPrefs, badgeCounts }`** — never the roster |
-| GET | `/api/dashboard` | staff | Today's events, homework due, class list |
+| GET | `/api/dashboard` | staff | Today's events and the class list |
 
 ### Collections
 
@@ -115,7 +115,6 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/staff/:id?` | staff | `StaffInput` |
 | `/api/parents/:id?` | staff | `ParentInput` |
 | `/api/invites/:id?` | staff | `InviteInput` (no PATCH) |
-| `/api/homework/:id?` | staff | `HomeworkInput` |
 | `/api/materials/:id?` | staff | `MaterialInput` — **multipart**, see below |
 | `/api/assessments/scores/:id?` | staff | `ScoreRecordInput` |
 | `/api/assessments/behavior/:id?` | staff | `BehaviorRecordInput` |
@@ -135,7 +134,6 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/grade-levels/reorder` | admin | `{ ids: string[] }` |
 | GET POST | `/api/attendance` | staff | GET needs `?eventId=&date=`. POST is delete-then-insert: omitting a student unmarks them |
 | GET POST | `/api/event-materials` | staff | GET `?eventId=` for one event, omit for the whole join table |
-| GET POST | `/api/homework/:id/grades` | staff | Whole grade set saved in one request |
 | GET | `/api/flashcards/topics/:id?` | **user** | Students play games |
 | POST PATCH DELETE | `/api/flashcards/topics/:id?` | staff | Replies with the refreshed topic list |
 | GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, results, mastery }` — one round trip, and exactly what an offline download stores. `results` is user-level because the web gives students the leaderboard too; `mastery` is empty for staff |

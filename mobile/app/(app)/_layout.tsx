@@ -143,7 +143,7 @@ export default function AppLayout() {
         /*
           This history exists for the DETAIL screens, not for the tab bar.
 
-          The eleven `href: null` screens at the bottom of this file are SIBLING TABS, not stack
+          The ten `href: null` screens at the bottom of this file are SIBLING TABS, not stack
           screens. `router.push` to a sibling tab is downgraded to a tab NAVIGATE
           (expo-router/build/global-state/getNavigationAction.js:51-53), so those pushes never build
           a stack for back to pop — More → People goes through the TAB history or nowhere at all.
@@ -151,7 +151,7 @@ export default function AppLayout() {
           The default `backBehavior: 'firstRoute'` does NOT keep a history: on every navigation
           TabRouter.changeIndex rewrites it as [routes[0], current] (TabRouter.js:34-41, :86).
           routes[0] is `dashboard`, declared first below, so back went to Dashboard from
-          everywhere — from every More row, from Calendar → event, from event → grade homework —
+          everywhere — from every More row, from Calendar → event, from event → material —
           and the screen you came from was unreachable.
 
           `fullHistory` rather than `history` because `history` de-duplicates, keeping each route at
@@ -166,9 +166,9 @@ export default function AppLayout() {
           Because this history also records plain tab switches, and a tab is a root rather than a
           step, useTabRootsEndTheBackStack above stops the press before it reaches this router
           whenever a tab's own URL is focused. `backBehavior="none"` would be the declarative way to
-          say that, but it would apply to the eleven detail screens too and strand them.
+          say that, but it would apply to the ten detail screens too and strand them.
 
-          Back inside the nested Stack layouts (classes, people, homework, materials, vocabulary,
+          Back inside the nested Stack layouts (classes, people, materials, vocabulary,
           event, material) is unaffected — a nested stack consumes GO_BACK before it reaches here.
         */
         backBehavior="fullHistory"
@@ -243,7 +243,6 @@ export default function AppLayout() {
         <Tabs.Screen name="attendance" options={{ href: null }} />
         <Tabs.Screen name="event" options={{ href: null }} />
         <Tabs.Screen name="material" options={{ href: null }} />
-        <Tabs.Screen name="homework" options={{ href: null }} />
         <Tabs.Screen name="materials" options={{ href: null }} />
         <Tabs.Screen name="assessments" options={{ href: null }} />
         <Tabs.Screen name="feedback" options={{ href: null }} />

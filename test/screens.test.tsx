@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
-import { DashboardScreen, HomeworkScreen } from '../src/screens-core.jsx';
+import { DashboardScreen } from '../src/screens-core.jsx';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.jsx';
 import { ClassesScreen, StudentsScreen } from '../src/screens-manage/index.jsx';
 import { FeedbackScreen } from '../src/feedback.jsx';
@@ -50,7 +50,14 @@ async function renderStub(Stub: ReturnType<typeof createRoutesStub>) {
 describe('DashboardScreen', () => {
   it('renders stat card labels', async () => {
     const Stub = makeStub(
-      { todayEvents: [], homework: [], classes: [], studentCount: 0, materialCount: 0 },
+      {
+        todayEvents: [],
+        tests: [],
+        attemptsSummary: {},
+        classes: [],
+        studentCount: 0,
+        materialCount: 0,
+      },
       DashboardScreen,
       { user: TEST_USER, onNav: () => {} },
     );
@@ -71,10 +78,7 @@ describe('CalendarScreen', () => {
 
 describe('ClassesScreen', () => {
   it('renders Classes heading', async () => {
-    const Stub = makeStub(
-      { classes: [], students: [], materials: [], homework: [] },
-      ClassesScreen,
-    );
+    const Stub = makeStub({ classes: [], students: [], materials: [] }, ClassesScreen);
     await renderStub(Stub);
     expect(screen.getByText('Classes')).toBeInTheDocument();
   });
@@ -96,14 +100,6 @@ describe('MaterialsScreen', () => {
     const Stub = makeStub({ materials: [], classes: [] }, MaterialsScreen);
     await renderStub(Stub);
     expect(screen.getByRole('heading', { name: 'Materials' })).toBeInTheDocument();
-  });
-});
-
-describe('HomeworkScreen', () => {
-  it('renders Homework heading', async () => {
-    const Stub = makeStub({ homework: [], classes: [] }, HomeworkScreen);
-    await renderStub(Stub);
-    expect(screen.getByText('Homework')).toBeInTheDocument();
   });
 });
 

@@ -123,20 +123,6 @@ export const assessmentTypes = sqliteTable('assessment_types', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
-export const homework = sqliteTable('homework', {
-  id: text('id').primaryKey(),
-  title: text('title').notNull(),
-  classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
-  due: text('due'),
-  points: integer('points'),
-  notes: text('notes'),
-  color: text('color'),
-  done: integer('done', { mode: 'boolean' }).notNull().default(false),
-  assessmentTypeId: text('assessment_type_id').references(() => assessmentTypes.id, {
-    onDelete: 'set null',
-  }),
-});
-
 export const materials = sqliteTable('materials', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
@@ -284,30 +270,6 @@ export const attendanceRecords = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.eventId, t.date, t.studentId] }),
     index('idx_attendance_student').on(t.studentId, t.date),
-  ],
-);
-
-export const homeworkGrades = sqliteTable(
-  'homework_grades',
-  {
-    id: text('id').primaryKey(),
-    homeworkId: text('homework_id')
-      .notNull()
-      .references(() => homework.id, { onDelete: 'cascade' }),
-    studentId: text('student_id')
-      .notNull()
-      .references(() => students.id, { onDelete: 'cascade' }),
-    score: real('score'),
-    comment: text('comment'),
-    gradedAt: text('graded_at'),
-    scoreRecordId: text('score_record_id').references(() => scoreRecords.id, {
-      onDelete: 'set null',
-    }),
-  },
-  (t) => [
-    index('idx_homework_grades_hw').on(t.homeworkId),
-    index('idx_homework_grades_student').on(t.studentId),
-    unique('uq_homework_grades').on(t.homeworkId, t.studentId),
   ],
 );
 

@@ -41,8 +41,8 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       testsSvc.totalPoints(db, id),
     ]);
 
-  // Roster of the test's class, in the class's own student order — same approach as the
-  // homework grading panel (ClassRow.studentIds joined against the student records).
+  // Roster of the test's class, in the class's own student order
+  // (ClassRow.studentIds joined against the student records).
   const cls = test.classId ? classes.find((c) => c.id === test.classId) : undefined;
   const students = (cls?.studentIds ?? [])
     .map((sid) => allStudents.find((s) => s.id === sid))

@@ -1,9 +1,7 @@
 import { withAuth } from '../../server/api/handler';
-import { iso } from '../../shared/logic/dates';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as assessmentTypesSvc from '../../server/services/assessment-types';
-import * as homeworkSvc from '../../server/services/homework';
 import * as invitesSvc from '../../server/services/invites';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
@@ -31,15 +29,13 @@ export const loader = withAuth('user', async ({ user, db }) => {
     };
   }
 
-  const today = iso(new Date());
-  const [classes, students, assessmentTypes, uiPrefs, theme, homeworkDue, unusedInvites, newFeedback] =
+  const [classes, students, assessmentTypes, uiPrefs, theme, unusedInvites, newFeedback] =
     await Promise.all([
       classesSvc.list(db),
       peopleSvc.listStudents(db),
       assessmentTypesSvc.list(db),
       uiPrefsSvc.getUiPrefs(db),
       themeSvc.getTheme(db),
-      homeworkSvc.countDue(db, today),
       invitesSvc.countUnused(db),
       // `newFeedback` is the historical wire name; it counts unresolved (new + reviewed),
       // matching the web sidebar badge. Renaming the field would break shipped OTA bundles.
@@ -53,6 +49,8 @@ export const loader = withAuth('user', async ({ user, db }) => {
     assessmentTypes,
     uiPrefs,
     theme,
-    badgeCounts: { homeworkDue, unusedInvites, newFeedback },
+    // `homeworkDue: 0` is a hardcoded stub: the homework feature is gone, but installed mobile
+    // builds read this key for one launch after the OTA update lands. Delete it next release.
+    badgeCounts: { homeworkDue: 0, unusedInvites, newFeedback },
   };
 });

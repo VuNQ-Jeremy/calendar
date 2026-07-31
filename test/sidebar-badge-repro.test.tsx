@@ -22,7 +22,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * also revalidates the visible route when its cache entry changes underneath it.
  * Keep both in sync with the real thing.
  */
-const APP_DATA_MUTATION_PATHS = ['/homework', '/people', '/feedback', '/config', '/profile'];
+const APP_DATA_MUTATION_PATHS = ['/people', '/feedback', '/config', '/profile'];
 
 function shouldRevalidate({ formAction, formMethod }: ShouldRevalidateFunctionArgs) {
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;

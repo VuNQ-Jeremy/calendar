@@ -111,7 +111,7 @@ function AuthScreen({ onLogin, invites = [] }: AuthScreenProps) {
         <ATag color="green">{t('chip_classes')}</ATag>
         <ATag color="blue">{t('chip_calendar')}</ATag>
         <ATag color="violet">{t('chip_materials')}</ATag>
-        <ATag color="orange">{t('chip_homework')}</ATag>
+        <ATag color="orange">{t('chip_tests')}</ATag>
       </div>
       <div className="auth-brand__paws">
         <MIcon name="paw" size={16} />

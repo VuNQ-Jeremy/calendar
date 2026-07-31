@@ -3,7 +3,6 @@ import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { createDb } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
-import * as homeworkSvc from '../server/services/homework';
 import * as eventsSvc from '../server/services/events';
 import * as materialsSvc from '../server/services/materials';
 import * as themeSvc from '../server/services/theme';
@@ -28,8 +27,6 @@ import {
   classStudents,
   parentStudents,
   events,
-  homework,
-  homeworkGrades,
   materials,
   sessions,
   scoreRecords,
@@ -83,25 +80,6 @@ describe('classes service', () => {
     await classesSvc.remove(db(), cls.id);
     const list = await classesSvc.list(db());
     expect(list.some((c) => c.id === cls.id)).toBe(false);
-  });
-});
-
-describe('homework service', () => {
-  it('creates and lists homework', async () => {
-    const hw = await homeworkSvc.create(db(), { title: 'Chapter 1', done: false });
-    expect(hw.id).toBeTruthy();
-    expect(hw.title).toBe('Chapter 1');
-
-    const list = await homeworkSvc.list(db());
-    expect(list.some((h) => h.id === hw.id)).toBe(true);
-  });
-
-  it('marks homework done', async () => {
-    const hw = await homeworkSvc.create(db(), { title: 'Essay', done: false });
-    await homeworkSvc.update(db(), hw.id, { done: true });
-    const list = await homeworkSvc.list(db());
-    const updated = list.find((h) => h.id === hw.id);
-    expect(updated?.done).toBe(true);
   });
 });
 
@@ -419,22 +397,6 @@ describe('FK cascade — delete class', () => {
     expect(evRows[0]?.classId).toBeNull();
   });
 
-  it('sets homework.class_id to NULL (SET NULL)', async () => {
-    const d = db();
-    const cls = await classesSvc.create(d, {
-      name: 'HW Class',
-      color: 'orange',
-      schedule: [],
-      studentIds: [],
-    });
-    const hw = await homeworkSvc.create(d, { title: 'HW Item', classId: cls.id, done: false });
-
-    await classesSvc.remove(d, cls.id);
-
-    const hwRows = await d.select().from(homework).where(eq(homework.id, hw.id));
-    expect(hwRows[0]?.classId).toBeNull();
-  });
-
   it('sets materials.class_id to NULL (SET NULL)', async () => {
     const d = db();
     const cls = await classesSvc.create(d, {
@@ -744,149 +706,6 @@ describe('attendance service', () => {
       .from(attendanceRecords)
       .where(eq(attendanceRecords.studentId, student.id));
     expect(rows.length).toBe(0);
-  });
-});
-
-describe('homework grading sync', () => {
-  async function setup(d) {
-    const cls = await classesSvc.create(d, {
-      name: 'Grading Class',
-      color: 'blue',
-      schedule: [],
-      studentIds: [],
-    });
-    const student = await peopleSvc.createStudent(d, {
-      name: 'Grading Student',
-      color: 'blue',
-      classIds: [],
-    });
-    const hw = await homeworkSvc.create(d, {
-      title: 'Graded Homework',
-      classId: cls.id,
-      due: '2026-06-23',
-      done: false,
-      assessmentTypeId: 'at2',
-    });
-    return { cls, student, hw };
-  }
-
-  it('grading creates a linked score record, and re-grading updates it without duplicating', async () => {
-    const d = db();
-    const { student, hw, cls } = await setup(d);
-
-    const grades = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: 8, comment: 'Nice work' },
-    ]);
-    const grade = grades.find((g) => g.studentId === student.id);
-    expect(grade.scoreRecordId).toBeTruthy();
-
-    const scoreRows = await d
-      .select()
-      .from(scoreRecords)
-      .where(eq(scoreRecords.id, grade.scoreRecordId));
-    expect(scoreRows[0].score).toBe(8);
-    expect(scoreRows[0].date).toBe('2026-06-23');
-    expect(scoreRows[0].classId).toBe(cls.id);
-    expect(scoreRows[0].assessmentTypeId).toBe('at2');
-    expect(scoreRows[0].notes).toBe('Nice work');
-
-    const regraded = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: 9, comment: 'Even better' },
-    ]);
-    const regrade = regraded.find((g) => g.studentId === student.id);
-    expect(regrade.scoreRecordId).toBe(grade.scoreRecordId);
-
-    const allScores = await assessSvc.listScores(d);
-    const linkedScores = allScores.filter((s) => s.id === grade.scoreRecordId);
-    expect(linkedScores.length).toBe(1);
-    expect(linkedScores[0].score).toBe(9);
-  });
-
-  it('clearing score and comment removes the grade and its score record', async () => {
-    const d = db();
-    const { student, hw } = await setup(d);
-    const grades = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: 7, comment: 'ok' },
-    ]);
-    const scoreRecordId = grades[0].scoreRecordId;
-
-    const cleared = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: null, comment: null },
-    ]);
-    expect(cleared.find((g) => g.studentId === student.id)).toBeUndefined();
-
-    const scoreAfter = await d
-      .select()
-      .from(scoreRecords)
-      .where(eq(scoreRecords.id, scoreRecordId));
-    expect(scoreAfter.length).toBe(0);
-  });
-
-  it('comment-only grade has no linked score record', async () => {
-    const d = db();
-    const { student, hw } = await setup(d);
-    const grades = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: null, comment: 'Missing submission' },
-    ]);
-    const grade = grades.find((g) => g.studentId === student.id);
-    expect(grade.scoreRecordId).toBeNull();
-    expect(grade.comment).toBe('Missing submission');
-  });
-
-  it('updating homework due date propagates to linked score records', async () => {
-    const d = db();
-    const { student, hw } = await setup(d);
-    const grades = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: 6, comment: null },
-    ]);
-    const scoreRecordId = grades[0].scoreRecordId;
-
-    await homeworkSvc.update(d, hw.id, { due: '2026-07-01' });
-
-    const scoreAfter = await d
-      .select()
-      .from(scoreRecords)
-      .where(eq(scoreRecords.id, scoreRecordId));
-    expect(scoreAfter[0].date).toBe('2026-07-01');
-  });
-
-  it('deleting homework deletes linked score records', async () => {
-    const d = db();
-    const { student, hw } = await setup(d);
-    const grades = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: 5, comment: null },
-    ]);
-    const scoreRecordId = grades[0].scoreRecordId;
-
-    await homeworkSvc.remove(d, hw.id);
-
-    const scoreAfter = await d
-      .select()
-      .from(scoreRecords)
-      .where(eq(scoreRecords.id, scoreRecordId));
-    expect(scoreAfter.length).toBe(0);
-    const gradesAfter = await d
-      .select()
-      .from(homeworkGrades)
-      .where(eq(homeworkGrades.homeworkId, hw.id));
-    expect(gradesAfter.length).toBe(0);
-  });
-
-  it('removing the linked score record from the Assessments side unlinks the grade', async () => {
-    const d = db();
-    const { student, hw } = await setup(d);
-    const grades = await homeworkSvc.saveGrades(d, hw.id, [
-      { studentId: student.id, score: 6.5, comment: null },
-    ]);
-    const scoreRecordId = grades[0].scoreRecordId;
-
-    await assessSvc.removeScore(d, scoreRecordId);
-
-    const gradesAfter = await d
-      .select()
-      .from(homeworkGrades)
-      .where(eq(homeworkGrades.homeworkId, hw.id));
-    expect(gradesAfter[0].scoreRecordId).toBeNull();
   });
 });
 

@@ -8,7 +8,6 @@ export const EMPTY_STATE = {
   users: [],
   parents: [],
   events: [],
-  homework: [],
   materials: [],
   invites: [],
   feedback: [],

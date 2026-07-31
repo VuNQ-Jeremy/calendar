@@ -6,7 +6,7 @@ import { ictDateOf } from '../../shared/logic/tests';
 
 /**
  * Tests domain service. Paper-mode score entry syncs a gradebook row per attempt so the
- * Assessment charts include test results, exactly like homework grades do.
+ * Assessment charts include test results.
  *
  * D1 has no interactive transactions, so every multi-row write here runs as a sequence of
  * idempotent awaits (or, where the whole write is one replace-set, a single `db.batch`).

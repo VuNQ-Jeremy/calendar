@@ -107,7 +107,7 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
 
 export async function remove(db: Db, id: string): Promise<void> {
   // ON DELETE CASCADE handles class_schedule and class_students rows.
-  // Events and homework FK is ON DELETE SET NULL (handled by D1 FK or we do it explicitly).
+  // The events and tests FKs are ON DELETE SET NULL (handled by D1 FK or explicitly).
   await db.delete(classes).where(eq(classes.id, id));
 }
 

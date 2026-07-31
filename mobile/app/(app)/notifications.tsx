@@ -116,15 +116,6 @@ export default function NotificationSettings() {
             <View style={{ height: 1, backgroundColor: th.color.borderSubtle }} />
 
             <Switch
-              label={t('notif_homework')}
-              checked={prefs.homeworkReminders}
-              onChange={(v) => set({ homeworkReminders: v })}
-            />
-            <Muted>{t('notif_homework_sub')}</Muted>
-
-            <View style={{ height: 1, backgroundColor: th.color.borderSubtle }} />
-
-            <Switch
               label={t('notif_study')}
               checked={prefs.studyNudges}
               onChange={(v) => set({ studyNudges: v })}

@@ -1,11 +1,10 @@
-import { and, eq, gte, isNotNull } from 'drizzle-orm';
-import { classStudents, flashcardResults, students } from '../db/schema';
+import { and, gte, isNotNull } from 'drizzle-orm';
+import { flashcardResults, students } from '../db/schema';
 import { createDb, type Db } from '../db/index';
 import { expandEvents } from '../../shared/logic/recurrence';
 import { iso, parseISO, toMin } from '../../shared/logic/dates';
 import * as classesSvc from './classes';
 import * as eventsSvc from './events';
-import * as homeworkSvc from './homework';
 import { getNotifPrefs } from './notif-prefs';
 import * as push from './push';
 import type { ExpoPushMessage } from './push';
@@ -113,50 +112,12 @@ export async function runClassReminders(db: Db, at: Date = new Date()): Promise<
   return messages.length;
 }
 
-/**
- * Job B — the daily digest. 01:00 UTC = 08:00 ICT, `homework` and `study` channels.
- *
- * Homework due TOMORROW, not today: a reminder on the morning something is due is a reminder
- * you cannot act on.
- */
+/** Job B — the daily digest. 01:00 UTC = 08:00 ICT, the `study` channel. */
 export async function runDailyDigest(db: Db, at: Date = new Date()): Promise<number> {
   const prefs = await getNotifPrefs(db);
   const { dateIso } = ictNow(at);
   const messages: ExpoPushMessage[] = [];
   const doneKeys: string[] = [];
-
-  if (prefs.homeworkReminders) {
-    const tomorrow = addDaysIso(dateIso, 1);
-    const due = (await homeworkSvc.list(db)).filter(
-      (h) => !h.done && h.due === tomorrow && h.classId,
-    );
-    const keys = due.map((h) => `homework:${h.id}:${tomorrow}`);
-    const sent = await push.alreadySent(db, keys);
-
-    for (const h of due) {
-      const key = `homework:${h.id}:${tomorrow}`;
-      if (sent.has(key)) continue;
-      doneKeys.push(key);
-
-      const roster = await db
-        .select({ studentId: classStudents.studentId })
-        .from(classStudents)
-        .where(eq(classStudents.classId, h.classId!));
-      const accountIds = await push.accountIdsForStudents(
-        db,
-        roster.map((r) => r.studentId),
-      );
-      for (const to of await push.tokensForAccounts(db, accountIds)) {
-        messages.push({
-          to,
-          title: h.title,
-          body: `${h.points != null ? `${h.points} pts · ` : ''}due tomorrow`,
-          data: { url: `/homework/${h.id}`, kind: 'homework' },
-          channelId: 'homework',
-        });
-      }
-    }
-  }
 
   if (prefs.studyNudges) {
     // Gentle and infrequent by design: this is the one notification with no deadline behind it,

@@ -30,7 +30,6 @@ import * as api from './endpoints';
  */
 export const CHANNELS = [
   { id: 'reminders', name: 'Class reminders', importance: Notifications.AndroidImportance.HIGH },
-  { id: 'homework', name: 'Homework', importance: Notifications.AndroidImportance.DEFAULT },
   { id: 'study', name: 'Study nudges', importance: Notifications.AndroidImportance.LOW },
 ] as const;
 
@@ -172,8 +171,8 @@ export function usePushRegistration(signedIn: boolean): void {
  * Tapping a notification opens the thing it is about.
  *
  * Every message carries `data.url` (see server/services/notify.ts) — `/event/:id`,
- * `/homework/:id`, `/flashcards`. A notification that opens the home screen is a notification
- * people learn to ignore.
+ * `/flashcards`. A notification that opens the home screen is a notification people learn to
+ * ignore.
  *
  * Both paths are handled: `getLastNotificationResponseAsync` for a tap that COLD-STARTED the app
  * (the listener is registered too late to see it), and the listener for a tap while it is

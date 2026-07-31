@@ -8,7 +8,7 @@ import type { StudentRow } from '../../server/services/people.js';
 
 const { Card: MC, Avatar: MAv } = DS;
 
-// Same granularity as the homework grading panel: blank (ungraded) plus 0–10 in
+// Blank (ungraded) plus 0–10 in
 // 0.25 steps, so no stored score is unpickable.
 const SCORE_OPTIONS = [
   { value: '', label: '—' },
@@ -29,7 +29,7 @@ export function PaperScoreGrid({ testId, roster, attempts, action }: PaperScoreG
   const { t } = useLang();
   const saveFetcher = useFetcher<{ ok?: boolean; attempts?: TestAttemptRow[]; error?: string }>();
 
-  // Local copy of the attempts, exactly like GradingPanel in src/calendar/homework-tab.tsx:
+  // Local copy of the attempts:
   // autosaving POSTs to this route, whose clientAction invalidates the tests cache in a
   // `finally`. Without our own copy the grid would blank out mid-save until a refetch lands.
   const [saved, setSaved] = React.useState<TestAttemptRow[]>(attempts);

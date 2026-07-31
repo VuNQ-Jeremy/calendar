@@ -41,7 +41,6 @@ export const qk = {
   flashcardStudentStats: ['flashcards', 'studentStats'] as const,
   scores: ['assessments', 'scores'] as const,
   behavior: ['assessments', 'behavior'] as const,
-  homework: ['homework'] as const,
   materials: ['materials'] as const,
   /** The calendar theme (`--cal-bg` and friends), from /api/settings/theme. */
   calTheme: ['calTheme'] as const,
@@ -52,8 +51,6 @@ export const qk = {
    */
   uiPrefs: ['uiPrefs'] as const,
   assessmentTypes: ['assessmentTypes'] as const,
-  /** Grades for one homework. The web holds the whole table; the phone fetches per assignment. */
-  homeworkGrades: (homeworkId: string) => ['homeworkGrades', homeworkId] as const,
   feedback: ['feedback'] as const,
   assessments: ['assessments'] as const,
   profile: ['profile'] as const,

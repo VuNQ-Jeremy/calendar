@@ -19,7 +19,6 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   classReminders: true,
   /** Minutes before a class starts. The cron sweeps every 15, so anything under 15 is fiction. */
   classLeadMinutes: 30,
-  homeworkReminders: true,
   studyNudges: false,
 };
 

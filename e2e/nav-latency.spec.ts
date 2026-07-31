@@ -14,8 +14,8 @@ import { test, expect, type Page, type Request } from '@playwright/test';
  *     offline, open the stale route -> exactly ONE failed .data request, not a
  *     stream. (The underlying guard is unit-tested: "does not notify
  *     subscribers when the background refresh fails" in test/cache.test.ts.)
- *   - homework <-> assessments coupling: save a homework grade -> the score
- *     shows on /assessments; delete that score -> /homework shows ungraded.
+ *   - tests <-> assessments coupling: save a paper test score -> the score shows
+ *     on /assessments; delete that score -> the test shows ungraded.
  */
 
 const EMAIL = process.env.MOCHI_EMAIL;
@@ -132,15 +132,15 @@ test.describe('navigation latency', () => {
     };
     page.on('request', onRequest);
     const data = await recordDataRequests(page, async () => {
-      await page.hover('.sb a[href="/homework"]');
+      await page.hover('.sb a[href="/questions"]');
     });
     page.off('request', onRequest);
 
     expect(
-      assets.some((p) => p.includes('homework')),
-      `expected a homework chunk to preload, saw: ${assets.join(', ') || '(none)'}`,
+      assets.some((p) => p.includes('questions')),
+      `expected a questions chunk to preload, saw: ${assets.join(', ') || '(none)'}`,
     ).toBe(true);
-    expect(data.filter((u) => u.startsWith('/homework.data'))).toEqual([]);
+    expect(data.filter((u) => u.startsWith('/questions.data'))).toEqual([]);
   });
 
   test('a slow navigation shows the progress bar and marks the link pending', async ({ page }) => {
@@ -224,7 +224,7 @@ test.describe('navigation latency', () => {
     await page.click('button.preset.preset--sb.is-active');
     await page.waitForLoadState('networkidle');
 
-    // A /config mutation stales homework + assessments (shared assessment types)...
+    // A /config mutation stales assessments + tests (shared assessment types)...
     const staled = await recordDataRequests(page, () => clickNav(page, '/assessments'), 2500);
     expect(
       scopedTo(staled, 'assessments').length,

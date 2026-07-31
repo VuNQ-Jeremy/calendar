@@ -5,7 +5,6 @@ import {
   BarChart3,
   Bell,
   ChevronRight,
-  ClipboardList,
   FolderOpen,
   Languages,
   LogOut,
@@ -45,12 +44,6 @@ export default function More() {
   const iconColor = th.color.textMuted;
   const rows: Row[] = [
     { key: 'people', tk: 'nav_people', href: '/people', icon: <Users size={20} color={iconColor} /> },
-    {
-      key: 'homework',
-      tk: 'nav_homework',
-      href: '/homework',
-      icon: <ClipboardList size={20} color={iconColor} />,
-    },
     {
       key: 'materials',
       tk: 'nav_materials',

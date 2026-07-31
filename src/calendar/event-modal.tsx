@@ -7,7 +7,6 @@ import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import { ATTENDANCE_META, ATTENDANCE_STATUSES, type AttendanceStatusId } from '../lib/assess.js';
 import { MAT_TYPES } from '../lib/mat-types.js';
-import { HomeworkTab } from './homework-tab.jsx';
 import { MaterialsTab } from './materials-tab.jsx';
 import { MaterialSearchDropdown } from '../material-search.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
@@ -261,7 +260,11 @@ function EventMaterialsPicker({
             {classMats.map((m) => {
               const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
               return (
-                <div key={m.id} className="lrow" style={{ border: '1.5px solid var(--border-subtle)' }}>
+                <div
+                  key={m.id}
+                  className="lrow"
+                  style={{ border: '1.5px solid var(--border-subtle)' }}
+                >
                   <MIcon name={mt.icon} size={16} />
                   <span style={{ flex: 1 }} className="lrow__title">
                     {m.title}
@@ -313,9 +316,7 @@ export function EventModal({
 }: EventModalProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<EventDraft>(draft || {});
-  const [tab, setTab] = React.useState<'details' | 'attendance' | 'homework' | 'materials'>(
-    'details',
-  );
+  const [tab, setTab] = React.useState<'details' | 'attendance' | 'materials'>('details');
   React.useEffect(() => {
     setF(draft || {});
     setTab('details');
@@ -380,13 +381,10 @@ export function EventModal({
       {showTabs && (
         <CTabs
           value={tab}
-          onChange={(id: string) =>
-            setTab(id as 'details' | 'attendance' | 'homework' | 'materials')
-          }
+          onChange={(id: string) => setTab(id as 'details' | 'attendance' | 'materials')}
           tabs={[
             { id: 'details', label: t('ev_details') },
             { id: 'attendance', label: t('att_tab') },
-            { id: 'homework', label: t('hw_tab') },
             { id: 'materials', label: t('mat_tab') },
           ]}
         />
@@ -402,8 +400,6 @@ export function EventModal({
             students={students}
           />
         </div>
-      ) : tab === 'homework' && showTabs ? (
-        <HomeworkTab classId={f.classId || ''} classes={classes} students={students} />
       ) : tab === 'materials' && showTabs ? (
         <MaterialsTab eventId={f.id!} classId={f.classId || ''} materials={materials} />
       ) : (

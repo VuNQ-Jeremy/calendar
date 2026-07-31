@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   FormBool,
   InviteInput,
-  HomeworkInput,
   MaterialInput,
   AssessmentTypeInput,
   NotifPrefsInput,
@@ -64,11 +63,6 @@ describe('InviteInput', () => {
 });
 
 describe('form toggles can be switched off', () => {
-  it('un-checks homework done', () => {
-    expect(HomeworkInput.parse({ title: 'Essay', done: 'false' }).done).toBe(false);
-    expect(parsePatch(HomeworkInput, { done: 'false' }).data).toEqual({ done: false });
-  });
-
   it('un-favorites a material', () => {
     expect(MaterialInput.parse({ title: 'Notes', favorite: 'false' }).favorite).toBe(false);
     expect(parsePatch(MaterialInput, { favorite: 'false' }).data).toEqual({ favorite: false });
@@ -81,12 +75,10 @@ describe('form toggles can be switched off', () => {
   it('turns notification prefs off', () => {
     const parsed = NotifPrefsInput.parse({
       classReminders: 'false',
-      homeworkReminders: 'false',
       studyNudges: 'false',
     });
     expect(parsed).toMatchObject({
       classReminders: false,
-      homeworkReminders: false,
       studyNudges: false,
     });
   });

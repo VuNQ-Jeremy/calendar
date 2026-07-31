@@ -16,7 +16,6 @@ import { cacheKeyForPath } from '../../src/lib/route-cache.js';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
 import type { IconName } from '../../src/icons.jsx';
-import { iso, TODAY } from '../../src/lib/core.js';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
 import { DevInspector } from '../../src/dev-inspector.jsx';
@@ -25,7 +24,6 @@ import { VersionStamp } from '../../src/components/version-stamp.jsx';
 import { BUILD_ID } from '../../src/lib/build-id.js';
 import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
-import * as homeworkSvc from '../../server/services/homework';
 import * as invitesSvc from '../../server/services/invites';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import { cloudflareCtx } from '../../app/load-context';
@@ -58,7 +56,6 @@ const NAV = [
       { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder', staffOnly: true },
       { id: 'tests', path: '/tests', tk: 'nav_tests', icon: 'clipboard', staffOnly: true },
       { id: 'questions', path: '/questions', tk: 'nav_questions', icon: 'edit', staffOnly: true },
-      { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard', staffOnly: true },
       {
         id: 'assessments',
         path: '/assessments',
@@ -87,24 +84,18 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (kind === 'student') {
     const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
     return {
-      homeworkDueCount: 0,
       unusedInviteCount: 0,
       unresolvedFeedbackCount: 0,
       uiPrefs,
       user: { ...user, kind },
     };
   }
-  const today = iso(TODAY);
-  const [homeworkDueCount, unusedInviteCount, unresolvedFeedbackCount, uiPrefs] = await Promise.all(
-    [
-      homeworkSvc.countDue(db, today),
-      invitesSvc.countUnused(db),
-      feedbackSvc.countUnresolved(db),
-      uiPrefsSvc.getUiPrefs(db),
-    ],
-  );
+  const [unusedInviteCount, unresolvedFeedbackCount, uiPrefs] = await Promise.all([
+    invitesSvc.countUnused(db),
+    feedbackSvc.countUnresolved(db),
+    uiPrefsSvc.getUiPrefs(db),
+  ]);
   return {
-    homeworkDueCount,
     unusedInviteCount,
     unresolvedFeedbackCount,
     uiPrefs,
@@ -112,29 +103,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   };
 }
 
-// The layout loader feeds the sidebar badge counts (homework due, unused
-// invites, unresolved feedback), uiPrefs, and the session user. Only mutations under
-// these paths can change that data — skip the layout .data round-trip for
-// everything else: plain GET navigations (incl. clicking the current page's
-// nav link), revalidator.revalidate() calls from useStaleRouteRefresh, and
-// unrelated mutations (calendar/classes/materials/assessments/flashcards —
-// note class deletion SET NULLs homework rows, it doesn't delete them, so
-// countDue is unaffected, and /calendar's theme write targets a different
-// settings row key than uiPrefs).
-const APP_DATA_MUTATION_PATHS = ['/homework', '/people', '/feedback', '/config', '/profile'];
+// The layout loader feeds the sidebar badge counts (unused invites, unresolved
+// feedback), uiPrefs, and the session user. Only mutations under these paths can
+// change that data — skip the layout .data round-trip for everything else: plain
+// GET navigations (incl. clicking the current page's nav link),
+// revalidator.revalidate() calls from useStaleRouteRefresh, and unrelated
+// mutations (calendar/classes/materials/tests/assessments/flashcards — and
+// /calendar's theme write targets a different settings row key than uiPrefs).
+const APP_DATA_MUTATION_PATHS = ['/people', '/feedback', '/config', '/profile'];
 
-export function shouldRevalidate({
-  formAction,
-  formMethod,
-  formData,
-}: ShouldRevalidateFunctionArgs) {
+export function shouldRevalidate({ formAction, formMethod }: ShouldRevalidateFunctionArgs) {
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
   const path = formAction.split('?')[0];
-  if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
-  // Grade auto-save posts to /homework on every edit (src/calendar/homework-tab.tsx)
-  // but countDue filters on done/due only, so grades can never move the badge.
-  if (path === '/homework' && formData?.get('intent') === 'save-grades') return false;
-  return true;
+  return APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'));
 }
 
 export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
@@ -150,11 +131,9 @@ function Sidebar({
   onFeedback: () => void;
   onHelp: () => void;
 }) {
-  const { homeworkDueCount, unusedInviteCount, unresolvedFeedbackCount } =
-    useLoaderData<typeof loader>();
+  const { unusedInviteCount, unresolvedFeedbackCount } = useLoaderData<typeof loader>();
   const { t } = useLang();
   const counts: Record<string, number> = {
-    homework: homeworkDueCount,
     people: unusedInviteCount,
     feedback: unresolvedFeedbackCount,
   };

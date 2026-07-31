@@ -1,31 +1,14 @@
 import React from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
-import { useMutation } from '@tanstack/react-query';
-import {
-  BookOpen,
-  Check,
-  ChevronRight,
-  ClipboardList,
-  FolderOpen,
-  MapPin,
-  Users,
-} from 'lucide-react-native';
+import { BookOpen, Check, ChevronRight, FolderOpen, MapPin, Users } from 'lucide-react-native';
 import { useAuth } from '~/lib/auth';
 import { useLang, locale } from '~/lib/i18n';
 import { eventsOn, fmtTime, todayDate } from '~/lib/cal';
-import * as api from '~/lib/endpoints';
-import {
-  useDashboard,
-  useHomework,
-  useInvalidateStaff,
-  useMaterials,
-  useStudents,
-} from '~/lib/staff-data';
-import { useTheme, TOUCH } from '~/theme';
-import { Badge, Body, Button, Card, Checkbox, Heading, Muted, Screen, Tag, Title } from '~/ui';
+import { useDashboard, useInvalidateStaff, useMaterials, useStudents } from '~/lib/staff-data';
+import { useTheme } from '~/theme';
+import { Body, Button, Card, Heading, Muted, Screen, Tag, Title } from '~/ui';
 import type { ColorIdKey } from '@mochi/shared/tokens';
-import type { HomeworkRow } from '~/lib/types';
 
 /**
  * Role guard.
@@ -49,9 +32,14 @@ export default function Dashboard() {
 /**
  * Task 4.1 — the teaching day, one screen.
  *
- * Port of `DashboardScreen` in `src/screens-core.tsx`. The web's `.cols-4` stat grid and its
- * `1.4fr 1fr` two-column body are a single column here — they already reflow at 920px, so this is
- * the same design taken one step further, not a different one.
+ * Port of `DashboardScreen` in `src/screens-core.tsx`. The web's stat grid and its `1.4fr 1fr`
+ * two-column body are a single column here — they already reflow at 920px, so this is the same
+ * design taken one step further, not a different one.
+ *
+ * The web's fourth stat and its second card are the Tests feature (`stat_needs_grading`,
+ * `dash_open_tests`), which has no mobile endpoints yet: `/api/dashboard` returns only
+ * `today`, `todayEvents` and `classes`. Rather than invent a card with nothing behind it, the
+ * homework card and stat that used to sit here are simply gone until Tests reaches the phone.
  *
  * The mobile-only addition is the **Take attendance** shortcut on every one of today's class
  * events. That is the whole point of the phone: two taps from a cold launch to marking a register,
@@ -66,12 +54,6 @@ function StaffDashboard() {
   const dash = useDashboard();
   const { data: students } = useStudents();
   const { data: materials } = useMaterials();
-  const { data: allHomework } = useHomework();
-
-  const toggleDone = useMutation({
-    mutationFn: ({ id, done }: { id: string; done: boolean }) => api.homework.update(id, { done }),
-    onSuccess: () => void invalidate(),
-  });
 
   const today = todayDate();
   const todaysEvents = dash.data?.todayEvents;
@@ -81,8 +63,6 @@ function StaffDashboard() {
   );
 
   const classes = dash.data?.classes ?? [];
-  const dueToday = dash.data?.homeworkDueToday ?? [];
-  const openCount = (allHomework ?? []).filter((h) => !h.done).length;
   const className = (id: string | null) => classes.find((c) => c.id === id)?.name;
 
   const todayStr = today.toLocaleDateString(locale(lang), {
@@ -101,11 +81,6 @@ function StaffDashboard() {
       icon: <Users size={22} color={th.category.blue.ink} />,
       num: students?.length ?? 0,
       label: t('stat_students'),
-    },
-    {
-      icon: <ClipboardList size={22} color={th.category.orange.ink} />,
-      num: openCount,
-      label: t('stat_homework'),
     },
     {
       icon: <FolderOpen size={22} color={th.category.violet.ink} />,
@@ -241,62 +216,6 @@ function StaffDashboard() {
           <Card>
             <Heading>{t('dash_nothing_scheduled')}</Heading>
             <Muted>{t('dash_enjoy_quiet')}</Muted>
-          </Card>
-        )}
-
-        {/* ---- Due today ---- */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: th.spacing[3],
-            marginTop: th.spacing[2],
-          }}
-        >
-          <Heading style={{ flex: 1 }}>{t('dash_due_today')}</Heading>
-          {dueToday.length ? <Badge color="brand">{dueToday.length}</Badge> : null}
-        </View>
-
-        {dueToday.length ? (
-          <Card flat style={{ padding: th.spacing[2] }}>
-            {dueToday.map((h: HomeworkRow) => (
-              <View
-                key={h.id}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: th.spacing[3],
-                  minHeight: TOUCH,
-                  paddingHorizontal: th.spacing[3],
-                }}
-              >
-                <Checkbox
-                  checked={!!h.done}
-                  onChange={(next) => toggleDone.mutate({ id: h.id, done: next })}
-                />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Body style={{ fontFamily: th.font.bodyBold }} numberOfLines={2}>
-                    {h.title}
-                  </Body>
-                  <Muted numberOfLines={1}>{className(h.classId ?? null) ?? t('no_class')}</Muted>
-                </View>
-                <View
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: (
-                      th.category[(h.color ?? 'orange') as ColorIdKey] ?? th.category.orange
-                    ).base,
-                  }}
-                />
-              </View>
-            ))}
-          </Card>
-        ) : (
-          <Card>
-            <Heading>{t('dash_all_caught')}</Heading>
-            <Muted>{t('dash_no_hw_today')}</Muted>
           </Card>
         )}
 

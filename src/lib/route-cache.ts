@@ -26,7 +26,6 @@ export const K = {
   classes: 'route:classes',
   people: 'route:people',
   materials: 'route:materials',
-  homework: 'route:homework',
   assessments: 'route:assessments',
   flashcards: 'route:flashcards',
   config: 'route:config',
@@ -81,7 +80,6 @@ export type MutationDomain =
   | 'classes'
   | 'people'
   | 'materials'
-  | 'homework'
   | 'assessments'
   | 'flashcards'
   | 'questions'
@@ -96,12 +94,11 @@ export type MutationDomain =
  * stale -> served instantly, refreshed in the background.
  *
  * Derived from what each route's loader reads:
- *   dashboard:   events(today), homework, classesLite, students, materials
+ *   dashboard:   events(today), tests, attempts summary, classesLite, students, materials
  *   calendar:    events, classes, students, theme, materials, eventMaterials
- *   classes:     classes, students, materials, homework
+ *   classes:     classes, students, materials
  *   people:      students, staff, parents, invites, classesLite, flashcardStats
  *   materials:   materials, classesLite
- *   homework:    homework, classes, students, grades, assessment types
  *   assessments: scores, behavior, students, classesLite, assessment types
  *   flashcards:  topics (list) / topic+words+results+mastery (slug pages)
  *   config:      assessment types, uiPrefs, grade levels
@@ -110,41 +107,41 @@ export type MutationDomain =
  *   tests:       tests, their questions, attempts, classes, students, assessment types, grade levels
  *   my-tests:    the student's own open/published tests plus their own attempts
  *
- * Note the two-way homework <-> assessments coupling:
- *   - saving/deleting homework grades WRITES score_records
- *     (server/services/homework.ts:97-119, :176-212), which is exactly what
- *     the assessments loader reads via assessSvc.listScores;
- *   - deleting a score on /assessments SET NULLs homework_grades.score_record_id
- *     (schema.ts:293-295), and scoreRecordId/score are fields of the GradeRow
- *     the homework loader returns.
+ * Note the two-way tests <-> assessments coupling:
+ *   - paper score entry and attempt grading WRITE score_records
+ *     (server/services/tests.ts, syncScoreRecord/savePaperScores), which is
+ *     exactly what the assessments loader reads via assessSvc.listScores;
+ *   - deleting a score on /assessments SET NULLs test_attempts.score_record_id,
+ *     and scoreRecordId/totalScore are fields of the TestAttemptRow the tests
+ *     loaders return.
  * So each domain must mark the other stale.
  */
 const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[] }> = {
   calendar: { hard: [K.calendar], stale: [K.dashboard] },
   classes: {
     hard: [K.classes],
-    stale: [K.dashboard, K.calendar, K.people, K.materials, K.homework, K.assessments],
+    stale: [K.dashboard, K.calendar, K.people, K.materials, K.assessments],
   },
   people: {
     hard: [K.people],
-    stale: [K.dashboard, K.calendar, K.classes, K.homework, K.assessments],
+    stale: [K.dashboard, K.calendar, K.classes, K.assessments],
   },
   // routes/materials patches its own cache in its clientAction; 'evmat:' rows
   // (event-material joins shown in the calendar event modal) must be hard.
   materials: { hard: ['evmat:'], stale: [K.dashboard, K.calendar, K.classes] },
-  homework: { hard: [K.homework, 'hw:'], stale: [K.dashboard, K.classes, K.assessments] },
-  assessments: { hard: [K.assessments], stale: [K.homework] },
+  assessments: { hard: [K.assessments], stale: [K.tests] },
   // 'route:flashcards' is a prefix of every 'route:flashcards:<slug>' key, so
   // topic CRUD also drops all cached topic pages (slug may have changed).
   flashcards: { hard: [K.flashcards], stale: [K.people] },
   // Editing a question changes what the test builder lists, so /tests goes stale.
   questions: { hard: [K.questions], stale: [K.tests] },
-  // A test writes score_records when graded, is scoped to a class, and appears on
-  // the student's own list — all three surfaces must refresh.
-  tests: { hard: [K.tests], stale: [K.assessments, K.classes, K.myTests] },
+  // A test writes score_records when graded, is scoped to a class, appears on the
+  // student's own list, and feeds the dashboard's open-tests card and needs-grading
+  // stat — all four surfaces must refresh.
+  tests: { hard: [K.tests], stale: [K.assessments, K.classes, K.myTests, K.dashboard] },
   // Grade-level and assessment-type edits surface on the question bank and the
-  // test pages as well as on homework/assessments.
-  config: { hard: [K.config], stale: [K.homework, K.assessments, K.questions, K.tests] },
+  // test pages as well as on assessments.
+  config: { hard: [K.config], stale: [K.assessments, K.questions, K.tests] },
   feedback: { hard: [K.feedback], stale: [] },
   // profile edits change name/color which surface in many lists; profile has
   // no cache of its own, so mark everything stale (still served instantly).
@@ -178,7 +175,6 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/classes': K.classes,
     '/people': K.people,
     '/materials': K.materials,
-    '/homework': K.homework,
     '/assessments': K.assessments,
     '/vocabulary': K.flashcards,
     '/config': K.config,
