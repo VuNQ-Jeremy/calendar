@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
-import { Check, CloudDownload, Pencil, Plus, Trash2 } from 'lucide-react-native';
+import { Check, CloudDownload, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react-native';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
@@ -44,7 +44,7 @@ export default function FlashcardTopics() {
   });
 
   const open = (topic: FlashcardTopicRow) =>
-    router.push(`/flashcards/${encodeURIComponent(topic.slug ?? topic.id)}`);
+    router.push(`/vocabulary/${encodeURIComponent(topic.slug ?? topic.id)}`);
 
   return (
     <Screen edges={{ top: true }}>
@@ -62,12 +62,21 @@ export default function FlashcardTopics() {
         </View>
 
         {isStaff ? (
-          <Button
-            iconLeft={<Plus size={18} color={th.color.textOnBrand} />}
-            onPress={() => router.push('/flashcards/new')}
-          >
-            {t('fc_new_topic')}
-          </Button>
+          <View style={{ gap: th.spacing[2] }}>
+            <Button
+              iconLeft={<Sparkles size={18} color={th.color.textOnBrand} />}
+              onPress={() => router.push('/vocabulary/generate')}
+            >
+              {t('fc_gen_new_btn')}
+            </Button>
+            <Button
+              variant="secondary"
+              iconLeft={<Plus size={18} color={th.color.textStrong} />}
+              onPress={() => router.push('/vocabulary/new')}
+            >
+              {t('fc_new_topic')}
+            </Button>
+          </View>
         ) : null}
 
         {isLoading && !topics ? (
@@ -119,7 +128,7 @@ export default function FlashcardTopics() {
                       label={t('edit')}
                       onPress={() =>
                         router.push(
-                          `/flashcards/${encodeURIComponent(topic.slug ?? topic.id)}/edit`,
+                          `/vocabulary/${encodeURIComponent(topic.slug ?? topic.id)}/edit`,
                         )
                       }
                     >

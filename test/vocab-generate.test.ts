@@ -49,11 +49,12 @@ describe('VOCAB_TOPICS', () => {
 });
 
 describe('sanitizeGeneratedWords', () => {
-  const w = (word: string, meaningVi = 'nghĩa', definitionEn = 'a definition'): GeneratedWord => ({
-    word,
-    meaningVi,
-    definitionEn,
-  });
+  const w = (
+    word: string,
+    meaningVi = 'nghĩa',
+    definitionEn = 'a definition',
+    ipa = '/wɜːd/',
+  ): GeneratedWord => ({ word, meaningVi, definitionEn, ipa });
 
   it('drops words the deck already has, ignoring case', () => {
     const out = sanitizeGeneratedWords([w('Rain'), w('cloud')], ['rain'], 10);
@@ -65,10 +66,21 @@ describe('sanitizeGeneratedWords', () => {
     expect(out.map((r) => r.word)).toEqual(['sun', 'wind']);
   });
 
-  it('clamps fields to the FlashcardWordInput limits and nulls a blank definition', () => {
-    const out = sanitizeGeneratedWords([w('sky', 'x'.repeat(600), '')], [], 10);
+  it('clamps fields to the FlashcardWordInput limits and nulls blank optional fields', () => {
+    const out = sanitizeGeneratedWords([w('sky', 'x'.repeat(600), '', '')], [], 10);
     expect(out[0].meaningVi).toHaveLength(500);
     expect(out[0].definitionEn).toBeNull();
+    expect(out[0].ipa).toBeNull();
+  });
+
+  it('keeps the IPA transcription the model returned', () => {
+    const out = sanitizeGeneratedWords([w('whisk', 'đánh trứng', 'to beat', '/wɪsk/')], [], 10);
+    expect(out[0].ipa).toBe('/wɪsk/');
+  });
+
+  it('clamps an overlong IPA to the FlashcardWordInput limit', () => {
+    const out = sanitizeGeneratedWords([w('sky', 'trời', 'the air', 'ˈ'.repeat(300))], [], 10);
+    expect(out[0].ipa).toHaveLength(200);
   });
 
   it('survives malformed model output rather than throwing at the UI', () => {

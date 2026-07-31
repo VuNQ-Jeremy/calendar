@@ -51,6 +51,12 @@ export default [
   route('api/push/unregister', 'routes/api.push.unregister.tsx'),
   route('api/push/run', 'routes/api.push.run.tsx'),
 
+  // The vocabulary pages used to live at /flashcards. Keep the old URLs working — bookmarks,
+  // and push notifications sent before the rename that still carry `url: '/flashcards'`.
+  // Outside the `_app` layout: a redirect has no business loading the app shell.
+  route('flashcards', 'routes/flashcards.legacy.tsx'),
+  route('flashcards/:slug', 'routes/flashcards.legacy.$slug.tsx'),
+
   layout('routes/_app.tsx', [
     index('routes/home.tsx'),
     route('dashboard', 'routes/dashboard.tsx'),
@@ -60,8 +66,8 @@ export default [
     route('materials', 'routes/materials.tsx'),
     route('homework', 'routes/homework.tsx'),
     route('assessments', 'routes/assessments.tsx'),
-    route('flashcards', 'routes/flashcards.tsx'),
-    route('flashcards/:slug', 'routes/flashcards.$slug.tsx'),
+    route('vocabulary', 'routes/flashcards.tsx'),
+    route('vocabulary/:slug', 'routes/flashcards.$slug.tsx'),
     route('config', 'routes/config.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),

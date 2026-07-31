@@ -246,6 +246,12 @@ export const FlashcardImportInput = z.object({
 });
 export type FlashcardImportInput = z.infer<typeof FlashcardImportInput>;
 
+/** A new topic plus its first words — what the AI generator saves in one call. */
+export const FlashcardTopicWithWordsInput = FlashcardTopicInput.extend({
+  words: z.array(FlashcardWordInput).min(1).max(200),
+});
+export type FlashcardTopicWithWordsInput = z.infer<typeof FlashcardTopicWithWordsInput>;
+
 export const TranslateInput = z.object({
   items: z
     .array(
@@ -276,9 +282,14 @@ export type VocabGenerateInput = z.infer<typeof VocabGenerateInput>;
 
 /**
  * One generated row — a subset of FlashcardWordInput, so the review UI can hand rows straight
- * to the existing import pipeline.
+ * to the existing import pipeline. `audioUrl` is the one card field the model cannot supply.
  */
-export type GeneratedWord = { word: string; meaningVi: string; definitionEn: string | null };
+export type GeneratedWord = {
+  word: string;
+  meaningVi: string;
+  definitionEn: string | null;
+  ipa: string | null;
+};
 
 export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;

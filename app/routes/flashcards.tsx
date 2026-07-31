@@ -9,7 +9,11 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser, requireStaff } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
-import { FlashcardTopicInput, parsePatch } from '../../shared/schemas';
+import {
+  FlashcardTopicInput,
+  FlashcardTopicWithWordsInput,
+  parsePatch,
+} from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -17,7 +21,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const { kind } = await requireUser(request, env);
   const db = createDb(env);
   const topics = await flashcardsSvc.listTopics(db);
-  return { topics, kind };
+  // Gates the AI generator in the UI — same flag the topic page passes down.
+  return { topics, kind, canTranslate: Boolean(env.ANTHROPIC_API_KEY) };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -47,6 +52,22 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await flashcardsSvc.createTopic(db, parsed.data);
     return { ok: true };
+  }
+
+  // AI generation: the words were reviewed client-side, so the topic and its words are written
+  // together — a failure can't leave an empty topic behind. Returns the slug so the screen can
+  // navigate straight into the new topic.
+  if (intent === 'generate-topic') {
+    try {
+      raw.words = JSON.parse((formData.get('words') as string) ?? '[]');
+    } catch {
+      return Response.json({ error: 'invalid words json' }, { status: 400 });
+    }
+    const parsed = FlashcardTopicWithWordsInput.safeParse(raw);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    const { words, ...topic } = parsed.data;
+    const created = await flashcardsSvc.createTopicWithWords(db, topic, words);
+    return { ok: true, topic: created };
   }
 
   if (intent === 'update') {

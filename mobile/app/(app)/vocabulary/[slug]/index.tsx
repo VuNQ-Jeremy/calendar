@@ -186,7 +186,7 @@ function WordsTab({
             <Button
               style={{ flex: 1 }}
               iconLeft={<Plus size={16} color={th.color.textOnBrand} />}
-              onPress={() => router.push(`/flashcards/${encodeURIComponent(slug)}/word/new`)}
+              onPress={() => router.push(`/vocabulary/${encodeURIComponent(slug)}/word/new`)}
             >
               {t('fc_add_word')}
             </Button>
@@ -194,7 +194,7 @@ function WordsTab({
               variant="secondary"
               style={{ flex: 1 }}
               iconLeft={<Upload size={16} color={th.color.textStrong} />}
-              onPress={() => router.push(`/flashcards/${encodeURIComponent(slug)}/import`)}
+              onPress={() => router.push(`/vocabulary/${encodeURIComponent(slug)}/import`)}
             >
               {t('fc_import')}
             </Button>
@@ -203,7 +203,7 @@ function WordsTab({
               variant="secondary"
               style={{ flex: 1 }}
               iconLeft={<Sparkles size={16} color={th.color.textStrong} />}
-              onPress={() => router.push(`/flashcards/${encodeURIComponent(slug)}/generate`)}
+              onPress={() => router.push(`/vocabulary/${encodeURIComponent(slug)}/generate`)}
             >
               {t('fc_gen_btn_short')}
             </Button>
@@ -246,7 +246,7 @@ function WordsTab({
                 size="sm"
                 label={t('edit')}
                 onPress={() =>
-                  router.push(`/flashcards/${encodeURIComponent(slug)}/word/${w.id}`)
+                  router.push(`/vocabulary/${encodeURIComponent(slug)}/word/${w.id}`)
                 }
               >
                 <Pencil size={16} color={th.color.textMuted} />

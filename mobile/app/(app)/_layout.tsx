@@ -26,8 +26,8 @@ import { useTabBarStyle } from '~/lib/use-ui-prefs';
  * `<Tabs.Screen name="profile">` options below — so the two lists have to stay in step with the
  * `href` values, not with the file tree.
  */
-const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/flashcards', '/more'];
-const STUDENT_TAB_ROOTS = ['/flashcards', '/profile'];
+const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/vocabulary', '/more'];
+const STUDENT_TAB_ROOTS = ['/vocabulary', '/profile'];
 
 /**
  * Back on a tab is a dead end, not a hop to the tab you were on before — so it asks first.
@@ -40,7 +40,7 @@ const STUDENT_TAB_ROOTS = ['/flashcards', '/profile'];
  *
  * So we intercept the press only while a tab's own URL is focused, confirm, and then hand it to
  * Android. Every other screen falls through to react-navigation untouched, which is what keeps the
- * nested stacks (`/classes/:id`, `/flashcards/:slug/...`) popping normally — their URLs are not in
+ * nested stacks (`/classes/:id`, `/vocabulary/:slug/...`) popping normally — their URLs are not in
  * the lists above, so this hook is inert there and back never asks anything.
  *
  * The dialog is ExitConfirmDialog (components/ExitConfirmDialog.tsx) — the design-system card, not
@@ -101,10 +101,10 @@ function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | undefined) {
  *   Staff   — 5 tabs: Dashboard, Calendar, Classes, Flashcards, More. Five is the practical
  *             maximum; everything else lives behind More.
  *   Student — 2 tabs: Flashcards, Profile. Mirrors the server exactly: `requireStaff` bounces
- *             students to /flashcards, so those are the only two places they can be.
+ *             students to /vocabulary, so those are the only two places they can be.
  *
  * ONE tab group, with per-role hiding via `href: null`, rather than a (staff) and a (student)
- * group. Two groups would both want to own `/flashcards`, and expo-router resolves group
+ * group. Two groups would both want to own `/vocabulary`, and expo-router resolves group
  * routes to the same URL — a genuine collision, not a style preference.
  */
 export default function AppLayout() {
@@ -168,7 +168,7 @@ export default function AppLayout() {
           whenever a tab's own URL is focused. `backBehavior="none"` would be the declarative way to
           say that, but it would apply to the eleven detail screens too and strand them.
 
-          Back inside the nested Stack layouts (classes, people, homework, materials, flashcards,
+          Back inside the nested Stack layouts (classes, people, homework, materials, vocabulary,
           event, material) is unaffected — a nested stack consumes GO_BACK before it reaches here.
         */
         backBehavior="fullHistory"
@@ -215,7 +215,7 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
-          name="flashcards"
+          name="vocabulary"
           options={{ title: t('nav_flashcards'), tabBarIcon: TabIconCards }}
         />
         <Tabs.Screen

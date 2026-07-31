@@ -64,7 +64,7 @@ const NAV = [
         icon: 'chart',
         staffOnly: true,
       },
-      { id: 'flashcards', path: '/flashcards', tk: 'nav_flashcards', icon: 'cards' },
+      { id: 'vocabulary', path: '/vocabulary', tk: 'nav_flashcards', icon: 'cards' },
       {
         id: 'config',
         path: '/config',

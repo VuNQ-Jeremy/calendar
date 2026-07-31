@@ -64,7 +64,7 @@ export default function ImportWords() {
   });
 
   if (user?.kind !== 'staff') {
-    router.replace('/flashcards');
+    router.replace('/vocabulary');
     return null;
   }
 

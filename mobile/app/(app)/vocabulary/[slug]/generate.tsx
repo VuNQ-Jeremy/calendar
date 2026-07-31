@@ -10,7 +10,7 @@ import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import { useInvalidateFlashcards, useTopic } from '~/lib/use-topics';
 import { useTheme } from '~/theme';
-import { Body, Button, Card, Checkbox, Input, Muted, Screen } from '~/ui';
+import { Body, Button, Card, Checkbox, Input, Mono, Muted, Screen } from '~/ui';
 import { ScreenHeader } from '~/components/ScreenHeader';
 
 /**
@@ -28,7 +28,13 @@ const MAX_COUNT = 50;
 
 const LEVELS: ('any' | VocabLevel)[] = ['any', 'beginner', 'intermediate', 'advanced'];
 
-type GenRow = { word: string; meaningVi: string; definitionEn: string; include: boolean };
+type GenRow = {
+  word: string;
+  meaningVi: string;
+  definitionEn: string;
+  ipa: string;
+  include: boolean;
+};
 
 export default function GenerateWords() {
   const th = useTheme();
@@ -69,6 +75,7 @@ export default function GenerateWords() {
           word: w.word,
           meaningVi: w.meaningVi,
           definitionEn: w.definitionEn ?? '',
+          ipa: w.ipa ?? '',
           include: true,
         })),
       );
@@ -84,7 +91,7 @@ export default function GenerateWords() {
           word: r.word.trim(),
           meaningVi: r.meaningVi.trim(),
           definitionEn: r.definitionEn.trim() || null,
-          ipa: null,
+          ipa: r.ipa.trim() || null,
           audioUrl: null,
         })),
       });
@@ -97,7 +104,7 @@ export default function GenerateWords() {
   });
 
   if (user?.kind !== 'staff') {
-    router.replace('/flashcards');
+    router.replace('/vocabulary');
     return null;
   }
 
@@ -203,6 +210,7 @@ export default function GenerateWords() {
                     setRows((rs) => rs.map((x, idx) => (idx === i ? { ...x, include: v } : x)))
                   }
                 />
+                {r.ipa ? <Mono>{r.ipa}</Mono> : null}
                 {r.definitionEn ? <Muted numberOfLines={2}>{r.definitionEn}</Muted> : null}
                 <Input
                   placeholder={t('fc_meaning_vi')}

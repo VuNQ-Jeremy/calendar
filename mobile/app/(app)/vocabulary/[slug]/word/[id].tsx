@@ -79,7 +79,7 @@ export default function WordEditor() {
   });
 
   if (user?.kind !== 'staff') {
-    router.replace('/flashcards');
+    router.replace('/vocabulary');
     return null;
   }
 

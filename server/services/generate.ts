@@ -14,6 +14,9 @@ word return:
   entry — not a full sentence)
 - "definitionEn": a simple English definition of at most 15 words, written for
   learners
+- "ipa": the General American pronunciation as a broad IPA transcription in
+  slashes, with primary stress marked — for example /ˈwɪskər/. Transcribe the
+  headword exactly as spelled in "word".
 Rules:
 - Every word must be clearly relevant to the topic.
 - No duplicates, and never include a word from the exclude list nor a plural or
@@ -53,8 +56,9 @@ export async function generateVocabWords(
                   word: { type: 'string' },
                   meaningVi: { type: 'string' },
                   definitionEn: { type: 'string' },
+                  ipa: { type: 'string' },
                 },
-                required: ['word', 'meaningVi', 'definitionEn'],
+                required: ['word', 'meaningVi', 'definitionEn', 'ipa'],
                 additionalProperties: false,
               },
             },
@@ -89,6 +93,9 @@ export async function generateVocabWords(
  * Make model output safe for the review UI and for FlashcardWordInput: drop blanks, anything on
  * the exclude list (case-insensitive), and duplicates; clamp fields to the schema's limits; cap
  * at the requested count. Exported on its own so it is unit-testable without a network call.
+ *
+ * Blank optional fields become null rather than '' so a card with no IPA renders as having none,
+ * instead of as an empty pronunciation line.
  */
 export function sanitizeGeneratedWords(
   raw: GeneratedWord[] | undefined,
@@ -104,10 +111,12 @@ export function sanitizeGeneratedWords(
     if (!word || word.length > 100 || excluded.has(key) || seen.has(key)) continue;
     seen.add(key);
     const definitionEn = (row.definitionEn ?? '').trim().slice(0, 1000);
+    const ipa = (row.ipa ?? '').trim().slice(0, 200);
     out.push({
       word,
       meaningVi: (row.meaningVi ?? '').trim().slice(0, 500),
       definitionEn: definitionEn || null,
+      ipa: ipa || null,
     });
     if (out.length >= count) break;
   }

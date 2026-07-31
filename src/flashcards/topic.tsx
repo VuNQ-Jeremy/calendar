@@ -21,7 +21,15 @@ import type {
   MasteryRow,
 } from '../../server/services/flashcards.js';
 
-const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput, Avatar: FAv, Badge: FBadge } = DS;
+const {
+  Card: FC,
+  Button: FBtn,
+  IconButton: FIB,
+  Input: FInput,
+  Avatar: FAv,
+  Badge: FBadge,
+  Checkbox: FCheck,
+} = DS;
 
 type TopicInfo = { id: string; name: string; description: string | null; color: string };
 type LoaderData = {
@@ -85,7 +93,7 @@ export function FlashcardTopicScreen() {
       <PageHeader
         title={
           <span className="m-row" style={{ gap: 10, alignItems: 'center' }}>
-            <FIB label={t('fc_title')} size="sm" onClick={() => navigate('/flashcards')}>
+            <FIB label={t('fc_title')} size="sm" onClick={() => navigate('/vocabulary')}>
               <MIcon name="chevronLeft" size={18} />
             </FIB>
             {topic.name}
@@ -715,8 +723,7 @@ function ImportModal({
               className="lrow"
               style={{ alignItems: 'center', gap: 10, opacity: r.include ? 1 : 0.5 }}
             >
-              <input
-                type="checkbox"
+              <FCheck
                 checked={r.include}
                 onChange={(e) => setRow(i, { include: e.target.checked })}
               />
@@ -761,7 +768,13 @@ function ImportModal({
 
 // ---- AI generation ----
 
-type GenRow = { word: string; meaningVi: string; definitionEn: string; include: boolean };
+type GenRow = {
+  word: string;
+  meaningVi: string;
+  definitionEn: string;
+  ipa: string;
+  include: boolean;
+};
 
 const GEN_LEVELS = ['any', 'beginner', 'intermediate', 'advanced'] as const;
 
@@ -818,6 +831,7 @@ function GenerateModal({
         word: w.word,
         meaningVi: w.meaningVi,
         definitionEn: w.definitionEn ?? '',
+        ipa: w.ipa ?? '',
         include: true,
       })),
     );
@@ -835,7 +849,7 @@ function GenerateModal({
       .map((r) => ({
         word: r.word.trim(),
         meaningVi: r.meaningVi.trim(),
-        ipa: null,
+        ipa: r.ipa.trim() || null,
         definitionEn: r.definitionEn.trim() || null,
         audioUrl: null,
       }));
@@ -935,13 +949,25 @@ function GenerateModal({
               className="lrow"
               style={{ alignItems: 'center', gap: 10, opacity: r.include ? 1 : 0.5 }}
             >
-              <input
-                type="checkbox"
+              <FCheck
                 checked={r.include}
                 onChange={(e) => setRow(i, { include: e.target.checked })}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{r.word}</span>
+                <div className="m-row" style={{ gap: 8, alignItems: 'baseline' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{r.word}</span>
+                  {r.ipa && (
+                    <span
+                      style={{
+                        color: 'var(--text-muted)',
+                        fontFamily: 'var(--font-mono, monospace)',
+                        fontSize: 'var(--text-sm)',
+                      }}
+                    >
+                      {r.ipa}
+                    </span>
+                  )}
+                </div>
                 {r.definitionEn && (
                   <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
                     {r.definitionEn}

@@ -188,17 +188,24 @@ describe('invalidateAfterMutation', () => {
 });
 
 describe('cacheKeyForPath', () => {
+  // The vocabulary pages live at /vocabulary; the cache keys kept the original `flashcards`
+  // name (as did the API paths and DB tables), so the mismatch below is deliberate.
   it('maps route paths to cache keys', () => {
     expect(cacheKeyForPath('/dashboard')).toBe(K.dashboard);
-    expect(cacheKeyForPath('/flashcards')).toBe(K.flashcards);
-    expect(cacheKeyForPath('/flashcards/animals')).toBe('route:flashcards:animals');
+    expect(cacheKeyForPath('/vocabulary')).toBe(K.flashcards);
+    expect(cacheKeyForPath('/vocabulary/animals')).toBe('route:flashcards:animals');
     expect(cacheKeyForPath('/profile')).toBeNull();
     expect(cacheKeyForPath('/')).toBeNull();
   });
 
+  it('no longer matches the pre-rename /flashcards paths', () => {
+    expect(cacheKeyForPath('/flashcards')).toBeNull();
+    expect(cacheKeyForPath('/flashcards/animals')).toBeNull();
+  });
+
   it('tolerates trailing slashes and encoded slugs', () => {
     expect(cacheKeyForPath('/dashboard/')).toBe(K.dashboard);
-    expect(cacheKeyForPath('/flashcards/animals/')).toBe('route:flashcards:animals');
-    expect(cacheKeyForPath('/flashcards/b%C3%A0i%201')).toBe('route:flashcards:bài 1');
+    expect(cacheKeyForPath('/vocabulary/animals/')).toBe('route:flashcards:animals');
+    expect(cacheKeyForPath('/vocabulary/b%C3%A0i%201')).toBe('route:flashcards:bài 1');
   });
 });

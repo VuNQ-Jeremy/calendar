@@ -34,7 +34,7 @@ export default function NewTopic() {
 
   // A student who deep-links here sees the list, not an error.
   if (user?.kind !== 'staff') {
-    router.replace('/flashcards');
+    router.replace('/vocabulary');
     return null;
   }
 

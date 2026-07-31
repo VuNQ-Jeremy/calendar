@@ -36,7 +36,7 @@ export default function EditTopic() {
   });
 
   if (user?.kind !== 'staff') {
-    router.replace('/flashcards');
+    router.replace('/vocabulary');
     return null;
   }
 

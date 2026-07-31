@@ -46,6 +46,13 @@ function slugify(name: string): string {
   return base || 'topic';
 }
 
+/**
+ * Slugs that would collide with a sibling screen rather than resolve to a topic. The mobile app
+ * routes `/vocabulary/new` and `/vocabulary/generate` as static segments, which win over the
+ * `[slug]` match — so a topic named "New" would otherwise be unreachable there.
+ */
+const RESERVED_SLUGS = new Set(['new', 'generate', 'import', 'edit']);
+
 /** Append -2, -3… until the slug is free (ignoring the row being updated). */
 async function uniqueSlug(db: Db, base: string, excludeId?: string): Promise<string> {
   const rows = await db
@@ -54,6 +61,7 @@ async function uniqueSlug(db: Db, base: string, excludeId?: string): Promise<str
   const taken = new Set(
     rows.filter((r) => r.id !== excludeId && r.slug).map((r) => r.slug as string),
   );
+  for (const reserved of RESERVED_SLUGS) taken.add(reserved);
   if (!taken.has(base)) return base;
   let n = 2;
   while (taken.has(`${base}-${n}`)) n++;
@@ -154,6 +162,33 @@ export async function createTopic(db: Db, input: FlashcardTopicInput): Promise<v
     color: input.color,
     createdAt: new Date().toISOString(),
   });
+}
+
+/**
+ * Create a topic and its first words in one call, returning the new topic.
+ *
+ * This is what the AI generator saves through: the words already exist client-side by the time
+ * the teacher confirms, so doing both writes here avoids leaving an empty topic behind if the
+ * second call were to fail. Unlike `createTopic` it returns the row, since the caller needs the
+ * slug to navigate to the new topic.
+ */
+export async function createTopicWithWords(
+  db: Db,
+  input: FlashcardTopicInput,
+  words: FlashcardWordInput[],
+): Promise<TopicInfo> {
+  const slug = await uniqueSlug(db, slugify(input.name));
+  const id = crypto.randomUUID();
+  await db.insert(flashcardTopics).values({
+    id,
+    name: input.name,
+    slug,
+    description: input.description ?? null,
+    color: input.color,
+    createdAt: new Date().toISOString(),
+  });
+  await importWords(db, id, words);
+  return { id, name: input.name, slug, description: input.description ?? null, color: input.color };
 }
 
 export async function updateTopic(

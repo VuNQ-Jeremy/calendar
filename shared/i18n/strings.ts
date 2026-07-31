@@ -614,6 +614,10 @@ const en_strings = {
   fc_gen_disabled: 'AI generation is not enabled on this server.',
   fc_gen_empty: 'No new words were generated. Try a different topic or level.',
   fc_gen_save: 'Add {n} words',
+  fc_gen_new_btn: 'Generate topic with AI',
+  fc_gen_new_title: 'Generate a new topic',
+  fc_gen_new_hint: 'Pick a topic and AI writes the words. Review the list before creating.',
+  fc_gen_new_save: 'Create topic with {n} words',
 
   // ---- Mobile app (m_*) ----
   // Added by docs/mobile/phase-2-expo-shell.md. The rule is: no hardcoded strings in any
@@ -1282,6 +1286,10 @@ export const STRINGS = {
     fc_gen_disabled: 'Tính năng tạo từ bằng AI chưa được bật trên máy chủ.',
     fc_gen_empty: 'Không tạo được từ mới nào. Hãy thử chủ đề hoặc trình độ khác.',
     fc_gen_save: 'Thêm {n} từ',
+    fc_gen_new_btn: 'Tạo chủ đề bằng AI',
+    fc_gen_new_title: 'Tạo chủ đề mới',
+    fc_gen_new_hint: 'Chọn một chủ đề và AI sẽ soạn từ vựng. Hãy xem lại danh sách trước khi tạo.',
+    fc_gen_new_save: 'Tạo chủ đề với {n} từ',
 
     // ---- Mobile app (m_*) ----
     m_more: 'Thêm',

@@ -156,7 +156,7 @@ export async function requireUser(request: Request, env: Env): Promise<SessionUs
 
 export async function requireStaff(request: Request, env: Env): Promise<SessionUser> {
   const sessionUser = await requireUser(request, env);
-  if (sessionUser.kind !== 'staff') throw redirect('/flashcards');
+  if (sessionUser.kind !== 'staff') throw redirect('/vocabulary');
   return sessionUser;
 }
 

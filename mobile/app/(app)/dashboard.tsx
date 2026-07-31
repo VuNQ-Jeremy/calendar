@@ -42,7 +42,7 @@ import type { HomeworkRow } from '~/lib/types';
  */
 export default function Dashboard() {
   const { user } = useAuth();
-  if (user?.kind === 'student') return <Redirect href="/flashcards" />;
+  if (user?.kind === 'student') return <Redirect href="/vocabulary" />;
   return <StaffDashboard />;
 }
 

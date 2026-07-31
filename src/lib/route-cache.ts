@@ -135,9 +135,15 @@ export function invalidateAfterMutation(domain: MutationDomain): void {
   if (stale.length) markStale(...stale);
 }
 
-/** Map a pathname to its route cache key (null when the route has no cache). */
+/**
+ * Map a pathname to its route cache key (null when the route has no cache).
+ *
+ * Note the deliberate mismatch on vocabulary: the URL is `/vocabulary`, but the cache keys, the
+ * `/api/flashcards/*` endpoints, and the DB tables all kept the original `flashcards` name. Only
+ * the user-visible URL was renamed — the internal names are not worth a coordinated migration.
+ */
 export function cacheKeyForPath(pathname: string): string | null {
-  const fc = pathname.match(/^\/flashcards\/([^/]+)\/?$/);
+  const fc = pathname.match(/^\/vocabulary\/([^/]+)\/?$/);
   if (fc) return flashcardTopicKey(decodeURIComponent(fc[1]));
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   const map: Record<string, string> = {
@@ -148,7 +154,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/materials': K.materials,
     '/homework': K.homework,
     '/assessments': K.assessments,
-    '/flashcards': K.flashcards,
+    '/vocabulary': K.flashcards,
     '/config': K.config,
     '/feedback': K.feedback,
   };

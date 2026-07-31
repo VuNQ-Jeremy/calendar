@@ -85,8 +85,8 @@ test.describe('navigation latency', () => {
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
     await page.click('form[action="/login"] button[type="submit"]');
-    // Staff land on /dashboard, students on /flashcards.
-    await page.waitForURL(/\/(dashboard|flashcards)/, { timeout: 30_000 });
+    // Staff land on /dashboard, students on /vocabulary.
+    await page.waitForURL(/\/(dashboard|vocabulary)/, { timeout: 30_000 });
     await expect(page.locator('.sb')).toBeVisible();
     // Every assertion below drives the staff sidebar.
     const isStaff = (await page.locator('.sb a[href="/dashboard"]').count()) > 0;

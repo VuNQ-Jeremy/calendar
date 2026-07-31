@@ -116,6 +116,15 @@ export interface MasteryRow {
   lastSeen: string | null;
 }
 
+/** A topic without its word count — what a create call replies with. */
+export interface TopicInfo {
+  id: string;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  color: string;
+}
+
 /** The whole payload for one topic. This exact object is what gets cached for offline use. */
 export interface TopicBundle {
   topic: FlashcardTopicRow;

@@ -13,5 +13,5 @@ export default function Index() {
   const { user } = useAuth();
 
   if (!user) return <Redirect href="/login" />;
-  return <Redirect href={user.kind === 'student' ? '/flashcards' : '/dashboard'} />;
+  return <Redirect href={user.kind === 'student' ? '/vocabulary' : '/dashboard'} />;
 }

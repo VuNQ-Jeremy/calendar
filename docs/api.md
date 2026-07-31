@@ -139,6 +139,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, results, mastery }` — one round trip, and exactly what an offline download stores. `results` is user-level because the web gives students the leaderboard too; `mastery` is empty for staff |
 | GET POST PATCH DELETE | `/api/flashcards/words/:id?` | staff | `?topicId=` required on GET and POST |
 | POST | `/api/flashcards/import?topicId=` | staff | `{ words: [...] }`, max 200 |
+| POST | `/api/flashcards/generate-topic` | staff | `{ name, description?, color?, words: [...] }` — creates a topic and its words in one write; replies with the new topic (incl. `slug`). NOT under `/topics`, whose `:id?` would swallow the segment |
 | POST | `/api/flashcards/results` | **user** | See idempotency below |
 | GET | `/api/flashcards/stats` | staff | `?topicId=` for one topic's results, else per-student stats |
 | GET PATCH | `/api/profile` | user | `ProfileInput` — deliberately cannot change `role` |
@@ -152,9 +153,16 @@ Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view
 
 `POST /generate-vocab` (staff) takes `{ topic, count?, level?, exclude? }` and answers
 `{ data: { words: [{ word, meaningVi, definitionEn }] } }` — proposed words only; the client
-saves the ones the user keeps through `POST /api/flashcards/import`. Returns 503 when the
+saves the ones the user keeps — through `POST /api/flashcards/import` when adding to an existing
+topic, or `POST /api/flashcards/generate-topic` when creating a new one. Returns 503 when the
 server has no `ANTHROPIC_API_KEY`. The model call takes 5-20s, so clients need a raised
 timeout.
+
+Note the naming split: the vocabulary **pages** live at `/vocabulary` (renamed from
+`/flashcards`), but these API paths, the DB tables, and the client cache keys all kept the
+original `flashcards` name — only the user-visible URL moved. `/flashcards` and
+`/flashcards/:slug` still 301-redirect to their `/vocabulary` equivalents for old bookmarks and
+for push notifications sent before the rename.
 
 ---
 

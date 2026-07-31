@@ -185,7 +185,15 @@ export function useNotificationRouting(ready: boolean): void {
 
     const go = (data: unknown) => {
       const url = (data as { url?: string } | undefined)?.url;
-      if (typeof url === 'string' && url.startsWith('/')) router.push(url as Href);
+      if (typeof url !== 'string' || !url.startsWith('/')) return;
+      // The vocabulary tab moved from /flashcards to /vocabulary. The server still sends the old
+      // path so notification taps keep working on installs that predate the rename; remap it here
+      // or expo-router lands on +not-found.
+      const href =
+        url === '/flashcards' || url.startsWith('/flashcards/')
+          ? `/vocabulary${url.slice('/flashcards'.length)}`
+          : url;
+      router.push(href as Href);
     };
 
     let handled = false;

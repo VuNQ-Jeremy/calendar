@@ -11,6 +11,7 @@ import type {
   FlashcardImportInput,
   FlashcardResultBatch,
   FlashcardTopicInput,
+  FlashcardTopicWithWordsInput,
   FlashcardWordInput,
   GeneratedWord,
   HomeworkGradesSaveInput,
@@ -44,6 +45,7 @@ import type {
   FlashcardWordRow,
   FlashcardResultRow,
   TopicBundle,
+  TopicInfo,
   HomeworkRow,
   InviteRow,
   LoginResponse,
@@ -240,6 +242,14 @@ export const flashcards = {
       query: { topicId },
       body: input,
     }),
+
+  /**
+   * Create a topic and its first words together — the save step of AI generation. Returns the new
+   * topic (the caller needs its slug to navigate there). Doing both writes server-side means an
+   * abandoned save can't leave an empty topic behind.
+   */
+  createTopicWithWords: (input: FlashcardTopicWithWordsInput) =>
+    apiFetch<TopicInfo>('/api/flashcards/generate-topic', { method: 'POST', body: input }),
 
   /**
    * Always a batch, so the phase-3 offline outbox can flush several at once. Every result

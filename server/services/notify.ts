@@ -188,7 +188,13 @@ export async function runDailyDigest(db: Db, at: Date = new Date()): Promise<num
         messages.push({
           to,
           title: 'Mochi',
-          body: 'A few minutes of flashcards?',
+          body: 'A few minutes of vocabulary?',
+          // Deliberately still `/flashcards`, even though the screen now lives at /vocabulary.
+          // The Worker deploys the moment we push, but phones only pick up the matching JS on
+          // their second launch after an OTA publish — sending the new path immediately would
+          // dead-end notification taps on every not-yet-updated install. Installed builds
+          // handle this path natively and updated ones remap it (mobile/lib/push.ts). Safe to
+          // switch to /vocabulary once no pre-rename build is in the wild.
           data: { url: '/flashcards', kind: 'study' },
           channelId: 'study',
         });
