@@ -21,6 +21,7 @@ import {
   TestQuestionsSaveInput,
   PaperScoresSaveInput,
   AttemptGradeInput,
+  QuestionsImportInput,
   parsePatch,
 } from '../../shared/schemas';
 import { testDetailKey, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -134,6 +135,43 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       return { ok: true, links };
     }
 
+    // Bulk save from the file-import review screen, then attach the new questions to THIS test.
+    // The two halves are deliberately not atomic: if the attach fails (someone has already
+    // attempted the test), the questions still belong in the bank, so we report the partial
+    // outcome rather than discarding a successful import.
+    if (intent === 'import-questions') {
+      let payload: unknown;
+      try {
+        payload = JSON.parse((formData.get('payload') as string) ?? '{}');
+      } catch {
+        return Response.json({ error: 'bad payload json' }, { status: 400 });
+      }
+      const parsed = QuestionsImportInput.safeParse(payload);
+      if (!parsed.success) {
+        return Response.json({ error: 'invalid', errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const pointsRaw = Number(formData.get('defaultPoints') ?? 1);
+      const points = Number.isFinite(pointsRaw) ? Math.min(Math.max(pointsRaw, 0), 100) : 1;
+      const created = await questionsSvc.createMany(db, parsed.data.questions);
+      try {
+        const links = await testsSvc.appendQuestions(
+          db,
+          id,
+          created.map((row) => ({ questionId: row.id, points })),
+        );
+        return { ok: true, created: created.length, links };
+      } catch (e) {
+        if (e instanceof Response) {
+          const body = (await e.json().catch(() => ({}))) as { error?: string };
+          return Response.json(
+            { error: body.error ?? 'attach_failed', createdInBank: created.length },
+            { status: e.status },
+          );
+        }
+        throw e;
+      }
+    }
+
     if (intent === 'save-paper-scores') {
       let recordsRaw: unknown;
       try {
@@ -200,10 +238,24 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 }
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  let result: unknown;
   try {
-    return await serverAction();
+    result = await serverAction();
+    return result;
   } finally {
     invalidateAfterMutation('tests');
+    // `import-questions` is the one intent here that writes the questions TABLE, which the
+    // 'tests' domain does not cover. The route cache has no TTL, so without this the question
+    // bank would serve a list missing the imported rows for the rest of the session. Both the
+    // success shape (`created`) and the attached-but-not-linked shape (`createdInBank`) mean
+    // rows were written.
+    if (
+      result &&
+      typeof result === 'object' &&
+      ('created' in result || 'createdInBank' in result)
+    ) {
+      invalidateAfterMutation('questions');
+    }
   }
 }
 

@@ -37,11 +37,13 @@
     "drizzle-orm": "^0.45.2",
     "isbot": "^5",
     "lucide-react": "^1.25.0",
+    "mammoth": "^1.12.0",
     "radix-ui": "^1.6.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router": "^8.2.0",
     "tailwind-merge": "^3.6.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
   "devDependencies": {

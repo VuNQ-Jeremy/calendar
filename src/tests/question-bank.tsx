@@ -11,6 +11,7 @@ import {
   draftFromQuestion,
   type QuestionDraft,
 } from './question-editor.jsx';
+import { QuestionImportModal } from './question-import.jsx';
 import type { QuestionRow } from '../../server/services/questions.js';
 import type { GradeLevelRow } from '../../server/services/grade-levels.js';
 
@@ -53,6 +54,7 @@ export function QuestionBankScreen() {
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const { t } = useLang();
   const [draft, setDraft] = React.useState<QuestionDraft | null>(null);
+  const [importing, setImporting] = React.useState(false);
   const [confirm, confirmNode] = useConfirm();
 
   const [q, setQ] = React.useState('');
@@ -115,13 +117,22 @@ export function QuestionBankScreen() {
         title={t('qb_title')}
         subtitle={t('qb_subtitle')}
         actions={
-          <MBtn
-            variant="primary"
-            iconLeft={<MIcon name="plus" size={18} />}
-            onClick={() => setDraft(newQuestionDraft())}
-          >
-            {t('qb_add')}
-          </MBtn>
+          <div className="m-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <MBtn
+              variant="secondary"
+              iconLeft={<MIcon name="upload" size={18} />}
+              onClick={() => setImporting(true)}
+            >
+              {t('qi_open')}
+            </MBtn>
+            <MBtn
+              variant="primary"
+              iconLeft={<MIcon name="plus" size={18} />}
+              onClick={() => setDraft(newQuestionDraft())}
+            >
+              {t('qb_add')}
+            </MBtn>
+          </div>
         }
       />
 
@@ -288,6 +299,14 @@ export function QuestionBankScreen() {
           gradeLevels={gradeLevels}
           fetcher={fetcher}
           onClose={() => setDraft(null)}
+        />
+      )}
+      {importing && (
+        <QuestionImportModal
+          mode="bank"
+          action="/questions"
+          gradeLevels={gradeLevels}
+          onClose={() => setImporting(false)}
         />
       )}
       {confirmNode}

@@ -10,7 +10,12 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as questionsSvc from '../../server/services/questions';
 import * as gradeLevelsSvc from '../../server/services/grade-levels';
-import { QuestionInput, QuestionInputBase, parsePatch } from '../../shared/schemas';
+import {
+  QuestionInput,
+  QuestionInputBase,
+  QuestionsImportInput,
+  parsePatch,
+} from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -71,6 +76,23 @@ export async function action({ request, context }: ActionFunctionArgs) {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
       await questionsSvc.remove(db, id);
       return { ok: true };
+    }
+
+    // Bulk save from the file-import review screen. Handled before `preprocessQRaw` because the
+    // whole list rides as one `payload` JSON string — there are no flat per-question fields.
+    if (intent === 'import') {
+      let payload: unknown;
+      try {
+        payload = JSON.parse((formData.get('payload') as string) ?? '{}');
+      } catch {
+        return Response.json({ error: 'bad payload json' }, { status: 400 });
+      }
+      const parsed = QuestionsImportInput.safeParse(payload);
+      if (!parsed.success) {
+        return Response.json({ error: 'invalid', errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const created = await questionsSvc.createMany(db, parsed.data.questions);
+      return { ok: true, created: created.length };
     }
 
     const raw = preprocessQRaw(Object.fromEntries(formData) as Record<string, unknown>);

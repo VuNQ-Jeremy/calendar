@@ -19,6 +19,14 @@ interface ModalProps {
   size?: 'default' | 'full';
 }
 
+/**
+ * Every open dialog, innermost last. The Escape handler has to live on `window` (a dialog holds no
+ * focus of its own), so without this every open Modal would answer the same keypress: pressing
+ * Escape in a dialog opened from inside another dialog closed BOTH, discarding the outer one's
+ * work. Only the entry on top acts.
+ */
+const openDialogs: object[] = [];
+
 function Modal({
   open,
   onClose,
@@ -31,14 +39,28 @@ function Modal({
 }: ModalProps) {
   const { t } = useLang();
 
+  // `onClose` is nearly always an inline arrow, so it changes identity on every parent render.
+  // Reading it through a ref keeps it out of the effect's deps — otherwise the effect would
+  // re-run constantly, popping and re-pushing this dialog and scrambling the stack order.
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+
   React.useEffect(() => {
     if (!open) return;
+    const token = {};
+    openDialogs.push(token);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose && onClose();
+      if (e.key !== 'Escape') return;
+      if (openDialogs[openDialogs.length - 1] !== token) return; // a dialog is open above this one
+      closeRef.current?.();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      const i = openDialogs.indexOf(token);
+      if (i >= 0) openDialogs.splice(i, 1);
+    };
+  }, [open]);
 
   if (!open) return null;
 

@@ -60,6 +60,32 @@ const emptyKeyFor = (type: QDraftType): string | string[] | null => {
 
 const asArray = (k: string | string[] | null): string[] => (Array.isArray(k) ? k : []);
 
+/**
+ * Mirrors the server's `QuestionInput` superRefine. Returns an i18n KEY for the first problem, or
+ * null when the draft would save cleanly.
+ *
+ * Module-level and translation-free on purpose: the import review screen checks whole batches of
+ * drafts with it, outside any one editor instance.
+ */
+export function validateDraft(draft: QuestionDraft): string | null {
+  if (!draft.prompt.trim()) return 'qb_err_no_prompt';
+  if (draft.type === 'mcq' || draft.type === 'multi') {
+    const filled = draft.options.filter((o) => o.text.trim() !== '');
+    if (filled.length < 2) return 'qb_err_options_min';
+    if (draft.type === 'mcq') {
+      if (typeof draft.answerKey !== 'string' || !draft.answerKey) return 'qb_err_no_correct';
+      if (!filled.some((o) => o.id === draft.answerKey)) return 'qb_err_no_correct';
+    } else {
+      const key = asArray(draft.answerKey).filter((k) => filled.some((o) => o.id === k));
+      if (!key.length) return 'qb_err_no_correct';
+    }
+  }
+  if (draft.type === 'text' && asArray(draft.answerKey).length === 0) {
+    return 'qb_err_no_accepted';
+  }
+  return null;
+}
+
 interface ChipInputProps {
   label: string;
   placeholder: string;
@@ -133,7 +159,17 @@ interface QuestionEditorModalProps {
   draft: QuestionDraft;
   setDraft: React.Dispatch<React.SetStateAction<QuestionDraft | null>>;
   gradeLevels: GradeLevelRow[];
-  fetcher: FetcherWithComponents<unknown>;
+  /** Required unless `onSave` is given — the editor posts to /questions itself by default. */
+  fetcher?: FetcherWithComponents<unknown>;
+  /**
+   * Take the normalized draft instead of saving it. The file-import review screen passes this so
+   * a row can be corrected in the full editor and kept in local state until the bulk import,
+   * rather than being written to the bank one question at a time.
+   *
+   * When given, the editor does NOT call `onClose` on save — closing (and any rollback) is the
+   * caller's, so `onClose` means "cancelled" and nothing else.
+   */
+  onSave?: (draft: QuestionDraft) => void;
   onClose: () => void;
 }
 
@@ -142,6 +178,7 @@ export function QuestionEditorModal({
   setDraft,
   gradeLevels,
   fetcher,
+  onSave,
   onClose,
 }: QuestionEditorModalProps) {
   const { t } = useLang();
@@ -214,30 +251,10 @@ export function QuestionEditorModal({
     set('answerKey', cur.includes(id) ? cur.filter((k) => k !== id) : [...cur, id]);
   };
 
-  /** Mirrors the server's superRefine so a valid-looking form is never bounced by a 400. */
-  const validate = (): string | null => {
-    if (!draft.prompt.trim()) return t('qb_err_no_prompt');
-    if (draft.type === 'mcq' || draft.type === 'multi') {
-      const filled = draft.options.filter((o) => o.text.trim() !== '');
-      if (filled.length < 2) return t('qb_err_options_min');
-      if (draft.type === 'mcq') {
-        if (typeof draft.answerKey !== 'string' || !draft.answerKey) return t('qb_err_no_correct');
-        if (!filled.some((o) => o.id === draft.answerKey)) return t('qb_err_no_correct');
-      } else {
-        const key = asArray(draft.answerKey).filter((k) => filled.some((o) => o.id === k));
-        if (!key.length) return t('qb_err_no_correct');
-      }
-    }
-    if (draft.type === 'text' && asArray(draft.answerKey).length === 0) {
-      return t('qb_err_no_accepted');
-    }
-    return null;
-  };
-
   const save = () => {
-    const err = validate();
-    if (err) {
-      setError(err);
+    const errKey = validateDraft(draft);
+    if (errKey) {
+      setError(t(errKey));
       return;
     }
     const options =
@@ -252,6 +269,20 @@ export function QuestionEditorModal({
     else if (draft.type === 'multi') answerKey = asArray(draft.answerKey).filter((k) => ids.has(k));
     else if (draft.type === 'text') answerKey = asArray(draft.answerKey);
 
+    // Import review: hand the cleaned-up draft back and let the caller hold it. `onClose` is NOT
+    // called here — it is the caller's cancel path (it may roll the draft back), so closing on
+    // save is the caller's job too.
+    if (onSave) {
+      onSave({
+        ...draft,
+        prompt: draft.prompt.trim(),
+        explanation: draft.explanation.trim(),
+        options,
+        answerKey,
+      });
+      return;
+    }
+
     const fd = new FormData();
     fd.set('intent', draft.id ? 'update' : 'create');
     if (draft.id) fd.set('id', draft.id);
@@ -265,7 +296,7 @@ export function QuestionEditorModal({
     // leave the previous options/answer key in place after a type switch.
     fd.set('options', JSON.stringify(options));
     fd.set('answerKey', JSON.stringify(answerKey));
-    fetcher.submit(fd, { action: '/questions', method: 'post' });
+    fetcher?.submit(fd, { action: '/questions', method: 'post' });
     onClose();
   };
 

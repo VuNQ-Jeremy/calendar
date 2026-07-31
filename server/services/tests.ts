@@ -1,6 +1,6 @@
 import { eq, asc, desc, inArray } from 'drizzle-orm';
 import { tests, testQuestions, testAttempts, questions, scoreRecords } from '../db/schema';
-import type { Db } from '../db/index';
+import { chunk, rowsPerStatement, D1_MAX_BOUND_PARAMS, type Db } from '../db/index';
 import type { TestInput } from '../../shared/schemas';
 import { ictDateOf } from '../../shared/logic/tests';
 
@@ -230,6 +230,9 @@ export async function remove(db: Db, id: string): Promise<void> {
   await db.delete(tests).where(eq(tests.id, id));
 }
 
+/** The columns each test_questions row binds — see `rowsPerStatement`. */
+const TEST_QUESTION_COLUMNS = 4;
+
 /**
  * Replace-set: the submitted array becomes the test's full question list, in array order.
  * Refuses once anyone has an attempt — reshaping a sat test would invalidate its scores.
@@ -246,7 +249,14 @@ export async function setQuestions(
 
   const ids = [...new Set(items.map((i) => i.questionId))];
   if (ids.length) {
-    const found = await db.select().from(questions).where(inArray(questions.id, ids));
+    // Chunked: `inArray` binds one parameter per id and D1 caps a statement at 100 of them.
+    const found = (
+      await Promise.all(
+        chunk(ids, D1_MAX_BOUND_PARAMS).map((part) =>
+          db.select().from(questions).where(inArray(questions.id, part)),
+        ),
+      )
+    ).flat();
     if (found.length !== ids.length) {
       throw Response.json({ error: 'unknown_question' }, { status: 400 });
     }
@@ -254,22 +264,52 @@ export async function setQuestions(
 
   const del = db.delete(testQuestions).where(eq(testQuestions.testId, testId));
   if (items.length) {
-    await db.batch([
-      del,
-      db.insert(testQuestions).values(
-        items.map((it, i) => ({
-          testId,
-          questionId: it.questionId,
-          sortOrder: i,
-          points: it.points,
-        })),
-      ),
-    ]);
+    const rows = items.map((it, i) => ({
+      testId,
+      questionId: it.questionId,
+      sortOrder: i,
+      points: it.points,
+    }));
+    // One INSERT of every link would bind 4 parameters per row and blow D1's 100-parameter
+    // ceiling past 25 questions, so the rows go out in chunks — all in the same batch as the
+    // delete, which is what makes the replace atomic.
+    const inserts = chunk(rows, rowsPerStatement(TEST_QUESTION_COLUMNS)).map((part) =>
+      db.insert(testQuestions).values(part),
+    );
+    await db.batch([del, ...inserts]);
   } else {
     await del;
   }
 
   return listQuestionLinks(db, testId);
+}
+
+/**
+ * Add questions to the END of a test's list, keeping everything already there.
+ *
+ * `setQuestions` is a REPLACE-set, so the import flow cannot call it with only the new rows — that
+ * would silently drop every question the teacher had already picked. Merging here and delegating
+ * keeps a single write path (and with it the attempt guard and the unknown-question check).
+ * Ids already on the test are skipped rather than duplicated: test_questions is keyed on
+ * (test_id, question_id), so a repeat would fail the insert.
+ */
+export async function appendQuestions(
+  db: Db,
+  testId: string,
+  add: { questionId: string; points: number }[],
+): Promise<TestQuestionRow[]> {
+  const existing = await listQuestionLinks(db, testId);
+  const have = new Set(existing.map((l) => l.questionId));
+  const fresh = add.filter((item) => !have.has(item.questionId));
+  if (!fresh.length) return existing;
+
+  const merged = [
+    ...existing.map((l) => ({ questionId: l.questionId, points: l.points })),
+    ...fresh,
+  ];
+  // Mirrors TestQuestionsSaveInput's cap, which setQuestions itself does not enforce.
+  if (merged.length > 100) throw Response.json({ error: 'too_many_questions' }, { status: 400 });
+  return setQuestions(db, testId, merged);
 }
 
 export async function publish(db: Db, id: string): Promise<TestRow> {

@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import * as enrichSvc from '../server/services/enrich';
 import * as generateSvc from '../server/services/generate';
-import type { VocabEnrichItem, VocabGenerateInput } from '../shared/schemas';
+import * as extractSvc from '../server/services/extract-questions';
+import type { VocabEnrichItem, VocabGenerateInput, QuestionExtractInput } from '../shared/schemas';
 
 /**
  * Durable Object that performs Anthropic API calls from a fixed region.
@@ -14,8 +15,9 @@ import type { VocabEnrichItem, VocabGenerateInput } from '../shared/schemas';
  * no storage work — it exists purely to relocate the egress point, so every
  * Anthropic-backed feature shares it, dispatched by path:
  *
- *   POST /enrich    fill in meaning/definition/IPA (app/routes/enrich-vocab.tsx)
- *   POST /generate  generate a vocab list          (app/routes/generate-vocab.tsx)
+ *   POST /enrich             fill in meaning/definition/IPA (app/routes/enrich-vocab.tsx)
+ *   POST /generate           generate a vocab list          (app/routes/generate-vocab.tsx)
+ *   POST /extract-questions  read questions off a test paper (app/routes/extract-questions.tsx)
  *
  * Bodies arrive already validated by the calling resource route.
  */
@@ -39,6 +41,13 @@ export class TranslateProxy extends DurableObject<Env> {
         );
         return Response.json({ words });
       }
+      if (op === '/extract-questions') {
+        const questions = await extractSvc.extractQuestions(
+          this.env.ANTHROPIC_API_KEY,
+          body as QuestionExtractInput,
+        );
+        return Response.json({ questions });
+      }
       const words = await enrichSvc.enrichWords(
         this.env.ANTHROPIC_API_KEY,
         body as VocabEnrichItem[],
@@ -50,10 +59,18 @@ export class TranslateProxy extends DurableObject<Env> {
         message: (e as Error)?.message,
         status: (e as { status?: number })?.status,
       });
-      return Response.json(
-        { error: op === '/generate' ? 'generate_failed' : 'enrich_failed' },
-        { status: 502 },
-      );
+      // Truncated extraction is a distinct, actionable failure ("split the file"), so it gets its
+      // own label rather than the generic per-op one.
+      if (e instanceof extractSvc.ExtractTruncatedError) {
+        return Response.json({ error: 'extract_truncated' }, { status: 502 });
+      }
+      const label =
+        op === '/generate'
+          ? 'generate_failed'
+          : op === '/extract-questions'
+            ? 'extract_failed'
+            : 'enrich_failed';
+      return Response.json({ error: label }, { status: 502 });
     }
   }
 }

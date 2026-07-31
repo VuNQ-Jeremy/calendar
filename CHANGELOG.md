@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0070 — 2026-07-31
+Import questions from a file: upload a Word, PDF, Excel or Markdown test paper and Claude reads the questions out for review before they are saved to the bank (or straight onto a test). Also fixes a D1 bound-parameter limit that broke saving a test with more than 25 questions.
+
 ## v0.0069 — 2026-07-31
 Date picker popover now sizes to its 44px day grid instead of a stale 272px width, so the calendar no longer overflows the panel.
 

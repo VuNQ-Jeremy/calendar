@@ -1,6 +1,6 @@
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, inArray } from 'drizzle-orm';
 import { questions, testQuestions, testAttempts } from '../db/schema';
-import type { Db } from '../db/index';
+import { chunk, rowsPerStatement, D1_MAX_BOUND_PARAMS, type Db } from '../db/index';
 import { QuestionInput, type QuestionInputBase } from '../../shared/schemas';
 
 export type QuestionRow = {
@@ -95,6 +95,61 @@ export async function create(db: Db, input: QuestionInput): Promise<QuestionRow>
   });
   const rows = await db.select().from(questions).where(eq(questions.id, id));
   return map(rows[0]);
+}
+
+/** The columns `createMany` binds per row — see `rowsPerStatement`. */
+const QUESTION_COLUMNS = 11;
+
+/**
+ * Bulk insert for the file-import flow. Every input has already passed the refined `QuestionInput`
+ * (the route parses `z.array(QuestionInput)`), so there is nothing left to validate here.
+ *
+ * Returns the new rows in submitted order — the caller uses that order for `sortOrder` when
+ * attaching them to a test. No lock check: a row created a millisecond ago cannot be on an
+ * attempted test.
+ */
+export async function createMany(db: Db, inputs: QuestionInput[]): Promise<QuestionRow[]> {
+  if (!inputs.length) return [];
+  const now = new Date().toISOString();
+  const values = inputs.map((input) => ({
+    id: crypto.randomUUID(),
+    type: input.type,
+    prompt: input.prompt,
+    gradeLevelId: input.gradeLevelId ?? null,
+    difficulty: input.difficulty ?? null,
+    tags: JSON.stringify(input.tags ?? []),
+    options: JSON.stringify(input.options ?? []),
+    answerKey: input.answerKey == null ? null : JSON.stringify(input.answerKey),
+    explanation: input.explanation ?? null,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  // Chunked so no single INSERT exceeds D1's bound-parameter ceiling, then sent as one batch so
+  // a partial import can never be left behind.
+  const inserts = chunk(values, rowsPerStatement(QUESTION_COLUMNS)).map((rows) =>
+    db.insert(questions).values(rows),
+  );
+  if (inserts.length === 1) {
+    await inserts[0];
+  } else {
+    await db.batch(inserts as [(typeof inserts)[number], ...typeof inserts]);
+  }
+
+  const ids = values.map((v) => v.id);
+  // `inArray` binds one parameter per id, so the read-back is chunked for the same reason.
+  const rows = (
+    await Promise.all(
+      chunk(ids, D1_MAX_BOUND_PARAMS).map((part) =>
+        db.select().from(questions).where(inArray(questions.id, part)),
+      ),
+    )
+  ).flat();
+  // A SELECT ... IN gives no ordering guarantee, so re-index by id to restore submitted order.
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row ? [map(row)] : [];
+  });
 }
 
 /** The fields whose change would invalidate already-graded attempts. */

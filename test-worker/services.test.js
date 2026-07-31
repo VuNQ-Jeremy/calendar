@@ -1064,6 +1064,135 @@ describe('questions', () => {
     expect(rows.length).toBe(0);
   });
 
+  it('createMany inserts every row and returns them in submitted order', async () => {
+    const d = db();
+    const inputs = ['Bulk A', 'Bulk B', 'Bulk C'].map((prompt) => mcqInput({ prompt }));
+    const created = await questionsSvc.createMany(d, inputs);
+
+    expect(created.map((r) => r.prompt)).toEqual(['Bulk A', 'Bulk B', 'Bulk C']);
+    expect(new Set(created.map((r) => r.id)).size).toBe(3);
+    // JSON columns must round-trip the same way the single-row create does.
+    expect(created[0].options).toEqual(OPTS);
+    expect(created[0].answerKey).toBe('b');
+    expect(created[0].tags).toEqual(['algebra']);
+
+    const list = await questionsSvc.list(d);
+    for (const row of created) expect(list.some((item) => item.id === row.id)).toBe(true);
+  });
+
+  it('createMany on an empty list is a no-op', async () => {
+    expect(await questionsSvc.createMany(db(), [])).toEqual([]);
+  });
+
+  it('appendQuestions keeps the questions already on the test', async () => {
+    const d = db();
+    const existing = await questionsSvc.create(d, mcqInput({ prompt: 'Was already here' }));
+    const testId = await seedTest(d, 'Append Test');
+    await testsSvc.setQuestions(d, testId, [{ questionId: existing.id, points: 2 }]);
+
+    const added = await questionsSvc.createMany(d, [
+      mcqInput({ prompt: 'Imported 1' }),
+      mcqInput({ prompt: 'Imported 2' }),
+    ]);
+    const links = await testsSvc.appendQuestions(
+      d,
+      testId,
+      added.map((row) => ({ questionId: row.id, points: 1 })),
+    );
+
+    // The original link survives with its own points, and the new ones land after it in order.
+    expect(links.map((l) => l.questionId)).toEqual([existing.id, added[0].id, added[1].id]);
+    expect(links.map((l) => l.sortOrder)).toEqual([0, 1, 2]);
+    expect(links.find((l) => l.questionId === existing.id).points).toBe(2);
+  });
+
+  it('appendQuestions skips a question the test already links', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Already linked' }));
+    const testId = await seedTest(d, 'Dedupe Test');
+    await testsSvc.setQuestions(d, testId, [{ questionId: q.id, points: 3 }]);
+
+    const links = await testsSvc.appendQuestions(d, testId, [{ questionId: q.id, points: 1 }]);
+    expect(links.length).toBe(1);
+    // Not re-added and not repriced — the existing link is left exactly as it was.
+    expect(links[0].points).toBe(3);
+  });
+
+  it('appendQuestions throws 409 test_has_attempts once the test has been sat', async () => {
+    const d = db();
+    const seeded = await questionsSvc.create(d, mcqInput({ prompt: 'On sat test' }));
+    const testId = await seedTest(d, 'Sat Test');
+    await linkQuestion(d, testId, seeded.id);
+    await seedAttempt(d, testId, 'Append Blocked Student');
+
+    const fresh = await questionsSvc.create(d, mcqInput({ prompt: 'Too late' }));
+    let err = null;
+    try {
+      await testsSvc.appendQuestions(d, testId, [{ questionId: fresh.id, points: 1 }]);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'test_has_attempts' });
+  });
+
+  it('setQuestions saves a full 100-question test', async () => {
+    // Regression: one INSERT per link binds 4 parameters per row, and D1 rejects a statement
+    // over 100 of them — so this used to die with `D1_ERROR: too many SQL variables` somewhere
+    // past 25 questions. Same ceiling applies to the unknown-question `inArray` check.
+    const d = db();
+    const testId = await seedTest(d, 'Hundred Test');
+    const created = await questionsSvc.createMany(
+      d,
+      Array.from({ length: 100 }, (_, i) => mcqInput({ prompt: `Q${i}` })),
+    );
+
+    const links = await testsSvc.setQuestions(
+      d,
+      testId,
+      created.map((row) => ({ questionId: row.id, points: 1 })),
+    );
+    expect(links.length).toBe(100);
+    // Order is preserved across the chunk boundaries, not just within a chunk.
+    expect(links.map((l) => l.questionId)).toEqual(created.map((row) => row.id));
+    expect(links.map((l) => l.sortOrder)).toEqual(created.map((_, i) => i));
+  });
+
+  it('appendQuestions refuses to push a test past 100 questions', async () => {
+    const d = db();
+    const testId = await seedTest(d, 'Full Test');
+    const existing = await questionsSvc.createMany(
+      d,
+      Array.from({ length: 99 }, (_, i) => mcqInput({ prompt: `Seat ${i}` })),
+    );
+    await testsSvc.setQuestions(
+      d,
+      testId,
+      existing.map((row) => ({ questionId: row.id, points: 1 })),
+    );
+
+    const extra = await questionsSvc.createMany(d, [
+      mcqInput({ prompt: 'Fits' }),
+      mcqInput({ prompt: 'Overflows' }),
+    ]);
+    let err = null;
+    try {
+      await testsSvc.appendQuestions(
+        d,
+        testId,
+        extra.map((row) => ({ questionId: row.id, points: 1 })),
+      );
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    expect(err.status).toBe(400);
+    expect(await err.json()).toEqual({ error: 'too_many_questions' });
+    // Rejected before any write: the test still holds exactly what it did.
+    expect((await testsSvc.listQuestionLinks(d, testId)).length).toBe(99);
+  });
+
   it('update throws 409 question_locked when an attempt exists and the patch touches options', async () => {
     const d = db();
     const q = await questionsSvc.create(d, mcqInput({ prompt: 'Locked' }));

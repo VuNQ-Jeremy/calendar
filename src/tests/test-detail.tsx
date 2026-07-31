@@ -14,6 +14,7 @@ import {
 import { useLang } from '../lib/i18n.jsx';
 import { composeUtcFromIct, splitIctFromUtc, isWindowOpen } from '../../shared/logic/tests.js';
 import { QuestionPicker } from './question-picker.jsx';
+import { QuestionImportModal } from './question-import.jsx';
 import { PaperScoreGrid } from './paper-entry.jsx';
 import { ResultsTable, AttemptGradeModal } from './grading.jsx';
 import type { AnswerRow } from '../../server/services/attempts.js';
@@ -64,6 +65,7 @@ export function TestDetailScreen() {
   const params = useParams();
   const { t } = useLang();
   const [tab, setTab] = React.useState<Tab>('setup');
+  const [importing, setImporting] = React.useState(false);
   const action = `/tests/${params.id}`;
 
   // Which attempt the grading modal is showing. Held as an id so a refetch swaps in fresh data
@@ -118,13 +120,39 @@ export function TestDetailScreen() {
       )}
 
       {tab === 'questions' && (
-        <QuestionPicker
-          links={links}
-          questions={questions}
-          gradeLevels={gradeLevels}
-          attempts={attempts}
-          action={action}
-        />
+        <div className="m-stack" style={{ gap: 12 }}>
+          {/* Hidden once anyone has attempted: the test's question set is frozen at that point
+              (setQuestions refuses), so offering an import that could only fail is worse than
+              not offering it. The bank-only import on /questions still works. */}
+          {attempts.length === 0 && (
+            <div className="m-row" style={{ justifyContent: 'flex-end' }}>
+              <MBtn
+                variant="secondary"
+                iconLeft={<MIcon name="upload" size={18} />}
+                onClick={() => setImporting(true)}
+              >
+                {t('qi_open')}
+              </MBtn>
+            </div>
+          )}
+          <QuestionPicker
+            links={links}
+            questions={questions}
+            gradeLevels={gradeLevels}
+            attempts={attempts}
+            action={action}
+          />
+          {importing && (
+            <QuestionImportModal
+              mode="test"
+              action={action}
+              gradeLevels={gradeLevels}
+              defaultGradeLevelId={test.gradeLevelId}
+              existingCount={links.length}
+              onClose={() => setImporting(false)}
+            />
+          )}
+        </div>
       )}
 
       {tab === 'results' &&
