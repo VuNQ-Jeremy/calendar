@@ -14,7 +14,7 @@ const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput } = DS;
 type LoaderData = {
   topics: FlashcardTopicRow[];
   kind: 'staff' | 'student';
-  canTranslate: boolean;
+  canUseAi: boolean;
 };
 
 interface TopicDraft {
@@ -25,7 +25,7 @@ interface TopicDraft {
 }
 
 export function FlashcardTopicsScreen() {
-  const { topics, kind, canTranslate } = useLoaderData() as LoaderData;
+  const { topics, kind, canUseAi } = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useLang();
@@ -75,7 +75,7 @@ export function FlashcardTopicsScreen() {
         actions={
           isStaff && (
             <span className="m-row" style={{ gap: 10, flexWrap: 'wrap' }}>
-              {canTranslate && (
+              {canUseAi && (
                 <FBtn
                   variant="secondary"
                   iconLeft={<MIcon name="sparkle" size={18} />}
@@ -339,7 +339,6 @@ function GenerateTopicModal({
         meaningVi: r.meaningVi.trim(),
         ipa: r.ipa.trim() || null,
         definitionEn: r.definitionEn.trim() || null,
-        audioUrl: null,
       }));
     if (words.length === 0 || !name.trim()) return;
     const fd = new FormData();

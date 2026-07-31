@@ -22,7 +22,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = createDb(env);
   const topics = await flashcardsSvc.listTopics(db);
   // Gates the AI generator in the UI — same flag the topic page passes down.
-  return { topics, kind, canTranslate: Boolean(env.ANTHROPIC_API_KEY) };
+  return { topics, kind, canUseAi: Boolean(env.ANTHROPIC_API_KEY) };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {

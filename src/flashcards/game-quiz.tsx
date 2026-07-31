@@ -98,11 +98,7 @@ export function QuizGame({ words, onExit, onFinish }: GameProps) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
         {q.prompt === 'audio' ? (
           <>
-            <FIB
-              label={t('fc_play_audio')}
-              size="md"
-              onClick={() => playWord(q.word.word, q.word.audioUrl)}
-            >
+            <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(q.word.word)}>
               <MIcon name="volume" size={32} />
             </FIB>
             <div style={{ color: 'var(--text-muted)' }}>{t('fc_listen_pick')}</div>

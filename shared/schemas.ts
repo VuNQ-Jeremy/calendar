@@ -252,18 +252,32 @@ export const FlashcardTopicWithWordsInput = FlashcardTopicInput.extend({
 });
 export type FlashcardTopicWithWordsInput = z.infer<typeof FlashcardTopicWithWordsInput>;
 
-export const TranslateInput = z.object({
-  items: z
-    .array(
-      z.object({
-        word: z.string().trim().min(1).max(100),
-        definitionEn: z.string().max(1000).nullish(),
-      }),
-    )
-    .min(1)
-    .max(200),
+/**
+ * One word to enrich. `definitionEn`, when present, is a sense hint the author already typed —
+ * the model glosses the word in THAT sense instead of guessing the most common one.
+ */
+export const VocabEnrichItem = z.object({
+  word: z.string().trim().min(1).max(100),
+  definitionEn: z.string().max(1000).nullish(),
 });
-export type TranslateInput = z.infer<typeof TranslateInput>;
+export type VocabEnrichItem = z.infer<typeof VocabEnrichItem>;
+
+export const VocabEnrichInput = z.object({
+  items: z.array(VocabEnrichItem).min(1).max(200),
+});
+export type VocabEnrichInput = z.infer<typeof VocabEnrichInput>;
+
+/**
+ * One enriched row: everything a flashcard needs except the word's own spelling, which the caller
+ * already had. Same field set as GeneratedWord — `audioUrl` is the one card field the model cannot
+ * supply, so AI-filled cards are pronounced by text-to-speech.
+ */
+export type EnrichedWord = {
+  word: string;
+  meaningVi: string;
+  definitionEn: string | null;
+  ipa: string | null;
+};
 
 export const VocabLevel = z.enum(['beginner', 'intermediate', 'advanced']);
 export type VocabLevel = z.infer<typeof VocabLevel>;

@@ -1,8 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
+import * as enrichSvc from '../server/services/enrich';
 import * as generateSvc from '../server/services/generate';
-import * as translateSvc from '../server/services/translate';
-import type { TranslateItem } from '../server/services/translate';
-import type { VocabGenerateInput } from '../shared/schemas';
+import type { VocabEnrichItem, VocabGenerateInput } from '../shared/schemas';
 
 /**
  * Durable Object that performs Anthropic API calls from a fixed region.
@@ -10,13 +9,13 @@ import type { VocabGenerateInput } from '../shared/schemas';
  * Why this exists: Cloudflare serves this Worker from the data center nearest
  * the user (HKG / Hong Kong for Vietnam), and Anthropic geo-blocks Hong Kong
  * egress with `403 "Request not allowed"`. A Durable Object requested with
- * `locationHint: 'enam'` (see app/routes/translate.tsx) runs in the US, so its
- * outbound fetch to Anthropic egresses from a supported region. The DO does no
- * storage work — it exists purely to relocate the egress point, so every
+ * `locationHint: 'enam'` (see app/routes/enrich-vocab.tsx) runs in the US, so
+ * its outbound fetch to Anthropic egresses from a supported region. The DO does
+ * no storage work — it exists purely to relocate the egress point, so every
  * Anthropic-backed feature shares it, dispatched by path:
  *
- *   POST /          translate a batch of words (app/routes/translate.tsx)
- *   POST /generate  generate a vocab list   (app/routes/generate-vocab.tsx)
+ *   POST /enrich    fill in meaning/definition/IPA (app/routes/enrich-vocab.tsx)
+ *   POST /generate  generate a vocab list          (app/routes/generate-vocab.tsx)
  *
  * Bodies arrive already validated by the calling resource route.
  */
@@ -40,11 +39,11 @@ export class TranslateProxy extends DurableObject<Env> {
         );
         return Response.json({ words });
       }
-      const translations = await translateSvc.translateWords(
+      const words = await enrichSvc.enrichWords(
         this.env.ANTHROPIC_API_KEY,
-        body as TranslateItem[],
+        body as VocabEnrichItem[],
       );
-      return Response.json({ translations });
+      return Response.json({ words });
     } catch (e) {
       console.error('[translate-do] failed', {
         op,
@@ -52,7 +51,7 @@ export class TranslateProxy extends DurableObject<Env> {
         status: (e as { status?: number })?.status,
       });
       return Response.json(
-        { error: op === '/generate' ? 'generate_failed' : 'translate_failed' },
+        { error: op === '/generate' ? 'generate_failed' : 'enrich_failed' },
         { status: 502 },
       );
     }

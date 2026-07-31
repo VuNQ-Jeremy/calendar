@@ -217,7 +217,7 @@ function WordsTab({
             borderBottomColor: th.color.borderSubtle,
           }}
         >
-          <IconButton size="sm" label={t('fc_play_audio')} onPress={() => play(w.word, w.audioUrl)}>
+          <IconButton size="sm" label={t('fc_play_audio')} onPress={() => play(w.word)}>
             <Volume2 size={18} color={th.color.textMuted} />
           </IconButton>
 

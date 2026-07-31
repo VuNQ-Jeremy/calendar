@@ -4,7 +4,7 @@ import { VOCAB_TOPICS, vocabTopicLabel } from '../shared/logic/vocab-topics';
 import { sanitizeGeneratedWords } from '../server/services/generate';
 import type { GeneratedWord } from '../shared/schemas';
 
-// The Anthropic call itself is not tested (it is network-bound, like translate.ts). What IS
+// The Anthropic call itself is not tested (it is network-bound, like enrich.ts). What IS
 // tested is everything the review UI trusts: the request schema and the post-processing that
 // turns raw model output into rows the import endpoint will accept.
 

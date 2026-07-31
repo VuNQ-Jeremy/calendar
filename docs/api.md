@@ -149,7 +149,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
 
 Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view`,
-`/materials/:id/download`, `/translate`, `/generate-vocab`.
+`/materials/:id/download`, `/enrich-vocab`, `/generate-vocab`.
 
 `POST /generate-vocab` (staff) takes `{ topic, count?, level?, exclude? }` and answers
 `{ data: { words: [{ word, meaningVi, definitionEn }] } }` — proposed words only; the client

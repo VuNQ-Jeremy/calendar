@@ -311,7 +311,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
           size="md"
           onClick={(e) => {
             e.stopPropagation();
-            playWord(word.word, word.audioUrl);
+            playWord(word.word);
           }}
         >
           <MIcon name="volume" size={22} />

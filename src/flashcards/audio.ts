@@ -1,29 +1,19 @@
 /**
- * Play a word's pronunciation. Prefers the dictionary-provided audio URL and
- * falls back to the browser's speech synthesis (robotic but always available)
- * when there is no URL or the audio fails to play (dead link / autoplay block).
+ * Speak a word with the browser's speech synthesis.
+ *
+ * Cards used to carry a recorded `audioUrl` from dictionaryapi.dev, played in preference to this.
+ * That lookup is gone (AI now fills every card field, and it cannot record audio), so synthesis is
+ * the only path — robotic, but available for every word including ones no dictionary knows.
  */
-export function playWord(word: string, audioUrl?: string | null): void {
+export function playWord(word: string): void {
   if (typeof window === 'undefined') return;
-  const tts = () => {
-    try {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(word);
-      u.lang = 'en-US';
-      u.rate = 0.9;
-      window.speechSynthesis.speak(u);
-    } catch {
-      /* no speech support */
-    }
-  };
-  if (audioUrl) {
-    try {
-      const a = new Audio(audioUrl);
-      a.play().catch(tts);
-    } catch {
-      tts();
-    }
-  } else {
-    tts();
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = 'en-US';
+    u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* no speech support */
   }
 }

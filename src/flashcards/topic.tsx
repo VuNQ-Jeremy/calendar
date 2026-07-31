@@ -4,8 +4,8 @@ import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { Modal, PageHeader, Empty, useConfirm } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
-import { fetchDictEntry, fetchDictEntries } from '../lib/dictionary.js';
-import { fetchTranslations } from '../lib/translate-client.js';
+import { fetchEnrichedWords } from '../lib/enrich-client.js';
+import type { EnrichMap } from '../lib/enrich-client.js';
 import { playWord } from './audio.js';
 import { MIN_WORDS, fmtDuration, parseImportLines } from './game-utils.js';
 import type { GameMode, GameResult } from './game-utils.js';
@@ -36,7 +36,7 @@ type LoaderData = {
   results: FlashcardResultRow[];
   mastery: MasteryRow[];
   kind: 'staff' | 'student';
-  canTranslate: boolean;
+  canUseAi: boolean;
 };
 
 const MODE_META: { id: GameMode; tk: string; icon: 'cards' | 'grid' | 'check' }[] = [
@@ -46,7 +46,7 @@ const MODE_META: { id: GameMode; tk: string; icon: 'cards' | 'grid' | 'check' }[
 ];
 
 export function FlashcardTopicScreen() {
-  const { topic, words, results, mastery, kind, canTranslate } = useLoaderData() as LoaderData;
+  const { topic, words, results, mastery, kind, canUseAi } = useLoaderData() as LoaderData;
   const navigate = useNavigate();
   const { t } = useLang();
   const fetcher = useFetcher();
@@ -128,7 +128,7 @@ export function FlashcardTopicScreen() {
       />
 
       {tab === 'words' ? (
-        <WordsTab words={words} isStaff={isStaff} fetcher={fetcher} canTranslate={canTranslate} />
+        <WordsTab words={words} isStaff={isStaff} fetcher={fetcher} canUseAi={canUseAi} />
       ) : (
         <ResultsTab results={results} />
       )}
@@ -187,19 +187,18 @@ interface WordDraft {
   meaningVi: string;
   definitionEn: string;
   ipa: string;
-  audioUrl: string;
 }
 
 function WordsTab({
   words,
   isStaff,
   fetcher,
-  canTranslate,
+  canUseAi,
 }: {
   words: FlashcardWordRow[];
   isStaff: boolean;
   fetcher: ReturnType<typeof useFetcher>;
-  canTranslate: boolean;
+  canUseAi: boolean;
 }) {
   const { t } = useLang();
   const [modal, setModal] = React.useState<WordDraft | null>(null);
@@ -229,7 +228,6 @@ function WordsTab({
     fd.set('meaningVi', f.meaningVi);
     fd.set('definitionEn', f.definitionEn);
     fd.set('ipa', f.ipa);
-    fd.set('audioUrl', f.audioUrl);
     fetcher.submit(fd, { method: 'post' });
     setModal(null);
   };
@@ -241,9 +239,7 @@ function WordsTab({
           <FBtn
             variant="primary"
             iconLeft={<MIcon name="plus" size={18} />}
-            onClick={() =>
-              setModal({ word: '', meaningVi: '', definitionEn: '', ipa: '', audioUrl: '' })
-            }
+            onClick={() => setModal({ word: '', meaningVi: '', definitionEn: '', ipa: '' })}
           >
             {t('fc_add_word')}
           </FBtn>
@@ -261,7 +257,7 @@ function WordsTab({
         <div className="m-stack">
           {words.map((w) => (
             <div key={w.id} className="lrow" style={{ alignItems: 'flex-start' }}>
-              <FIB label={t('fc_play_audio')} size="sm" onClick={() => playWord(w.word, w.audioUrl)}>
+              <FIB label={t('fc_play_audio')} size="sm" onClick={() => playWord(w.word)}>
                 <MIcon name="volume" size={18} />
               </FIB>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -310,7 +306,6 @@ function WordsTab({
                         meaningVi: w.meaningVi,
                         definitionEn: w.definitionEn ?? '',
                         ipa: w.ipa ?? '',
-                        audioUrl: w.audioUrl ?? '',
                       })
                     }
                   >
@@ -340,15 +335,11 @@ function WordsTab({
           setDraft={setModal}
           onClose={() => setModal(null)}
           onSave={save}
-          canTranslate={canTranslate}
+          canUseAi={canUseAi}
         />
       )}
       {importing && (
-        <ImportModal
-          fetcher={fetcher}
-          onClose={() => setImporting(false)}
-          canTranslate={canTranslate}
-        />
+        <ImportModal fetcher={fetcher} onClose={() => setImporting(false)} canUseAi={canUseAi} />
       )}
       {confirmNode}
     </>
@@ -360,75 +351,83 @@ function WordModal({
   setDraft,
   onClose,
   onSave,
-  canTranslate,
+  canUseAi,
 }: {
   draft: WordDraft;
   setDraft: React.Dispatch<React.SetStateAction<WordDraft | null>>;
   onClose: () => void;
   onSave: (f: WordDraft) => void;
-  canTranslate: boolean;
+  canUseAi: boolean;
 }) {
   const { t } = useLang();
-  const [status, setStatus] = React.useState<
-    'idle' | 'fetching' | 'found' | 'notfound' | 'translating'
-  >('idle');
-  const lastFetched = React.useRef<string>(draft.id ? draft.word.trim().toLowerCase() : '');
+  const [status, setStatus] = React.useState<'idle' | 'busy' | 'failed'>('idle');
+  const lastFilled = React.useRef<string>(draft.id ? draft.word.trim().toLowerCase() : '');
   // Latest draft, readable inside the async debounce without re-triggering the
-  // effect — lets us skip AI translation when the user already typed a meaning.
+  // effect — lets us leave fields alone that the user has already filled in.
   const draftRef = React.useRef(draft);
   draftRef.current = draft;
   const set = <K extends keyof WordDraft>(k: K, v: WordDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
 
-  // Auto-fill IPA / definition / audio from the dictionary when the word field
-  // settles, then (if enabled) AI-translate the Vietnamese meaning. Only fills
-  // fields the user left empty, so manual edits win.
+  // Auto-fill meaning / IPA / definition from Claude once the word field settles. Only fills
+  // fields the user left empty, so manual edits win. Fires once per distinct word (`lastFilled`),
+  // and never for an existing word until its spelling actually changes.
   React.useEffect(() => {
-    const w = draft.word.trim().toLowerCase();
-    if (!w || w === lastFetched.current) return;
+    if (!canUseAi) return;
+    const w = draft.word.trim();
+    const key = w.toLowerCase();
+    if (!w || key === lastFilled.current) return;
     const handle = setTimeout(async () => {
-      lastFetched.current = w;
-      setStatus('fetching');
-      const entry = await fetchDictEntry(w);
-      if (entry) {
-        setStatus('found');
-        setDraft((d) =>
-          d
-            ? {
-                ...d,
-                ipa: d.ipa || entry.ipa || '',
-                audioUrl: d.audioUrl || entry.audioUrl || '',
-                definitionEn: d.definitionEn || entry.definition || '',
-              }
-            : d,
-        );
-      } else {
-        setStatus('notfound');
+      lastFilled.current = key;
+      setStatus('busy');
+      const res = await fetchEnrichedWords([
+        { word: w, definitionEn: draftRef.current.definitionEn || null },
+      ]);
+      if (!res.ok) {
+        setStatus('failed');
+        return;
       }
-      // AI translation — fill the meaning only when the user hasn't typed one.
-      // Runs even when the dictionary found nothing (Claude can translate names
-      // and simple words dictionaryapi.dev doesn't know).
-      if (canTranslate && !draftRef.current.meaningVi.trim()) {
-        const dictStatus = entry ? 'found' : 'notfound';
-        setStatus('translating');
-        const map = await fetchTranslations([{ word: w, definitionEn: entry?.definition ?? null }]);
-        const vi = map.get(w);
-        if (vi) setDraft((d) => (d && !d.meaningVi.trim() ? { ...d, meaningVi: vi } : d));
-        setStatus(dictStatus);
-      }
+      const hit = res.map.get(key);
+      setStatus('idle');
+      if (!hit) return;
+      setDraft((d) =>
+        d
+          ? {
+              ...d,
+              meaningVi: d.meaningVi.trim() ? d.meaningVi : hit.meaningVi,
+              ipa: d.ipa || hit.ipa || '',
+              definitionEn: d.definitionEn || hit.definitionEn || '',
+            }
+          : d,
+      );
     }, 500);
     return () => clearTimeout(handle);
-  }, [draft.word, canTranslate, setDraft]);
+  }, [draft.word, canUseAi, setDraft]);
 
-  // Manual retry — an explicit user action, so it overwrites the field.
-  const retryTranslate = async () => {
-    const w = draft.word.trim().toLowerCase();
+  // Manual retry — an explicit user action, so it overwrites the meaning. The other two fields
+  // are still only filled when blank: they are what the user would have edited by hand.
+  const retryEnrich = async () => {
+    const w = draft.word.trim();
     if (!w) return;
-    setStatus('translating');
-    const map = await fetchTranslations([{ word: w, definitionEn: draft.definitionEn || null }]);
-    const vi = map.get(w);
-    if (vi) set('meaningVi', vi);
+    setStatus('busy');
+    const res = await fetchEnrichedWords([{ word: w, definitionEn: draft.definitionEn || null }]);
+    if (!res.ok) {
+      setStatus('failed');
+      return;
+    }
+    const hit = res.map.get(w.toLowerCase());
     setStatus('idle');
+    if (!hit) return;
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            meaningVi: hit.meaningVi || d.meaningVi,
+            ipa: d.ipa || hit.ipa || '',
+            definitionEn: d.definitionEn || hit.definitionEn || '',
+          }
+        : d,
+    );
   };
 
   return (
@@ -458,23 +457,13 @@ function WordModal({
             value={draft.word}
             onChange={(e) => set('word', e.target.value)}
           />
-          <FIB
-            label={t('fc_play_audio')}
-            size="md"
-            onClick={() => playWord(draft.word, draft.audioUrl)}
-          >
+          <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(draft.word)}>
             <MIcon name="volume" size={18} />
           </FIB>
         </div>
         {status !== 'idle' && (
           <span className="mochi-field__hint">
-            {status === 'fetching'
-              ? t('fc_fetching')
-              : status === 'translating'
-                ? t('fc_translating')
-                : status === 'found'
-                  ? t('fc_fetched')
-                  : t('fc_not_found')}
+            {status === 'busy' ? t('fc_enriching') : t('fc_enrich_failed')}
           </span>
         )}
       </div>
@@ -487,12 +476,12 @@ function WordModal({
             value={draft.meaningVi}
             onChange={(e) => set('meaningVi', e.target.value)}
           />
-          {canTranslate && (
+          {canUseAi && (
             <FIB
-              label={t('fc_translate')}
+              label={t('fc_enrich')}
               size="md"
-              disabled={!draft.word.trim() || status === 'translating'}
-              onClick={retryTranslate}
+              disabled={!draft.word.trim() || status === 'busy'}
+              onClick={retryEnrich}
             >
               <MIcon name="sparkle" size={18} />
             </FIB>
@@ -521,65 +510,60 @@ type ImportRow = {
   meaningVi: string;
   ipa: string;
   definitionEn: string;
-  audioUrl: string;
-  found: boolean;
   include: boolean;
 };
 
 function ImportModal({
   fetcher,
   onClose,
-  canTranslate,
+  canUseAi,
 }: {
   fetcher: ReturnType<typeof useFetcher>;
   onClose: () => void;
-  canTranslate: boolean;
+  canUseAi: boolean;
 }) {
   const { t } = useLang();
   const [step, setStep] = React.useState<'paste' | 'review'>('paste');
   const [text, setText] = React.useState('');
   const [rows, setRows] = React.useState<ImportRow[]>([]);
   const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null);
-  const [translating, setTranslating] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
 
-  const runFetch = async () => {
+  // Paste step → review. When AI is available, Claude fills the meaning, IPA and definition for
+  // every pasted word first; a failure still advances to review, where the fields are editable by
+  // hand (which is all the mobile client has ever offered).
+  const runEnrich = async () => {
     const parsed = parseImportLines(text);
     if (parsed.length === 0) return;
-    const uniqueWords = Array.from(new Set(parsed.map((p) => p.word.toLowerCase())));
-    setProgress({ done: 0, total: uniqueWords.length });
-    const dict = await fetchDictEntries(uniqueWords, (done, total) => setProgress({ done, total }));
-    setProgress(null);
-
-    // AI-translate the rows the user didn't already gloss, in one batched call.
-    // Typed meanings (from `word - nghĩa` lines) are never overwritten.
-    let viMap = new Map<string, string>();
-    if (canTranslate) {
+    setFailed(false);
+    let map: EnrichMap = new Map();
+    if (canUseAi) {
+      // One request per distinct word. Rows the user glossed inline (`word - nghĩa`) still get
+      // their IPA and definition filled, so they are not skipped here.
       const seen = new Set<string>();
       const items: { word: string; definitionEn?: string | null }[] = [];
       for (const p of parsed) {
         const key = p.word.toLowerCase();
-        if (p.meaningVi.trim() || seen.has(key)) continue;
+        if (seen.has(key)) continue;
         seen.add(key);
-        items.push({ word: p.word, definitionEn: dict.get(key)?.definition ?? null });
+        items.push({ word: p.word });
       }
-      if (items.length > 0) {
-        setTranslating(true);
-        viMap = await fetchTranslations(items);
-        setTranslating(false);
-      }
+      setProgress({ done: 0, total: items.length });
+      const res = await fetchEnrichedWords(items, (done, total) => setProgress({ done, total }));
+      setProgress(null);
+      if (res.ok) map = res.map;
+      else setFailed(true);
     }
 
     setRows(
       parsed.map((p) => {
-        const key = p.word.toLowerCase();
-        const entry = dict.get(key);
+        const hit = map.get(p.word.toLowerCase());
         return {
           word: p.word,
-          meaningVi: p.meaningVi || viMap.get(key) || '',
-          ipa: entry?.ipa ?? '',
-          definitionEn: entry?.definition ?? '',
-          audioUrl: entry?.audioUrl ?? '',
-          found: !!entry,
+          // A typed meaning always wins over the model's.
+          meaningVi: p.meaningVi || hit?.meaningVi || '',
+          ipa: hit?.ipa ?? '',
+          definitionEn: hit?.definitionEn ?? '',
           include: true,
         };
       }),
@@ -590,9 +574,9 @@ function ImportModal({
   const setRow = (i: number, patch: Partial<ImportRow>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
-  // Manual (re)translate for the review step: fills every included row whose
-  // meaning is still blank in one batched call. Typed meanings are left alone.
-  const translateBlanks = async () => {
+  // Manual retry from the review step: fills every included row that is still missing a meaning.
+  // Typed meanings are left alone; IPA and definition are filled only where blank.
+  const enrichBlanks = async () => {
     const seen = new Set<string>();
     const items: { word: string; definitionEn?: string | null }[] = [];
     for (const r of rows) {
@@ -602,14 +586,25 @@ function ImportModal({
       items.push({ word: r.word, definitionEn: r.definitionEn || null });
     }
     if (items.length === 0) return;
-    setTranslating(true);
-    const map = await fetchTranslations(items);
-    setTranslating(false);
+    setFailed(false);
+    setProgress({ done: 0, total: items.length });
+    const res = await fetchEnrichedWords(items, (done, total) => setProgress({ done, total }));
+    setProgress(null);
+    if (!res.ok) {
+      setFailed(true);
+      return;
+    }
     setRows((rs) =>
       rs.map((r) => {
         if (r.meaningVi.trim()) return r;
-        const vi = map.get(r.word.toLowerCase());
-        return vi ? { ...r, meaningVi: vi } : r;
+        const hit = res.map.get(r.word.toLowerCase());
+        if (!hit) return r;
+        return {
+          ...r,
+          meaningVi: hit.meaningVi,
+          ipa: r.ipa || hit.ipa || '',
+          definitionEn: r.definitionEn || hit.definitionEn || '',
+        };
       }),
     );
   };
@@ -624,7 +619,6 @@ function ImportModal({
         meaningVi: r.meaningVi.trim(),
         ipa: r.ipa || null,
         definitionEn: r.definitionEn || null,
-        audioUrl: r.audioUrl || null,
       }));
     if (words.length === 0) return;
     const fd = new FormData();
@@ -648,16 +642,12 @@ function ImportModal({
             <FBtn variant="secondary" onClick={onClose}>
               {t('cancel')}
             </FBtn>
-            <FBtn
-              variant="primary"
-              disabled={!text.trim() || !!progress || translating}
-              onClick={runFetch}
-            >
+            <FBtn variant="primary" disabled={!text.trim() || !!progress} onClick={runEnrich}>
               {progress
                 ? `${progress.done}/${progress.total}`
-                : translating
-                  ? t('fc_translating')
-                  : t('fc_fetch')}
+                : canUseAi
+                  ? t('fc_enrich')
+                  : t('fc_review')}
             </FBtn>
           </>
         ) : (
@@ -665,14 +655,14 @@ function ImportModal({
             <FBtn variant="secondary" onClick={() => setStep('paste')}>
               {t('cancel')}
             </FBtn>
-            {canTranslate && (
+            {canUseAi && (
               <FBtn
                 variant="secondary"
                 iconLeft={<MIcon name="sparkle" size={16} />}
-                disabled={translating || blanksCount === 0}
-                onClick={translateBlanks}
+                disabled={!!progress || blanksCount === 0}
+                onClick={enrichBlanks}
               >
-                {translating ? t('fc_translating') : t('fc_translate')}
+                {progress ? `${progress.done}/${progress.total}` : t('fc_enrich_blanks')}
               </FBtn>
             )}
             <FBtn variant="primary" disabled={readyCount === 0} onClick={submit}>
@@ -695,9 +685,19 @@ function ImportModal({
             onChange={(e) => setText(e.target.value)}
           />
           <span className="mochi-field__hint">{t('fc_import_hint')}</span>
+          {failed && (
+            <span className="mochi-field__hint" style={{ color: 'var(--red-600, #c0392b)' }}>
+              {t('fc_enrich_failed')}
+            </span>
+          )}
         </div>
       ) : (
         <div className="m-stack" style={{ gap: 8 }}>
+          {failed && (
+            <span className="mochi-field__hint" style={{ color: 'var(--red-600, #c0392b)' }}>
+              {t('fc_enrich_failed')}
+            </span>
+          )}
           {rows.map((r, i) => (
             <div
               key={i}
@@ -722,15 +722,12 @@ function ImportModal({
                       {r.ipa}
                     </span>
                   )}
-                  <span
-                    style={{
-                      fontSize: 'var(--text-xs, 11px)',
-                      color: r.found ? 'var(--green-600, green)' : 'var(--text-muted)',
-                    }}
-                  >
-                    {r.found ? t('fc_fetched') : t('fc_not_found')}
-                  </span>
                 </div>
+                {r.definitionEn && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                    {r.definitionEn}
+                  </div>
+                )}
                 <input
                   className="mochi-input"
                   style={{ marginTop: 4 }}

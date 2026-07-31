@@ -119,7 +119,7 @@ export function QuizGame({ words, onExit, onFinish }: GameProps) {
             <IconButton
               variant="solid"
               label={t('fc_play_audio')}
-              onPress={() => play(q.word.word, q.word.audioUrl)}
+              onPress={() => play(q.word.word)}
             >
               <Volume2 size={28} color={th.color.textOnBrand} />
             </IconButton>

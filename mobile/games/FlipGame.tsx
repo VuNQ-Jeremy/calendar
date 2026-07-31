@@ -414,7 +414,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
           {word.word}
         </Text>
         {word.ipa ? <Mono>{word.ipa}</Mono> : null}
-        <IconButton label={t('fc_play_audio')} onPress={() => play(word.word, word.audioUrl)}>
+        <IconButton label={t('fc_play_audio')} onPress={() => play(word.word)}>
           <Volume2 size={22} color={th.color.textBody} />
         </IconButton>
       </>

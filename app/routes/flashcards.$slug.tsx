@@ -37,7 +37,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     results,
     mastery,
     kind: su.kind,
-    canTranslate: Boolean(env.ANTHROPIC_API_KEY),
+    canUseAi: Boolean(env.ANTHROPIC_API_KEY),
   };
 }
 

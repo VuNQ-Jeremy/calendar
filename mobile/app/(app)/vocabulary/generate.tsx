@@ -82,7 +82,6 @@ export default function GenerateTopic() {
           meaningVi: r.meaningVi.trim(),
           definitionEn: r.definitionEn.trim() || null,
           ipa: r.ipa.trim() || null,
-          audioUrl: null,
         })),
       }),
     onSuccess: async (topic) => {

@@ -4,11 +4,10 @@ import { WordAudio } from './audio';
 /**
  * A `WordAudio` bound to the component's lifetime.
  *
- * The `release()` in the cleanup is the whole point: without it every screen that plays a word
- * leaks a native audio player, and after a couple of hundred cards playback stops working with
- * no error message.
+ * The `release()` in the cleanup is what stops a word being read aloud after the screen that
+ * started it has gone — a card still talking over the next one reads as a bug.
  */
-export function useWordAudio(): (word: string, audioUrl?: string | null) => void {
+export function useWordAudio(): (word: string) => void {
   const ref = useRef<WordAudio | null>(null);
   const audio = useMemo(() => {
     ref.current = new WordAudio();
@@ -17,7 +16,5 @@ export function useWordAudio(): (word: string, audioUrl?: string | null) => void
 
   useEffect(() => () => audio.release(), [audio]);
 
-  return (word, audioUrl) => {
-    void audio.play(word, audioUrl);
-  };
+  return (word) => audio.play(word);
 }

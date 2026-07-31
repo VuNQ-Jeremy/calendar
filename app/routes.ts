@@ -7,7 +7,7 @@ export default [
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
-  route('translate', 'routes/translate.tsx'),
+  route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
 
   // ---- JSON API (mobile app; see docs/api.md) ----

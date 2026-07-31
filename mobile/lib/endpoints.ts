@@ -13,6 +13,7 @@ import type {
   FlashcardTopicInput,
   FlashcardTopicWithWordsInput,
   FlashcardWordInput,
+  EnrichedWord,
   GeneratedWord,
   HomeworkGradesSaveInput,
   HomeworkInput,
@@ -29,6 +30,7 @@ import type {
   StudentInput,
   ThemeInput,
   UiPrefsInput,
+  VocabEnrichItem,
   VocabGenerateInput,
 } from '@mochi/shared/schemas';
 import type {
@@ -276,7 +278,7 @@ export const flashcards = {
 };
 
 /**
- * AI vocabulary generation. STAFF only. Note the path is NOT under /api — like `/translate`,
+ * AI vocabulary generation. STAFF only. Note the path is NOT under /api — like `/enrich-vocab`,
  * this is a bearer-aware resource route (docs/api.md). It only proposes words; the ones the
  * user keeps are saved with `flashcards.importWords`.
  *
@@ -286,6 +288,22 @@ export const generateVocab = (input: VocabGenerateInput) =>
   apiFetch<{ words: GeneratedWord[] }>('/generate-vocab', {
     method: 'POST',
     body: input,
+    timeoutMs: 60_000,
+  });
+
+/**
+ * Fill in the Vietnamese meaning, English definition and IPA for words the user already has.
+ * STAFF only, and again NOT under /api. This replaced the web's browser-side dictionaryapi.dev
+ * lookup, which never existed on mobile — so the import screen and word editor could not offer
+ * auto-fill at all before this.
+ *
+ * Prefer `enrichInChunks` (lib/enrich.ts) over calling this directly: the route accepts 200 words
+ * but a batch that large runs past even the 60s timeout.
+ */
+export const enrichVocab = (items: VocabEnrichItem[]) =>
+  apiFetch<{ words: EnrichedWord[] }>('/enrich-vocab', {
+    method: 'POST',
+    body: { items },
     timeoutMs: 60_000,
   });
 

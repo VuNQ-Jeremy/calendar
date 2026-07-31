@@ -1,0 +1,14 @@
+-- Drop the stored pronunciation-audio URLs.
+--
+-- Every non-null `audio_url` in this table came from a browser-side lookup against the free
+-- dictionaryapi.dev, which has been removed: AI now fills in every card field (meaning, IPA,
+-- definition), and it cannot record audio. Nothing writes this column any more.
+--
+-- The URLs are wiped rather than left in place so playback is consistent — one voice for every
+-- word, instead of a recording for the handful of words a dictionary happened to know and
+-- text-to-speech for the rest. Both clients speak the word with the platform's synthesizer, which
+-- needs no network, so this loses nothing offline.
+--
+-- The COLUMN stays: `FlashcardWordInput` still accepts `audioUrl` (nullish), and installed app
+-- versions that predate this change still send it. Dropping it would 500 those writes.
+UPDATE flashcard_words SET audio_url = NULL WHERE audio_url IS NOT NULL;
