@@ -17,7 +17,8 @@ import * as attendanceSvc from '../server/services/attendance';
 import * as gradeLevelsSvc from '../server/services/grade-levels';
 import * as questionsSvc from '../server/services/questions';
 import * as testsSvc from '../server/services/tests';
-import { ictDateOf } from '../shared/logic/tests';
+import * as attemptsSvc from '../server/services/attempts';
+import { ictDateOf, normalizeScore } from '../shared/logic/tests';
 import { hashPassword } from '../server/services/crypto';
 import { sessionCookie } from '../server/session';
 import {
@@ -1818,5 +1819,626 @@ describe('paper score sync', () => {
       expect(rows.length).toBe(1);
       expect(rows[0].id).toBe(second.find((a) => a.studentId === s.id).scoreRecordId);
     }
+  });
+});
+
+// ---- WP3.1: attempts service (online test taking) ----
+
+describe('attempts service', () => {
+  const OPTS = [
+    { id: 'a', text: 'Alpha' },
+    { id: 'b', text: 'Bravo' },
+    { id: 'c', text: 'Charlie' },
+  ];
+
+  async function expectThrown(fn) {
+    let err = null;
+    try {
+      await fn();
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    return err;
+  }
+
+  function iso(offsetMs) {
+    return new Date(Date.now() + offsetMs).toISOString();
+  }
+
+  /**
+   * A fresh class, student, assessment type and published online test per test.
+   * The workers pool shares one D1 across this file, so nothing here may assert absolute counts —
+   * every assertion filters by the ids this fixture created.
+   */
+  async function setup(d, opts = {}) {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const cls = await classesSvc.create(d, {
+      name: `Attempt Class ${tag}`,
+      color: 'blue',
+      schedule: [],
+      studentIds: [],
+    });
+    const type = await typesSvc.create(d, { name: `Attempt Type ${tag}`, active: true });
+    const student = await peopleSvc.createStudent(d, {
+      name: `Attempt Student ${tag}`,
+      color: 'blue',
+      classIds: [cls.id],
+    });
+    const outsider = await peopleSvc.createStudent(d, {
+      name: `Attempt Outsider ${tag}`,
+      color: 'red',
+      classIds: [],
+    });
+
+    const specs = opts.questions ?? [
+      { type: 'mcq', prompt: `Q mcq ${tag}`, options: OPTS, answerKey: 'b', points: 2 },
+    ];
+    const qs = [];
+    for (const s of specs) {
+      const q = await questionsSvc.create(d, {
+        type: s.type,
+        prompt: s.prompt,
+        difficulty: 'easy',
+        tags: [],
+        options: s.options ?? [],
+        answerKey: s.answerKey ?? null,
+        explanation: s.explanation ?? 'Because reasons',
+      });
+      qs.push({ ...q, points: s.points });
+    }
+
+    const test = await testsSvc.create(d, {
+      title: `Attempt Test ${tag}`,
+      mode: opts.mode ?? 'online',
+      classId: cls.id,
+      assessmentTypeId: type.id,
+      date: opts.date ?? '2026-06-24',
+      openAt: opts.openAt ?? null,
+      closeAt: opts.closeAt ?? iso(60 * 60 * 1000),
+      timeLimitMinutes: opts.timeLimitMinutes ?? null,
+    });
+    await testsSvc.setQuestions(
+      d,
+      test.id,
+      qs.map((q) => ({ questionId: q.id, points: q.points })),
+    );
+    if (opts.publish !== false) await testsSvc.publish(d, test.id);
+
+    return { tag, cls, type, student, outsider, qs, test: await testsSvc.get(d, test.id) };
+  }
+
+  function scoresFor(d, studentId) {
+    return d.select().from(scoreRecords).where(eq(scoreRecords.studentId, studentId));
+  }
+
+  const THREE_Q = [
+    { type: 'mcq', prompt: 'Pick b', options: OPTS, answerKey: 'b', points: 2 },
+    { type: 'multi', prompt: 'Pick a and c', options: OPTS, answerKey: ['a', 'c'], points: 2 },
+    { type: 'text', prompt: 'Capital of Vietnam', answerKey: ['Hà Nội'], points: 1 },
+  ];
+
+  it('start creates an online in_progress attempt and returns questions with no answer key', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, {
+      questions: [
+        { type: 'mcq', prompt: 'Second', options: OPTS, answerKey: 'b', points: 2 },
+        { type: 'essay', prompt: 'First', answerKey: null, points: 5 },
+      ],
+    });
+    // setQuestions ordered them [mcq, essay]; sortOrder must drive the returned order.
+    const now = new Date();
+    const res = await attemptsSvc.start(d, test.id, student.id, now);
+
+    expect(res.attempt.source).toBe('online');
+    expect(res.attempt.status).toBe('in_progress');
+    expect(res.attempt.testId).toBe(test.id);
+    expect(res.attempt.studentId).toBe(student.id);
+    expect(res.serverNow).toBe(now.toISOString());
+
+    expect(res.questions.map((q) => q.id)).toEqual([qs[0].id, qs[1].id]);
+    expect(res.questions.map((q) => q.sortOrder)).toEqual([0, 1]);
+    expect(res.questions.map((q) => q.points)).toEqual([2, 5]);
+    expect(res.questions[0].options).toEqual(OPTS);
+
+    // The leak guard: the properties must be ABSENT, not merely null.
+    for (const q of res.questions) {
+      expect('answerKey' in q).toBe(false);
+      expect('explanation' in q).toBe(false);
+      expect(Object.keys(q).sort()).toEqual(
+        ['id', 'options', 'points', 'prompt', 'sortOrder', 'type'].sort(),
+      );
+    }
+  });
+
+  it('deadlineAt is min(closeAt, startedAt + timeLimitMinutes), or null when neither is set', async () => {
+    const d = db();
+
+    // closeAt sooner than the time limit.
+    const closeSoon = iso(5 * 60 * 1000);
+    const a = await setup(d, { closeAt: closeSoon, timeLimitMinutes: 120 });
+    const ra = await attemptsSvc.start(d, a.test.id, a.student.id, new Date());
+    expect(ra.attempt.deadlineAt).toBe(closeSoon);
+
+    // time limit sooner than closeAt.
+    const b = await setup(d, { closeAt: iso(10 * 60 * 60 * 1000), timeLimitMinutes: 30 });
+    const bNow = new Date();
+    const rb = await attemptsSvc.start(d, b.test.id, b.student.id, bNow);
+    expect(rb.attempt.deadlineAt).toBe(new Date(bNow.getTime() + 30 * 60_000).toISOString());
+
+    // Neither: a published online test needs a closeAt, so clear it after publishing.
+    const c = await setup(d, { timeLimitMinutes: null });
+    await d.update(testsTable).set({ closeAt: null }).where(eq(testsTable.id, c.test.id));
+    const rc = await attemptsSvc.start(d, c.test.id, c.student.id, new Date());
+    expect(rc.attempt.deadlineAt).toBeNull();
+  });
+
+  it('start is idempotent: the same attempt comes back with startedAt and deadlineAt untouched', async () => {
+    const d = db();
+    const { student, test } = await setup(d, { timeLimitMinutes: 60 });
+    const first = await attemptsSvc.start(d, test.id, student.id, new Date());
+    const later = new Date(Date.now() + 5 * 60 * 1000);
+    const second = await attemptsSvc.start(d, test.id, student.id, later);
+
+    expect(second.attempt.id).toBe(first.attempt.id);
+    expect(second.attempt.startedAt).toBe(first.attempt.startedAt);
+    expect(second.attempt.deadlineAt).toBe(first.attempt.deadlineAt);
+    expect(second.attempt.status).toBe('in_progress');
+    expect(second.questions.length).toBe(first.questions.length);
+    expect(second.serverNow).toBe(later.toISOString());
+
+    const rows = await d.select().from(testAttempts).where(eq(testAttempts.testId, test.id));
+    expect(rows.length).toBe(1);
+  });
+
+  it('start refuses a draft test with 409 test_not_published', async () => {
+    const d = db();
+    const { student, test } = await setup(d, { publish: false });
+    expect(test.status).toBe('draft');
+    const err = await expectThrown(() => attemptsSvc.start(d, test.id, student.id, new Date()));
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'test_not_published' });
+  });
+
+  it('start refuses a paper test with 409 test_not_online', async () => {
+    const d = db();
+    const { student, test } = await setup(d, { mode: 'paper' });
+    const err = await expectThrown(() => attemptsSvc.start(d, test.id, student.id, new Date()));
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'test_not_online' });
+  });
+
+  it('start refuses a student who is not on the roster with 403 not_enrolled', async () => {
+    const d = db();
+    const { outsider, test } = await setup(d);
+    const err = await expectThrown(() => attemptsSvc.start(d, test.id, outsider.id, new Date()));
+    expect(err.status).toBe(403);
+    expect(await err.json()).toEqual({ error: 'not_enrolled' });
+    expect(await attemptsSvc.listForTest(d, test.id)).toEqual([]);
+  });
+
+  it('start refuses a window that has not opened yet with 409 window_upcoming', async () => {
+    const d = db();
+    const { student, test } = await setup(d, {
+      openAt: iso(60 * 60 * 1000),
+      closeAt: iso(2 * 60 * 60 * 1000),
+    });
+    const err = await expectThrown(() => attemptsSvc.start(d, test.id, student.id, new Date()));
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'window_upcoming' });
+  });
+
+  it('start refuses a closed window with 409 window_closed', async () => {
+    const d = db();
+    const { student, test } = await setup(d, { closeAt: iso(-60 * 60 * 1000) });
+    const err = await expectThrown(() => attemptsSvc.start(d, test.id, student.id, new Date()));
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'window_closed' });
+  });
+
+  it('getOwn hides another student attempt behind the same 404 as a missing one', async () => {
+    const d = db();
+    const { cls, student, test } = await setup(d);
+    const other = await peopleSvc.createStudent(d, {
+      name: `Attempt Peer ${crypto.randomUUID().slice(0, 8)}`,
+      color: 'green',
+      classIds: [cls.id],
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+
+    const mine = await attemptsSvc.getOwn(d, attempt.id, student.id);
+    expect(mine.id).toBe(attempt.id);
+
+    const stolen = await expectThrown(() => attemptsSvc.getOwn(d, attempt.id, other.id));
+    expect(stolen.status).toBe(404);
+    expect(await stolen.json()).toEqual({ error: 'attempt_not_found' });
+
+    const missing = await expectThrown(() => attemptsSvc.getOwn(d, 'no-such-attempt', student.id));
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: 'attempt_not_found' });
+  });
+
+  it('saveAnswers round-trips strings and arrays, and a second save overwrites', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, { questions: THREE_Q });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [
+        { questionId: qs[0].id, answer: 'a' },
+        { questionId: qs[1].id, answer: ['a', 'c'] },
+        { questionId: qs[2].id, answer: 'Hue' },
+      ],
+      new Date(),
+    );
+
+    let rows = await attemptsSvc.listAnswers(d, attempt.id);
+    expect(rows.length).toBe(3);
+    let byQ = Object.fromEntries(rows.map((r) => [r.questionId, r.answer]));
+    expect(byQ[qs[0].id]).toBe('a');
+    expect(byQ[qs[1].id]).toEqual(['a', 'c']);
+    expect(byQ[qs[2].id]).toBe('Hue');
+    expect(rows.every((r) => r.attemptId === attempt.id)).toBe(true);
+    expect(rows.every((r) => r.autoCorrect === null && r.autoPoints === null)).toBe(true);
+
+    // Overwrite one, leave the others alone: the composite PK means no duplicate rows.
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[0].id, answer: 'b' }],
+      new Date(),
+    );
+    rows = await attemptsSvc.listAnswers(d, attempt.id);
+    expect(rows.length).toBe(3);
+    byQ = Object.fromEntries(rows.map((r) => [r.questionId, r.answer]));
+    expect(byQ[qs[0].id]).toBe('b');
+    expect(byQ[qs[1].id]).toEqual(['a', 'c']);
+  });
+
+  it('saveAnswers rejects a questionId that is not on the test with 400 unknown_question', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d);
+    const stray = await questionsSvc.create(d, {
+      type: 'mcq',
+      prompt: `Not on the test ${crypto.randomUUID().slice(0, 8)}`,
+      difficulty: 'easy',
+      tags: [],
+      options: OPTS,
+      answerKey: 'a',
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+
+    const err = await expectThrown(() =>
+      attemptsSvc.saveAnswers(
+        d,
+        attempt.id,
+        student.id,
+        [
+          { questionId: qs[0].id, answer: 'b' },
+          { questionId: stray.id, answer: 'a' },
+        ],
+        new Date(),
+      ),
+    );
+    expect(err.status).toBe(400);
+    expect(await err.json()).toEqual({ error: 'unknown_question' });
+    expect(await attemptsSvc.listAnswers(d, attempt.id)).toEqual([]);
+  });
+
+  it('saveAnswers past the deadline throws 409 attempt_closed', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, { timeLimitMinutes: 10 });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    expect(attempt.deadlineAt).toBeTruthy();
+
+    // Inside the 30s grace still works.
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[0].id, answer: 'b' }],
+      new Date(new Date(attempt.deadlineAt).getTime() + 10_000),
+    );
+
+    const err = await expectThrown(() =>
+      attemptsSvc.saveAnswers(
+        d,
+        attempt.id,
+        student.id,
+        [{ questionId: qs[0].id, answer: 'a' }],
+        new Date(new Date(attempt.deadlineAt).getTime() + 10 * 60_000),
+      ),
+    );
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'attempt_closed' });
+    // The pre-deadline answer survived.
+    const rows = await attemptsSvc.listAnswers(d, attempt.id);
+    expect(rows[0].answer).toBe('b');
+  });
+
+  it('saveAnswers on an already-submitted attempt throws 409 attempt_closed', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d);
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+
+    const err = await expectThrown(() =>
+      attemptsSvc.saveAnswers(
+        d,
+        attempt.id,
+        student.id,
+        [{ questionId: qs[0].id, answer: 'b' }],
+        new Date(),
+      ),
+    );
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'attempt_closed' });
+  });
+
+  it('submit auto-grades an essay-free test, stores per-answer marks and syncs the gradebook', async () => {
+    const d = db();
+    const { cls, type, student, test, qs } = await setup(d, { questions: THREE_Q });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [
+        { questionId: qs[0].id, answer: 'b' }, // right, 2
+        { questionId: qs[1].id, answer: ['a'] }, // wrong (all-or-nothing), 0
+        { questionId: qs[2].id, answer: 'Hà Nội' }, // right, 1
+      ],
+      new Date(),
+    );
+
+    const submitted = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    expect(submitted.status).toBe('graded');
+    expect(submitted.autoScore).toBe(3);
+    expect(submitted.totalScore).toBe(3);
+    expect(submitted.normalizedScore).toBe(normalizeScore(3, 5));
+    expect(submitted.submittedAt).toBeTruthy();
+    expect(submitted.scoreRecordId).toBeTruthy();
+
+    const rows = await attemptsSvc.listAnswers(d, attempt.id);
+    const byQ = Object.fromEntries(rows.map((r) => [r.questionId, r]));
+    expect(byQ[qs[0].id].autoCorrect).toBe(true);
+    expect(byQ[qs[0].id].autoPoints).toBe(2);
+    expect(byQ[qs[1].id].autoCorrect).toBe(false);
+    expect(byQ[qs[1].id].autoPoints).toBe(0);
+    expect(byQ[qs[2].id].autoCorrect).toBe(true);
+    expect(byQ[qs[2].id].autoPoints).toBe(1);
+
+    const scores = await scoresFor(d, student.id);
+    expect(scores.length).toBe(1);
+    expect(scores[0].id).toBe(submitted.scoreRecordId);
+    expect(scores[0].score).toBe(normalizeScore(3, 5));
+    expect(scores[0].classId).toBe(cls.id);
+    expect(scores[0].assessmentTypeId).toBe(type.id);
+    expect(scores[0].date).toBe('2026-06-24');
+  });
+
+  it('text auto-grading forgives case and missing diacritics', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, {
+      questions: [{ type: 'text', prompt: 'Capital?', answerKey: ['Hà Nội'], points: 4 }],
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[0].id, answer: 'ha noi' }],
+      new Date(),
+    );
+    const submitted = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    expect(submitted.autoScore).toBe(4);
+    expect(submitted.normalizedScore).toBe(10);
+    expect((await attemptsSvc.listAnswers(d, attempt.id))[0].autoCorrect).toBe(true);
+  });
+
+  it('submit with an essay parks the attempt in needs_grading with no gradebook row', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, {
+      questions: [
+        { type: 'mcq', prompt: 'Pick b', options: OPTS, answerKey: 'b', points: 2 },
+        { type: 'essay', prompt: 'Discuss', answerKey: null, points: 8 },
+      ],
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [
+        { questionId: qs[0].id, answer: 'b' },
+        { questionId: qs[1].id, answer: 'Some prose.' },
+      ],
+      new Date(),
+    );
+
+    const submitted = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    expect(submitted.status).toBe('needs_grading');
+    expect(submitted.autoScore).toBe(2);
+    expect(submitted.totalScore).toBeNull();
+    expect(submitted.normalizedScore).toBeNull();
+    expect(submitted.scoreRecordId).toBeNull();
+
+    const rows = await attemptsSvc.listAnswers(d, attempt.id);
+    const byQ = Object.fromEntries(rows.map((r) => [r.questionId, r]));
+    expect(byQ[qs[1].id].autoCorrect).toBeNull();
+    expect(byQ[qs[1].id].autoPoints).toBeNull();
+    expect(byQ[qs[1].id].answer).toBe('Some prose.');
+
+    // Nothing reaches the gradebook until a human grades it.
+    expect(await scoresFor(d, student.id)).toEqual([]);
+  });
+
+  it('submit is idempotent: a second call returns the row unchanged', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, { questions: THREE_Q });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[0].id, answer: 'b' }],
+      new Date(),
+    );
+    const first = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    const second = await attemptsSvc.submit(
+      d,
+      attempt.id,
+      student.id,
+      new Date(Date.now() + 60_000),
+    );
+    expect(second).toEqual(first);
+    expect(second.autoScore).toBe(2);
+    expect((await scoresFor(d, student.id)).length).toBe(1);
+  });
+
+  it('grade awards manual points, totals them with the auto marks and syncs the gradebook', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, {
+      questions: [
+        { type: 'mcq', prompt: 'Pick b', options: OPTS, answerKey: 'b', points: 2 },
+        { type: 'essay', prompt: 'Discuss', answerKey: null, points: 8 },
+      ],
+    });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [
+        { questionId: qs[0].id, answer: 'b' },
+        { questionId: qs[1].id, answer: 'Some prose.' },
+      ],
+      new Date(),
+    );
+    await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+
+    const graded = await attemptsSvc.grade(d, attempt.id, {
+      attemptId: attempt.id,
+      grades: [{ questionId: qs[1].id, manualPoints: 6, feedback: 'Good argument' }],
+      comment: 'Well done',
+    });
+    expect(graded.status).toBe('graded');
+    expect(graded.totalScore).toBe(8); // 2 auto + 6 manual
+    expect(graded.normalizedScore).toBe(normalizeScore(8, 10));
+    expect(graded.comment).toBe('Well done');
+    expect(graded.scoreRecordId).toBeTruthy();
+
+    const rows = await attemptsSvc.listAnswers(d, attempt.id);
+    const essay = rows.find((r) => r.questionId === qs[1].id);
+    expect(essay.manualPoints).toBe(6);
+    expect(essay.feedback).toBe('Good argument');
+
+    const scores = await scoresFor(d, student.id);
+    expect(scores.length).toBe(1);
+    expect(scores[0].id).toBe(graded.scoreRecordId);
+    expect(scores[0].score).toBe(normalizeScore(8, 10));
+    expect(scores[0].notes).toBe('Well done');
+
+    // normalizedOverride wins over the computed value, reusing the same score record.
+    const overridden = await attemptsSvc.grade(d, attempt.id, {
+      attemptId: attempt.id,
+      grades: [],
+      normalizedOverride: 9.5,
+      comment: 'Bumped',
+    });
+    expect(overridden.totalScore).toBe(8);
+    expect(overridden.normalizedScore).toBe(9.5);
+    expect(overridden.scoreRecordId).toBe(graded.scoreRecordId);
+    const after = await scoresFor(d, student.id);
+    expect(after.length).toBe(1);
+    expect(after[0].score).toBe(9.5);
+  });
+
+  it('grade rejects a questionId that is not on the test with 400 unknown_question', async () => {
+    const d = db();
+    const { student, test } = await setup(d);
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    const err = await expectThrown(() =>
+      attemptsSvc.grade(d, attempt.id, {
+        attemptId: attempt.id,
+        grades: [{ questionId: 'no-such-question', manualPoints: 1 }],
+      }),
+    );
+    expect(err.status).toBe(400);
+    expect(await err.json()).toEqual({ error: 'unknown_question' });
+  });
+
+  it('reset deletes the attempt, its answers and its score record, and a retake starts fresh', async () => {
+    const d = db();
+    const { student, test, qs } = await setup(d, { questions: THREE_Q });
+    const { attempt } = await attemptsSvc.start(d, test.id, student.id, new Date());
+    await attemptsSvc.saveAnswers(
+      d,
+      attempt.id,
+      student.id,
+      [{ questionId: qs[0].id, answer: 'b' }],
+      new Date(),
+    );
+    const submitted = await attemptsSvc.submit(d, attempt.id, student.id, new Date());
+    expect(submitted.scoreRecordId).toBeTruthy();
+    expect((await attemptsSvc.listAnswers(d, attempt.id)).length).toBe(3);
+
+    await attemptsSvc.reset(d, attempt.id);
+
+    expect(await attemptsSvc.listForTest(d, test.id)).toEqual([]);
+    expect(await attemptsSvc.listAnswers(d, attempt.id)).toEqual([]);
+    expect(await scoresFor(d, student.id)).toEqual([]);
+
+    const again = await attemptsSvc.start(d, test.id, student.id, new Date());
+    expect(again.attempt.id).not.toBe(attempt.id);
+    expect(again.attempt.status).toBe('in_progress');
+    expect(again.attempt.normalizedScore).toBeNull();
+  });
+
+  it('listOpenForStudent shows open online published tests and hides what the student cannot sit', async () => {
+    const d = db();
+    const { cls, student, test } = await setup(d);
+
+    // A draft, a paper test and an online test for another class must not appear.
+    const draft = await setup(d, { publish: false });
+    await d.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, draft.test.id));
+    const paper = await setup(d, { mode: 'paper' });
+    await d.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, paper.test.id));
+    const foreign = await setup(d); // its own class, this student is not in it
+
+    const items = await attemptsSvc.listOpenForStudent(d, student.id, new Date());
+    const ids = items.map((i) => i.test.id);
+    expect(ids).toContain(test.id);
+    expect(ids).not.toContain(draft.test.id);
+    expect(ids).not.toContain(paper.test.id);
+    expect(ids).not.toContain(foreign.test.id);
+
+    const mine = items.find((i) => i.test.id === test.id);
+    expect(mine.window).toBe('open');
+    expect(mine.attempt).toBeNull();
+    expect(mine.test.classId).toBe(cls.id);
+    expect(mine.test.mode).toBe('online');
+
+    // A closed test appears only once the student has an attempt on it.
+    const closed = await setup(d);
+    await d.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, closed.test.id));
+    await attemptsSvc.start(d, closed.test.id, student.id, new Date());
+    await d
+      .update(testsTable)
+      .set({ closeAt: iso(-60 * 60 * 1000) })
+      .where(eq(testsTable.id, closed.test.id));
+
+    const withClosed = await attemptsSvc.listOpenForStudent(d, student.id, new Date());
+    const closedItem = withClosed.find((i) => i.test.id === closed.test.id);
+    expect(closedItem).toBeTruthy();
+    expect(closedItem.window).toBe('closed');
+    expect(closedItem.attempt.status).toBe('in_progress');
+    // Open ones sort ahead of closed ones.
+    const positions = withClosed.map((i) => i.window);
+    expect(positions.indexOf('closed')).toBe(positions.length - 1);
   });
 });
