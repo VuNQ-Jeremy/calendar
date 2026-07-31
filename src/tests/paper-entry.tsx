@@ -27,7 +27,12 @@ interface PaperScoreGridProps {
 
 export function PaperScoreGrid({ testId, roster, attempts, action }: PaperScoreGridProps) {
   const { t } = useLang();
-  const saveFetcher = useFetcher<{ ok?: boolean; attempts?: TestAttemptRow[]; error?: string }>();
+  const saveFetcher = useFetcher<{
+    ok?: boolean;
+    attempts?: TestAttemptRow[];
+    skipped?: string[];
+    error?: string;
+  }>();
 
   // Local copy of the attempts:
   // autosaving POSTs to this route, whose clientAction invalidates the tests cache in a
@@ -58,12 +63,20 @@ export function PaperScoreGrid({ testId, roster, attempts, action }: PaperScoreG
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testId, roster.length]);
 
+  // A student who sat the test online owns a submitted attempt that this grid cannot show.
+  // The service refuses to overwrite it, so never offer an editable field that would look
+  // accepted and then be discarded — render those rows read-only and leave them out of the
+  // payload. Reachable only for a test whose mode changed before that became a 409.
+  const onlineIds = new Set(saved.filter((a) => a.source === 'online').map((a) => a.studentId));
+
   const persist = (next: Record<string, { score: string; comment: string }>) => {
-    const records = roster.map((s) => ({
-      studentId: s.id,
-      score: next[s.id]?.score === '' || next[s.id] == null ? null : Number(next[s.id].score),
-      comment: next[s.id]?.comment || null,
-    }));
+    const records = roster
+      .filter((s) => !onlineIds.has(s.id))
+      .map((s) => ({
+        studentId: s.id,
+        score: next[s.id]?.score === '' || next[s.id] == null ? null : Number(next[s.id].score),
+        comment: next[s.id]?.comment || null,
+      }));
     const fd = new FormData();
     fd.set('intent', 'save-paper-scores');
     fd.set('records', JSON.stringify(records));
@@ -100,21 +113,29 @@ export function PaperScoreGrid({ testId, roster, attempts, action }: PaperScoreG
             <span style={{ flex: 1, minWidth: 0 }} className="lrow__title">
               {s.name}
             </span>
-            <div className="hw-grade-score" style={{ width: 90 }}>
-              <MSelect
-                value={rows[s.id]?.score ?? ''}
-                onChange={(v) => setScore(s.id, v)}
-                options={SCORE_OPTIONS}
-              />
-            </div>
-            <input
-              className="mochi-input"
-              style={{ width: 220 }}
-              placeholder={t('hw_comment')}
-              value={rows[s.id]?.comment ?? ''}
-              onChange={(e) => setComment(s.id, e.target.value)}
-              onBlur={commitComment}
-            />
+            {onlineIds.has(s.id) ? (
+              <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                {t('paper_online_attempt')}
+              </span>
+            ) : (
+              <>
+                <div className="hw-grade-score" style={{ width: 90 }}>
+                  <MSelect
+                    value={rows[s.id]?.score ?? ''}
+                    onChange={(v) => setScore(s.id, v)}
+                    options={SCORE_OPTIONS}
+                  />
+                </div>
+                <input
+                  className="mochi-input"
+                  style={{ width: 220 }}
+                  placeholder={t('hw_comment')}
+                  value={rows[s.id]?.comment ?? ''}
+                  onChange={(e) => setComment(s.id, e.target.value)}
+                  onBlur={commitComment}
+                />
+              </>
+            )}
           </div>
         ))}
       </div>

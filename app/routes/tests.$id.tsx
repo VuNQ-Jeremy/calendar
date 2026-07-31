@@ -145,8 +145,8 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       if (!parsed.success) {
         return Response.json({ error: 'invalid', errors: parsed.error.flatten() }, { status: 400 });
       }
-      const attempts = await testsSvc.savePaperScores(db, id, parsed.data.records);
-      return { ok: true, attempts };
+      const { attempts, skipped } = await testsSvc.savePaperScores(db, id, parsed.data.records);
+      return { ok: true, attempts, skipped };
     }
 
     // Teacher grading of an online attempt. The grades array travels as JSON in `payload`

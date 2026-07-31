@@ -165,6 +165,16 @@ export async function create(db: Db, input: TestInput): Promise<TestRow> {
 }
 
 export async function update(db: Db, id: string, patch: Partial<TestInput>): Promise<TestRow> {
+  // Switching mode once anyone has sat the test would strand their attempts in a mode that
+  // cannot display them: an online attempt is invisible to the paper score grid, which then
+  // silently discards whatever the teacher types for that student. Close the door instead.
+  if (patch.mode !== undefined) {
+    const current = await get(db, id);
+    if (patch.mode !== current.mode && (await hasAttempts(db, id))) {
+      throw Response.json({ error: 'test_has_attempts' }, { status: 409 });
+    }
+  }
+
   const set: Partial<typeof tests.$inferInsert> = {};
   if (patch.title !== undefined) set.title = patch.title;
   if (patch.classId !== undefined) set.classId = patch.classId ?? null;
@@ -184,7 +194,14 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
   const row = await get(db, id);
 
   // Propagate class/type/date changes to any score records synced from this test's attempts.
-  if (patch.classId !== undefined || patch.assessmentTypeId !== undefined || patch.date) {
+  // Each guard tests `!== undefined`, not truthiness: clearing a field to null is a real
+  // change that must propagate too, and a date cleared to null falls back to today in ICT
+  // (the same rule syncScoreRecord applies) rather than stranding the old date.
+  if (
+    patch.classId !== undefined ||
+    patch.assessmentTypeId !== undefined ||
+    patch.date !== undefined
+  ) {
     const attempts = await db.select().from(testAttempts).where(eq(testAttempts.testId, id));
     const scoreRecordIds = attempts
       .map((a) => a.scoreRecordId)
@@ -193,7 +210,7 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
       const scoreSet: Partial<typeof scoreRecords.$inferInsert> = {};
       if (patch.classId !== undefined) scoreSet.classId = row.classId;
       if (patch.assessmentTypeId !== undefined) scoreSet.assessmentTypeId = row.assessmentTypeId;
-      if (patch.date) scoreSet.date = row.date ?? ictDateOf(new Date().toISOString());
+      if (patch.date !== undefined) scoreSet.date = row.date ?? ictDateOf(new Date().toISOString());
       if (Object.keys(scoreSet).length) {
         await db.update(scoreRecords).set(scoreSet).where(inArray(scoreRecords.id, scoreRecordIds));
       }
@@ -335,23 +352,30 @@ export async function syncScoreRecord(
  * Paper-mode score entry: one graded attempt per student, gradebook-synced.
  * D1 has no interactive transactions, so this is a sequence of idempotent awaits —
  * re-running the same payload converges on the same state.
+ *
+ * `skipped` names students whose record was ignored because they already hold an online
+ * attempt. Paper entry must not clobber work a student actually submitted, but dropping
+ * the teacher's input without telling anyone is worse — the caller surfaces this.
  */
 export async function savePaperScores(
   db: Db,
   testId: string,
   records: { studentId: string; score?: number | null; comment?: string | null }[],
-): Promise<TestAttemptRow[]> {
+): Promise<{ attempts: TestAttemptRow[]; skipped: string[] }> {
   const test = await get(db, testId);
 
   const existing = await db.select().from(testAttempts).where(eq(testAttempts.testId, testId));
   const byStudent = new Map(existing.map((a) => [a.studentId, a]));
 
   const now = new Date().toISOString();
+  const skipped: string[] = [];
 
   for (const rec of records) {
     const prev = byStudent.get(rec.studentId);
-    // Never clobber a real online attempt with paper entry.
-    if (prev && prev.source === 'online') continue;
+    if (prev && prev.source === 'online') {
+      skipped.push(rec.studentId);
+      continue;
+    }
 
     const hasScore = rec.score != null;
     const hasComment = !!rec.comment?.trim();
@@ -395,5 +419,5 @@ export async function savePaperScores(
     }
   }
 
-  return listAttempts(db, testId);
+  return { attempts: await listAttempts(db, testId), skipped };
 }
