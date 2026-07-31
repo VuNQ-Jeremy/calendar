@@ -16,6 +16,8 @@ import * as typesSvc from '../server/services/assessment-types';
 import * as attendanceSvc from '../server/services/attendance';
 import * as gradeLevelsSvc from '../server/services/grade-levels';
 import * as questionsSvc from '../server/services/questions';
+import * as testsSvc from '../server/services/tests';
+import { ictDateOf } from '../shared/logic/tests';
 import { hashPassword } from '../server/services/crypto';
 import { sessionCookie } from '../server/session';
 import {
@@ -1310,5 +1312,511 @@ describe('questions', () => {
     const row = after.find((x) => x.id === q.id);
     expect(row.type).toBe('mcq');
     expect(row.options).toEqual(OPTS);
+  });
+});
+
+// ---- WP2a.2: tests service + paper score sync ----
+
+describe('tests service', () => {
+  const OPTS = [
+    { id: 'a', text: 'Alpha' },
+    { id: 'b', text: 'Bravo' },
+  ];
+
+  async function makeQuestion(d, prompt) {
+    return questionsSvc.create(d, {
+      type: 'mcq',
+      prompt,
+      gradeLevelId: 'gl6',
+      difficulty: 'easy',
+      tags: [],
+      options: OPTS,
+      answerKey: 'b',
+      explanation: null,
+    });
+  }
+
+  /** Inserts a raw attempt row so the "already sat" guards can be exercised. */
+  async function seedAttempt(d, testId, opts = {}) {
+    const student = await peopleSvc.createStudent(d, {
+      name: `Attempt ${crypto.randomUUID().slice(0, 8)}`,
+      color: 'blue',
+      classIds: [],
+    });
+    const id = crypto.randomUUID();
+    await d.insert(testAttempts).values({
+      id,
+      testId,
+      studentId: student.id,
+      startedAt: new Date().toISOString(),
+      ...opts,
+    });
+    return { attemptId: id, studentId: student.id };
+  }
+
+  async function expectThrown(fn) {
+    let err = null;
+    try {
+      await fn();
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    return err;
+  }
+
+  it('create sets draft status and createdAt; list is createdAt DESC; get returns the row', async () => {
+    const d = db();
+    const a = await testsSvc.create(d, { title: 'WP2a Test A', mode: 'online' });
+    const b = await testsSvc.create(d, { title: 'WP2a Test B', mode: 'paper' });
+
+    expect(a.id).toBeTruthy();
+    expect(a.status).toBe('draft');
+    expect(typeof a.createdAt).toBe('string');
+    expect(a.mode).toBe('online');
+    expect(b.mode).toBe('paper');
+
+    const list = await testsSvc.list(d);
+    expect(list.some((t) => t.id === a.id)).toBe(true);
+    expect(list.some((t) => t.id === b.id)).toBe(true);
+    // Storage is shared across tests in this file, so assert monotonicity rather than positions.
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1].createdAt;
+      const cur = list[i].createdAt;
+      if (prev != null && cur != null) expect(prev >= cur).toBe(true);
+    }
+
+    const fetched = await testsSvc.get(d, a.id);
+    expect(fetched.title).toBe('WP2a Test A');
+  });
+
+  it('get on an unknown id throws 404 test_not_found', async () => {
+    const err = await expectThrown(() => testsSvc.get(db(), 'no-such-test'));
+    expect(err.status).toBe(404);
+    expect(await err.json()).toEqual({ error: 'test_not_found' });
+  });
+
+  it('setQuestions stores sortOrder by array index with the given points, and totalPoints sums', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Links', mode: 'paper' });
+    const q1 = await makeQuestion(d, 'Link Q1');
+    const q2 = await makeQuestion(d, 'Link Q2');
+    const q3 = await makeQuestion(d, 'Link Q3');
+
+    const links = await testsSvc.setQuestions(d, t.id, [
+      { questionId: q2.id, points: 2 },
+      { questionId: q1.id, points: 3.5 },
+      { questionId: q3.id, points: 1 },
+    ]);
+    expect(links.map((l) => l.questionId)).toEqual([q2.id, q1.id, q3.id]);
+    expect(links.map((l) => l.sortOrder)).toEqual([0, 1, 2]);
+    expect(links.map((l) => l.points)).toEqual([2, 3.5, 1]);
+    expect(links.every((l) => l.testId === t.id)).toBe(true);
+    expect(await testsSvc.totalPoints(d, t.id)).toBe(6.5);
+  });
+
+  it('setQuestions replaces the whole set rather than merging, and an empty array clears it', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Replace', mode: 'paper' });
+    const q1 = await makeQuestion(d, 'Replace Q1');
+    const q2 = await makeQuestion(d, 'Replace Q2');
+    const q3 = await makeQuestion(d, 'Replace Q3');
+
+    await testsSvc.setQuestions(d, t.id, [
+      { questionId: q1.id, points: 1 },
+      { questionId: q2.id, points: 1 },
+    ]);
+
+    const replaced = await testsSvc.setQuestions(d, t.id, [{ questionId: q3.id, points: 4 }]);
+    expect(replaced.length).toBe(1);
+    expect(replaced[0].questionId).toBe(q3.id);
+    expect(replaced[0].sortOrder).toBe(0);
+    expect(await testsSvc.totalPoints(d, t.id)).toBe(4);
+
+    const rows = await d.select().from(testQuestions).where(eq(testQuestions.testId, t.id));
+    expect(rows.length).toBe(1);
+
+    const cleared = await testsSvc.setQuestions(d, t.id, []);
+    expect(cleared).toEqual([]);
+    expect(await testsSvc.totalPoints(d, t.id)).toBe(0);
+    const afterClear = await d.select().from(testQuestions).where(eq(testQuestions.testId, t.id));
+    expect(afterClear.length).toBe(0);
+  });
+
+  it('setQuestions with an unknown questionId throws 400 unknown_question and changes nothing', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Unknown Q', mode: 'paper' });
+    const q1 = await makeQuestion(d, 'Known Q');
+    await testsSvc.setQuestions(d, t.id, [{ questionId: q1.id, points: 1 }]);
+
+    const err = await expectThrown(() =>
+      testsSvc.setQuestions(d, t.id, [
+        { questionId: q1.id, points: 1 },
+        { questionId: 'nope-not-a-question', points: 1 },
+      ]),
+    );
+    expect(err.status).toBe(400);
+    expect(await err.json()).toEqual({ error: 'unknown_question' });
+
+    const links = await testsSvc.listQuestionLinks(d, t.id);
+    expect(links.map((l) => l.questionId)).toEqual([q1.id]);
+  });
+
+  it('publish refuses an empty test with 400 test_empty', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Empty', mode: 'paper' });
+    const err = await expectThrown(() => testsSvc.publish(d, t.id));
+    expect(err.status).toBe(400);
+    expect(await err.json()).toEqual({ error: 'test_empty' });
+    expect((await testsSvc.get(d, t.id)).status).toBe('draft');
+  });
+
+  it('publish refuses an online test with no closeAt, and succeeds once closeAt is set', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Online', mode: 'online' });
+    const q = await makeQuestion(d, 'Online Q');
+    await testsSvc.setQuestions(d, t.id, [{ questionId: q.id, points: 1 }]);
+
+    const err = await expectThrown(() => testsSvc.publish(d, t.id));
+    expect(err.status).toBe(400);
+    expect(await err.json()).toEqual({ error: 'test_no_close' });
+    expect((await testsSvc.get(d, t.id)).status).toBe('draft');
+
+    await testsSvc.update(d, t.id, { closeAt: '2026-08-01T10:00:00.000Z' });
+    const published = await testsSvc.publish(d, t.id);
+    expect(published.status).toBe('published');
+  });
+
+  it('publish succeeds for a paper test with questions and no closeAt', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Paper Publish', mode: 'paper' });
+    const q = await makeQuestion(d, 'Paper Q');
+    await testsSvc.setQuestions(d, t.id, [{ questionId: q.id, points: 1 }]);
+
+    const published = await testsSvc.publish(d, t.id);
+    expect(published.status).toBe('published');
+    expect(published.closeAt).toBeNull();
+  });
+
+  it('unpublish returns to draft with no attempts, then throws 409 test_has_attempts', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Unpublish', mode: 'paper' });
+    const q = await makeQuestion(d, 'Unpublish Q');
+    await testsSvc.setQuestions(d, t.id, [{ questionId: q.id, points: 1 }]);
+    await testsSvc.publish(d, t.id);
+
+    const drafted = await testsSvc.unpublish(d, t.id);
+    expect(drafted.status).toBe('draft');
+
+    await testsSvc.publish(d, t.id);
+    await seedAttempt(d, t.id);
+    const err = await expectThrown(() => testsSvc.unpublish(d, t.id));
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'test_has_attempts' });
+    expect((await testsSvc.get(d, t.id)).status).toBe('published');
+  });
+
+  it('setQuestions throws 409 test_has_attempts once an attempt exists and leaves links intact', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Locked Links', mode: 'paper' });
+    const q1 = await makeQuestion(d, 'Locked Q1');
+    const q2 = await makeQuestion(d, 'Locked Q2');
+    const before = await testsSvc.setQuestions(d, t.id, [
+      { questionId: q1.id, points: 2 },
+      { questionId: q2.id, points: 3 },
+    ]);
+    await seedAttempt(d, t.id);
+
+    const err = await expectThrown(() => testsSvc.setQuestions(d, t.id, []));
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'test_has_attempts' });
+
+    const after = await testsSvc.listQuestionLinks(d, t.id);
+    expect(after).toEqual(before);
+  });
+
+  it('hasAttempts flips false to true, and attemptsSummary buckets by status', async () => {
+    const d = db();
+    const t = await testsSvc.create(d, { title: 'WP2a Summary', mode: 'paper' });
+    expect(await testsSvc.hasAttempts(d, t.id)).toBe(false);
+
+    await seedAttempt(d, t.id, { status: 'in_progress' });
+    expect(await testsSvc.hasAttempts(d, t.id)).toBe(true);
+    await seedAttempt(d, t.id, { status: 'needs_grading' });
+    await seedAttempt(d, t.id, { status: 'graded' });
+    await seedAttempt(d, t.id, { status: 'graded' });
+
+    const summary = await testsSvc.attemptsSummary(d);
+    expect(summary[t.id]).toEqual({ total: 4, needsGrading: 1, graded: 2 });
+    expect((await testsSvc.listAttempts(d, t.id)).length).toBe(4);
+  });
+});
+
+describe('paper score sync', () => {
+  /** A fresh class, two fresh students, a fresh assessment type and a paper test wired to them. */
+  async function setup(d, overrides = {}) {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const cls = await classesSvc.create(d, {
+      name: `Paper Class ${tag}`,
+      color: 'blue',
+      schedule: [],
+      studentIds: [],
+    });
+    const type = await typesSvc.create(d, { name: `Paper Type ${tag}`, active: true });
+    const s1 = await peopleSvc.createStudent(d, {
+      name: `Paper Student A ${tag}`,
+      color: 'blue',
+      classIds: [cls.id],
+    });
+    const s2 = await peopleSvc.createStudent(d, {
+      name: `Paper Student B ${tag}`,
+      color: 'green',
+      classIds: [cls.id],
+    });
+    const test = await testsSvc.create(d, {
+      title: `Paper Test ${tag}`,
+      mode: 'paper',
+      classId: cls.id,
+      assessmentTypeId: type.id,
+      date: '2026-06-23',
+      ...overrides,
+    });
+    return { cls, type, s1, s2, test };
+  }
+
+  function scoresFor(d, studentId) {
+    return d.select().from(scoreRecords).where(eq(scoreRecords.studentId, studentId));
+  }
+
+  it('a paper score creates a graded attempt and a fully populated linked score record', async () => {
+    const d = db();
+    const { cls, type, s1, test } = await setup(d);
+
+    const attempts = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 8.5, comment: 'Nice work' },
+    ]);
+    const attempt = attempts.find((a) => a.studentId === s1.id);
+    expect(attempt).toBeTruthy();
+    expect(attempt.source).toBe('paper');
+    expect(attempt.status).toBe('graded');
+    expect(attempt.normalizedScore).toBe(8.5);
+    expect(attempt.comment).toBe('Nice work');
+    expect(attempt.scoreRecordId).toBeTruthy();
+
+    const rows = await scoresFor(d, s1.id);
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe(attempt.scoreRecordId);
+    expect(rows[0].studentId).toBe(s1.id);
+    expect(rows[0].classId).toBe(cls.id);
+    expect(rows[0].assessmentTypeId).toBe(type.id);
+    expect(rows[0].date).toBe('2026-06-23');
+    expect(rows[0].score).toBe(8.5);
+    expect(rows[0].notes).toBe('Nice work');
+  });
+
+  it('invariant: updating a score reuses the same score record with no orphans', async () => {
+    const d = db();
+    const { s1, test } = await setup(d);
+
+    const first = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 6, comment: 'ok' },
+    ]);
+    const scoreRecordId = first.find((a) => a.studentId === s1.id).scoreRecordId;
+
+    const second = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 9, comment: 'better' },
+    ]);
+    const attempt = second.find((a) => a.studentId === s1.id);
+    expect(attempt.scoreRecordId).toBe(scoreRecordId);
+    expect(attempt.normalizedScore).toBe(9);
+
+    const rows = await scoresFor(d, s1.id);
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe(scoreRecordId);
+    expect(rows[0].score).toBe(9);
+    expect(rows[0].notes).toBe('better');
+    expect((await testsSvc.listAttempts(d, test.id)).length).toBe(1);
+  });
+
+  it('invariant: clearing both score and comment deletes the attempt and its score record', async () => {
+    const d = db();
+    const { s1, test } = await setup(d);
+    await testsSvc.savePaperScores(d, test.id, [{ studentId: s1.id, score: 7, comment: 'ok' }]);
+
+    const after = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: null, comment: null },
+    ]);
+    expect(after.find((a) => a.studentId === s1.id)).toBeUndefined();
+    expect(after.length).toBe(0);
+    expect(await scoresFor(d, s1.id)).toEqual([]);
+  });
+
+  it('invariant: a comment-only entry keeps the attempt but drops the score record', async () => {
+    const d = db();
+    const { s1, test } = await setup(d);
+    const first = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 7, comment: 'scored' },
+    ]);
+    const scoreRecordId = first.find((a) => a.studentId === s1.id).scoreRecordId;
+    expect(scoreRecordId).toBeTruthy();
+
+    const after = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: null, comment: 'Missing submission' },
+    ]);
+    const attempt = after.find((a) => a.studentId === s1.id);
+    expect(attempt).toBeTruthy();
+    expect(attempt.normalizedScore).toBeNull();
+    expect(attempt.comment).toBe('Missing submission');
+    expect(attempt.scoreRecordId).toBeNull();
+
+    const gone = await d.select().from(scoreRecords).where(eq(scoreRecords.id, scoreRecordId));
+    expect(gone.length).toBe(0);
+    expect(await scoresFor(d, s1.id)).toEqual([]);
+  });
+
+  it('a test with no date scores against today in ICT', async () => {
+    const d = db();
+    const { s1, test } = await setup(d, { date: null });
+    expect(test.date).toBeNull();
+
+    const expected = ictDateOf(new Date().toISOString());
+    const attempts = await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 5, comment: null },
+    ]);
+    const rows = await scoresFor(d, s1.id);
+    expect(rows.length).toBe(1);
+    expect(rows[0].date).toBe(expected);
+    expect(rows[0].id).toBe(attempts.find((a) => a.studentId === s1.id).scoreRecordId);
+  });
+
+  it('update propagates date, classId and assessmentTypeId to every linked score record', async () => {
+    const d = db();
+    const { s1, s2, test } = await setup(d);
+    await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 6, comment: null },
+      { studentId: s2.id, score: 7, comment: null },
+    ]);
+
+    const otherClass = await classesSvc.create(d, {
+      name: `Paper Class Moved ${crypto.randomUUID().slice(0, 8)}`,
+      color: 'red',
+      schedule: [],
+      studentIds: [],
+    });
+    const otherType = await typesSvc.create(d, {
+      name: `Paper Type Moved ${crypto.randomUUID().slice(0, 8)}`,
+      active: true,
+    });
+
+    await testsSvc.update(d, test.id, {
+      date: '2026-07-01',
+      classId: otherClass.id,
+      assessmentTypeId: otherType.id,
+    });
+
+    for (const s of [s1, s2]) {
+      const rows = await scoresFor(d, s.id);
+      expect(rows.length).toBe(1);
+      expect(rows[0].date).toBe('2026-07-01');
+      expect(rows[0].classId).toBe(otherClass.id);
+      expect(rows[0].assessmentTypeId).toBe(otherType.id);
+    }
+  });
+
+  it('remove deletes linked score records and cascades attempts and question links', async () => {
+    const d = db();
+    const { s1, s2, test } = await setup(d);
+    const q = await questionsSvc.create(d, {
+      type: 'essay',
+      prompt: 'Paper essay',
+      difficulty: 'easy',
+      tags: [],
+      options: [],
+      answerKey: null,
+    });
+    await testsSvc.setQuestions(d, test.id, [{ questionId: q.id, points: 10 }]);
+    await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 6, comment: null },
+      { studentId: s2.id, score: 7, comment: 'good' },
+    ]);
+    expect((await scoresFor(d, s1.id)).length).toBe(1);
+    expect((await scoresFor(d, s2.id)).length).toBe(1);
+
+    await testsSvc.remove(d, test.id);
+
+    expect(await scoresFor(d, s1.id)).toEqual([]);
+    expect(await scoresFor(d, s2.id)).toEqual([]);
+    const attemptRows = await d.select().from(testAttempts).where(eq(testAttempts.testId, test.id));
+    expect(attemptRows.length).toBe(0);
+    const linkRows = await d.select().from(testQuestions).where(eq(testQuestions.testId, test.id));
+    expect(linkRows.length).toBe(0);
+    const testRows = await d.select().from(testsTable).where(eq(testsTable.id, test.id));
+    expect(testRows.length).toBe(0);
+  });
+
+  it('paper entry never clobbers an existing online attempt', async () => {
+    const d = db();
+    const { s1, s2, test } = await setup(d);
+    const onlineId = crypto.randomUUID();
+    await d.insert(testAttempts).values({
+      id: onlineId,
+      testId: test.id,
+      studentId: s1.id,
+      source: 'online',
+      status: 'submitted',
+      startedAt: new Date().toISOString(),
+      normalizedScore: 4.5,
+    });
+
+    await testsSvc.savePaperScores(d, test.id, [
+      { studentId: s1.id, score: 10, comment: 'paper override attempt' },
+      { studentId: s2.id, score: 8, comment: null },
+    ]);
+
+    const online = (await d.select().from(testAttempts).where(eq(testAttempts.id, onlineId)))[0];
+    expect(online.source).toBe('online');
+    expect(online.status).toBe('submitted');
+    expect(online.normalizedScore).toBe(4.5);
+    expect(online.comment).toBeNull();
+    expect(online.scoreRecordId).toBeNull();
+    // No gradebook row was invented for the online student.
+    expect(await scoresFor(d, s1.id)).toEqual([]);
+
+    const paper = (await testsSvc.listAttempts(d, test.id)).find((a) => a.studentId === s2.id);
+    expect(paper.source).toBe('paper');
+    expect(paper.normalizedScore).toBe(8);
+    expect((await scoresFor(d, s2.id)).length).toBe(1);
+  });
+
+  it('savePaperScores on an unknown testId throws 404 test_not_found', async () => {
+    let err = null;
+    try {
+      await testsSvc.savePaperScores(db(), 'no-such-test', []);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    expect(err.status).toBe(404);
+    expect(await err.json()).toEqual({ error: 'test_not_found' });
+  });
+
+  it('is idempotent: saving the identical payload twice leaves one attempt and one score record each', async () => {
+    const d = db();
+    const { s1, s2, test } = await setup(d);
+    const payload = [
+      { studentId: s1.id, score: 6.5, comment: 'first' },
+      { studentId: s2.id, score: 9, comment: null },
+    ];
+
+    const first = await testsSvc.savePaperScores(d, test.id, payload);
+    const second = await testsSvc.savePaperScores(d, test.id, payload);
+
+    expect(second.length).toBe(2);
+    expect(new Set(second.map((a) => a.id))).toEqual(new Set(first.map((a) => a.id)));
+    for (const s of [s1, s2]) {
+      const rows = await scoresFor(d, s.id);
+      expect(rows.length).toBe(1);
+      expect(rows[0].id).toBe(second.find((a) => a.studentId === s.id).scoreRecordId);
+    }
   });
 });

@@ -11,7 +11,7 @@ import { requireStaff } from '../../server/services/auth';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
-import * as homeworkSvc from '../../server/services/homework';
+import * as testsSvc from '../../server/services/tests';
 import { ClassInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 
@@ -19,13 +19,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [classes, students, materials, homework] = await Promise.all([
+  const [classes, students, materials, tests] = await Promise.all([
     classesSvc.list(db),
     peopleSvc.listStudents(db),
     materialsSvc.list(db),
-    homeworkSvc.list(db),
+    testsSvc.list(db),
   ]);
-  return { classes, students, materials, homework };
+  return { classes, students, materials, tests };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {

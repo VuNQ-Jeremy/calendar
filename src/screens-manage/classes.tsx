@@ -11,7 +11,7 @@ import type { IconName } from '../icons.jsx';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { MaterialRow } from '../../server/services/materials.js';
-import type { HomeworkRow } from '../../server/services/homework.js';
+import type { TestRow } from '../../server/services/tests.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Avatar: MAv } = DS;
 
@@ -19,7 +19,7 @@ interface ClassesLoaderData {
   classes: ClassRow[];
   students: StudentRow[];
   materials: MaterialRow[];
-  homework: HomeworkRow[];
+  tests: TestRow[];
 }
 
 type ClassDraft = {
@@ -31,7 +31,7 @@ type ClassDraft = {
 };
 
 export function ClassesScreen() {
-  const { classes, students, materials, homework } = useLoaderData() as ClassesLoaderData;
+  const { classes, students, materials, tests } = useLoaderData() as ClassesLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
   const [modal, setModal] = React.useState<ClassDraft | null>(null);
@@ -152,7 +152,7 @@ export function ClassesScreen() {
           classes={classes}
           students={students}
           materials={materials}
-          homework={homework}
+          tests={tests}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setModal({ ...detail });
@@ -170,7 +170,7 @@ interface ClassDetailModalProps {
   classes: ClassRow[];
   students: StudentRow[];
   materials: MaterialRow[];
-  homework: HomeworkRow[];
+  tests: TestRow[];
   onClose: () => void;
   onEdit: () => void;
 }
@@ -180,7 +180,7 @@ function ClassDetailModal({
   classes,
   students,
   materials,
-  homework,
+  tests,
   onClose,
   onEdit,
 }: ClassDetailModalProps) {
@@ -195,8 +195,7 @@ function ClassDetailModal({
 
   const roster = students.filter((s) => cls.studentIds.includes(s.id));
   const clsMaterials = materials.filter(isClassMat);
-  const clsHomework = homework.filter((h) => h.classId === cls.id);
-  const openHw = clsHomework.filter((h) => !h.done).length;
+  const clsTests = tests.filter((x) => x.classId === cls.id && x.status === 'published').length;
 
   const setScope = (m: MaterialRow, scope: 'class' | 'event', moveToClass = false) => {
     setOv((p) => ({ ...p, [m.id]: { scope, classId: moveToClass ? cls.id : effClassId(m) } }));
@@ -268,7 +267,7 @@ function ClassDetailModal({
       </div>
       <div className="m-row" style={{ gap: 10, marginBottom: 20 }}>
         {Stat('users', t('stat_students'), roster.length)}
-        {Stat('clipboard', t('cls_stat_openwork'), openHw)}
+        {Stat('clipboard', t('cls_stat_tests'), clsTests)}
         {Stat('folder', t('stat_materials'), clsMaterials.length)}
       </div>
       <div className="mochi-eyebrow" style={{ marginBottom: 8 }}>
@@ -313,7 +312,11 @@ function ClassDetailModal({
           {clsMaterials.map((m) => {
             const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
             return (
-              <div key={m.id} className="lrow" style={{ border: '1.5px solid var(--border-subtle)' }}>
+              <div
+                key={m.id}
+                className="lrow"
+                style={{ border: '1.5px solid var(--border-subtle)' }}
+              >
                 <MIcon name={mt.icon} size={16} />
                 <span style={{ flex: 1 }} className="lrow__title">
                   {m.title}

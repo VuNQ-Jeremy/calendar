@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0063 — 2026-07-31
+Tests: builder, paper scoring that syncs to the gradebook, printable test + answer key
+
 ## v0.0062 — 2026-07-31
 Tests module phase 1: question bank + managed grade levels
 

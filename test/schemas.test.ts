@@ -8,6 +8,7 @@ import {
   NotifPrefsInput,
   QuestionInput,
   QuestionInputBase,
+  TestInput,
   parsePatch,
 } from '../shared/schemas';
 
@@ -191,5 +192,23 @@ describe('QuestionInput', () => {
     expect(parsePatch(QuestionInputBase, { prompt: 'Capital of Vietnam?' }).data).toEqual({
       prompt: 'Capital of Vietnam?',
     });
+  });
+});
+
+describe('TestInput', () => {
+  // A blank time-limit field must clear the limit, not be silently dropped from the patch,
+  // or a teacher could never remove a limit once saved. null has to survive parsePatch.
+  it('accepts a null time limit and keeps it through a patch', () => {
+    expect(TestInput.safeParse({ title: 'Kiểm tra 15 phút', timeLimitMinutes: null }).success).toBe(
+      true,
+    );
+    expect(parsePatch(TestInput, { timeLimitMinutes: null }).data).toEqual({
+      timeLimitMinutes: null,
+    });
+  });
+
+  it('rejects a zero or out-of-range time limit', () => {
+    expect(TestInput.safeParse({ title: 'T', timeLimitMinutes: 0 }).success).toBe(false);
+    expect(TestInput.safeParse({ title: 'T', timeLimitMinutes: 301 }).success).toBe(false);
   });
 });

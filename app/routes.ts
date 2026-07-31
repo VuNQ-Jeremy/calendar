@@ -7,6 +7,8 @@ export default [
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
+  // Printable test document — outside the _app layout on purpose: no app shell, no nav chrome.
+  route('tests/:id/print', 'routes/tests.$id.print.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
 
@@ -69,6 +71,8 @@ export default [
     route('people', 'routes/people.tsx'),
     route('materials', 'routes/materials.tsx'),
     route('homework', 'routes/homework.tsx'),
+    route('tests', 'routes/tests.tsx'),
+    route('tests/:id', 'routes/tests.$id.tsx'),
     route('questions', 'routes/questions.tsx'),
     route('assessments', 'routes/assessments.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),

@@ -39,6 +39,13 @@ export const K = {
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
 
 /**
+ * Same trick as flashcardTopicKey: K.tests ('route:tests') is a PREFIX of every
+ * detail key, and invalidate/markStale match by prefix — so any test mutation
+ * (which hard-invalidates K.tests) also drops every cached test detail page.
+ */
+export const testDetailKey = (id: string) => `route:tests:${id}`;
+
+/**
  * Stale-while-revalidate loader for route clientLoaders.
  * - miss: awaits serverLoader and caches (blocking, same as before);
  * - fresh hit: returns instantly, no network;
@@ -160,6 +167,10 @@ export function invalidateAfterMutation(domain: MutationDomain): void {
 export function cacheKeyForPath(pathname: string): string | null {
   const fc = pathname.match(/^\/vocabulary\/([^/]+)\/?$/);
   if (fc) return flashcardTopicKey(decodeURIComponent(fc[1]));
+  // Single trailing segment only, so `/tests/:id/print` (outside the app shell,
+  // uncached) does NOT match, and a bare `/tests` falls through to the map below.
+  const td = pathname.match(/^\/tests\/([^/]+)\/?$/);
+  if (td) return testDetailKey(decodeURIComponent(td[1]));
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   const map: Record<string, string> = {
     '/dashboard': K.dashboard,

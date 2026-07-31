@@ -56,6 +56,7 @@ const NAV = [
       { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book', staffOnly: true },
       { id: 'people', path: '/people', tk: 'nav_people', icon: 'users', staffOnly: true },
       { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder', staffOnly: true },
+      { id: 'tests', path: '/tests', tk: 'nav_tests', icon: 'clipboard', staffOnly: true },
       { id: 'questions', path: '/questions', tk: 'nav_questions', icon: 'edit', staffOnly: true },
       { id: 'homework', path: '/homework', tk: 'nav_homework', icon: 'clipboard', staffOnly: true },
       {
