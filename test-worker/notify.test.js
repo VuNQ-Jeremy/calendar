@@ -72,7 +72,9 @@ async function seedStudentWithDevice(d, name, token) {
  * The whole job reasons in Vietnam local time; the tests have to as well.
  */
 function utcForIct(dateIso, hh, mm) {
-  return new Date(`${dateIso}T${String(hh - 7).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00Z`);
+  return new Date(
+    `${dateIso}T${String(hh - 7).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00Z`,
+  );
 }
 
 describe('runClassReminders()', () => {
@@ -84,7 +86,6 @@ describe('runClassReminders()', () => {
     const cls = await classesSvc.create(d, {
       name: 'Maths',
       color: 'green',
-      schedule: [],
       studentIds: [student.id],
     });
     const ev = await eventsSvc.create(d, {
@@ -118,7 +119,6 @@ describe('runClassReminders()', () => {
     const cls = await classesSvc.create(d, {
       name: 'English',
       color: 'blue',
-      schedule: [],
       studentIds: [student.id],
     });
     await eventsSvc.create(d, {
@@ -145,7 +145,6 @@ describe('runClassReminders()', () => {
     const cls = await classesSvc.create(d, {
       name: 'Science',
       color: 'violet',
-      schedule: [],
       studentIds: [student.id],
     });
     await eventsSvc.create(d, {
@@ -168,7 +167,6 @@ describe('runClassReminders()', () => {
     const cls = await classesSvc.create(d, {
       name: 'History',
       color: 'cocoa',
-      schedule: [],
       studentIds: [student.id],
     });
     await eventsSvc.create(d, {

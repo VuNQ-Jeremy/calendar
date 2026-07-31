@@ -47,7 +47,6 @@ describe('classes service', () => {
     const cls = await classesSvc.create(db(), {
       name: 'Math 101',
       color: 'blue',
-      schedule: [],
       studentIds: [],
     });
     expect(cls.id).toBeTruthy();
@@ -61,7 +60,6 @@ describe('classes service', () => {
     const cls = await classesSvc.create(db(), {
       name: 'Science',
       color: 'green',
-      schedule: [],
       studentIds: [],
     });
     await classesSvc.update(db(), cls.id, { name: 'Science II' });
@@ -74,7 +72,6 @@ describe('classes service', () => {
     const cls = await classesSvc.create(db(), {
       name: 'Temp',
       color: 'orange',
-      schedule: [],
       studentIds: [],
     });
     await classesSvc.remove(db(), cls.id);
@@ -326,14 +323,24 @@ describe('db.batch atomicity', () => {
 // ---- Task 2: FK cascade verification ----
 
 describe('FK cascade — delete class', () => {
+  // The row is inserted directly rather than through classesSvc.create, because the weekly
+  // schedule editor was removed from the product on 2026-07-29 (commit 25bdb89): `schedule`
+  // is gone from ClassInput, so create() silently drops it and no public API can produce a
+  // class_schedule row any more. The table stays dormant so the decision is reversible
+  // without a migration, and this test guards the ON DELETE CASCADE that makes it safe to
+  // leave sitting there. Going through create() left the assertion vacuous — it failed in
+  // setup, so the cascade below was never actually reached.
   it('cascades class_schedule rows', async () => {
     const d = db();
     const cls = await classesSvc.create(d, {
       name: 'Cascade Test',
       color: 'blue',
-      schedule: [{ day: 1, start: '09:00', end: '10:00' }],
       studentIds: [],
     });
+
+    await d
+      .insert(classSchedule)
+      .values({ classId: cls.id, day: 1, startTime: '09:00', endTime: '10:00' });
 
     const schedBefore = await d
       .select()
@@ -360,7 +367,6 @@ describe('FK cascade — delete class', () => {
     const cls = await classesSvc.create(d, {
       name: 'Cascade Test 2',
       color: 'green',
-      schedule: [],
       studentIds: [student.id],
     });
 
@@ -381,7 +387,6 @@ describe('FK cascade — delete class', () => {
     const cls = await classesSvc.create(d, {
       name: 'Event Class',
       color: 'violet',
-      schedule: [],
       studentIds: [],
     });
     const ev = await eventsSvc.create(d, {
@@ -402,7 +407,6 @@ describe('FK cascade — delete class', () => {
     const cls = await classesSvc.create(d, {
       name: 'Mat Class',
       color: 'rose',
-      schedule: [],
       studentIds: [],
     });
     const mat = await materialsSvc.create(d, {
@@ -425,7 +429,6 @@ describe('FK cascade — delete student', () => {
     const cls = await classesSvc.create(d, {
       name: 'FK Class',
       color: 'blue',
-      schedule: [],
       studentIds: [],
     });
     const student = await peopleSvc.createStudent(d, {
@@ -590,7 +593,6 @@ describe('assessments service', () => {
     const cls = await classesSvc.create(d, {
       name: 'Assess Class',
       color: 'blue',
-      schedule: [],
       studentIds: [],
     });
     const score = await assessSvc.createScore(d, {
@@ -1407,7 +1409,6 @@ describe('paper score sync', () => {
     const cls = await classesSvc.create(d, {
       name: `Paper Class ${tag}`,
       color: 'blue',
-      schedule: [],
       studentIds: [],
     });
     const type = await typesSvc.create(d, { name: `Paper Type ${tag}`, active: true });
@@ -1548,7 +1549,6 @@ describe('paper score sync', () => {
     const otherClass = await classesSvc.create(d, {
       name: `Paper Class Moved ${crypto.randomUUID().slice(0, 8)}`,
       color: 'red',
-      schedule: [],
       studentIds: [],
     });
     const otherType = await typesSvc.create(d, {
@@ -1796,7 +1796,6 @@ describe('attempts service', () => {
     const cls = await classesSvc.create(d, {
       name: `Attempt Class ${tag}`,
       color: 'blue',
-      schedule: [],
       studentIds: [],
     });
     const type = await typesSvc.create(d, { name: `Attempt Type ${tag}`, active: true });

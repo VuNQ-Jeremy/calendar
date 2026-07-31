@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0068 — 2026-07-31
+Fix the long-failing class_schedule cascade test; worker suite fully green
+
 ## v0.0067 — 2026-07-31
 Fix test date/mode propagation, surface skipped paper scores, drop dead i18n keys
 
