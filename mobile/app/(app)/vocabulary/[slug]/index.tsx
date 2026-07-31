@@ -8,7 +8,6 @@ import {
   ListChecks,
   Pencil,
   Plus,
-  Sparkles,
   Trash2,
   Upload,
   Volume2,
@@ -197,15 +196,6 @@ function WordsTab({
               onPress={() => router.push(`/vocabulary/${encodeURIComponent(slug)}/import`)}
             >
               {t('fc_import')}
-            </Button>
-            {/* Short label: three buttons share this row, and 'Generate with AI' will not fit. */}
-            <Button
-              variant="secondary"
-              style={{ flex: 1 }}
-              iconLeft={<Sparkles size={16} color={th.color.textStrong} />}
-              onPress={() => router.push(`/vocabulary/${encodeURIComponent(slug)}/generate`)}
-            >
-              {t('fc_gen_btn_short')}
             </Button>
           </View>
         ) : null

@@ -17,8 +17,7 @@ import { ScreenHeader } from '~/components/ScreenHeader';
  * Create a whole topic from a name. **Staff only.** Sibling of `new.tsx` (the manual form) and the
  * port of the web's `GenerateTopicModal`: pick a topic, let the model write the words, review, save.
  *
- * The `[slug]/generate.tsx` screen is the other half of this feature — that one adds words to a
- * topic that already exists. Both end up in the same import pipeline.
+ * This is the only AI-generation entry point — an existing topic grows by hand or by paste import.
  */
 
 /** Server-side cap, from `VocabGenerateInput`. */

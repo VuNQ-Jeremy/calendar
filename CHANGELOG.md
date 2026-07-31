@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0060 — 2026-07-31
+Remove the in-topic 'Generate with AI' button on web and mobile — AI generation now happens only when creating a whole topic from the vocabulary list.
+
 ## v0.0059 — 2026-07-31
 Register the generate-topic API route so mobile AI topic creation works.
 
