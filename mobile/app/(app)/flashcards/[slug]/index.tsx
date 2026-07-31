@@ -2,7 +2,17 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Grid3x3, Layers, ListChecks, Pencil, Plus, Trash2, Upload, Volume2 } from 'lucide-react-native';
+import {
+  Grid3x3,
+  Layers,
+  ListChecks,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  Upload,
+  Volume2,
+} from 'lucide-react-native';
 import { useMutation } from '@tanstack/react-query';
 import { MIN_WORDS } from '@mochi/shared/logic/flashcards';
 import type { GameMode } from '@mochi/shared/logic/flashcards';
@@ -187,6 +197,15 @@ function WordsTab({
               onPress={() => router.push(`/flashcards/${encodeURIComponent(slug)}/import`)}
             >
               {t('fc_import')}
+            </Button>
+            {/* Short label: three buttons share this row, and 'Generate with AI' will not fit. */}
+            <Button
+              variant="secondary"
+              style={{ flex: 1 }}
+              iconLeft={<Sparkles size={16} color={th.color.textStrong} />}
+              onPress={() => router.push(`/flashcards/${encodeURIComponent(slug)}/generate`)}
+            >
+              {t('fc_gen_btn_short')}
             </Button>
           </View>
         ) : null

@@ -74,6 +74,12 @@ export interface ApiInit extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Appended as a query string, skipping null/undefined. */
   query?: Record<string, string | number | boolean | null | undefined>;
+  /**
+   * Raises the default 15s timeout for a call that is legitimately slower — currently only AI
+   * vocab generation, where the model takes 5-20s. Do not use it to paper over a slow endpoint:
+   * a long timeout on an ordinary call is a frozen screen.
+   */
+  timeoutMs?: number;
 }
 
 function buildUrl(path: string, query?: ApiInit['query']): string {
@@ -150,7 +156,7 @@ export async function apiUpload<T>(
 }
 
 export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> {
-  const { auth = true, body, query, headers, ...rest } = init;
+  const { auth = true, body, query, headers, timeoutMs, ...rest } = init;
 
   if (!BASE) {
     throw new ApiError(0, 'no_base_url', 'm_server_error');
@@ -169,7 +175,7 @@ export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> 
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs ?? TIMEOUT_MS);
 
   let res: Response;
   try {

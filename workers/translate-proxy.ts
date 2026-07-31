@@ -1,37 +1,60 @@
 import { DurableObject } from 'cloudflare:workers';
+import * as generateSvc from '../server/services/generate';
 import * as translateSvc from '../server/services/translate';
 import type { TranslateItem } from '../server/services/translate';
+import type { VocabGenerateInput } from '../shared/schemas';
 
 /**
- * Durable Object that performs the Anthropic API call from a fixed region.
+ * Durable Object that performs Anthropic API calls from a fixed region.
  *
  * Why this exists: Cloudflare serves this Worker from the data center nearest
  * the user (HKG / Hong Kong for Vietnam), and Anthropic geo-blocks Hong Kong
  * egress with `403 "Request not allowed"`. A Durable Object requested with
  * `locationHint: 'enam'` (see app/routes/translate.tsx) runs in the US, so its
  * outbound fetch to Anthropic egresses from a supported region. The DO does no
- * storage work — it exists purely to relocate the egress point.
+ * storage work — it exists purely to relocate the egress point, so every
+ * Anthropic-backed feature shares it, dispatched by path:
+ *
+ *   POST /          translate a batch of words (app/routes/translate.tsx)
+ *   POST /generate  generate a vocab list   (app/routes/generate-vocab.tsx)
+ *
+ * Bodies arrive already validated by the calling resource route.
  */
 export class TranslateProxy extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     if (!this.env.ANTHROPIC_API_KEY) {
       return Response.json({ error: 'disabled' }, { status: 503 });
     }
-    let items: TranslateItem[];
+    const op = new URL(request.url).pathname;
+    let body: unknown;
     try {
-      items = (await request.json()) as TranslateItem[];
+      body = await request.json();
     } catch {
       return Response.json({ error: 'invalid json' }, { status: 400 });
     }
     try {
-      const translations = await translateSvc.translateWords(this.env.ANTHROPIC_API_KEY, items);
+      if (op === '/generate') {
+        const words = await generateSvc.generateVocabWords(
+          this.env.ANTHROPIC_API_KEY,
+          body as VocabGenerateInput,
+        );
+        return Response.json({ words });
+      }
+      const translations = await translateSvc.translateWords(
+        this.env.ANTHROPIC_API_KEY,
+        body as TranslateItem[],
+      );
       return Response.json({ translations });
     } catch (e) {
       console.error('[translate-do] failed', {
+        op,
         message: (e as Error)?.message,
         status: (e as { status?: number })?.status,
       });
-      return Response.json({ error: 'translate_failed' }, { status: 502 });
+      return Response.json(
+        { error: op === '/generate' ? 'generate_failed' : 'translate_failed' },
+        { status: 502 },
+      );
     }
   }
 }

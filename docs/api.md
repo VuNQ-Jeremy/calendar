@@ -148,7 +148,13 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
 
 Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view`,
-`/materials/:id/download`, `/translate`.
+`/materials/:id/download`, `/translate`, `/generate-vocab`.
+
+`POST /generate-vocab` (staff) takes `{ topic, count?, level?, exclude? }` and answers
+`{ data: { words: [{ word, meaningVi, definitionEn }] } }` — proposed words only; the client
+saves the ones the user keeps through `POST /api/flashcards/import`. Returns 503 when the
+server has no `ANTHROPIC_API_KEY`. The model call takes 5-20s, so clients need a raised
+timeout.
 
 ---
 

@@ -2,10 +2,12 @@ import React from 'react';
 import { useLoaderData, useFetcher, useNavigate } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
-import { Modal, PageHeader, Empty, useConfirm } from '../ui.jsx';
+import { Modal, MSelect, PageHeader, Empty, useConfirm } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { fetchDictEntry, fetchDictEntries } from '../lib/dictionary.js';
 import { fetchTranslations } from '../lib/translate-client.js';
+import { fetchGeneratedWords } from '../lib/generate-client.js';
+import { VOCAB_TOPICS, vocabTopicLabel } from '../../shared/logic/vocab-topics';
 import { playWord } from './audio.js';
 import { MIN_WORDS, fmtDuration, parseImportLines } from './game-utils.js';
 import type { GameMode, GameResult } from './game-utils.js';
@@ -196,6 +198,7 @@ function WordsTab({
   const { t } = useLang();
   const [modal, setModal] = React.useState<WordDraft | null>(null);
   const [importing, setImporting] = React.useState(false);
+  const [generating, setGenerating] = React.useState(false);
   const [confirm, confirmNode] = useConfirm();
 
   const del = async (w: FlashcardWordRow) => {
@@ -246,6 +249,15 @@ function WordsTab({
           >
             {t('fc_import')}
           </FBtn>
+          {canTranslate && (
+            <FBtn
+              variant="secondary"
+              iconLeft={<MIcon name="sparkle" size={18} />}
+              onClick={() => setGenerating(true)}
+            >
+              {t('fc_gen_btn')}
+            </FBtn>
+          )}
         </div>
       )}
 
@@ -340,6 +352,13 @@ function WordsTab({
           fetcher={fetcher}
           onClose={() => setImporting(false)}
           canTranslate={canTranslate}
+        />
+      )}
+      {generating && (
+        <GenerateModal
+          fetcher={fetcher}
+          onClose={() => setGenerating(false)}
+          existingWords={words.map((w) => w.word)}
         />
       )}
       {confirmNode}
@@ -724,6 +743,210 @@ function ImportModal({
                     {r.found ? t('fc_fetched') : t('fc_not_found')}
                   </span>
                 </div>
+                <input
+                  className="mochi-input"
+                  style={{ marginTop: 4 }}
+                  placeholder={t('fc_meaning_vi')}
+                  value={r.meaningVi}
+                  onChange={(e) => setRow(i, { meaningVi: e.target.value })}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ---- AI generation ----
+
+type GenRow = { word: string; meaningVi: string; definitionEn: string; include: boolean };
+
+const GEN_LEVELS = ['any', 'beginner', 'intermediate', 'advanced'] as const;
+
+/**
+ * Pick a topic (curated list or free text) → let Claude propose words → review the list →
+ * import the kept ones. The save reuses the `words-import` intent, so the topic route's
+ * clientAction handles cache invalidation exactly as it does for a paste import.
+ */
+function GenerateModal({
+  fetcher,
+  onClose,
+  existingWords,
+}: {
+  fetcher: ReturnType<typeof useFetcher>;
+  onClose: () => void;
+  existingWords: string[];
+}) {
+  const { t, lang } = useLang();
+  const [step, setStep] = React.useState<'setup' | 'review'>('setup');
+  const [topicId, setTopicId] = React.useState('');
+  const [customTopic, setCustomTopic] = React.useState('');
+  const [count, setCount] = React.useState('20');
+  const [level, setLevel] = React.useState<(typeof GEN_LEVELS)[number]>('any');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [rows, setRows] = React.useState<GenRow[]>([]);
+
+  // The model always gets the English name; `vi` labels are display only.
+  const topic =
+    topicId === 'custom'
+      ? customTopic.trim()
+      : (VOCAB_TOPICS.find((vt) => vt.id === topicId)?.en ?? '');
+
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await fetchGeneratedWords({
+      topic,
+      count: Math.min(Math.max(parseInt(count, 10) || 20, 1), 50),
+      level: level === 'any' ? null : level,
+      exclude: existingWords.slice(0, 500),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setError(t(res.error === 'disabled' ? 'fc_gen_disabled' : 'fc_gen_failed'));
+      return;
+    }
+    if (res.words.length === 0) {
+      setError(t('fc_gen_empty'));
+      return;
+    }
+    setRows(
+      res.words.map((w) => ({
+        word: w.word,
+        meaningVi: w.meaningVi,
+        definitionEn: w.definitionEn ?? '',
+        include: true,
+      })),
+    );
+    setStep('review');
+  };
+
+  const setRow = (i: number, patch: Partial<GenRow>) =>
+    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+
+  const readyCount = rows.filter((r) => r.include && r.word.trim()).length;
+
+  const submit = () => {
+    const words = rows
+      .filter((r) => r.include && r.word.trim())
+      .map((r) => ({
+        word: r.word.trim(),
+        meaningVi: r.meaningVi.trim(),
+        ipa: null,
+        definitionEn: r.definitionEn.trim() || null,
+        audioUrl: null,
+      }));
+    if (words.length === 0) return;
+    const fd = new FormData();
+    fd.set('intent', 'words-import');
+    fd.set('words', JSON.stringify(words));
+    fetcher.submit(fd, { method: 'post' });
+    onClose();
+  };
+
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={t('fc_gen_title')}
+      width={640}
+      footer={
+        step === 'setup' ? (
+          <>
+            <FBtn variant="secondary" onClick={onClose}>
+              {t('cancel')}
+            </FBtn>
+            <FBtn
+              variant="primary"
+              iconLeft={<MIcon name="sparkle" size={16} />}
+              disabled={!topic || busy}
+              onClick={run}
+            >
+              {busy ? t('fc_gen_running') : t('fc_gen_run')}
+            </FBtn>
+          </>
+        ) : (
+          <>
+            <FBtn variant="secondary" onClick={() => setStep('setup')}>
+              {t('cancel')}
+            </FBtn>
+            <FBtn variant="primary" disabled={readyCount === 0} onClick={submit}>
+              {t('fc_gen_save', { n: readyCount })}
+            </FBtn>
+          </>
+        )
+      }
+    >
+      {step === 'setup' ? (
+        <>
+          <MSelect
+            label={t('fc_gen_topic')}
+            value={topicId}
+            onChange={(v) => setTopicId(v)}
+            options={[
+              { value: '', label: t('fc_gen_topic_pick') },
+              ...VOCAB_TOPICS.map((vt) => ({ value: vt.id, label: vocabTopicLabel(vt, lang) })),
+              { value: 'custom', label: t('fc_gen_topic_custom') },
+            ]}
+            hint={t('fc_gen_hint')}
+          />
+          {topicId === 'custom' && (
+            <FInput
+              label={t('fc_gen_topic')}
+              autoFocus={true}
+              value={customTopic}
+              onChange={(e) => setCustomTopic(e.target.value)}
+            />
+          )}
+          <div className="m-grid cols-2" style={{ gap: 14 }}>
+            <div className="mochi-field">
+              <label className="mochi-field__label">{t('fc_gen_count')}</label>
+              <input
+                className="mochi-input"
+                type="number"
+                min={1}
+                max={50}
+                value={count}
+                onChange={(e) => setCount(e.target.value)}
+              />
+            </div>
+            <MSelect
+              label={t('fc_gen_level')}
+              value={level}
+              onChange={(v) => setLevel(v as (typeof GEN_LEVELS)[number])}
+              options={GEN_LEVELS.map((l) => ({ value: l, label: t(`fc_gen_level_${l}`) }))}
+            />
+          </div>
+          {busy && <span className="mochi-field__hint">{t('fc_gen_wait')}</span>}
+          {error && (
+            <span className="mochi-field__hint" style={{ color: 'var(--red-600, #c0392b)' }}>
+              {error}
+            </span>
+          )}
+        </>
+      ) : (
+        <div className="m-stack" style={{ gap: 8 }}>
+          {rows.map((r, i) => (
+            <div
+              key={i}
+              className="lrow"
+              style={{ alignItems: 'center', gap: 10, opacity: r.include ? 1 : 0.5 }}
+            >
+              <input
+                type="checkbox"
+                checked={r.include}
+                onChange={(e) => setRow(i, { include: e.target.checked })}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{r.word}</span>
+                {r.definitionEn && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                    {r.definitionEn}
+                  </div>
+                )}
                 <input
                   className="mochi-input"
                   style={{ marginTop: 4 }}

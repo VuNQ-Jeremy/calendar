@@ -12,6 +12,7 @@ import type {
   FlashcardResultBatch,
   FlashcardTopicInput,
   FlashcardWordInput,
+  GeneratedWord,
   HomeworkGradesSaveInput,
   HomeworkInput,
   InviteInput,
@@ -27,6 +28,7 @@ import type {
   StudentInput,
   ThemeInput,
   UiPrefsInput,
+  VocabGenerateInput,
 } from '@mochi/shared/schemas';
 import type {
   AssessmentTypeRow,
@@ -262,6 +264,20 @@ export const flashcards = {
       '/api/flashcards/stats',
     ),
 };
+
+/**
+ * AI vocabulary generation. STAFF only. Note the path is NOT under /api — like `/translate`,
+ * this is a bearer-aware resource route (docs/api.md). It only proposes words; the ones the
+ * user keeps are saved with `flashcards.importWords`.
+ *
+ * The 60s timeout is deliberate: the model call takes 5-20s, well past apiFetch's 15s default.
+ */
+export const generateVocab = (input: VocabGenerateInput) =>
+  apiFetch<{ words: GeneratedWord[] }>('/generate-vocab', {
+    method: 'POST',
+    body: input,
+    timeoutMs: 60_000,
+  });
 
 // ---- Profile and settings ----
 

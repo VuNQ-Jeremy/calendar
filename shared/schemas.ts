@@ -259,6 +259,27 @@ export const TranslateInput = z.object({
 });
 export type TranslateInput = z.infer<typeof TranslateInput>;
 
+export const VocabLevel = z.enum(['beginner', 'intermediate', 'advanced']);
+export type VocabLevel = z.infer<typeof VocabLevel>;
+
+export const VocabGenerateInput = z.object({
+  // Usually one of VOCAB_TOPICS (shared/logic/vocab-topics.ts) by English name, but free text
+  // is accepted — the curated catalog is a UI concern only.
+  topic: z.string().trim().min(1).max(200),
+  count: z.coerce.number().int().min(1).max(50).default(20),
+  /** Null/omitted means mixed levels. */
+  level: VocabLevel.nullish(),
+  /** Words already in the deck, so the model does not repeat them. Matched case-insensitively. */
+  exclude: z.array(z.string().trim().min(1).max(100)).max(500).default([]),
+});
+export type VocabGenerateInput = z.infer<typeof VocabGenerateInput>;
+
+/**
+ * One generated row — a subset of FlashcardWordInput, so the review UI can hand rows straight
+ * to the existing import pipeline.
+ */
+export type GeneratedWord = { word: string; meaningVi: string; definitionEn: string | null };
+
 export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
 

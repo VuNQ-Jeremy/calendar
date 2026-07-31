@@ -8,6 +8,7 @@ export default [
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
   route('translate', 'routes/translate.tsx'),
+  route('generate-vocab', 'routes/generate-vocab.tsx'),
 
   // ---- JSON API (mobile app; see docs/api.md) ----
   // Resource routes only: none of these has a default export, and none is inside the
