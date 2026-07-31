@@ -40,6 +40,8 @@ export default [
   route('api/flashcards/topic/:slug', 'routes/api.flashcards.topics.$slug.tsx'),
   route('api/flashcards/words/:id?', 'routes/api.flashcards.words.tsx'),
   route('api/flashcards/import', 'routes/api.flashcards.import.tsx'),
+  // Not under `topics/`: that route's `:id?` would swallow a literal `generate-topic` segment.
+  route('api/flashcards/generate-topic', 'routes/api.flashcards.generate-topic.tsx'),
   route('api/flashcards/results', 'routes/api.flashcards.results.tsx'),
   route('api/flashcards/stats', 'routes/api.flashcards.stats.tsx'),
   route('api/feedback/:id?', 'routes/api.feedback.tsx'),

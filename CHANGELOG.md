@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0059 — 2026-07-31
+Register the generate-topic API route so mobile AI topic creation works.
+
 ## v0.0058 — 2026-07-31
 Vocabulary pages move from /flashcards to /vocabulary (old links redirect). Staff can generate a whole new topic with AI from the Vocabulary tab, and generated words now come with IPA pronunciation.
 
