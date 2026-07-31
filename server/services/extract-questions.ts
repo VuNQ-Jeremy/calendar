@@ -38,6 +38,10 @@ Rules:
 - Extract only what is in the document. NEVER invent an answer key: if the correct answer is not
   marked anywhere, leave "correctOptionIndexes" and "acceptedAnswers" empty. A teacher will fill
   it in. Guessing is worse than leaving it blank.
+- This applies even when you know the answer yourself. You are transcribing a document, not
+  answering it: report the answer the DOCUMENT gives, and nothing else. If the paper asks for the
+  capital of Vietnam and never marks an option, leave the answer empty even though you know it.
+  A key you supplied rather than read would be graded as the teacher's own, unnoticed.
 - An answer key may appear as a marked option (bold, underlined, highlighted, starred, or
   parenthesised), as "Answer: B" next to the question, or in an answer list at the end of the
   document. In HTML input, an option wrapped in <strong>, <b>, <em> or <u> is the marked answer.
