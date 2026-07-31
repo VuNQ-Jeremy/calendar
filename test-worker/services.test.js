@@ -14,6 +14,8 @@ import * as invitesSvc from '../server/services/invites';
 import * as assessSvc from '../server/services/assessments';
 import * as typesSvc from '../server/services/assessment-types';
 import * as attendanceSvc from '../server/services/attendance';
+import * as gradeLevelsSvc from '../server/services/grade-levels';
+import * as questionsSvc from '../server/services/questions';
 import { hashPassword } from '../server/services/crypto';
 import { sessionCookie } from '../server/session';
 import {
@@ -30,6 +32,10 @@ import {
   scoreRecords,
   behaviorRecords,
   attendanceRecords,
+  questions as questionsTable,
+  tests as testsTable,
+  testQuestions,
+  testAttempts,
 } from '../server/db/schema';
 
 function db() {
@@ -952,5 +958,357 @@ describe('materials service — R2 file storage', () => {
       favorite: false,
     });
     expect(mat.fileKey).toBeNull();
+  });
+});
+
+// ---- WP1.5: Tests module Phase 1 services ----
+
+describe('grade levels', () => {
+  it('create then list — new level appears after the seeded Khối 6..9', async () => {
+    const d = db();
+    const created = await gradeLevelsSvc.create(d, { name: 'Khối 10', active: true });
+    expect(created.id).toBeTruthy();
+
+    const list = await gradeLevelsSvc.list(d);
+    // Migration 0017 seeds gl6..gl9 with sortOrder 1..4, so they lead the list.
+    expect(list.slice(0, 4).map((g) => g.id)).toEqual(['gl6', 'gl7', 'gl8', 'gl9']);
+    expect(list.slice(0, 4).map((g) => g.name)).toEqual(['Khối 6', 'Khối 7', 'Khối 8', 'Khối 9']);
+    expect(list.some((g) => g.id === created.id)).toBe(true);
+
+    // Ordering is sortOrder asc, then name asc.
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1];
+      const cur = list[i];
+      expect(
+        prev.sortOrder < cur.sortOrder ||
+          (prev.sortOrder === cur.sortOrder && prev.name <= cur.name),
+      ).toBe(true);
+    }
+  });
+
+  it('create without sortOrder computes max + 1', async () => {
+    const d = db();
+    // Storage is shared across tests in this file, so compute the baseline instead of hardcoding
+    // the seeded max of 4.
+    const baseMax = (await gradeLevelsSvc.list(d)).reduce((m, g) => Math.max(m, g.sortOrder), 0);
+    const first = await gradeLevelsSvc.create(d, { name: 'Auto Order A', active: true });
+    expect(first.sortOrder).toBe(baseMax + 1);
+
+    const second = await gradeLevelsSvc.create(d, { name: 'Auto Order B', active: true });
+    expect(second.sortOrder).toBe(baseMax + 2);
+
+    const explicit = await gradeLevelsSvc.create(d, {
+      name: 'Explicit Order',
+      active: true,
+      sortOrder: 99,
+    });
+    expect(explicit.sortOrder).toBe(99);
+  });
+
+  it('update renames and toggles active as a real boolean', async () => {
+    const d = db();
+    const created = await gradeLevelsSvc.create(d, { name: 'Khối 11', active: true });
+    expect(created.active).toBe(true);
+
+    const renamed = await gradeLevelsSvc.update(d, created.id, { name: 'Khối 11 (evening)' });
+    expect(renamed.name).toBe('Khối 11 (evening)');
+    expect(renamed.active).toBe(true);
+
+    const deactivated = await gradeLevelsSvc.update(d, created.id, { active: false });
+    expect(deactivated.active).toBe(false);
+    expect(typeof deactivated.active).toBe('boolean');
+
+    const list = await gradeLevelsSvc.list(d);
+    const fromList = list.find((g) => g.id === created.id);
+    expect(fromList.name).toBe('Khối 11 (evening)');
+    expect(fromList.active).toBe(false);
+  });
+
+  it('reorder rewrites sortOrder to 1..n in the given order', async () => {
+    const d = db();
+    const ids = ['gl9', 'gl6', 'gl8', 'gl7'];
+    await gradeLevelsSvc.reorder(d, ids);
+
+    const list = await gradeLevelsSvc.list(d);
+    const seeded = list.filter((g) => ids.includes(g.id));
+    expect(seeded.map((g) => g.id)).toEqual(ids);
+    expect(seeded.map((g) => g.sortOrder)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('remove deletes the row', async () => {
+    const d = db();
+    const created = await gradeLevelsSvc.create(d, { name: 'Temp Level', active: true });
+    expect((await gradeLevelsSvc.list(d)).some((g) => g.id === created.id)).toBe(true);
+
+    await gradeLevelsSvc.remove(d, created.id);
+    expect((await gradeLevelsSvc.list(d)).some((g) => g.id === created.id)).toBe(false);
+  });
+});
+
+describe('questions', () => {
+  const OPTS = [
+    { id: 'a', text: 'Alpha' },
+    { id: 'b', text: 'Bravo' },
+    { id: 'c', text: 'Charlie' },
+    { id: 'd', text: 'Delta' },
+  ];
+
+  function mcqInput(overrides = {}) {
+    return {
+      type: 'mcq',
+      prompt: 'Pick one',
+      gradeLevelId: 'gl6',
+      difficulty: 'easy',
+      tags: ['algebra'],
+      options: OPTS,
+      answerKey: 'b',
+      explanation: null,
+      ...overrides,
+    };
+  }
+
+  /** A tests row needs only id + title; every other column has a non-null default or is nullable. */
+  async function seedTest(d, title = 'WP1.5 Test') {
+    const id = crypto.randomUUID();
+    await d.insert(testsTable).values({ id, title });
+    return id;
+  }
+
+  async function linkQuestion(d, testId, questionId, sortOrder = 0) {
+    await d.insert(testQuestions).values({ testId, questionId, sortOrder, points: 1 });
+  }
+
+  async function seedAttempt(d, testId, studentName = 'Attempt Student') {
+    const student = await peopleSvc.createStudent(d, {
+      name: studentName,
+      color: 'blue',
+      classIds: [],
+    });
+    const id = crypto.randomUUID();
+    await d.insert(testAttempts).values({
+      id,
+      testId,
+      studentId: student.id,
+      startedAt: new Date().toISOString(),
+    });
+    return { attemptId: id, studentId: student.id };
+  }
+
+  it('creates one question of each type and round-trips the JSON columns', async () => {
+    const d = db();
+
+    const mcq = await questionsSvc.create(d, mcqInput());
+    const multi = await questionsSvc.create(d, {
+      type: 'multi',
+      prompt: 'Pick two',
+      gradeLevelId: 'gl7',
+      difficulty: 'medium',
+      tags: ['geometry', 'shapes'],
+      options: OPTS,
+      answerKey: ['a', 'c'],
+      explanation: 'Because.',
+    });
+    const text = await questionsSvc.create(d, {
+      type: 'text',
+      prompt: 'Capital of Vietnam?',
+      difficulty: 'easy',
+      tags: [],
+      options: [],
+      answerKey: ['Hanoi', 'Hà Nội'],
+    });
+    const essay = await questionsSvc.create(d, {
+      type: 'essay',
+      prompt: 'Discuss the water cycle.',
+      difficulty: 'hard',
+      tags: ['writing'],
+      options: [],
+      answerKey: null,
+    });
+
+    const list = await questionsSvc.list(d);
+    const byId = Object.fromEntries(list.map((q) => [q.id, q]));
+    expect([mcq.id, multi.id, text.id, essay.id].every((id) => byId[id])).toBe(true);
+
+    const m = byId[mcq.id];
+    expect(m.type).toBe('mcq');
+    expect(m.options).toEqual(OPTS);
+    expect(m.options.length).toBe(4);
+    expect(m.answerKey).toBe('b');
+    expect(Array.isArray(m.tags)).toBe(true);
+    expect(m.tags).toEqual(['algebra']);
+    expect(m.gradeLevelId).toBe('gl6');
+    expect(typeof m.createdAt).toBe('string');
+    expect(typeof m.updatedAt).toBe('string');
+
+    const mu = byId[multi.id];
+    expect(mu.options.length).toBe(4);
+    expect(mu.options.every((o) => typeof o.id === 'string' && typeof o.text === 'string')).toBe(
+      true,
+    );
+    expect(mu.answerKey).toEqual(['a', 'c']);
+    expect(mu.tags).toEqual(['geometry', 'shapes']);
+    expect(mu.explanation).toBe('Because.');
+
+    const t = byId[text.id];
+    expect(t.options).toEqual([]);
+    expect(t.answerKey).toEqual(['Hanoi', 'Hà Nội']);
+    expect(t.tags).toEqual([]);
+
+    const e = byId[essay.id];
+    expect(e.options).toEqual([]);
+    expect(e.answerKey).toBeNull();
+    expect(e.difficulty).toBe('hard');
+  });
+
+  it('list is ordered newest-updatedAt first', async () => {
+    const d = db();
+    const q1 = await questionsSvc.create(d, mcqInput({ prompt: 'Q1' }));
+    const q2 = await questionsSvc.create(d, mcqInput({ prompt: 'Q2' }));
+    const q3 = await questionsSvc.create(d, mcqInput({ prompt: 'Q3' }));
+
+    const list = await questionsSvc.list(d);
+    expect(list.length).toBeGreaterThanOrEqual(3);
+    for (const id of [q1.id, q2.id, q3.id]) {
+      expect(list.some((q) => q.id === id)).toBe(true);
+    }
+    for (let i = 1; i < list.length; i++) {
+      expect(list[i - 1].updatedAt >= list[i].updatedAt).toBe(true);
+    }
+  });
+
+  it('update of prompt/tags/difficulty succeeds and bumps updatedAt', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Before' }));
+
+    const updated = await questionsSvc.update(d, q.id, {
+      prompt: 'After',
+      tags: ['fractions'],
+      difficulty: 'hard',
+    });
+    expect(updated.prompt).toBe('After');
+    expect(updated.tags).toEqual(['fractions']);
+    expect(updated.difficulty).toBe('hard');
+    expect(updated.updatedAt >= q.updatedAt).toBe(true);
+    // Answer shape untouched.
+    expect(updated.options).toEqual(OPTS);
+    expect(updated.answerKey).toBe('b');
+  });
+
+  it('usageCounts counts the tests that include each question', async () => {
+    const d = db();
+    const q1 = await questionsSvc.create(d, mcqInput({ prompt: 'Used twice' }));
+    const q2 = await questionsSvc.create(d, mcqInput({ prompt: 'Used once' }));
+    const q3 = await questionsSvc.create(d, mcqInput({ prompt: 'Unused' }));
+
+    const testA = await seedTest(d, 'Test A');
+    const testB = await seedTest(d, 'Test B');
+    await linkQuestion(d, testA, q1.id, 0);
+    await linkQuestion(d, testA, q2.id, 1);
+    await linkQuestion(d, testB, q1.id, 0);
+
+    const counts = await questionsSvc.usageCounts(d);
+    expect(counts[q1.id]).toBe(2);
+    expect(counts[q2.id]).toBe(1);
+    expect(counts[q3.id]).toBeUndefined();
+  });
+
+  it('remove throws 409 question_in_use while a test still links it', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Linked' }));
+    const testId = await seedTest(d, 'Linking Test');
+    await linkQuestion(d, testId, q.id);
+
+    let err = null;
+    try {
+      await questionsSvc.remove(d, q.id);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'question_in_use' });
+
+    const rows = await d.select().from(questionsTable).where(eq(questionsTable.id, q.id));
+    expect(rows.length).toBe(1);
+  });
+
+  it('remove succeeds once no test links the question', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Free' }));
+    await questionsSvc.remove(d, q.id);
+    const rows = await d.select().from(questionsTable).where(eq(questionsTable.id, q.id));
+    expect(rows.length).toBe(0);
+  });
+
+  it('update throws 409 question_locked when an attempt exists and the patch touches options', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Locked' }));
+    const testId = await seedTest(d, 'Attempted Test');
+    await linkQuestion(d, testId, q.id);
+    await seedAttempt(d, testId, 'Locked Student');
+
+    let err = null;
+    try {
+      await questionsSvc.update(d, q.id, {
+        options: [
+          { id: 'a', text: 'Alpha' },
+          { id: 'z', text: 'Zulu' },
+        ],
+      });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    expect(err.status).toBe(409);
+    expect(await err.json()).toEqual({ error: 'question_locked' });
+
+    const after = await questionsSvc.list(d);
+    expect(after.find((x) => x.id === q.id).options).toEqual(OPTS);
+  });
+
+  it('prompt-only update is still allowed while locked', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Locked but renameable' }));
+    const testId = await seedTest(d, 'Attempted Test 2');
+    await linkQuestion(d, testId, q.id);
+    await seedAttempt(d, testId, 'Locked Student 2');
+
+    const updated = await questionsSvc.update(d, q.id, { prompt: 'Renamed while locked' });
+    expect(updated.prompt).toBe('Renamed while locked');
+    expect(updated.options).toEqual(OPTS);
+    expect(updated.answerKey).toBe('b');
+  });
+
+  it('hasAttempts flips from false to true when an attempt is inserted', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Attempt probe' }));
+    const testId = await seedTest(d, 'Probe Test');
+    await linkQuestion(d, testId, q.id);
+
+    expect(await questionsSvc.hasAttempts(d, q.id)).toBe(false);
+    await seedAttempt(d, testId, 'Probe Student');
+    expect(await questionsSvc.hasAttempts(d, q.id)).toBe(true);
+  });
+
+  it('rejects a merged patch that would leave an essay question with options', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Type switch' }));
+
+    let err = null;
+    try {
+      await questionsSvc.update(d, q.id, { type: 'essay' });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(Response);
+    expect(err.status).toBe(400);
+    const body = await err.json();
+    expect(body.errors).toBeTruthy();
+
+    // The row is untouched.
+    const after = await questionsSvc.list(d);
+    const row = after.find((x) => x.id === q.id);
+    expect(row.type).toBe('mcq');
+    expect(row.options).toEqual(OPTS);
   });
 });

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0062 — 2026-07-31
+Tests module phase 1: question bank + managed grade levels
+
 ## v0.0061 — 2026-07-31
 Replace the dictionaryapi.dev lookup with AI enrichment (meaning, IPA and definition) on web and mobile, in bulk import and the single-word editor. Wipe the stored pronunciation-audio URLs: every word is now spoken by the device's text-to-speech.
 

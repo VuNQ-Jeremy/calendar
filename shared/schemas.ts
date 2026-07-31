@@ -432,3 +432,222 @@ export const NotifPrefsInput = z.object({
   studyNudges: FormBool.default(false),
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;
+
+/* ── Tests module: grade levels, question bank, tests, attempts ─────────────────────────── */
+
+export const GradeLevelInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  active: FormBool.default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type GradeLevelInput = z.infer<typeof GradeLevelInput>;
+
+export const GradeLevelReorder = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type GradeLevelReorder = z.infer<typeof GradeLevelReorder>;
+
+export const QuestionType = z.enum(['mcq', 'multi', 'text', 'essay']);
+export type QuestionType = z.infer<typeof QuestionType>;
+
+export const QuestionDifficulty = z.enum(['easy', 'medium', 'hard']);
+export type QuestionDifficulty = z.infer<typeof QuestionDifficulty>;
+
+export const QuestionOption = z.object({
+  id: z.string().min(1),
+  text: z.string().trim().min(1).max(500),
+});
+export type QuestionOption = z.infer<typeof QuestionOption>;
+
+/**
+ * The field shape of a question, WITHOUT the per-type answer-key rules.
+ *
+ * Two schemas exist because `parsePatch` calls `.partial()`, and Zod v4 refuses that on an object
+ * carrying refinements ("`.partial()` cannot be used on object schemas containing refinements").
+ * Creates parse `QuestionInput` — the refined schema, so a bad answer key can never be stored.
+ * Patches parse `QuestionInputBase`: a patch may legitimately carry only `prompt`, so the
+ * cross-field rules cannot apply anyway, and the service re-validates the whole row when the
+ * answer-shaping fields are among the keys being changed.
+ */
+export const QuestionInputBase = z.object({
+  type: QuestionType,
+  prompt: z.string().trim().min(1).max(4000),
+  gradeLevelId: z.string().nullish(),
+  difficulty: QuestionDifficulty.nullish(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
+  options: z.array(QuestionOption).max(10).default([]),
+  answerKey: z.union([z.string(), z.array(z.string())]).nullish(),
+  explanation: z.string().max(2000).nullish(),
+});
+export type QuestionInputBase = z.infer<typeof QuestionInputBase>;
+
+export const QuestionInput = QuestionInputBase.superRefine((q, ctx) => {
+  const ids = new Set(q.options.map((o) => o.id));
+  const key = q.answerKey;
+
+  if (q.type === 'mcq' || q.type === 'multi') {
+    if (q.options.length < 2) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'A choice question needs at least two options',
+        path: ['options'],
+      });
+    }
+  } else if (q.options.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `A ${q.type} question cannot have options`,
+      path: ['options'],
+    });
+  }
+
+  if (q.type === 'mcq') {
+    if (typeof key !== 'string' || key === '') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Pick the correct option',
+        path: ['answerKey'],
+      });
+    } else if (!ids.has(key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'The correct answer must be one of the options',
+        path: ['answerKey'],
+      });
+    }
+  }
+
+  if (q.type === 'multi') {
+    if (!Array.isArray(key) || key.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Pick at least one correct option',
+        path: ['answerKey'],
+      });
+    } else {
+      if (new Set(key).size !== key.length) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'The correct answers must not repeat',
+          path: ['answerKey'],
+        });
+      }
+      key.forEach((k, i) => {
+        if (!ids.has(k)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Every correct answer must be one of the options',
+            path: ['answerKey', i],
+          });
+        }
+      });
+    }
+  }
+
+  if (q.type === 'text') {
+    if (!Array.isArray(key) || key.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Give at least one accepted answer',
+        path: ['answerKey'],
+      });
+    } else {
+      key.forEach((k, i) => {
+        if (k.trim() === '') {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'An accepted answer cannot be blank',
+            path: ['answerKey', i],
+          });
+        }
+      });
+    }
+  }
+
+  if (q.type === 'essay' && key != null) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'An essay question is graded by hand and has no answer key',
+      path: ['answerKey'],
+    });
+  }
+});
+export type QuestionInput = z.infer<typeof QuestionInput>;
+
+export const TestInput = z.object({
+  title: z.string().trim().min(1).max(200),
+  classId: z.string().nullish(),
+  assessmentTypeId: z.string().nullish(),
+  gradeLevelId: z.string().nullish(),
+  mode: z.enum(['online', 'paper']).default('online'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish(),
+  /** UTC ISO. The UI composes these from ICT date + time; see shared/logic/tests.ts. */
+  openAt: z.string().nullish(),
+  closeAt: z.string().nullish(),
+  timeLimitMinutes: z.coerce.number().int().min(1).max(300).nullish(),
+  instructions: z.string().max(4000).nullish(),
+  color: ColorId.nullish(),
+});
+export type TestInput = z.infer<typeof TestInput>;
+
+export const TestQuestionsSaveInput = z.object({
+  testId: z.string().min(1),
+  // array order is the question order (sort_order = index)
+  items: z
+    .array(
+      z.object({
+        questionId: z.string().min(1),
+        points: z.coerce.number().min(0).max(100).default(1),
+      }),
+    )
+    .max(100),
+});
+export type TestQuestionsSaveInput = z.infer<typeof TestQuestionsSaveInput>;
+
+export const PaperScoresSaveInput = z.object({
+  testId: z.string().min(1),
+  records: z.array(
+    z.object({
+      studentId: z.string().min(1),
+      score: z.number().min(0).max(10).nullish(),
+      comment: z.string().max(2000).nullish(),
+    }),
+  ),
+});
+export type PaperScoresSaveInput = z.infer<typeof PaperScoresSaveInput>;
+
+/** A string for mcq/text/essay, an array of option ids for multi. */
+export const AnswerValueSchema = z.union([z.string().max(20000), z.array(z.string())]);
+export type AnswerValueSchema = z.infer<typeof AnswerValueSchema>;
+
+export const AttemptAnswersSaveInput = z.object({
+  attemptId: z.string().min(1),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string().min(1),
+        answer: AnswerValueSchema.nullable(),
+      }),
+    )
+    .max(100),
+});
+export type AttemptAnswersSaveInput = z.infer<typeof AttemptAnswersSaveInput>;
+
+export const AttemptGradeInput = z.object({
+  attemptId: z.string().min(1),
+  grades: z
+    .array(
+      z.object({
+        questionId: z.string().min(1),
+        manualPoints: z.number().min(0).nullish(),
+        feedback: z.string().max(2000).nullish(),
+      }),
+    )
+    .default([]),
+  normalizedOverride: z.coerce.number().min(0).max(10).nullish(),
+  comment: z.string().max(2000).nullish(),
+});
+export type AttemptGradeInput = z.infer<typeof AttemptGradeInput>;

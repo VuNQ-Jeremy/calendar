@@ -412,3 +412,145 @@ export const flashcardMastery = sqliteTable(
     index('idx_flashcard_mastery_word').on(t.wordId),
   ],
 );
+
+/**
+ * Tests module — see migrations/0017_tests.sql. A question bank (`questions`) is composed into
+ * `tests`, which students sit as `test_attempts` holding one `test_answers` row per question.
+ * `test_questions.questionId` deliberately has NO cascade: deleting a question that is still on a
+ * test must fail at the service layer rather than silently reshape a published test.
+ */
+export const gradeLevels = sqliteTable('grade_levels', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+export const questions = sqliteTable(
+  'questions',
+  {
+    id: text('id').primaryKey(),
+    /** mcq | multi | text | essay */
+    type: text('type').notNull(),
+    prompt: text('prompt').notNull(),
+    gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, {
+      onDelete: 'set null',
+    }),
+    /** easy | medium | hard | null */
+    difficulty: text('difficulty'),
+    /** JSON string[] */
+    tags: text('tags').notNull().default('[]'),
+    /** JSON [{ id, text }] — mcq/multi only */
+    options: text('options').notNull().default('[]'),
+    /** JSON: mcq "optId" | multi ["optId"] | text ["accepted"] | essay null */
+    answerKey: text('answer_key'),
+    explanation: text('explanation'),
+    createdAt: text('created_at'),
+    updatedAt: text('updated_at'),
+  },
+  (t) => [index('idx_questions_grade_level').on(t.gradeLevelId)],
+);
+
+export const tests = sqliteTable(
+  'tests',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
+    assessmentTypeId: text('assessment_type_id').references(() => assessmentTypes.id, {
+      onDelete: 'set null',
+    }),
+    gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, {
+      onDelete: 'set null',
+    }),
+    /** draft | published */
+    status: text('status').notNull().default('draft'),
+    /** online | paper */
+    mode: text('mode').notNull().default('online'),
+    /** ICT YYYY-MM-DD; becomes score_records.date */
+    date: text('date'),
+    /** UTC ISO */
+    openAt: text('open_at'),
+    /** UTC ISO */
+    closeAt: text('close_at'),
+    timeLimitMinutes: integer('time_limit_minutes'),
+    instructions: text('instructions'),
+    color: text('color'),
+    createdAt: text('created_at'),
+  },
+  (t) => [index('idx_tests_class').on(t.classId)],
+);
+
+export const testQuestions = sqliteTable(
+  'test_questions',
+  {
+    testId: text('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    /** No cascade on purpose — the service guards question deletes. */
+    questionId: text('question_id')
+      .notNull()
+      .references(() => questions.id),
+    sortOrder: integer('sort_order').notNull().default(0),
+    points: real('points').notNull().default(1),
+  },
+  (t) => [
+    primaryKey({ columns: [t.testId, t.questionId] }),
+    index('idx_test_questions_question').on(t.questionId),
+  ],
+);
+
+export const testAttempts = sqliteTable(
+  'test_attempts',
+  {
+    id: text('id').primaryKey(),
+    testId: text('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** online | paper */
+    source: text('source').notNull().default('online'),
+    /** in_progress | submitted | needs_grading | graded */
+    status: text('status').notNull().default('in_progress'),
+    startedAt: text('started_at').notNull(),
+    submittedAt: text('submitted_at'),
+    /** Server-computed at start: min(closeAt, startedAt + timeLimitMinutes). */
+    deadlineAt: text('deadline_at'),
+    autoScore: real('auto_score'),
+    totalScore: real('total_score'),
+    /** 0-10 — the value that syncs to score_records. */
+    normalizedScore: real('normalized_score'),
+    comment: text('comment'),
+    scoreRecordId: text('score_record_id').references(() => scoreRecords.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    index('idx_test_attempts_test').on(t.testId),
+    index('idx_test_attempts_student').on(t.studentId),
+    unique('uq_test_attempts').on(t.testId, t.studentId),
+  ],
+);
+
+export const testAnswers = sqliteTable(
+  'test_answers',
+  {
+    attemptId: text('attempt_id')
+      .notNull()
+      .references(() => testAttempts.id, { onDelete: 'cascade' }),
+    questionId: text('question_id')
+      .notNull()
+      .references(() => questions.id, { onDelete: 'cascade' }),
+    /** JSON: mcq "optId" | multi ["optId"] | text/essay "string" */
+    answer: text('answer'),
+    /** 1 | 0 | null (essay, or not yet graded) */
+    autoCorrect: integer('auto_correct', { mode: 'boolean' }),
+    autoPoints: real('auto_points'),
+    /** Effective points = manualPoints ?? autoPoints. */
+    manualPoints: real('manual_points'),
+    feedback: text('feedback'),
+  },
+  (t) => [primaryKey({ columns: [t.attemptId, t.questionId] })],
+);

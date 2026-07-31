@@ -120,6 +120,7 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/assessments/scores/:id?` | staff | `ScoreRecordInput` |
 | `/api/assessments/behavior/:id?` | staff | `BehaviorRecordInput` |
 | `/api/assessment-types/:id?` | **admin** | `AssessmentTypeInput` |
+| `/api/grade-levels/:id?` | **admin** | `GradeLevelInput` — managed Khối 6..9 list, categorizes questions and tests |
 | `/api/feedback/:id?` | staff | `FeedbackInput` |
 
 **PATCH is a true partial.** It uses `parsePatch`, which strips keys absent from the request
@@ -131,6 +132,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | Method | Path | Level | Notes |
 |---|---|---|---|
 | POST | `/api/assessment-types/reorder` | admin | `{ ids: string[] }` |
+| POST | `/api/grade-levels/reorder` | admin | `{ ids: string[] }` |
 | GET POST | `/api/attendance` | staff | GET needs `?eventId=&date=`. POST is delete-then-insert: omitting a student unmarks them |
 | GET POST | `/api/event-materials` | staff | GET `?eventId=` for one event, omit for the whole join table |
 | GET POST | `/api/homework/:id/grades` | staff | Whole grade set saved in one request |

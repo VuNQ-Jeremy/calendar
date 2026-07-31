@@ -6,6 +6,8 @@ import {
   MaterialInput,
   AssessmentTypeInput,
   NotifPrefsInput,
+  QuestionInput,
+  QuestionInputBase,
   parsePatch,
 } from '../shared/schemas';
 
@@ -85,6 +87,109 @@ describe('form toggles can be switched off', () => {
       classReminders: false,
       homeworkReminders: false,
       studyNudges: false,
+    });
+  });
+});
+
+describe('QuestionInput', () => {
+  const opts = [
+    { id: 'a', text: 'Hà Nội' },
+    { id: 'b', text: 'Huế' },
+  ];
+
+  it('accepts one question of each type', () => {
+    expect(
+      QuestionInput.safeParse({ type: 'mcq', prompt: 'Capital?', options: opts, answerKey: 'a' })
+        .success,
+    ).toBe(true);
+    expect(
+      QuestionInput.safeParse({
+        type: 'multi',
+        prompt: 'Which are cities?',
+        options: opts,
+        answerKey: ['a', 'b'],
+      }).success,
+    ).toBe(true);
+    expect(
+      QuestionInput.safeParse({ type: 'text', prompt: 'Capital?', answerKey: ['Hà Nội', 'Ha Noi'] })
+        .success,
+    ).toBe(true);
+    expect(QuestionInput.safeParse({ type: 'essay', prompt: 'Discuss the river.' }).success).toBe(
+      true,
+    );
+  });
+
+  it('rejects an mcq answer key that is not one of the options', () => {
+    const r = QuestionInput.safeParse({
+      type: 'mcq',
+      prompt: 'Capital?',
+      options: opts,
+      answerKey: 'z',
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0].path).toEqual(['answerKey']);
+  });
+
+  it('rejects an mcq with a single option', () => {
+    const r = QuestionInput.safeParse({
+      type: 'mcq',
+      prompt: 'Capital?',
+      options: [opts[0]],
+      answerKey: 'a',
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0].path).toEqual(['options']);
+  });
+
+  it('rejects a multi with no correct answers', () => {
+    expect(
+      QuestionInput.safeParse({ type: 'multi', prompt: 'Pick', options: opts, answerKey: [] })
+        .success,
+    ).toBe(false);
+  });
+
+  it('rejects a multi key that is not an option', () => {
+    expect(
+      QuestionInput.safeParse({
+        type: 'multi',
+        prompt: 'Pick',
+        options: opts,
+        answerKey: ['a', 'z'],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a text question carrying options', () => {
+    const r = QuestionInput.safeParse({
+      type: 'text',
+      prompt: 'Capital?',
+      options: opts,
+      answerKey: ['Hà Nội'],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues.some((i) => i.path[0] === 'options')).toBe(true);
+  });
+
+  it('rejects a text question with no accepted answers', () => {
+    expect(
+      QuestionInput.safeParse({ type: 'text', prompt: 'Capital?', answerKey: [] }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an essay with an answer key or options', () => {
+    expect(
+      QuestionInput.safeParse({ type: 'essay', prompt: 'Discuss', answerKey: 'anything' }).success,
+    ).toBe(false);
+    expect(
+      QuestionInput.safeParse({ type: 'essay', prompt: 'Discuss', options: opts }).success,
+    ).toBe(false);
+  });
+
+  // Patches parse the unrefined base: a prompt-only edit carries no type, so the per-type
+  // answer-key rules cannot be evaluated. See the comment on QuestionInputBase.
+  it('patches a prompt on its own', () => {
+    expect(parsePatch(QuestionInputBase, { prompt: 'Capital of Vietnam?' }).data).toEqual({
+      prompt: 'Capital of Vietnam?',
     });
   });
 });

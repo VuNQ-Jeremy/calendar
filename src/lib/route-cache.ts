@@ -31,6 +31,9 @@ export const K = {
   flashcards: 'route:flashcards',
   config: 'route:config',
   feedback: 'route:feedback',
+  questions: 'route:questions',
+  tests: 'route:tests',
+  myTests: 'route:my-tests',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -74,6 +77,8 @@ export type MutationDomain =
   | 'homework'
   | 'assessments'
   | 'flashcards'
+  | 'questions'
+  | 'tests'
   | 'config'
   | 'feedback'
   | 'profile';
@@ -92,8 +97,11 @@ export type MutationDomain =
  *   homework:    homework, classes, students, grades, assessment types
  *   assessments: scores, behavior, students, classesLite, assessment types
  *   flashcards:  topics (list) / topic+words+results+mastery (slug pages)
- *   config:      assessment types, uiPrefs
+ *   config:      assessment types, uiPrefs, grade levels
  *   feedback:    feedback
+ *   questions:   questions, grade levels, per-question test-usage counts
+ *   tests:       tests, their questions, attempts, classes, students, assessment types, grade levels
+ *   my-tests:    the student's own open/published tests plus their own attempts
  *
  * Note the two-way homework <-> assessments coupling:
  *   - saving/deleting homework grades WRITES score_records
@@ -122,7 +130,14 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // 'route:flashcards' is a prefix of every 'route:flashcards:<slug>' key, so
   // topic CRUD also drops all cached topic pages (slug may have changed).
   flashcards: { hard: [K.flashcards], stale: [K.people] },
-  config: { hard: [K.config], stale: [K.homework, K.assessments] },
+  // Editing a question changes what the test builder lists, so /tests goes stale.
+  questions: { hard: [K.questions], stale: [K.tests] },
+  // A test writes score_records when graded, is scoped to a class, and appears on
+  // the student's own list — all three surfaces must refresh.
+  tests: { hard: [K.tests], stale: [K.assessments, K.classes, K.myTests] },
+  // Grade-level and assessment-type edits surface on the question bank and the
+  // test pages as well as on homework/assessments.
+  config: { hard: [K.config], stale: [K.homework, K.assessments, K.questions, K.tests] },
   feedback: { hard: [K.feedback], stale: [] },
   // profile edits change name/color which surface in many lists; profile has
   // no cache of its own, so mark everything stale (still served instantly).
@@ -157,6 +172,9 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/vocabulary': K.flashcards,
     '/config': K.config,
     '/feedback': K.feedback,
+    '/questions': K.questions,
+    '/tests': K.tests,
+    '/my-tests': K.myTests,
   };
   return map[clean] ?? null;
 }

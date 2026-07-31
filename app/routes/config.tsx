@@ -9,10 +9,13 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
+import * as levelsSvc from '../../server/services/grade-levels';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import {
   AssessmentTypeInput,
   AssessmentTypeReorder,
+  GradeLevelInput,
+  GradeLevelReorder,
   UiPrefsInput,
   parsePatch,
 } from '../../shared/schemas';
@@ -22,8 +25,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
-  const [types, uiPrefs] = await Promise.all([typesSvc.list(db), uiPrefsSvc.getUiPrefs(db)]);
-  return { types, uiPrefs };
+  const [types, gradeLevels, uiPrefs] = await Promise.all([
+    typesSvc.list(db),
+    levelsSvc.list(db),
+    uiPrefsSvc.getUiPrefs(db),
+  ]);
+  return { types, gradeLevels, uiPrefs };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -86,6 +93,46 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
       await typesSvc.reorder(db, parsed.data.ids);
+      return { ok: true };
+    }
+
+    if (intent === 'create-level') {
+      const parsed = GradeLevelInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await levelsSvc.create(db, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'update-level') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      const parsed = parsePatch(GradeLevelInput, raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await levelsSvc.update(db, id, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'delete-level') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      await levelsSvc.remove(db, id);
+      return { ok: true };
+    }
+
+    if (intent === 'reorder-levels') {
+      let ids: unknown;
+      try {
+        ids = JSON.parse((formData.get('ids') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid ids' }, { status: 400 });
+      }
+      const parsed = GradeLevelReorder.safeParse({ ids });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await levelsSvc.reorder(db, parsed.data.ids);
       return { ok: true };
     }
 
