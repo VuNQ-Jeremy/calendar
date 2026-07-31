@@ -277,14 +277,24 @@ function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const menuRef = React.useRef<HTMLDivElement>(null);
 
-  const MENU_W = 272;
-  const MENU_H = 332;
+  // First-paint estimate only — the popover sizes itself to the 44px day grid,
+  // and the layout effect below re-places it from the measured box.
+  const MENU_W = 347;
+  const MENU_H = 420;
+
+  const place = (w: number, h: number) => {
+    const r = triggerRef.current!.getBoundingClientRect();
+    const up = window.innerHeight - r.bottom < h + 8 && r.top > h + 8;
+    const top = up ? r.top - h - 6 : r.bottom + 6;
+    return {
+      top: Math.max(8, Math.min(top, Math.max(8, window.innerHeight - h - 8))),
+      left: Math.max(8, Math.min(r.left, Math.max(8, window.innerWidth - w - 8))),
+      up,
+    };
+  };
 
   const openMenu = () => {
-    const r = triggerRef.current!.getBoundingClientRect();
-    const up = window.innerHeight - r.bottom < MENU_H + 8 && r.top > MENU_H + 8;
-    const left = Math.min(r.left, window.innerWidth - MENU_W - 8);
-    setPos({ top: up ? r.top - MENU_H - 6 : r.bottom + 6, left, up });
+    setPos(place(MENU_W, MENU_H));
     setCursor(value ? parseISO(value) : TODAY);
     setOpen(true);
   };
@@ -326,6 +336,13 @@ function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  React.useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!open || !el) return;
+    const next = place(el.offsetWidth, el.offsetHeight);
+    setPos((p) => (p && p.top === next.top && p.left === next.left && p.up === next.up ? p : next));
+  }, [open]);
+
   const cells = React.useMemo(() => {
     if (!open) return [];
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -363,7 +380,7 @@ function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps
             ref={menuRef}
             role="dialog"
             className={'m-datepicker__menu' + (pos.up ? ' is-up' : '')}
-            style={{ top: pos.top, left: pos.left, width: MENU_W }}
+            style={{ top: pos.top, left: pos.left }}
           >
             <div className="m-datepicker__head">
               <button
