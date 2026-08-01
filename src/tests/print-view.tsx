@@ -78,6 +78,17 @@ const CSS = `
   page-break-inside: avoid;
 }
 .print-doc .prompt { margin: 0; white-space: pre-wrap; }
+/* A shared passage sits outside the numbered list, so it is not itself numbered, and is kept on
+   one page with the questions that follow wherever the browser can manage it. */
+.print-doc .passage {
+  white-space: pre-wrap;
+  margin: 0 0 8pt;
+  padding: 0 0 0 4mm;
+  border-left: 1pt solid var(--ink);
+  font-size: 10.5pt;
+  break-after: avoid;
+  page-break-after: avoid;
+}
 .print-doc .pts { font-size: 9.5pt; white-space: nowrap; }
 .print-doc .hint { font-size: 9.5pt; font-style: italic; }
 .print-doc ol.opts { list-style: none; margin: 4pt 0 0; padding: 0 0 0 2mm; }
@@ -213,10 +224,14 @@ export function TestPrintView() {
           <p className="empty">{t('print_empty')}</p>
         ) : (
           <ol className="qs">
-            {items.map((q) => {
+            {items.map((q, qIndex) => {
               const correct = keyIds(q.answerKey);
+              // The passage prints once, above the first question of the run that shares it —
+              // inside the <li> so the numbering stays continuous.
+              const showContext = q.context && q.context !== (items[qIndex - 1]?.context ?? null);
               return (
                 <li className="q" key={q.id}>
+                  {showContext ? <p className="passage">{q.context}</p> : null}
                   <p className="prompt">
                     {q.prompt}{' '}
                     <span className="pts">{t('print_points_suffix', { n: q.points })}</span>

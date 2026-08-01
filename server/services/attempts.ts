@@ -52,6 +52,8 @@ export type StudentQuestion = {
   id: string;
   type: QuestionTypeId;
   prompt: string;
+  /** Shared passage / section instruction. Carries no answer, so it is safe pre-grading. */
+  context: string | null;
   options: { id: string; text: string }[];
   points: number;
   sortOrder: number;
@@ -284,6 +286,7 @@ async function questionsWithKeys(db: Db, testId: string): Promise<ReviewQuestion
     id: q.id,
     type: q.type as QuestionTypeId,
     prompt: q.prompt,
+    context: q.context ?? null,
     options: parseJson<StudentQuestion['options']>(q.options, []),
     points: link.points,
     sortOrder: link.sortOrder,

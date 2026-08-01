@@ -16,6 +16,10 @@
  *    in `issues` so the UI can flag it and leave it unchecked. Throwing away a perfectly good
  *    multiple-choice question because the answer sheet lived on another page would be worse than
  *    asking the teacher to click the right radio button.
+ * 3. The model returns questions GROUPED (a reading passage and the seven questions under it are
+ *    one group), so shared text is emitted once rather than repeated per question. The group's
+ *    instruction and passage are flattened into each question's `context` here, because that is
+ *    what the rest of the app stores and renders.
  */
 
 import { MAX_IMPORT_QUESTIONS, type QuestionType } from '../schemas';
@@ -23,6 +27,7 @@ import { MAX_IMPORT_QUESTIONS, type QuestionType } from '../schemas';
 /** Mirrors QuestionInputBase's `options` cap and the editor's own MAX_OPTIONS. */
 const MAX_OPTIONS = 10;
 const MAX_PROMPT = 4000;
+const MAX_CONTEXT = 8000;
 const MAX_OPTION_TEXT = 500;
 const MAX_EXPLANATION = 2000;
 const MAX_TAGS = 20;
@@ -35,6 +40,8 @@ export type ImportIssue = 'qi_issue_no_answer' | 'qi_issue_downgraded' | 'qi_iss
 export type RawExtractedQuestion = {
   type?: string;
   prompt?: string;
+  /** The question number printed in the document; 0/absent when it has none. */
+  sourceNumber?: number;
   options?: string[];
   correctOptionIndexes?: number[];
   acceptedAnswers?: string[];
@@ -43,15 +50,33 @@ export type RawExtractedQuestion = {
   tags?: string[];
 };
 
+/** A run of questions sharing an instruction and/or a passage. */
+export type RawExtractedGroup = {
+  instruction?: string;
+  text?: string;
+  questions?: RawExtractedQuestion[];
+};
+
 export type ImportedQuestionDraft = {
   type: QuestionType;
   prompt: string;
+  /** The group's instruction + passage, or null for a standalone question. */
+  context: string | null;
   options: { id: string; text: string }[];
   /** mcq -> option id; multi/text -> string[]; essay -> null. Empty when unknown. */
   answerKey: string | string[] | null;
   explanation: string | null;
   difficulty: 'easy' | 'medium' | 'hard' | null;
   tags: string[];
+  /** The number this question carries in the document, for answer-key matching. */
+  sourceNumber: number | null;
+  /**
+   * ORIGINAL option position -> assigned id, `null` where that option was dropped (blank, a
+   * duplicate, or past the cap). A separate answer key says "17. C", meaning the third option as
+   * PRINTED — resolving that against the filtered `options` array would silently shift the answer.
+   * Review-time only; never persisted.
+   */
+  letterIds: (string | null)[];
   /** Non-empty means "do not save this as-is" — the review UI leaves such rows unchecked. */
   issues: ImportIssue[];
 };
@@ -74,7 +99,11 @@ const DIFFICULTIES = new Set(['easy', 'medium', 'hard']);
  * `newId` is injected so tests can assert on the index→id mapping without stubbing globals;
  * production callers get `crypto.randomUUID`.
  */
-function sanitizeOne(raw: RawExtractedQuestion, newId: () => string): ImportedQuestionDraft | null {
+function sanitizeOne(
+  raw: RawExtractedQuestion,
+  context: string | null,
+  newId: () => string,
+): ImportedQuestionDraft | null {
   const prompt = clamp(norm(raw?.prompt), MAX_PROMPT);
   if (!prompt) return null;
 
@@ -86,8 +115,10 @@ function sanitizeOne(raw: RawExtractedQuestion, newId: () => string): ImportedQu
   const options: { id: string; text: string }[] = [];
   const seenText = new Set<string>();
   const rawOptions = Array.isArray(raw?.options) ? raw.options : [];
+  const letterIds: (string | null)[] = [];
   let droppedForCap = false;
   rawOptions.forEach((optRaw, originalIndex) => {
+    letterIds.push(null);
     const text = clamp(norm(optRaw), MAX_OPTION_TEXT);
     if (!text) return;
     const dedupeKey = text.toLowerCase();
@@ -99,6 +130,7 @@ function sanitizeOne(raw: RawExtractedQuestion, newId: () => string): ImportedQu
     seenText.add(dedupeKey);
     const id = newId();
     keptFrom.set(originalIndex, id);
+    letterIds[originalIndex] = id;
     options.push({ id, text });
   });
   if (droppedForCap) issues.push('qi_issue_options_capped');
@@ -161,35 +193,63 @@ function sanitizeOne(raw: RawExtractedQuestion, newId: () => string): ImportedQu
     ),
   ].slice(0, MAX_TAGS);
 
+  const sourceNumber = Number(raw?.sourceNumber);
+
+  const choice = type === 'mcq' || type === 'multi';
   return {
     type,
     prompt,
+    context,
     // An essay/text question must carry no options at all, or the refine rejects it.
-    options: type === 'mcq' || type === 'multi' ? options : [],
+    options: choice ? options : [],
     answerKey,
     explanation: explanation || null,
     difficulty: DIFFICULTIES.has(difficultyRaw)
       ? (difficultyRaw as 'easy' | 'medium' | 'hard')
       : null,
     tags,
+    sourceNumber: Number.isInteger(sourceNumber) && sourceNumber > 0 ? sourceNumber : null,
+    letterIds: choice ? letterIds : [],
     issues,
   };
+}
+
+/** The instruction and the passage, as one block — blank parts dropped, whole thing clamped. */
+function groupContext(group: RawExtractedGroup): string | null {
+  const joined = [norm(group?.instruction), norm(group?.text)].filter(Boolean).join('\n\n');
+  return joined ? clamp(joined, MAX_CONTEXT) : null;
 }
 
 /**
  * Normalize a whole model response. Malformed output degrades to `[]` rather than throwing —
  * the review screen should say "nothing found", not crash.
+ *
+ * Accepts the grouped shape (`{ groups: [{ instruction, text, questions }] }`), and also a bare
+ * list of questions: a model that ignores the grouping still produces something importable, and
+ * the unit tests exercise single questions without wrapping each one in a group.
  */
 export function sanitizeExtractedQuestions(
   raw: unknown,
   newId: () => string = () => crypto.randomUUID(),
 ): ImportedQuestionDraft[] {
-  const rows = Array.isArray(raw) ? raw : [];
+  const root = raw as { groups?: unknown; questions?: unknown } | null;
+  const groups: RawExtractedGroup[] = Array.isArray(root?.groups)
+    ? (root.groups as RawExtractedGroup[])
+    : Array.isArray(raw)
+      ? [{ questions: raw as RawExtractedQuestion[] }]
+      : Array.isArray(root?.questions)
+        ? [{ questions: root.questions as RawExtractedQuestion[] }]
+        : [];
+
   const out: ImportedQuestionDraft[] = [];
-  for (const row of rows) {
-    const draft = sanitizeOne((row ?? {}) as RawExtractedQuestion, newId);
-    if (draft) out.push(draft);
-    if (out.length >= MAX_IMPORT_QUESTIONS) break;
+  for (const group of groups) {
+    const context = groupContext(group ?? {});
+    const rows = Array.isArray(group?.questions) ? group.questions : [];
+    for (const row of rows) {
+      const draft = sanitizeOne((row ?? {}) as RawExtractedQuestion, context, newId);
+      if (draft) out.push(draft);
+      if (out.length >= MAX_IMPORT_QUESTIONS) return out;
+    }
   }
   return out;
 }

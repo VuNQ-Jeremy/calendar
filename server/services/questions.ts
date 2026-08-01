@@ -7,6 +7,8 @@ export type QuestionRow = {
   id: string;
   type: 'mcq' | 'multi' | 'text' | 'essay';
   prompt: string;
+  /** Shared passage / section instruction, shown above the prompt. */
+  context: string | null;
   gradeLevelId: string | null;
   difficulty: 'easy' | 'medium' | 'hard' | null;
   tags: string[];
@@ -36,6 +38,7 @@ function map(r: typeof questions.$inferSelect): QuestionRow {
     id: r.id,
     type: r.type as QuestionRow['type'],
     prompt: r.prompt,
+    context: r.context,
     gradeLevelId: r.gradeLevelId,
     difficulty: (r.difficulty as QuestionRow['difficulty']) ?? null,
     tags: parseJson<string[]>(r.tags, []),
@@ -84,6 +87,7 @@ export async function create(db: Db, input: QuestionInput): Promise<QuestionRow>
     id,
     type: input.type,
     prompt: input.prompt,
+    context: input.context ?? null,
     gradeLevelId: input.gradeLevelId ?? null,
     difficulty: input.difficulty ?? null,
     tags: JSON.stringify(input.tags ?? []),
@@ -98,7 +102,7 @@ export async function create(db: Db, input: QuestionInput): Promise<QuestionRow>
 }
 
 /** The columns `createMany` binds per row — see `rowsPerStatement`. */
-const QUESTION_COLUMNS = 11;
+const QUESTION_COLUMNS = 12;
 
 /**
  * Bulk insert for the file-import flow. Every input has already passed the refined `QuestionInput`
@@ -115,6 +119,7 @@ export async function createMany(db: Db, inputs: QuestionInput[]): Promise<Quest
     id: crypto.randomUUID(),
     type: input.type,
     prompt: input.prompt,
+    context: input.context ?? null,
     gradeLevelId: input.gradeLevelId ?? null,
     difficulty: input.difficulty ?? null,
     tags: JSON.stringify(input.tags ?? []),
@@ -176,6 +181,7 @@ export async function update(
   const merged = {
     type: patch.type ?? current.type,
     prompt: patch.prompt ?? current.prompt,
+    context: patch.context !== undefined ? patch.context : current.context,
     gradeLevelId: patch.gradeLevelId !== undefined ? patch.gradeLevelId : current.gradeLevelId,
     difficulty: patch.difficulty !== undefined ? patch.difficulty : current.difficulty,
     tags: patch.tags ?? current.tags,
@@ -194,6 +200,7 @@ export async function update(
     .set({
       type: next.type,
       prompt: next.prompt,
+      context: next.context ?? null,
       gradeLevelId: next.gradeLevelId ?? null,
       difficulty: next.difficulty ?? null,
       tags: JSON.stringify(next.tags ?? []),

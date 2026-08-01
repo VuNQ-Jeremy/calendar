@@ -255,6 +255,7 @@ describe('sanitizeExtractedQuestions', () => {
       const parsed = QuestionInput.safeParse({
         type: draft.type,
         prompt: draft.prompt,
+        context: draft.context,
         gradeLevelId: null,
         difficulty: draft.difficulty,
         tags: draft.tags,
@@ -266,5 +267,89 @@ describe('sanitizeExtractedQuestions', () => {
         true,
       );
     }
+  });
+});
+
+/**
+ * The model returns questions grouped, so a reading passage is emitted once instead of being
+ * repeated under each of the seven questions about it. Flattening is where that shared text turns
+ * into the per-question `context` the rest of the app stores.
+ */
+describe('sanitizeExtractedQuestions — groups', () => {
+  const grouped = (groups: unknown) => sanitizeExtractedQuestions({ groups }, seqIds());
+
+  it('copies the group instruction and passage onto every question in it', () => {
+    const out = grouped([
+      {
+        instruction: 'Read the passage and answer the questions.',
+        text: 'Water covers most of the planet.',
+        questions: [mcq({ prompt: 'Q1' }), mcq({ prompt: 'Q2' })],
+      },
+      { instruction: '', text: '', questions: [mcq({ prompt: 'Q3' })] },
+    ]);
+    expect(out).toHaveLength(3);
+    expect(out[0].context).toBe(
+      'Read the passage and answer the questions.\n\nWater covers most of the planet.',
+    );
+    expect(out[1].context).toBe(out[0].context);
+    // A standalone question carries no context at all rather than an empty string.
+    expect(out[2].context).toBeNull();
+  });
+
+  it('keeps an instruction-only or passage-only group, and clamps a very long passage', () => {
+    expect(
+      grouped([{ instruction: 'Choose the odd one out.', questions: [mcq()] }])[0].context,
+    ).toBe('Choose the odd one out.');
+    expect(grouped([{ text: 'Just a passage.', questions: [mcq()] }])[0].context).toBe(
+      'Just a passage.',
+    );
+    expect(grouped([{ text: 'p'.repeat(9000), questions: [mcq()] }])[0].context).toHaveLength(8000);
+  });
+
+  it('caps the whole batch at fifty across groups', () => {
+    const out = grouped(
+      Array.from({ length: 6 }, (_, g) => ({
+        text: `passage ${g}`,
+        questions: Array.from({ length: 10 }, (_, i) => mcq({ prompt: `G${g}Q${i}` })),
+      })),
+    );
+    expect(out).toHaveLength(50);
+  });
+
+  it('still accepts a flat list of questions, in case the model ignores the grouping', () => {
+    const out = sanitizeExtractedQuestions({ questions: [mcq()] }, seqIds());
+    expect(out).toHaveLength(1);
+    expect(out[0].context).toBeNull();
+  });
+
+  it('keeps the printed question number and drops a nonsense one', () => {
+    expect(one(mcq({ sourceNumber: 17 })).sourceNumber).toBe(17);
+    expect(one(mcq({ sourceNumber: 0 })).sourceNumber).toBeNull();
+    expect(one(mcq({ sourceNumber: undefined })).sourceNumber).toBeNull();
+    expect(one(mcq({ sourceNumber: -3 })).sourceNumber).toBeNull();
+  });
+
+  /**
+   * The subtle one. "17. C" names the THIRD option AS PRINTED. If a blank or duplicate option was
+   * dropped in between, counting into the surviving array would silently shift the answer, so the
+   * map has to be keyed on the original position with a hole where an option went.
+   */
+  it('maps every printed option position to its id, with holes for dropped options', () => {
+    const q = one(mcq({ options: ['A', '   ', 'a', 'B'], correctOptionIndexes: [] }));
+    expect(q.options.map((o) => o.text)).toEqual(['A', 'B']);
+    // Printed A, B(blank), C(duplicate of A), D -> only A and D survive, at their own positions.
+    expect(q.letterIds).toEqual([q.options[0].id, null, null, q.options[1].id]);
+  });
+
+  it('has no letter map for a question with no options', () => {
+    expect(one(mcq({ type: 'essay', options: [] })).letterIds).toEqual([]);
+    expect(one(mcq({ type: 'text', options: [], acceptedAnswers: ['x'] })).letterIds).toEqual([]);
+  });
+
+  it('leaves a hole for an option dropped by the ten-option cap', () => {
+    const options = Array.from({ length: 12 }, (_, i) => `option ${i}`);
+    const q = one(mcq({ options, correctOptionIndexes: [0] }));
+    expect(q.letterIds).toHaveLength(12);
+    expect(q.letterIds.slice(10)).toEqual([null, null]);
   });
 });

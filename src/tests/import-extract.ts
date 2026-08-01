@@ -62,10 +62,18 @@ function toBase64(bytes: Uint8Array): string {
  * Word → HTML rather than raw text. Teachers very often mark the correct option by bolding or
  * underlining it, and `extractRawText` would throw exactly that away; the extraction prompt tells
  * the model to read `<strong>`/`<u>` as the answer marker.
+ *
+ * The style map is NOT optional. mammoth's default map has no rule for underline, so `<u>` is
+ * dropped silently — which loses both the "underlined option is the answer" convention and the
+ * whole point of a pronunciation question ("which underlined part sounds different"). One rule
+ * restores it; bold and italic are already mapped by default.
  */
 async function fromDocx(file: File): Promise<string> {
   const mammoth = await import('mammoth');
-  const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+  const { value } = await mammoth.convertToHtml(
+    { arrayBuffer: await file.arrayBuffer() },
+    { styleMap: ['u => u'] },
+  );
   return value;
 }
 
@@ -122,4 +130,19 @@ export async function extractFileContent(file: File): Promise<ExtractPayload> {
   // Truncate rather than reject: the questions are at the top of a test paper far more often than
   // the bottom, so half an import beats none. The prompt caps output at 50 questions anyway.
   return { kind: 'text', text: trimmed.slice(0, MAX_TEXT_CHARS) };
+}
+
+/** What the answer-key picker accepts — everything `extractFileContent` reads in the browser. */
+export const KEY_ACCEPT = '.docx,.xlsx,.xls,.md,.txt';
+
+/**
+ * Read a separate answer-key file as text, for `parseAnswerKey`.
+ *
+ * PDF is refused rather than sent to the model: a key is a dozen letters, and paying for a vision
+ * call (plus a round trip) to read "1. B  2. C" would be absurd — the teacher can paste it.
+ */
+export async function extractKeyText(file: File): Promise<string> {
+  const payload = await extractFileContent(file);
+  if (payload.kind !== 'text') throw new ExtractInputError('qi_key_err_pdf');
+  return payload.text;
 }

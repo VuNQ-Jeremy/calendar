@@ -54,6 +54,7 @@ async function studentQuestionsOf(db: Db, testId: string): Promise<StudentQuesti
         id: q.id,
         type: q.type,
         prompt: q.prompt,
+        context: q.context,
         options: q.options,
         points: l.points,
         sortOrder: l.sortOrder,

@@ -202,13 +202,52 @@ function MultiInput({ q, value, onChange }: QuestionInputProps) {
   );
 }
 
-function QuestionCard({ q, index, value, onChange }: QuestionInputProps & { index: number }) {
+/**
+ * The shared passage or section instruction a question hangs off.
+ *
+ * Printed once per run: seven questions about one reading passage repeat the passage seven times
+ * on screen otherwise, which is unreadable and nothing like the paper they came from. When the
+ * previous question carried the same text, this collapses to a one-line reminder.
+ */
+function ContextBlock({ text, repeated }: { text: string; repeated: boolean }) {
+  const { t } = useLang();
+  if (repeated) {
+    return (
+      <div className="m-muted" style={{ fontSize: 'var(--text-xs)', marginBottom: 8 }}>
+        {t('take_same_context')}
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        whiteSpace: 'pre-wrap',
+        marginBottom: 10,
+        paddingLeft: 10,
+        borderLeft: '3px solid var(--border-strong)',
+        fontSize: 'var(--text-sm)',
+        color: 'var(--text-muted)',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function QuestionCard({
+  q,
+  index,
+  value,
+  onChange,
+  prevContext,
+}: QuestionInputProps & { index: number; prevContext: string | null }) {
   const { t } = useLang();
   return (
     <MC style={{ padding: 16 }}>
       <div className="m-row" style={{ gap: 8, alignItems: 'flex-start' }}>
         <span style={{ fontWeight: 800, minWidth: 24 }}>{index + 1}.</span>
         <div style={{ flex: 1, minWidth: 0 }}>
+          {q.context && <ContextBlock text={q.context} repeated={q.context === prevContext} />}
           <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{q.prompt}</div>
           <div style={{ marginTop: 10 }}>
             {q.type === 'mcq' && <McqInput q={q} value={value} onChange={onChange} />}
@@ -456,6 +495,7 @@ function Taking({ data }: { data: TakingData }) {
             key={q.id}
             q={q}
             index={i}
+            prevContext={data.questions[i - 1]?.context ?? null}
             value={answers[q.id] ?? null}
             onChange={(v) => setAnswer(q.id, v)}
           />
@@ -490,7 +530,17 @@ function SubmittedView({ data }: { data: SubmittedData }) {
   );
 }
 
-function ReviewCard({ q, index, item }: { q: ReviewQuestion; index: number; item?: ReviewItem }) {
+function ReviewCard({
+  q,
+  index,
+  item,
+  prevContext,
+}: {
+  q: ReviewQuestion;
+  index: number;
+  item?: ReviewItem;
+  prevContext: string | null;
+}) {
   const { t } = useLang();
   const keyText = answerKeyText(q);
   return (
@@ -498,6 +548,7 @@ function ReviewCard({ q, index, item }: { q: ReviewQuestion; index: number; item
       <div className="m-row" style={{ gap: 8, alignItems: 'flex-start' }}>
         <span style={{ fontWeight: 800, minWidth: 24 }}>{index + 1}.</span>
         <div style={{ flex: 1, minWidth: 0 }}>
+          {q.context && <ContextBlock text={q.context} repeated={q.context === prevContext} />}
           <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap' }}>{q.prompt}</div>
           <div style={{ marginTop: 8 }}>
             <span className="mochi-eyebrow">{t('take_review_your_answer')}</span>
@@ -556,7 +607,13 @@ function GradedView({ data }: { data: GradedData }) {
         )}
       </MC>
       {data.questions.map((q, i) => (
-        <ReviewCard key={q.id} q={q} index={i} item={byId.get(q.id)} />
+        <ReviewCard
+          key={q.id}
+          q={q}
+          index={i}
+          item={byId.get(q.id)}
+          prevContext={data.questions[i - 1]?.context ?? null}
+        />
       ))}
     </div>
   );

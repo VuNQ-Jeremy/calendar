@@ -446,6 +446,8 @@ export type QuestionOption = z.infer<typeof QuestionOption>;
 export const QuestionInputBase = z.object({
   type: QuestionType,
   prompt: z.string().trim().min(1).max(4000),
+  /** Shared passage / section instruction shown above the prompt. Longer cap: it holds prose. */
+  context: z.string().max(8000).nullish(),
   gradeLevelId: z.string().nullish(),
   difficulty: QuestionDifficulty.nullish(),
   tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),

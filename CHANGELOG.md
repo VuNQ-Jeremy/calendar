@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0074 — 2026-08-01
+Question import v2: reading passages and section instructions are kept as a new per-question passage field, the model returns questions grouped with their printed numbers, a separate answer key can be pasted or uploaded on the review screen, and underlines survive Word import.
+
 ## v0.0073 — 2026-08-01
 Clicking the Mochi logo in the sidebar now navigates home — /dashboard for staff, /vocabulary for students.
 

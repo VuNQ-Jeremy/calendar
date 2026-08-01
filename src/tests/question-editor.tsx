@@ -17,6 +17,8 @@ export type QuestionDraft = {
   id?: string;
   type: QDraftType;
   prompt: string;
+  /** Shared passage / section instruction shown above the prompt. '' means none. */
+  context: string;
   /** '' means "no grade level" — the select cannot hold null. */
   gradeLevelId: string;
   /** '' means "no difficulty". */
@@ -31,6 +33,7 @@ export type QuestionDraft = {
 export const newQuestionDraft = (): QuestionDraft => ({
   type: 'mcq',
   prompt: '',
+  context: '',
   gradeLevelId: '',
   difficulty: '',
   tags: [],
@@ -43,6 +46,7 @@ export const draftFromQuestion = (q: QuestionRow): QuestionDraft => ({
   id: q.id,
   type: q.type,
   prompt: q.prompt,
+  context: q.context ?? '',
   gradeLevelId: q.gradeLevelId ?? '',
   difficulty: q.difficulty ?? '',
   tags: [...q.tags],
@@ -276,6 +280,7 @@ export function QuestionEditorModal({
       onSave({
         ...draft,
         prompt: draft.prompt.trim(),
+        context: draft.context.trim(),
         explanation: draft.explanation.trim(),
         options,
         answerKey,
@@ -288,6 +293,7 @@ export function QuestionEditorModal({
     if (draft.id) fd.set('id', draft.id);
     fd.set('type', draft.type);
     fd.set('prompt', draft.prompt.trim());
+    fd.set('context', draft.context.trim());
     fd.set('gradeLevelId', draft.gradeLevelId);
     fd.set('difficulty', draft.difficulty);
     fd.set('explanation', draft.explanation.trim());
@@ -335,6 +341,24 @@ export function QuestionEditorModal({
           value={draft.prompt}
           onChange={(e) => set('prompt', e.target.value)}
         />
+      </div>
+
+      {/* Shared text: the reading passage or section instruction this question hangs off. Shown
+          above the prompt everywhere the question appears, and printed once per run of questions
+          that share it. */}
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('qb_context_label')}</label>
+        <textarea
+          className="mochi-input"
+          rows={draft.context ? 4 : 2}
+          style={{ resize: 'vertical', minHeight: 64, paddingTop: 10 }}
+          placeholder={t('qb_context_ph')}
+          value={draft.context}
+          onChange={(e) => set('context', e.target.value)}
+        />
+        <span className="m-muted" style={{ fontSize: 'var(--text-xs)', marginTop: 4 }}>
+          {t('qb_context_hint')}
+        </span>
       </div>
 
       <div className="m-grid cols-2" style={{ gap: 14 }}>

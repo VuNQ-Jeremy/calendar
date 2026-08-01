@@ -1084,6 +1084,33 @@ describe('questions', () => {
     expect(await questionsSvc.createMany(db(), [])).toEqual([]);
   });
 
+  it('round-trips the shared passage through create, createMany and update', async () => {
+    const d = db();
+    const passage = 'Read the passage.\n\nWater covers most of the planet.';
+
+    const single = await questionsSvc.create(
+      d,
+      mcqInput({ prompt: 'With passage', context: passage }),
+    );
+    expect(single.context).toBe(passage);
+    // A question with no passage stores null, not an empty string — the take screen keys off that.
+    expect((await questionsSvc.create(d, mcqInput({ prompt: 'No passage' }))).context).toBeNull();
+
+    const bulk = await questionsSvc.createMany(d, [
+      mcqInput({ prompt: 'Bulk with passage', context: passage }),
+      mcqInput({ prompt: 'Bulk without' }),
+    ]);
+    expect(bulk.map((r) => r.context)).toEqual([passage, null]);
+
+    const edited = await questionsSvc.update(d, single.id, { context: 'A different passage.' });
+    expect(edited.context).toBe('A different passage.');
+    // Clearing it must survive the merge-and-revalidate path in `update`.
+    expect((await questionsSvc.update(d, single.id, { context: null })).context).toBeNull();
+    // An unrelated patch leaves it alone.
+    const kept = await questionsSvc.update(d, bulk[0].id, { prompt: 'Renamed' });
+    expect(kept.context).toBe(passage);
+  });
+
   it('appendQuestions keeps the questions already on the test', async () => {
     const d = db();
     const existing = await questionsSvc.create(d, mcqInput({ prompt: 'Was already here' }));
@@ -2014,7 +2041,7 @@ describe('attempts service', () => {
       expect('answerKey' in q).toBe(false);
       expect('explanation' in q).toBe(false);
       expect(Object.keys(q).sort()).toEqual(
-        ['id', 'options', 'points', 'prompt', 'sortOrder', 'type'].sort(),
+        ['context', 'id', 'options', 'points', 'prompt', 'sortOrder', 'type'].sort(),
       );
     }
   });
@@ -2584,7 +2611,7 @@ describe('attempts service', () => {
       expect('answerKey' in q).toBe(false);
       expect('explanation' in q).toBe(false);
       expect(Object.keys(q).sort()).toEqual(
-        ['id', 'options', 'points', 'prompt', 'sortOrder', 'type'].sort(),
+        ['context', 'id', 'options', 'points', 'prompt', 'sortOrder', 'type'].sort(),
       );
     }
   });

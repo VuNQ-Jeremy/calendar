@@ -105,6 +105,7 @@ describe('toPayload', () => {
   const draft = (over: Partial<QuestionDraft> = {}): QuestionDraft => ({
     type: 'mcq',
     prompt: 'Pick one',
+    context: '',
     gradeLevelId: '',
     difficulty: '',
     tags: [],
@@ -185,5 +186,13 @@ describe('toPayload', () => {
     expect(payload.gradeLevelId).toBeNull();
     expect(payload.difficulty).toBeNull();
     expect(payload.explanation).toBeNull();
+  });
+
+  it('carries the passage through, trimmed, and nulls a blank one', () => {
+    const passage = 'Read the passage.\n\nWater covers most of the planet.';
+    expect(toPayload(draft({ context: `  ${passage}  ` })).context).toBe(passage);
+    expect(toPayload(draft({ context: '   ' })).context).toBeNull();
+    expect(toPayload(draft({ context: 'c'.repeat(9000) })).context).toHaveLength(8000);
+    expect(QuestionInput.safeParse(toPayload(draft({ context: passage }))).success).toBe(true);
   });
 });

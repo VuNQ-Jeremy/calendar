@@ -6,12 +6,15 @@ import { Modal, MSelect } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import {
   ACCEPT,
+  KEY_ACCEPT,
   extractFileContent,
+  extractKeyText,
   ExtractInputError,
   type ExtractPayload,
 } from './import-extract.js';
 import { QuestionEditorModal, validateDraft, type QuestionDraft } from './question-editor.jsx';
 import type { ImportedQuestionDraft } from '../../shared/logic/question-import.js';
+import { parseAnswerKey, applyAnswerKey, stripHtml } from '../../shared/logic/answer-key.js';
 import type { GradeLevelRow } from '../../server/services/grade-levels.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Checkbox: MCheck } = DS;
@@ -37,11 +40,16 @@ type Row = {
   /** i18n keys from the sanitizer — why this row needs a look before it can be saved. */
   issues: string[];
   checked: boolean;
+  /** The number printed in the document, for answer-key matching. Never saved. */
+  sourceNumber: number | null;
+  /** Original printed option position -> id. See `letterIds` in shared/logic/question-import. */
+  letterIds: (string | null)[];
 };
 
 const toDraft = (d: ImportedQuestionDraft): QuestionDraft => ({
   type: d.type,
   prompt: d.prompt,
+  context: d.context ?? '',
   gradeLevelId: '',
   difficulty: d.difficulty ?? '',
   tags: [...d.tags],
@@ -78,6 +86,7 @@ export const toPayload = (draft: QuestionDraft) => {
   return {
     type: draft.type,
     prompt: draft.prompt.trim().slice(0, 4000),
+    context: draft.context.trim().slice(0, 8000) || null,
     gradeLevelId: draft.gradeLevelId || null,
     difficulty: draft.difficulty || null,
     tags: [...new Set(draft.tags.map((tag) => tag.trim().slice(0, 50)).filter(Boolean))].slice(
@@ -135,6 +144,15 @@ export function QuestionImportModal({
   const [editing, setEditing] = React.useState<{ index: number; snapshot: QuestionDraft } | null>(
     null,
   );
+  /** The separate answer key: pasted, or read out of a picked file. */
+  const [keyText, setKeyText] = React.useState('');
+  const [keyOpen, setKeyOpen] = React.useState(false);
+  const [keyError, setKeyError] = React.useState<string | null>(null);
+  const [keyResult, setKeyResult] = React.useState<{
+    matched: number;
+    unmatched: number[];
+    unresolved: number[];
+  } | null>(null);
 
   const saving = fetcher.state !== 'idle';
   const saved = fetcher.data?.ok === true;
@@ -208,8 +226,11 @@ export function QuestionImportModal({
           // A row the model could not fully resolve starts unchecked: importing a question with
           // no answer key would silently create something no student can be graded against.
           checked: q.issues.length === 0,
+          sourceNumber: q.sourceNumber,
+          letterIds: q.letterIds,
         })),
       );
+      setKeyResult(null);
       setPhase('review');
     } catch {
       setError(t('qi_err_extract_failed'));
@@ -239,6 +260,81 @@ export function QuestionImportModal({
       prev.map((row) => ({ ...row, draft: { ...row.draft, gradeLevelId: value } })),
     );
   };
+
+  /** A key file is read in the browser and shown in the box, so the teacher can fix it before use. */
+  const pickKeyFile = async (file: File) => {
+    setKeyError(null);
+    try {
+      setKeyText(
+        stripHtml(await extractKeyText(file))
+          .replace(/[ \t]+\n/g, '\n')
+          .trim(),
+      );
+    } catch (e) {
+      setKeyError(t(e instanceof ExtractInputError ? e.message : 'qi_err_read_failed'));
+    }
+  };
+
+  /**
+   * Match the key onto the rows by the question number printed in the document.
+   *
+   * The key wins over anything the model thought it read: a teacher who pastes one is stating what
+   * the answers are. Rows it fixes are re-validated and re-checked, so a paper that arrived with
+   * forty "no answer marked" rows becomes importable in one click.
+   */
+  const applyKey = () => {
+    setKeyError(null);
+    const entries = parseAnswerKey(keyText);
+    if (!entries.length) {
+      setKeyResult(null);
+      setKeyError(t('qi_key_err_none'));
+      return;
+    }
+    const { applied, unmatchedNumbers, unresolvedNumbers } = applyAnswerKey(
+      rows.map((row) => ({
+        type: row.draft.type,
+        letterIds: row.letterIds,
+        sourceNumber: row.sourceNumber,
+      })),
+      entries,
+    );
+    const byIndex = new Map(applied.map((a) => [a.index, a]));
+    setRows((prev) =>
+      prev.map((row, i) => {
+        const hit = byIndex.get(i);
+        if (!hit) return row;
+        const draft = { ...row.draft, type: hit.type, answerKey: hit.answerKey };
+        const problem = validateDraft(draft);
+        // The "no answer marked" flag is exactly what the key answers; anything else the sanitizer
+        // reported (options capped, type downgraded) still deserves a look.
+        const issues = row.issues.filter((issue) => issue !== 'qi_issue_no_answer');
+        if (problem && !issues.includes(problem)) issues.push(problem);
+        return { ...row, draft, issues, checked: problem == null };
+      }),
+    );
+    setKeyResult({
+      matched: applied.length,
+      unmatched: unmatchedNumbers,
+      unresolved: unresolvedNumbers,
+    });
+  };
+
+  /**
+   * Numbers the document uses that no row carries — the model silently dropped a question. Only
+   * meaningful once most rows are numbered, and only within the range actually extracted.
+   */
+  const missingNumbers = React.useMemo(() => {
+    const numbers = rows.map((row) => row.sourceNumber).filter((n): n is number => n != null);
+    if (numbers.length < 2) return [];
+    const present = new Set(numbers);
+    const out: number[] = [];
+    for (let n = Math.min(...numbers); n <= Math.max(...numbers); n++) {
+      if (!present.has(n)) out.push(n);
+    }
+    // A paper numbered in sections that restart would light this up for every gap; past a handful
+    // the warning is noise rather than a lost question.
+    return out.length > 10 ? [] : out;
+  }, [rows]);
 
   const selected = rows.filter((row) => row.checked);
   const blocked = selected.filter((row) => validateDraft(row.draft) != null);
@@ -383,6 +479,85 @@ export function QuestionImportModal({
               </div>
             </MC>
 
+            {/* Separate answer key. Collapsed by default — a paper that already marks its answers
+                needs nothing here, and the box is long. */}
+            <MC style={{ padding: 12 }}>
+              <div className="m-spread" style={{ alignItems: 'center', gap: 8 }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>
+                  {t('qi_key_title')}
+                </span>
+                <MBtn variant="ghost" size="sm" onClick={() => setKeyOpen((v) => !v)}>
+                  {keyOpen ? t('qi_key_hide') : t('qi_key_show')}
+                </MBtn>
+              </div>
+              {keyOpen && (
+                <div className="m-stack" style={{ gap: 8, marginTop: 8 }}>
+                  <span className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
+                    {t('qi_key_hint')}
+                  </span>
+                  <textarea
+                    className="mochi-input"
+                    rows={4}
+                    style={{ resize: 'vertical', minHeight: 84, paddingTop: 10 }}
+                    placeholder={t('qi_key_ph')}
+                    value={keyText}
+                    onChange={(e) => setKeyText(e.target.value)}
+                  />
+                  <div className="m-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    <MBtn variant="primary" size="sm" onClick={applyKey} disabled={!keyText.trim()}>
+                      {t('qi_key_apply')}
+                    </MBtn>
+                    <label
+                      className="m-row"
+                      style={{
+                        gap: 6,
+                        padding: '6px 12px',
+                        border: '1.5px dashed var(--border-strong)',
+                        borderRadius: 'var(--radius-md)',
+                        cursor: 'pointer',
+                        color: 'var(--text-muted)',
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <MIcon name="upload" size={16} />
+                      {t('qi_key_pick_file')}
+                      <input
+                        type="file"
+                        accept={KEY_ACCEPT}
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (file) void pickKeyFile(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {keyError && (
+                    <span
+                      style={{
+                        color: 'var(--danger)',
+                        fontSize: 'var(--text-sm)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {keyError}
+                    </span>
+                  )}
+                  {keyResult && (
+                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+                      {t('qi_key_matched', { n: keyResult.matched })}
+                      {keyResult.unmatched.length > 0 &&
+                        ` · ${t('qi_key_unmatched', { list: keyResult.unmatched.join(', ') })}`}
+                      {keyResult.unresolved.length > 0 &&
+                        ` · ${t('qi_key_unresolved', { list: keyResult.unresolved.join(', ') })}`}
+                    </span>
+                  )}
+                </div>
+              )}
+            </MC>
+
             <div className="m-stack" style={{ gap: 6, maxHeight: '46vh', overflowY: 'auto' }}>
               {rows.map((row, i) => {
                 const problem = validateDraft(row.draft);
@@ -399,7 +574,20 @@ export function QuestionImportModal({
                         className="m-row"
                         style={{ gap: 6, flexWrap: 'wrap', marginBottom: 4, alignItems: 'center' }}
                       >
+                        {row.sourceNumber != null && (
+                          <span
+                            className="m-muted"
+                            style={{ fontSize: 'var(--text-xs)', fontWeight: 800 }}
+                          >
+                            {t('qi_q_number', { n: row.sourceNumber })}
+                          </span>
+                        )}
                         <MTag color={TYPE_COLOR[row.draft.type]}>{t(TYPE_TK[row.draft.type])}</MTag>
+                        {row.draft.context && (
+                          <span className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
+                            {t('qi_has_context')}
+                          </span>
+                        )}
                         {row.draft.options.length > 0 && (
                           <span className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
                             {t('qi_n_options', { n: row.draft.options.length })}
@@ -439,6 +627,11 @@ export function QuestionImportModal({
               })}
             </div>
 
+            {missingNumbers.length > 0 && (
+              <span className="m-muted" style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+                {t('qi_missing_numbers', { list: missingNumbers.join(', ') })}
+              </span>
+            )}
             {blocked.length > 0 && (
               <span style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
                 {t('qi_fix_selected', { n: blocked.length })}

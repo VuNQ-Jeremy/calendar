@@ -55,6 +55,7 @@ function preprocessQRaw(raw: Record<string, unknown>): Record<string, unknown> |
     }
   }
   if (out.gradeLevelId === '') out.gradeLevelId = null;
+  if (out.context === '') out.context = null;
   if (out.difficulty === '') out.difficulty = null;
   if (out.explanation === '') out.explanation = null;
   return out;

@@ -395,6 +395,12 @@ export const questions = sqliteTable(
     /** mcq | multi | text | essay */
     type: text('type').notNull(),
     prompt: text('prompt').notNull(),
+    /**
+     * Shared text the prompt depends on — a reading passage, a cloze paragraph, or the section
+     * instruction covering a run of questions. Rendered above the prompt, and deduped when
+     * consecutive questions on a test carry the same one. See migrations/0019.
+     */
+    context: text('context'),
     gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, {
       onDelete: 'set null',
     }),

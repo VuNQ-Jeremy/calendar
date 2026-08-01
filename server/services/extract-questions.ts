@@ -21,9 +21,22 @@ const SYSTEM = `You extract exam questions from a teacher's test paper so they c
 into a question bank. The input is one test document: plain text, HTML converted from a Word
 file, tab-separated spreadsheet rows, or a PDF.
 
-For each question you find, return:
+Return the questions in GROUPS. A group is a run of consecutive questions that share something:
+a section instruction ("Choose the word whose underlined part is pronounced differently"), a
+reading passage, a cloze paragraph, an announcement, or a single set of options used by several
+questions. A question that shares nothing with its neighbours is its own group of one.
+
+For each group return:
+- "instruction": the section instruction introducing these questions, verbatim, or "" if none
+- "text": the passage, paragraph, letter, chart caption or announcement the questions are about,
+  copied VERBATIM and in full, or "" if there is none
+- "questions": the questions in that group
+
+For each question return:
 - "type": "mcq" (one correct option), "multi" (several correct options), "text" (short written
   answer), or "essay" (long written answer, graded by hand)
+- "sourceNumber": the question number printed in the document (13 for "Question 13" or "Câu 13"),
+  or 0 if it has none
 - "prompt": the question text, without its leading number or letter
 - "options": the answer choices in document order, each WITHOUT its "A."/"B."/"1)" label.
   Empty for text and essay questions.
@@ -34,7 +47,17 @@ For each question you find, return:
 - "difficulty": "easy", "medium" or "hard" if the document labels it, otherwise "unknown"
 - "tags": short topic labels if the document groups questions under headings, otherwise empty
 
-Rules:
+Rules for groups:
+- The shared passage belongs in the group's "text", ONCE. Do NOT copy it into each question's
+  "prompt" — but never drop it either. A prompt like "According to the passage, what happened?"
+  is unanswerable on its own, so the passage MUST appear in "text".
+- Copy the passage word for word, including its title and every paragraph. Do not summarise it.
+- When several questions share ONE list of options (a "match the sentence to A/B/C/D" block),
+  repeat that list in every question's "options" — each question is imported on its own.
+- Every question in the document gets returned, in document order, with its printed number. Do
+  not skip one because it looks similar to another.
+
+Rules for content:
 - Extract only what is in the document. NEVER invent an answer key: if the correct answer is not
   marked anywhere, leave "correctOptionIndexes" and "acceptedAnswers" empty. A teacher will fill
   it in. Guessing is worse than leaving it blank.
@@ -44,47 +67,69 @@ Rules:
   A key you supplied rather than read would be graded as the teacher's own, unnoticed.
 - An answer key may appear as a marked option (bold, underlined, highlighted, starred, or
   parenthesised), as "Answer: B" next to the question, or in an answer list at the end of the
-  document. In HTML input, an option wrapped in <strong>, <b>, <em> or <u> is the marked answer.
+  document.
+- Formatting is a MARKED ANSWER only when it marks exactly one whole option and the same
+  convention repeats across the paper. Bold or underlined question numbers, headings, section
+  titles, quoted words inside a prompt, a single underlined syllable inside a word, and stray
+  bold spaces are NOT answer marks — if that is all you see, the paper marks no answers at all.
+  When in doubt, leave the answer empty.
+- Underlining inside a word or phrase is part of the question (pronunciation and stress items
+  depend on it). Transcribe it with underscores around the underlined part: "pleas_ed_",
+  "_ch_emistry". Options are plain text, so this is the only way it survives.
 - Keep the original language exactly as written — Vietnamese stays Vietnamese. Do not translate,
   reword, or fix spelling.
 - Preserve mathematical and scientific notation as written.
-- Skip anything that is not a question: instructions, headers, page numbers, score boxes,
-  name/date lines.
-- Return at most ${MAX_IMPORT_QUESTIONS} questions. If the document has more, return the first
-  ${MAX_IMPORT_QUESTIONS} in document order.`;
+- Skip anything that is not part of a question: page headers and footers, page numbers, score
+  boxes, name/date lines, and advertising.
+- Return at most ${MAX_IMPORT_QUESTIONS} questions in total. If the document has more, return the
+  first ${MAX_IMPORT_QUESTIONS} in document order.`;
 
 const SCHEMA = {
   type: 'object',
   properties: {
-    questions: {
+    groups: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          type: { type: 'string', enum: ['mcq', 'multi', 'text', 'essay'] },
-          prompt: { type: 'string' },
-          options: { type: 'array', items: { type: 'string' } },
-          correctOptionIndexes: { type: 'array', items: { type: 'integer' } },
-          acceptedAnswers: { type: 'array', items: { type: 'string' } },
-          explanation: { type: 'string' },
-          difficulty: { type: 'string', enum: ['easy', 'medium', 'hard', 'unknown'] },
-          tags: { type: 'array', items: { type: 'string' } },
+          instruction: { type: 'string' },
+          text: { type: 'string' },
+          questions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', enum: ['mcq', 'multi', 'text', 'essay'] },
+                sourceNumber: { type: 'integer' },
+                prompt: { type: 'string' },
+                options: { type: 'array', items: { type: 'string' } },
+                correctOptionIndexes: { type: 'array', items: { type: 'integer' } },
+                acceptedAnswers: { type: 'array', items: { type: 'string' } },
+                explanation: { type: 'string' },
+                difficulty: { type: 'string', enum: ['easy', 'medium', 'hard', 'unknown'] },
+                tags: { type: 'array', items: { type: 'string' } },
+              },
+              required: [
+                'type',
+                'sourceNumber',
+                'prompt',
+                'options',
+                'correctOptionIndexes',
+                'acceptedAnswers',
+                'explanation',
+                'difficulty',
+                'tags',
+              ],
+              additionalProperties: false,
+            },
+          },
         },
-        required: [
-          'type',
-          'prompt',
-          'options',
-          'correctOptionIndexes',
-          'acceptedAnswers',
-          'explanation',
-          'difficulty',
-          'tags',
-        ],
+        required: ['instruction', 'text', 'questions'],
         additionalProperties: false,
       },
     },
   },
-  required: ['questions'],
+  required: ['groups'],
   additionalProperties: false,
 } as const;
 
@@ -123,9 +168,10 @@ export async function extractQuestions(
 
   const response = await client.messages.create({
     model: MODEL,
-    // Generous: 50 questions with options and explanations is a lot of JSON. Non-streaming is
+    // Generous: 50 questions with options and explanations is a lot of JSON, and reading passages
+    // are copied out verbatim on top of that (once per group, not per question). Non-streaming is
     // still safe at this size (well under the SDK's HTTP timeout for a Haiku call).
-    max_tokens: 16000,
+    max_tokens: 24000,
     system: SYSTEM,
     output_config: { format: { type: 'json_schema', schema: SCHEMA } },
     messages: [{ role: 'user', content }],
@@ -138,11 +184,11 @@ export async function extractQuestions(
 
   const text = response.content.find((b) => b.type === 'text');
   if (!text || text.type !== 'text') return [];
-  let parsed: { questions?: unknown };
+  let parsed: unknown;
   try {
-    parsed = JSON.parse(text.text) as { questions?: unknown };
+    parsed = JSON.parse(text.text);
   } catch {
     throw new ExtractTruncatedError();
   }
-  return sanitizeExtractedQuestions(parsed.questions);
+  return sanitizeExtractedQuestions(parsed);
 }
