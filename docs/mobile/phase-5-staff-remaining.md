@@ -151,10 +151,10 @@ equivalent, or a **deliberate, documented** omission.
 | `/profile` | Phase 2 | |
 | `/login` | Phase 2 | Password-reset deep link may be deferred |
 
-Also check the shell-level features in `app/routes/_app.tsx`: the **intro modal**
-(`SEEN_INTRO_KEY` in localStorage → AsyncStorage), the **badge counts** on nav items, the
-**feedback modal**, and the **dev inspector** (`src/dev-inspector.tsx` — skip it, it is a web
-debugging tool).
+Also check the shell-level features in `app/routes/_app.tsx`: the **badge counts** on nav items,
+the **feedback modal**, and the **dev inspector** (`src/dev-inspector.tsx` — skip it, it is a web
+debugging tool). The first-visit intro modal was removed from the web app, so there is nothing
+to port.
 
 Write the result into `docs/mobile-parity.md`, listing every deliberate omission with its
 reason. Future-you will ask.

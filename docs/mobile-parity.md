@@ -32,7 +32,6 @@ never built), `(app)/language.tsx`, and `(app)/notifications.tsx` (phase 6).
 
 | Feature | Mobile |
 |---|---|
-| Intro modal (`SEEN_INTRO_KEY` in localStorage) | **Omitted.** See below |
 | Badge counts on nav items | Present as counts in the People and Feedback tab labels; not on the bottom tab bar |
 | Feedback modal | The compose form on `/feedback?compose=1`, linked from More and from the version stamp |
 | Dev inspector (`src/dev-inspector.tsx`) | **Omitted.** A web debugging tool; React Native has its own |
@@ -62,11 +61,11 @@ tab; Parent invites created on the web still list and revoke on the phone. **Thi
 capability gap, not a mobile one** — if parent login ships, delete the restriction in
 `components/InvitesPanel.tsx` and the note in `people/parent/[id].tsx`.
 
-**The intro modal.**
-Six feature cards explaining a sidebar the mobile app does not have, keyed on a localStorage flag.
-Porting it would mean rewriting the copy for a different navigation model, and a first-run modal on
-a phone competes with the notification permission prompt for the user's one moment of goodwill. The
-prompt is worth more.
+**The intro modal.** No longer a parity question: the first-visit intro modal
+(`src/instructions.tsx`, `SEEN_INTRO_KEY`) was deleted from the web app, so neither client has it.
+Mobile had already skipped it — its feature cards described a sidebar a phone does not have, and a
+first-run modal competes with the notification permission prompt for the user's one moment of
+goodwill.
 
 **Week time-grid view** (phase 4, restated here).
 `src/calendar/time-grid.tsx` reschedules events with `onMouseDown` plus a `window` mousemove

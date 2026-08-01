@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0072 — 2026-08-01
+Remove the first-visit instructions modal and the sidebar help button that reopened it, along with its i18n strings, styles and test scaffolding.
+
 ## v0.0070 — 2026-07-31
 Import questions from a file: upload a Word, PDF, Excel or Markdown test paper and Claude reads the questions out for review before they are saved to the bank (or straight onto a test). Also fixes a D1 bound-parameter limit that broke saving a test with more than 25 questions.
 

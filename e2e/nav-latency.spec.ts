@@ -71,16 +71,6 @@ test.describe('navigation latency', () => {
   test.skip(!HAVE_CREDS, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 
   test.beforeEach(async ({ page }) => {
-    // A fresh browser profile has no localStorage, so AppLayout opens the
-    // first-visit instructions modal, whose .m-overlay swallows every click.
-    // Mark it seen before any page script runs (src/instructions.tsx).
-    await page.addInitScript(() => {
-      try {
-        localStorage.setItem('mochi_seen_intro_v1', '1');
-      } catch {
-        /* storage unavailable */
-      }
-    });
     await page.goto('/login');
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);

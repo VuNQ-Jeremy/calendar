@@ -268,9 +268,6 @@ body {
   gap: 10px;
   padding: 4px var(--space-2) var(--space-5);
 }
-.sb__help {
-  margin-left: auto;
-}
 
 /* Language toggle (EN | Tiếng Việt) */
 .lang-toggle {
@@ -524,9 +521,6 @@ body {
     padding: 11px 0;
   }
   .sb__cta span {
-    display: none;
-  }
-  .sb__help {
     display: none;
   }
   .sb__langbar {

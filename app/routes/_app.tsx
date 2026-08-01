@@ -17,7 +17,6 @@ import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
 import type { IconName } from '../../src/icons.jsx';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
-import { InstructionsModal, SEEN_INTRO_KEY } from '../../src/instructions.jsx';
 import { DevInspector } from '../../src/dev-inspector.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { VersionStamp } from '../../src/components/version-stamp.jsx';
@@ -30,7 +29,7 @@ import * as testsSvc from '../../server/services/tests';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 
-const { Avatar: ShAv, Badge: ShBadge, IconButton: ShIB } = DS;
+const { Avatar: ShAv, Badge: ShBadge } = DS;
 
 const DEV_ACCOUNT_EMAIL = 'dev@mochi.edu';
 
@@ -144,15 +143,7 @@ export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
 
 export type SessionUser = AppLoaderData['user'];
 
-function Sidebar({
-  user,
-  onFeedback,
-  onHelp,
-}: {
-  user: SessionUser;
-  onFeedback: () => void;
-  onHelp: () => void;
-}) {
+function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => void }) {
   const { unusedInviteCount, unresolvedFeedbackCount, needsGradingCount } =
     useLoaderData<typeof loader>();
   const { t } = useLang();
@@ -169,11 +160,6 @@ function Sidebar({
           <MIcon name="paw" size={20} />
         </span>
         Mochi
-        <span className="sb__help">
-          <ShIB label={t('help_label')} size="sm" onClick={onHelp}>
-            <MIcon name="help" size={18} />
-          </ShIB>
-        </span>
       </div>
       {NAV.map((sec) => {
         const items = sec.items.filter(
@@ -300,28 +286,10 @@ export default function AppLayout() {
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
     typeof newFeedbackDraft
   > | null>(null);
-  const [introOpen, setIntroOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    try {
-      if (!localStorage.getItem(SEEN_INTRO_KEY)) setIntroOpen(true);
-    } catch {
-      /* storage unavailable */
-    }
-  }, []);
 
   React.useEffect(() => {
     document.documentElement.dataset.scrollbar = uiPrefs.scrollbar;
   }, [uiPrefs.scrollbar]);
-
-  const closeIntro = () => {
-    setIntroOpen(false);
-    try {
-      localStorage.setItem(SEEN_INTRO_KEY, '1');
-    } catch {
-      /* storage unavailable */
-    }
-  };
 
   const openFeedback = () => {
     setFeedbackDraft(newFeedbackDraft(user));
@@ -360,7 +328,7 @@ export default function AppLayout() {
   return (
     <div className="app" style={shellStyle} data-density={TWEAKS.density}>
       <NavProgress />
-      <Sidebar user={user} onFeedback={openFeedback} onHelp={() => setIntroOpen(true)} />
+      <Sidebar user={user} onFeedback={openFeedback} />
       <div className="main">
         <Outlet context={{ user } satisfies AppContext} />
       </div>
@@ -372,7 +340,6 @@ export default function AppLayout() {
           onSave={saveFeedback}
         />
       )}
-      {introOpen && <InstructionsModal onClose={closeIntro} />}
       {user.email === DEV_ACCOUNT_EMAIL && <DevInspector />}
     </div>
   );

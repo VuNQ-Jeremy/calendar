@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
-import { SEEN_INTRO_KEY } from '../src/instructions.jsx';
 import AppLayout from '../app/routes/_app';
 import { DEFAULT_UI_PREFS } from '../server/services/ui-prefs';
 
@@ -31,8 +30,6 @@ function withLang(element: React.ReactElement) {
 
 describe('AppLayout (_app.tsx)', () => {
   it('renders sidebar navigation items when loader provides user', async () => {
-    localStorage.setItem(SEEN_INTRO_KEY, '1');
-
     const Stub = createRoutesStub([
       {
         path: '/',
@@ -54,13 +51,9 @@ describe('AppLayout (_app.tsx)', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Calendar' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Classes' })).toBeInTheDocument();
-
-    localStorage.clear();
   });
 
   it('renders the user name in the sidebar footer', async () => {
-    localStorage.setItem(SEEN_INTRO_KEY, '1');
-
     const Stub = createRoutesStub([
       {
         path: '/',
@@ -80,13 +73,9 @@ describe('AppLayout (_app.tsx)', () => {
     });
 
     expect(screen.getByText('Test Teacher')).toBeInTheDocument();
-
-    localStorage.clear();
   });
 
   it('hides the System Config nav item for a non-Admin user', async () => {
-    localStorage.setItem(SEEN_INTRO_KEY, '1');
-
     const Stub = createRoutesStub([
       {
         path: '/',
@@ -106,13 +95,9 @@ describe('AppLayout (_app.tsx)', () => {
     });
 
     expect(screen.queryByRole('link', { name: 'System Config' })).not.toBeInTheDocument();
-
-    localStorage.clear();
   });
 
   it('shows the System Config nav item for an Admin user', async () => {
-    localStorage.setItem(SEEN_INTRO_KEY, '1');
-
     const adminLoaderData = {
       ...STUB_LOADER_DATA,
       user: { ...TEST_USER, role: 'Admin' },
@@ -137,7 +122,5 @@ describe('AppLayout (_app.tsx)', () => {
     });
 
     expect(screen.getByRole('link', { name: 'System Config' })).toBeInTheDocument();
-
-    localStorage.clear();
   });
 });

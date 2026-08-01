@@ -96,33 +96,6 @@ const en_strings = {
   role_teacher: 'Teacher',
   role_admin: 'Admin',
   role_assistant: 'Assistant',
-  intro_title: 'Welcome to Mochi 🐾',
-  intro_lead:
-    "A calm home for your classes, calendar and coursework. Here's what you can do, feature by feature:",
-  intro_get_started: 'Get started',
-  intro_footer:
-    "Everything you add is saved to your school's database — reopen this guide from the ? in the sidebar.",
-  feat_dashboard_title: 'Dashboard',
-  feat_dashboard_text:
-    "See today's schedule and the tests that are open, plus quick stats, the moment you sign in.",
-  feat_calendar_title: 'Calendar',
-  feat_calendar_text:
-    'Month, Week, Day and Agenda views. Click a slot to add an event, drag to reschedule, and customize the colors.',
-  feat_classes_title: 'Classes',
-  feat_classes_text:
-    'Create classes with weekly schedules, rooms and rosters, and open any card for its full details.',
-  feat_people_title: 'People',
-  feat_people_text:
-    'Add students, teachers and parents, link them with type-ahead search, and generate one-time invite codes.',
-  feat_materials_title: 'Materials',
-  feat_materials_text:
-    'Upload notes and worksheets or link videos and pages, organized by class and easy to favorite.',
-  feat_tests_title: 'Tests',
-  feat_tests_text:
-    'Build tests from your question bank, run them online or on paper, and enter scores that flow straight into the gradebook.',
-  feat_feedback_title: 'Feedback',
-  feat_feedback_text:
-    'Tap "Give feedback" in the sidebar to log ideas, bugs or praise — all collected on the Feedback page.',
   nav_overview: 'Overview',
   nav_manage: 'Manage',
   nav_dashboard: 'Dashboard',
@@ -133,7 +106,6 @@ const en_strings = {
   nav_config: 'System Config',
   nav_feedback: 'Feedback',
   cta_feedback: 'Give feedback',
-  help_label: 'How Mochi works',
   dash_greeting: 'Good morning, {name}',
   dash_sub_none: '{date} · Nothing scheduled today',
   dash_sub_one: '{date} · 1 event today',
@@ -949,33 +921,6 @@ export const STRINGS = {
     role_teacher: 'Giáo viên',
     role_admin: 'Quản trị',
     role_assistant: 'Trợ giảng',
-    intro_title: 'Chào mừng đến với Mochi 🐾',
-    intro_lead:
-      'Một không gian gọn gàng cho lớp học, lịch và bài tập của bạn. Đây là những gì bạn có thể làm, theo từng tính năng:',
-    intro_get_started: 'Bắt đầu',
-    intro_footer:
-      'Mọi thứ bạn thêm đều được lưu vào cơ sở dữ liệu của trường — mở lại hướng dẫn này từ biểu tượng ? ở thanh bên.',
-    feat_dashboard_title: 'Bảng điều khiển',
-    feat_dashboard_text:
-      'Xem lịch hôm nay và các bài kiểm tra đang mở, cùng số liệu nhanh, ngay khi bạn đăng nhập.',
-    feat_calendar_title: 'Lịch',
-    feat_calendar_text:
-      'Chế độ xem Tháng, Tuần, Ngày và Lịch trình. Nhấp vào một ô để thêm sự kiện, kéo để dời lịch, và tùy chỉnh màu sắc.',
-    feat_classes_title: 'Lớp học',
-    feat_classes_text:
-      'Tạo lớp với lịch hằng tuần, phòng học và danh sách học sinh, và mở mỗi thẻ để xem đầy đủ chi tiết.',
-    feat_people_title: 'Mọi người',
-    feat_people_text:
-      'Thêm học sinh, giáo viên và phụ huynh, liên kết bằng tìm kiếm gợi ý, và tạo mã mời dùng một lần.',
-    feat_materials_title: 'Tài liệu',
-    feat_materials_text:
-      'Tải lên ghi chú và phiếu bài tập hoặc liên kết video và trang web, sắp xếp theo lớp và dễ đánh dấu yêu thích.',
-    feat_tests_title: 'Bài kiểm tra',
-    feat_tests_text:
-      'Soạn bài kiểm tra từ kho câu hỏi, cho làm trực tuyến hoặc trên giấy, và nhập điểm để tự động chuyển vào sổ điểm.',
-    feat_feedback_title: 'Phản hồi',
-    feat_feedback_text:
-      'Nhấn "Gửi phản hồi" ở thanh bên để ghi lại ý tưởng, lỗi hoặc lời khen — tất cả được tập hợp ở trang Phản hồi.',
     nav_overview: 'Tổng quan',
     nav_manage: 'Quản lý',
     nav_dashboard: 'Bảng điều khiển',
@@ -986,7 +931,6 @@ export const STRINGS = {
     nav_config: 'Cấu hình hệ thống',
     nav_feedback: 'Phản hồi',
     cta_feedback: 'Gửi phản hồi',
-    help_label: 'Mochi hoạt động thế nào',
     dash_greeting: 'Chào buổi sáng, {name}',
     dash_sub_none: '{date} · Hôm nay không có lịch nào',
     dash_sub_one: '{date} · 1 sự kiện hôm nay',

@@ -37,7 +37,7 @@ const SKIP_DIRS = new Set([
  * Prefixes composed at runtime — `t('role_' + role)`. A static scan sees the prefix and calls it
  * undefined; it isn't. Add to this list rather than silencing a whole file.
  */
-const DYNAMIC_PREFIXES = ['role_', 'rel_', 'feat_'];
+const DYNAMIC_PREFIXES = ['role_', 'rel_'];
 
 const SCAN_EXT = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs']);
 
