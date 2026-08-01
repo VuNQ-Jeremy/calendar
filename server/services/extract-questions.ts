@@ -166,16 +166,21 @@ export async function extractQuestions(
         ]
       : [{ type: 'text', text: `${instruction}\n\n---\n${input.text!}` }];
 
-  const response = await client.messages.create({
-    model: MODEL,
-    // Generous: 50 questions with options and explanations is a lot of JSON, and reading passages
-    // are copied out verbatim on top of that (once per group, not per question). Non-streaming is
-    // still safe at this size (well under the SDK's HTTP timeout for a Haiku call).
-    max_tokens: 24000,
-    system: SYSTEM,
-    output_config: { format: { type: 'json_schema', schema: SCHEMA } },
-    messages: [{ role: 'user', content }],
-  });
+  // Streamed, and awaited whole. The budget has to be generous — 50 questions with options is a
+  // lot of JSON, and reading passages are copied out verbatim on top of that (once per group, not
+  // once per question) — and past roughly 16k output tokens the SDK refuses a non-streaming
+  // request outright, on the grounds that it could exceed its 10-minute ceiling. Streaming lifts
+  // that limit; nothing here consumes the events, so `finalMessage` reassembles the whole reply
+  // and the rest of this function is unchanged.
+  const response = await client.messages
+    .stream({
+      model: MODEL,
+      max_tokens: 24000,
+      system: SYSTEM,
+      output_config: { format: { type: 'json_schema', schema: SCHEMA } },
+      messages: [{ role: 'user', content }],
+    })
+    .finalMessage();
 
   if (response.stop_reason === 'refusal') return [];
   // Out of output budget means the JSON object is cut off mid-token; there is no partial result
