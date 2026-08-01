@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Link,
   NavLink,
   Outlet,
   useLoaderData,
@@ -155,12 +156,18 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
 
   return (
     <aside className="sb">
-      <div className="sb__brand">
+      {/* Students never reach /dashboard — requireStaff bounces them to /vocabulary — so
+          send them straight to their own home rather than through a redirect. */}
+      <Link
+        to={user.kind === 'staff' ? '/dashboard' : '/vocabulary'}
+        prefetch="intent"
+        className="sb__brand"
+      >
         <span className="sb__brand-mark">
           <MIcon name="paw" size={20} />
         </span>
         Mochi
-      </div>
+      </Link>
       {NAV.map((sec) => {
         const items = sec.items.filter(
           (n) =>

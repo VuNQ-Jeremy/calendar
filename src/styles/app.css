@@ -267,6 +267,15 @@ body {
   align-items: center;
   gap: 10px;
   padding: 4px var(--space-2) var(--space-5);
+  text-decoration: none;
+}
+/* The brand links home. Tint the mark rather than the row: the row's bottom
+   padding is layout spacing, so a background here would read as a stray block. */
+.sb__brand:hover .sb__brand-mark {
+  filter: brightness(1.08);
+}
+.sb__brand:active .sb__brand-mark {
+  transform: scale(0.96);
 }
 
 /* Language toggle (EN | Tiếng Việt) */
@@ -310,6 +319,9 @@ body {
   display: grid;
   place-items: center;
   box-shadow: var(--shadow-sm);
+  transition:
+    filter var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .sb__section {
   font-size: var(--text-2xs);

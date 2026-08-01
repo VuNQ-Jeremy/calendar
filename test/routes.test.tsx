@@ -123,4 +123,55 @@ describe('AppLayout (_app.tsx)', () => {
 
     expect(screen.getByRole('link', { name: 'System Config' })).toBeInTheDocument();
   });
+
+  it('links the sidebar brand to /dashboard for staff', async () => {
+    const Stub = createRoutesStub([
+      {
+        path: '/',
+        Component: AppLayout,
+        loader: () => STUB_LOADER_DATA,
+        children: [
+          {
+            path: 'dashboard',
+            Component: () => React.createElement('div', null, 'Dashboard content'),
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/dashboard'] })));
+    });
+
+    expect(screen.getByRole('link', { name: 'Mochi' })).toHaveAttribute('href', '/dashboard');
+  });
+
+  // /dashboard is behind requireStaff, which redirects a student to /vocabulary. The brand
+  // points there directly so a student's click does not bounce through a staff-only route.
+  it('links the sidebar brand to /vocabulary for a student', async () => {
+    const studentLoaderData = {
+      ...STUB_LOADER_DATA,
+      user: { ...TEST_USER, id: 'student-001', kind: 'student' as const },
+    };
+
+    const Stub = createRoutesStub([
+      {
+        path: '/',
+        Component: AppLayout,
+        loader: () => studentLoaderData,
+        children: [
+          {
+            path: 'vocabulary',
+            Component: () => React.createElement('div', null, 'Vocabulary content'),
+          },
+        ],
+      },
+    ]);
+
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/vocabulary'] })));
+    });
+
+    expect(screen.getByRole('link', { name: 'Mochi' })).toHaveAttribute('href', '/vocabulary');
+  });
 });

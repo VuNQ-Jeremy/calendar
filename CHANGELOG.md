@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0073 — 2026-08-01
+Clicking the Mochi logo in the sidebar now navigates home — /dashboard for staff, /vocabulary for students.
+
 ## v0.0072 — 2026-08-01
 Remove the first-visit instructions modal and the sidebar help button that reopened it, along with its i18n strings, styles and test scaffolding.
 
