@@ -35,9 +35,13 @@ const MAX_RAW = 500;
  * The leading `[^\p{L}\p{N}]` keeps it from firing inside a word or a longer number, and the
  * closing group demands either punctuation or an immediately following letter — so a year in a
  * sentence ("in 1975 the war ended") never reads as question 197.
+ *
+ * The unpunctuated form ("1B", "1 B") may only reach across spaces and tabs, never a line break.
+ * A key headed "ĐÁP ÁN PRACTICE TEST 10" whose next line starts "Câu 1: D" would otherwise read
+ * that heading as question 10 — and, first-entry-wins, shadow the real answer for 10.
  */
 const MARKER =
-  /(?:^|[^\p{L}\p{N}])(?:c[âa]u|question|ques|b[àa]i|q)?[\s.]*(\d{1,3})\s*(?:[.)\]:\-–—]\s*|(?=[A-Za-z]))/giu;
+  /(?:^|[^\p{L}\p{N}])(?:c[âa]u|question|ques|b[àa]i|q)?[ \t.]*(\d{1,3})(?:[ \t]*[.)\]:\-–—][ \t]*|[ \t]*(?=[A-Za-z]))/giu;
 
 /** The words a teacher joins two answers with, removed before the letters are read out. */
 const JOINERS = /(?<!\p{L})(?:and|v[àa]|hay|ho[ăa]c|or)(?!\p{L})/giu;

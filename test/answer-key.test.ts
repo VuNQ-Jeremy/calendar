@@ -59,6 +59,13 @@ describe('parseAnswerKey', () => {
     expect(numbers('<p>1. B</p><p>2. C</p>')).toEqual(['1B', '2C']);
   });
 
+  it('is not fooled by a number at the end of the key’s own heading', () => {
+    // "TEST 10" is not question 10 — and if it were read as one, first-entry-wins would let the
+    // heading shadow the real answer for 10 further down.
+    const key = 'ĐÁP ÁN PRACTICE TEST 10\n\nCâu 1: D\nCâu 10: B';
+    expect(numbers(key)).toEqual(['1D', '10B']);
+  });
+
   it('is not fooled by numbers inside prose', () => {
     // A year is neither preceded by a boundary it can use nor followed by a separator or letter.
     expect(parseAnswerKey('The war ended in 1975 and the country was reunified.')).toEqual([]);
