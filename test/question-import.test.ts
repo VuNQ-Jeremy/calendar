@@ -316,6 +316,48 @@ describe('sanitizeExtractedQuestions — groups', () => {
     expect(out).toHaveLength(50);
   });
 
+  /**
+   * The load-bearing guard against the model answering the paper instead of transcribing it. A
+   * document that gives its answers nowhere is reported once, up front, and that verdict is
+   * binding on every question that came back with it — however confidently they were answered.
+   */
+  it('discards every answer when the document gives its answers nowhere', () => {
+    const out = sanitizeExtractedQuestions(
+      {
+        answerKeySource: 'none',
+        answerKeyEvidence: '',
+        groups: [
+          {
+            questions: [
+              mcq({ correctOptionIndexes: [1] }),
+              mcq({ type: 'multi', correctOptionIndexes: [0, 2] }),
+              mcq({ type: 'text', options: [], acceptedAnswers: ['Hà Nội'] }),
+              mcq({ type: 'essay', options: [], acceptedAnswers: [] }),
+            ],
+          },
+        ],
+      },
+      seqIds(),
+    );
+    expect(out.map((q) => q.answerKey)).toEqual(['', [], [], null]);
+    expect(out.slice(0, 3).every((q) => q.issues.includes('qi_issue_no_answer'))).toBe(true);
+    // An essay has no answer to discard, so it is not flagged as missing one.
+    expect(out[3].issues).toEqual([]);
+  });
+
+  it('keeps the answers when the document does mark them', () => {
+    const out = sanitizeExtractedQuestions(
+      {
+        answerKeySource: 'marked',
+        answerKeyEvidence: '<strong>4</strong>',
+        groups: [{ questions: [mcq({ correctOptionIndexes: [1] })] }],
+      },
+      seqIds(),
+    );
+    expect(out[0].answerKey).toBe('opt2');
+    expect(out[0].issues).toEqual([]);
+  });
+
   it('still accepts a flat list of questions, in case the model ignores the grouping', () => {
     const out = sanitizeExtractedQuestions({ questions: [mcq()] }, seqIds());
     expect(out).toHaveLength(1);

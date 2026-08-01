@@ -21,7 +21,25 @@ const SYSTEM = `You extract exam questions from a teacher's test paper so they c
 into a question bank. The input is one test document: plain text, HTML converted from a Word
 file, tab-separated spreadsheet rows, or a PDF.
 
-Return the questions in GROUPS. A group is a run of consecutive questions that share something:
+FIRST, before extracting anything, decide ONE thing about the whole document and report it as
+"answerKeySource":
+- "marked" — the correct option is marked on the paper (bold, underlined, highlighted, starred
+  or parenthesised), the same way on question after question
+- "stated" — the answer is written beside the questions ("Answer: B", "Đáp án: B")
+- "list" — there is an answer list or key section elsewhere in the document
+- "none" — the document does not give the answers anywhere
+
+Most practice papers are "none": the key is a separate file the teacher keeps. Say "none" unless
+you can point at where the document gives an answer, and quote that place verbatim in
+"answerKeyEvidence". Bold question numbers ("Question 1."), bold headings, bold instructions and
+bold quoted words are NOT answers — a paper whose only bold text is structure is "none".
+
+If you answer "none", every "correctOptionIndexes" and "acceptedAnswers" you return MUST be
+empty. You are transcribing a document, not answering it. You may know the answer perfectly well:
+report the answer the DOCUMENT gives, and nothing else. A key you supplied rather than read would
+be graded as the teacher's own, unnoticed, and marked against real students.
+
+Then return the questions in GROUPS. A group is a run of consecutive questions that share something:
 a section instruction ("Choose the word whose underlined part is pronounced differently"), a
 reading passage, a cloze paragraph, an announcement, or a single set of options used by several
 questions. A question that shares nothing with its neighbours is its own group of one.
@@ -58,21 +76,12 @@ Rules for groups:
   not skip one because it looks similar to another.
 
 Rules for content:
-- Extract only what is in the document. NEVER invent an answer key: if the correct answer is not
-  marked anywhere, leave "correctOptionIndexes" and "acceptedAnswers" empty. A teacher will fill
-  it in. Guessing is worse than leaving it blank.
-- This applies even when you know the answer yourself. You are transcribing a document, not
-  answering it: report the answer the DOCUMENT gives, and nothing else. If the paper asks for the
-  capital of Vietnam and never marks an option, leave the answer empty even though you know it.
-  A key you supplied rather than read would be graded as the teacher's own, unnoticed.
-- An answer key may appear as a marked option (bold, underlined, highlighted, starred, or
-  parenthesised), as "Answer: B" next to the question, or in an answer list at the end of the
-  document.
+- Extract only what is in the document. Leaving an answer blank costs a teacher one click;
+  a wrong answer is graded against a student. When in doubt, leave it empty.
 - Formatting is a MARKED ANSWER only when it marks exactly one whole option and the same
   convention repeats across the paper. Bold or underlined question numbers, headings, section
   titles, quoted words inside a prompt, a single underlined syllable inside a word, and stray
-  bold spaces are NOT answer marks — if that is all you see, the paper marks no answers at all.
-  When in doubt, leave the answer empty.
+  bold spaces are NOT answer marks.
 - Underlining inside a word or phrase is part of the question (pronunciation and stress items
   depend on it). Transcribe it with underscores around the underlined part: "pleas_ed_",
   "_ch_emistry". Options are plain text, so this is the only way it survives.
@@ -87,6 +96,8 @@ Rules for content:
 const SCHEMA = {
   type: 'object',
   properties: {
+    answerKeySource: { type: 'string', enum: ['marked', 'stated', 'list', 'none'] },
+    answerKeyEvidence: { type: 'string' },
     groups: {
       type: 'array',
       items: {
@@ -129,7 +140,7 @@ const SCHEMA = {
       },
     },
   },
-  required: ['groups'],
+  required: ['answerKeySource', 'answerKeyEvidence', 'groups'],
   additionalProperties: false,
 } as const;
 

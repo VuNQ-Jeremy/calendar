@@ -221,18 +221,38 @@ function groupContext(group: RawExtractedGroup): string | null {
 }
 
 /**
+ * Throw away every answer on a draft, as if the document had marked nothing.
+ *
+ * Used when the model has told us — for the document as a whole — that the answers are not in it.
+ * A model that has just read forty questions is under enormous pressure to answer them, and asking
+ * it forty separate times not to is a losing game; asking it ONCE, up front, whether the paper
+ * gives its answers at all is a question it gets right. This is what makes that answer binding.
+ */
+function withoutAnswers(draft: ImportedQuestionDraft): ImportedQuestionDraft {
+  if (draft.type === 'essay') return draft;
+  const issues = draft.issues.includes('qi_issue_no_answer')
+    ? draft.issues
+    : [...draft.issues, 'qi_issue_no_answer' as const];
+  return { ...draft, answerKey: draft.type === 'mcq' ? '' : [], issues };
+}
+
+/**
  * Normalize a whole model response. Malformed output degrades to `[]` rather than throwing —
  * the review screen should say "nothing found", not crash.
  *
  * Accepts the grouped shape (`{ groups: [{ instruction, text, questions }] }`), and also a bare
  * list of questions: a model that ignores the grouping still produces something importable, and
  * the unit tests exercise single questions without wrapping each one in a group.
+ *
+ * `answerKeySource: 'none'` on the response means the document does not give its answers anywhere,
+ * and every answer that came back with it is discarded — see `withoutAnswers`.
  */
 export function sanitizeExtractedQuestions(
   raw: unknown,
   newId: () => string = () => crypto.randomUUID(),
 ): ImportedQuestionDraft[] {
-  const root = raw as { groups?: unknown; questions?: unknown } | null;
+  const root = raw as { groups?: unknown; questions?: unknown; answerKeySource?: unknown } | null;
+  const keyless = root?.answerKeySource === 'none';
   const groups: RawExtractedGroup[] = Array.isArray(root?.groups)
     ? (root.groups as RawExtractedGroup[])
     : Array.isArray(raw)
@@ -247,7 +267,7 @@ export function sanitizeExtractedQuestions(
     const rows = Array.isArray(group?.questions) ? group.questions : [];
     for (const row of rows) {
       const draft = sanitizeOne((row ?? {}) as RawExtractedQuestion, context, newId);
-      if (draft) out.push(draft);
+      if (draft) out.push(keyless ? withoutAnswers(draft) : draft);
       if (out.length >= MAX_IMPORT_QUESTIONS) return out;
     }
   }
