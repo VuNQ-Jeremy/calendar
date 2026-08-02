@@ -7,6 +7,11 @@ import { cloudflareCtx } from '../app/load-context';
 // module for Cloudflare to register the class.
 export { TranslateProxy } from './translate-proxy';
 
+// Durable Object that fans live cache-invalidation messages out to every open
+// browser tab (see workers/live-hub.ts). Same registration requirement.
+export { LiveHub } from './live-hub';
+
+import { handleLiveUpgrade } from './live-hub';
 import { runScheduled } from '../server/services/notify';
 
 const requestHandler = createRequestHandler(
@@ -16,8 +21,23 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const context = new RouterContextProvider(new Map([[cloudflareCtx, { env, ctx }]]));
     const url = new URL(request.url);
+
+    // Handled before the React Router handler on purpose: the 101 response
+    // carries a live WebSocket and must reach the runtime unmodified.
+    if (url.pathname === '/ws') {
+      try {
+        return await handleLiveUpgrade(request, env);
+      } catch (err) {
+        console.error('[ws] upgrade failed', {
+          name: err instanceof Error ? err.name : typeof err,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return new Response('upgrade failed', { status: 500 });
+      }
+    }
+
+    const context = new RouterContextProvider(new Map([[cloudflareCtx, { env, ctx }]]));
     const start = Date.now();
     try {
       const response = await requestHandler(request, context);

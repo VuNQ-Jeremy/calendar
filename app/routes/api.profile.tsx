@@ -14,8 +14,12 @@ export const loader = withAuth('user', async ({ user }) => ({
   email: user.account.email,
 }));
 
-export const action = withAuth('user', async ({ request, db, user }) => {
-  const patch = await parsePatchBody(request, ProfileInput);
-  if (user.kind === 'staff') return people.updateStaff(db, user.user.id, patch);
-  return people.updateStudent(db, user.user.id, patch);
-});
+export const action = withAuth(
+  'user',
+  async ({ request, db, user }) => {
+    const patch = await parsePatchBody(request, ProfileInput);
+    if (user.kind === 'staff') return people.updateStaff(db, user.user.id, patch);
+    return people.updateStudent(db, user.user.id, patch);
+  },
+  { live: 'profile' },
+);

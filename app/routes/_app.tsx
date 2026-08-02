@@ -14,6 +14,7 @@ import {
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from 'react-router';
 import { cacheGet, subscribe } from '../../src/lib/cache.js';
 import { cacheKeyForPath } from '../../src/lib/route-cache.js';
+import { startLive, consumeLiveLayoutRefresh } from '../../src/lib/live.js';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
 import type { IconName } from '../../src/icons.jsx';
@@ -131,6 +132,12 @@ export function shouldRevalidate({
   formMethod,
   formData,
 }: ShouldRevalidateFunctionArgs) {
+  // A live update announced a change to invites / feedback / grading somewhere
+  // else, so the badge counts really are out of date. src/lib/live.ts sets the
+  // flag immediately before calling revalidate() and it is cleared on read, so
+  // this stays a narrow exception rather than reopening the layout loader to
+  // every revalidation.
+  if (consumeLiveLayoutRefresh()) return true;
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
   const path = formAction.split('?')[0];
   if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
@@ -282,12 +289,40 @@ function useStaleRouteRefresh() {
   }, [key]);
 }
 
+/**
+ * Hold the live-update socket for as long as the app shell is mounted. Login,
+ * logout and the print view live outside this layout, so the socket exists only
+ * while signed in and closes on logout.
+ *
+ * The callback runs only for changes that move a sidebar badge; ordinary route
+ * data refreshes itself through the cache subscription above.
+ */
+function useLiveUpdates() {
+  const revalidator = useRevalidator();
+  const navigation = useNavigation();
+  const ref = React.useRef({ revalidator, navigation });
+  ref.current = { revalidator, navigation };
+  React.useEffect(
+    () =>
+      startLive(() => {
+        const cur = ref.current;
+        // If something is already in flight the pending flag survives and the
+        // revalidation now underway picks it up — delayed, not dropped.
+        if (cur.navigation.state === 'idle' && cur.revalidator.state === 'idle') {
+          cur.revalidator.revalidate();
+        }
+      }),
+    [],
+  );
+}
+
 export type AppContext = {
   user: SessionUser;
 };
 
 export default function AppLayout() {
   useStaleRouteRefresh();
+  useLiveUpdates();
   const { user, uiPrefs } = useLoaderData<typeof loader>();
   const feedbackFetcher = useFetcher();
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<

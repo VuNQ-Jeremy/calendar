@@ -19,6 +19,10 @@ import {
   markStale,
   markStaleQuiet,
 } from './cache.js';
+// The canonical domain list lives in shared/live.ts so the browser, the Worker
+// and the Durable Object cannot drift apart. Re-exported below because route
+// modules have always imported the type from here.
+import type { MutationDomain } from '../../shared/live.js';
 
 export const K = {
   dashboard: 'route:dashboard',
@@ -75,18 +79,7 @@ export async function swrLoad<T>(key: string, serverLoader: () => Promise<T>): P
   return data;
 }
 
-export type MutationDomain =
-  | 'calendar'
-  | 'classes'
-  | 'people'
-  | 'materials'
-  | 'assessments'
-  | 'flashcards'
-  | 'questions'
-  | 'tests'
-  | 'config'
-  | 'feedback'
-  | 'profile';
+export type { MutationDomain };
 
 /**
  * hard  -> deleted (next load blocks on the network; used for the mutated
@@ -148,10 +141,40 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   profile: { hard: [], stale: ['route:'] },
 };
 
+/**
+ * When this tab last mutated each domain. src/lib/live.ts uses it to ignore the
+ * server's echo of a change this tab just made — the clientAction below already
+ * invalidated it.
+ */
+const lastLocalMutationAt = new Map<MutationDomain, number>();
+
+export function lastLocalMutation(domain: MutationDomain): number {
+  return lastLocalMutationAt.get(domain) ?? 0;
+}
+
 export function invalidateAfterMutation(domain: MutationDomain): void {
+  lastLocalMutationAt.set(domain, Date.now());
   const { hard, stale } = MUTATION_EFFECTS[domain];
   if (hard.length) invalidate(...hard);
   if (stale.length) markStale(...stale);
+}
+
+/**
+ * Same effects map, but for a mutation made *somewhere else* and announced over
+ * the WebSocket (src/lib/live.ts).
+ *
+ * Everything is marked stale — nothing is hard-invalidated. That difference is
+ * load-bearing: useStaleRouteRefresh (app/routes/_app.tsx) deliberately ignores
+ * keys whose entry was deleted, because for a local mutation React Router's own
+ * post-action revalidation refills them. A remote mutation has no such
+ * revalidation in this tab, so hard-deleting here would leave the viewer
+ * looking at stale data until they navigated. markStale keeps serving the old
+ * value instantly, notifies the subscriber, and lets swrLoad refresh underneath.
+ */
+export function invalidateAfterRemoteMutation(domain: MutationDomain): void {
+  const { hard, stale } = MUTATION_EFFECTS[domain];
+  const keys = [...hard, ...stale];
+  if (keys.length) markStale(...keys);
 }
 
 /**

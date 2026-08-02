@@ -18,4 +18,10 @@
       "bucket_name": "mochi-files",
     },
   ],
+  // vitest-pool-workers instantiates Durable Objects from this config's `main`,
+  // so the class is re-exported by worker/index.js as well.
+  "durable_objects": {
+    "bindings": [{ "name": "LIVE_HUB", "class_name": "LiveHub" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveHub"] }],
 }

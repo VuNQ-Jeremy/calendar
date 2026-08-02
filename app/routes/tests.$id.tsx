@@ -25,6 +25,7 @@ import {
   parsePatch,
 } from '../../shared/schemas';
 import { testDetailKey, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
+import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -97,7 +98,7 @@ function preprocessTestRaw(raw: Record<string, unknown>): Record<string, unknown
   return out;
 }
 
-export async function action({ request, params, context }: ActionFunctionArgs) {
+async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
@@ -236,6 +237,19 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+// save-paper-scores autosaves on every keystroke and a paper attempt is stored
+// already graded, so broadcasting it would be pure noise. import-questions
+// writes the question bank too, matching its clientAction below.
+export const action = withLiveAction(
+  (intent) =>
+    intent === 'save-paper-scores'
+      ? null
+      : intent === 'import-questions'
+        ? (['tests', 'questions'] as const)
+        : 'tests',
+  actionImpl,
+);
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   let result: unknown;

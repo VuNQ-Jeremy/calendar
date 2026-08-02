@@ -17,6 +17,7 @@ import {
 } from '../../shared/schemas';
 import { invalidate, markStale } from '../../src/lib/cache.js';
 import { K, flashcardTopicKey, swrLoad } from '../../src/lib/route-cache.js';
+import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -59,7 +60,7 @@ function preprocessWord(raw: Record<string, unknown>) {
   return out;
 }
 
-export async function action({ request, params, context }: ActionFunctionArgs) {
+async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireUser(request, env);
   const db = createDb(env);
@@ -145,6 +146,8 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+export const action = withLiveAction('flashcards', actionImpl);
 
 export async function clientAction({ serverAction, params }: ClientActionFunctionArgs) {
   try {

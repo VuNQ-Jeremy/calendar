@@ -20,6 +20,7 @@ import {
   parsePatch,
 } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
+import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -45,7 +46,7 @@ function preprocessRaw(raw: Record<string, unknown>) {
   return out;
 }
 
-export async function action({ request, context }: ActionFunctionArgs) {
+async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
@@ -150,6 +151,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+export const action = withLiveAction('config', actionImpl);
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {

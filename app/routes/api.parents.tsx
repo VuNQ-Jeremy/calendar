@@ -7,6 +7,7 @@ import { ParentInput } from "../../shared/schemas";
 const routes = crud({
   level: "staff",
   schema: ParentInput,
+  live: "people",
   list: ({ db }) => people.listParents(db),
   create: (input, { db }) => people.createParent(db, input),
   update: (id, patch, { db }) => people.updateParent(db, id, patch),

@@ -14,6 +14,7 @@ import * as classesSvc from '../../server/services/classes';
 import { MaterialInput, parsePatch } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
+import { withLiveAction } from '../../server/live';
 
 // Only referenced by the server `action`, so it does not block chunk splitting.
 // Never introduce a module-scope local shared by clientLoader AND clientAction:
@@ -40,7 +41,7 @@ function preprocessMatRaw(raw: Record<string, unknown>) {
   return out;
 }
 
-export async function action({ request, context }: ActionFunctionArgs) {
+async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
@@ -86,6 +87,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+export const action = withLiveAction('materials', actionImpl);
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   const cached = cacheGet<Awaited<ReturnType<typeof loader>>>(K.materials);

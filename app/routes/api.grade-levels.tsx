@@ -6,6 +6,7 @@ import { GradeLevelInput } from '../../shared/schemas';
 const routes = crud({
   level: 'admin',
   schema: GradeLevelInput,
+  live: 'config',
   list: ({ db }) => svc.list(db),
   create: (input, { db }) => svc.create(db, input),
   update: (id, patch, { db }) => svc.update(db, id, patch),

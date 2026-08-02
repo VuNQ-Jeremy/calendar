@@ -5,6 +5,7 @@ import { ScoreRecordInput } from '../../shared/schemas';
 const routes = crud({
   level: 'staff',
   schema: ScoreRecordInput,
+  live: 'assessments',
   list: ({ db }) => svc.listScores(db),
   create: (input, { db }) => svc.createScore(db, input),
   update: (id, patch, { db }) => svc.updateScore(db, id, patch),

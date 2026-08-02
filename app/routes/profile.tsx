@@ -11,8 +11,9 @@ import { hashToken } from '../../server/services/crypto';
 import * as peopleSvc from '../../server/services/people';
 import { ColorId } from '../../shared/schemas';
 import { invalidateAfterMutation } from '../../src/lib/route-cache.js';
+import { withLiveAction } from '../../server/live';
 
-export async function action({ request, context }: ActionFunctionArgs) {
+async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const sessionUser = await requireUser(request, env);
   const { user, account } = sessionUser;
@@ -70,6 +71,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+export const action = withLiveAction('profile', actionImpl);
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {

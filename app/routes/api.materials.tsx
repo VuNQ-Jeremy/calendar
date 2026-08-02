@@ -38,27 +38,31 @@ async function readBody(request: Request): Promise<{ raw: Record<string, unknown
   return { raw: coerce(Object.fromEntries(form) as Record<string, unknown>), file };
 }
 
-export const action = withAuth('staff', async (ctx) => {
-  const { request, db, env } = ctx;
+export const action = withAuth(
+  'staff',
+  async (ctx) => {
+    const { request, db, env } = ctx;
 
-  if (request.method === 'DELETE') {
-    await svc.remove(db, requireId(ctx), env.FILES);
-    return { id: requireId(ctx) };
-  }
+    if (request.method === 'DELETE') {
+      await svc.remove(db, requireId(ctx), env.FILES);
+      return { id: requireId(ctx) };
+    }
 
-  const { raw, file } = await readBody(request);
+    const { raw, file } = await readBody(request);
 
-  if (request.method === 'POST') {
-    const parsed = MaterialInput.safeParse(raw);
-    if (!parsed.success) throw fail('validation_failed', 422, parsed.error.issues);
-    return svc.create(db, parsed.data, file, env.FILES);
-  }
+    if (request.method === 'POST') {
+      const parsed = MaterialInput.safeParse(raw);
+      if (!parsed.success) throw fail('validation_failed', 422, parsed.error.issues);
+      return svc.create(db, parsed.data, file, env.FILES);
+    }
 
-  if (request.method === 'PATCH') {
-    const parsed = parsePatch(MaterialInput, raw);
-    if (!parsed.success) throw fail('validation_failed', 422, parsed.error.issues);
-    return svc.update(db, requireId(ctx), parsed.data, file, env.FILES);
-  }
+    if (request.method === 'PATCH') {
+      const parsed = parsePatch(MaterialInput, raw);
+      if (!parsed.success) throw fail('validation_failed', 422, parsed.error.issues);
+      return svc.update(db, requireId(ctx), parsed.data, file, env.FILES);
+    }
 
-  return ok({ error: 'method_not_allowed' }, 405);
-});
+    return ok({ error: 'method_not_allowed' }, 405);
+  },
+  { live: 'materials' },
+);

@@ -11,6 +11,7 @@ import * as testsSvc from '../../server/services/tests';
 import * as questionsSvc from '../../server/services/questions';
 import { isWindowOpen } from '../../shared/logic/tests';
 import { AttemptAnswersSaveInput } from '../../shared/schemas';
+import { withLiveAction } from '../../server/live';
 
 /**
  * Taking one online test.
@@ -155,7 +156,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   return { ...base, state: 'submitted' as const, attempt };
 }
 
-export async function action({ request, params, context }: ActionFunctionArgs) {
+async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const { user, kind } = await requireUser(request, env);
   if (kind !== 'student') return Response.json({ error: 'forbidden' }, { status: 403 });
@@ -206,6 +207,13 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+// save-answers autosaves while the student works; only starting and submitting
+// change anything staff can see (the attempt list and the needs-grading badge).
+export const action = withLiveAction(
+  (intent) => (intent === 'start' || intent === 'submit' ? 'tests' : null),
+  actionImpl,
+);
 
 export default function MyTestDetail() {
   return <TakeTestScreen />;

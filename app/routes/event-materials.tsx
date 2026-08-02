@@ -4,6 +4,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
 import { EventMaterialsSaveInput } from '../../shared/schemas';
+import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -16,7 +17,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   return { materialIds };
 }
 
-export async function action({ request, context }: ActionFunctionArgs) {
+async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
@@ -45,3 +46,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
   );
   return { ok: true, materialIds };
 }
+
+export const action = withLiveAction('materials', actionImpl);

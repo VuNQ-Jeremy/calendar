@@ -12,6 +12,7 @@ const routes = crud({
   level: 'staff',
   readLevel: 'user',
   schema: FlashcardTopicInput,
+  live: 'flashcards',
   list: ({ db }) => svc.listTopics(db),
   create: async (input, { db }) => {
     await svc.createTopic(db, input);

@@ -13,6 +13,7 @@ import { requireStaff } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
 import { FeedbackInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
+import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -27,7 +28,7 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
 }
 clientLoader.hydrate = true as const;
 
-export async function action({ request, context }: ActionFunctionArgs) {
+async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
@@ -60,6 +61,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
+
+export const action = withLiveAction('feedback', actionImpl);
 
 export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
   try {

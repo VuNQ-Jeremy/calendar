@@ -17,7 +17,11 @@ import { UiPrefsInput } from '../../shared/schemas';
  */
 export const loader = withAuth('user', ({ db }) => svc.getUiPrefs(db));
 
-export const action = withAuth('admin', async ({ request, db }) => {
-  const patch = await parsePatchBody(request, UiPrefsInput);
-  return svc.setUiPrefs(db, patch);
-});
+export const action = withAuth(
+  'admin',
+  async ({ request, db }) => {
+    const patch = await parsePatchBody(request, UiPrefsInput);
+    return svc.setUiPrefs(db, patch);
+  },
+  { live: 'config' },
+);

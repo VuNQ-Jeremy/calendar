@@ -5,6 +5,7 @@ import { BehaviorRecordInput } from '../../shared/schemas';
 const routes = crud({
   level: 'staff',
   schema: BehaviorRecordInput,
+  live: 'assessments',
   list: ({ db }) => svc.listBehavior(db),
   create: (input, { db }) => svc.createBehavior(db, input),
   update: (id, patch, { db }) => svc.updateBehavior(db, id, patch),

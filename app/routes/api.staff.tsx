@@ -7,6 +7,7 @@ import { StaffInput } from "../../shared/schemas";
 const routes = crud({
   level: "staff",
   schema: StaffInput,
+  live: "people",
   list: ({ db }) => people.listStaff(db),
   create: (input, { db }) => people.createStaff(db, input),
   update: (id, patch, { db }) => people.updateStaff(db, id, patch),

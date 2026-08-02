@@ -5,6 +5,8 @@ import { cloudflareCtx } from '../../app/load-context';
 import { parsePatch } from '../../shared/schemas';
 import type { SessionUser } from '../services/auth';
 import { requireApiUser, requireApiStaff, requireApiAdmin } from './auth';
+import { notifyLive } from '../live';
+import type { MutationDomain } from '../../shared/live';
 
 /**
  * Plumbing for the JSON API. Contains NO business logic — every route calls the same
@@ -60,10 +62,18 @@ async function resolveUser(level: AuthLevel, request: Request, env: Env): Promis
 export function withAuth<T>(
   level: AuthLevel,
   handler: (ctx: ApiCtx) => Promise<T>,
+  opts?: {
+    /**
+     * Broadcast this domain to connected web clients after a successful write,
+     * so a change made in the mobile app shows up in an open browser tab.
+     * Reads never broadcast.
+     */
+    live?: MutationDomain;
+  },
 ): (args: LoaderFunctionArgs | ActionFunctionArgs) => Promise<Response> {
   return async ({ request, params, context }) => {
     if (request.method === 'OPTIONS') return corsPreflight();
-    const env = context.get(cloudflareCtx).env;
+    const { env, ctx: execCtx } = context.get(cloudflareCtx);
     try {
       const user = await resolveUser(level, request, env);
       const result = await handler({
@@ -73,7 +83,16 @@ export function withAuth<T>(
         request,
         params: params as Record<string, string | undefined>,
       });
-      return result instanceof Response ? result : ok(result);
+      const response = result instanceof Response ? result : ok(result);
+      if (
+        opts?.live &&
+        request.method !== 'GET' &&
+        request.method !== 'HEAD' &&
+        response.status < 400
+      ) {
+        notifyLive(env, execCtx, opts.live);
+      }
+      return response;
     } catch (err) {
       if (err instanceof Response) return err;
       console.error('[api] unhandled', { path: new URL(request.url).pathname, err: String(err) });
@@ -159,6 +178,8 @@ type CrudCfg<S extends z.ZodObject<z.ZodRawShape>> = {
   /** GET may be looser than writes — e.g. flashcard topics are readable by students. */
   readLevel?: AuthLevel;
   schema: S;
+  /** Domain broadcast to web clients after a successful write (see server/live.ts). */
+  live?: MutationDomain;
   list: (ctx: ApiCtx) => Promise<unknown>;
   create?: (input: z.infer<S>, ctx: ApiCtx) => Promise<unknown>;
   update?: (id: string, patch: Partial<z.infer<S>>, ctx: ApiCtx) => Promise<unknown>;
@@ -173,25 +194,29 @@ type CrudCfg<S extends z.ZodObject<z.ZodRawShape>> = {
 export function crud<S extends z.ZodObject<z.ZodRawShape>>(cfg: CrudCfg<S>) {
   const loader = withAuth(cfg.readLevel ?? cfg.level, (ctx) => cfg.list(ctx));
 
-  const action = withAuth(cfg.level, async (ctx) => {
-    switch (ctx.request.method) {
-      case 'POST': {
-        if (!cfg.create) throw fail('method_not_allowed', 405);
-        return cfg.create(await parseBody(ctx.request, cfg.schema), ctx);
+  const action = withAuth(
+    cfg.level,
+    async (ctx) => {
+      switch (ctx.request.method) {
+        case 'POST': {
+          if (!cfg.create) throw fail('method_not_allowed', 405);
+          return cfg.create(await parseBody(ctx.request, cfg.schema), ctx);
+        }
+        case 'PATCH': {
+          if (!cfg.update) throw fail('method_not_allowed', 405);
+          const id = requireId(ctx);
+          return cfg.update(id, await parsePatchBody(ctx.request, cfg.schema), ctx);
+        }
+        case 'DELETE': {
+          if (!cfg.remove) throw fail('method_not_allowed', 405);
+          return cfg.remove(requireId(ctx), ctx);
+        }
+        default:
+          throw fail('method_not_allowed', 405);
       }
-      case 'PATCH': {
-        if (!cfg.update) throw fail('method_not_allowed', 405);
-        const id = requireId(ctx);
-        return cfg.update(id, await parsePatchBody(ctx.request, cfg.schema), ctx);
-      }
-      case 'DELETE': {
-        if (!cfg.remove) throw fail('method_not_allowed', 405);
-        return cfg.remove(requireId(ctx), ctx);
-      }
-      default:
-        throw fail('method_not_allowed', 405);
-    }
-  });
+    },
+    { live: cfg.live },
+  );
 
   return { loader, action };
 }

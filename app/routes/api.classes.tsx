@@ -8,6 +8,7 @@ import { ClassInput } from "../../shared/schemas";
 const routes = crud({
   level: "staff",
   schema: ClassInput,
+  live: "classes",
   list: ({ db }) => svc.list(db),
   create: (input, { db }) => svc.create(db, input),
   update: (id, patch, { db }) => svc.update(db, id, patch),

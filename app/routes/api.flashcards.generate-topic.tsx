@@ -9,7 +9,11 @@ import { FlashcardTopicWithWordsInput } from '../../shared/schemas';
  * `topics/generate-topic` segment would be parsed as an id. Generation itself happens earlier via
  * `/generate-vocab`; by the time this is called the words are already reviewed and confirmed.
  */
-export const action = withAuth('staff', async ({ request, db }) => {
-  const { words, ...topic } = await parseBody(request, FlashcardTopicWithWordsInput);
-  return svc.createTopicWithWords(db, topic, words);
-});
+export const action = withAuth(
+  'staff',
+  async ({ request, db }) => {
+    const { words, ...topic } = await parseBody(request, FlashcardTopicWithWordsInput);
+    return svc.createTopicWithWords(db, topic, words);
+  },
+  { live: 'flashcards' },
+);

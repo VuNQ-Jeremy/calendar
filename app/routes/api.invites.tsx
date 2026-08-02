@@ -8,6 +8,7 @@ import { InviteInput } from "../../shared/schemas";
 const routes = crud({
   level: "staff",
   schema: InviteInput,
+  live: "people",
   list: ({ db }) => svc.list(db),
   create: (input, { db }) => svc.create(db, input),
   remove: (id, { db }) => svc.remove(db, id).then(() => ({ id })),

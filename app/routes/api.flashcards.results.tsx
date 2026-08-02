@@ -9,8 +9,12 @@ import { FlashcardResultBatch } from '../../shared/schemas';
  * carries an optional device-generated `clientId`; replaying one already recorded is a
  * silent no-op, which is what lets the outbox retry blindly after a dropped response.
  */
-export const action = withAuth('user', async ({ request, db, user }) => {
-  const { results } = await parseBody(request, FlashcardResultBatch);
-  const recorded = await svc.recordResults(db, { kind: user.kind, id: user.user.id }, results);
-  return { received: results.length, recorded, duplicates: results.length - recorded };
-});
+export const action = withAuth(
+  'user',
+  async ({ request, db, user }) => {
+    const { results } = await parseBody(request, FlashcardResultBatch);
+    const recorded = await svc.recordResults(db, { kind: user.kind, id: user.user.id }, results);
+    return { received: results.length, recorded, duplicates: results.length - recorded };
+  },
+  { live: 'flashcards' },
+);

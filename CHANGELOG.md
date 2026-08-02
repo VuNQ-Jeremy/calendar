@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0081 — 2026-08-02
+Live updates: a LiveHub Durable Object broadcasts mutation domains over WebSocket, so open tabs refresh their data and sidebar badges without a reload. Mobile API writes notify web clients too.
+
 ## v0.0079 — 2026-08-02
 Question bank gets multi-select with bulk actions (set grade level, set difficulty, add a tag, delete selected) and a Wipe bank danger button. Bulk delete keeps questions a test still uses and says how many; the wipe detaches every test and warns that students' stored answers go with it.
 

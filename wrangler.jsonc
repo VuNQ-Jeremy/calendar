@@ -30,13 +30,21 @@
       "bucket_name": "mochi-files",
     },
   ],
-  // Durable Object for region-pinned Anthropic egress (see
-  // workers/translate-proxy.ts). SQLite-backed class so it works on the free
-  // Workers plan.
+  // Durable Objects. Both are SQLite-backed classes so they work on the free
+  // Workers plan (`new_sqlite_classes`, never `new_classes`).
+  //   TRANSLATE_DO — region-pinned Anthropic egress (workers/translate-proxy.ts)
+  //   LIVE_HUB     — WebSocket fan-out for live cache invalidation
+  //                  (workers/live-hub.ts, one global instance)
   "durable_objects": {
-    "bindings": [{ "name": "TRANSLATE_DO", "class_name": "TranslateProxy" }],
+    "bindings": [
+      { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },
+      { "name": "LIVE_HUB", "class_name": "LiveHub" },
+    ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TranslateProxy"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TranslateProxy"] },
+    { "tag": "v2", "new_sqlite_classes": ["LiveHub"] },
+  ],
   // Phase 6 push notifications — handled by `scheduled()` in workers/app.ts, which branches on
   // event.cron. Cron Triggers are available on the free Workers plan.
   //

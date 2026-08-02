@@ -14,6 +14,13 @@ interface __BaseEnv_Env {
   // Durable Object namespace for region-pinned Anthropic egress. Hand-added
   // alongside ANTHROPIC_API_KEY (wrangler types crashes on this machine).
   TRANSLATE_DO: DurableObjectNamespace;
+  // Durable Object namespace for the live-update WebSocket hub
+  // (workers/live-hub.ts). Hand-added for the same reason as TRANSLATE_DO.
+  //
+  // NB: `wrangler types` DOES run on some machines now, but its output drops
+  // ANTHROPIC_API_KEY (a secret, so wrangler cannot see it) and rewrites the
+  // whole runtime-types block. If you regenerate, re-add the secret above.
+  LIVE_HUB: DurableObjectNamespace;
 }
 declare namespace Cloudflare {
   interface GlobalProps {
