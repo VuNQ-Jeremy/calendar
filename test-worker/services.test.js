@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createDb } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
@@ -36,6 +36,7 @@ import {
   tests as testsTable,
   testQuestions,
   testAttempts,
+  testAnswers,
 } from '../server/db/schema';
 
 function db() {
@@ -902,6 +903,22 @@ describe('questions', () => {
     await d.insert(testQuestions).values({ testId, questionId, sortOrder, points: 1 });
   }
 
+  /**
+   * Read one question back through the service's own mapping (there is no `get` export). The suite
+   * shares a single database with no per-test cleanup, so every assertion below is scoped to the ids
+   * the test created rather than to the state of a whole table.
+   */
+  async function getQuestion(d, id) {
+    return (await questionsSvc.list(d)).find((q) => q.id === id);
+  }
+
+  async function idsPresent(d, ids) {
+    const all = new Set(
+      (await d.select({ id: questionsTable.id }).from(questionsTable)).map((r) => r.id),
+    );
+    return ids.filter((id) => all.has(id));
+  }
+
   async function seedAttempt(d, testId, studentName = 'Attempt Student') {
     const student = await peopleSvc.createStudent(d, {
       name: studentName,
@@ -1062,6 +1079,109 @@ describe('questions', () => {
     await questionsSvc.remove(d, q.id);
     const rows = await d.select().from(questionsTable).where(eq(questionsTable.id, q.id));
     expect(rows.length).toBe(0);
+  });
+
+  it('removeMany deletes the free questions and keeps the ones a test uses', async () => {
+    const d = db();
+    const free1 = await questionsSvc.create(d, mcqInput({ prompt: 'Free 1' }));
+    const free2 = await questionsSvc.create(d, mcqInput({ prompt: 'Free 2' }));
+    const linked = await questionsSvc.create(d, mcqInput({ prompt: 'Linked' }));
+    const testId = await seedTest(d, 'Keeps One');
+    await linkQuestion(d, testId, linked.id);
+
+    const result = await questionsSvc.removeMany(d, [free1.id, linked.id, free2.id]);
+    expect(result).toEqual({ deleted: 2, skippedInUse: 1 });
+
+    // The whole point: the batch does NOT fail because one member was in use, and the in-use one
+    // is still there afterwards rather than having been taken with the rest.
+    expect(await idsPresent(d, [free1.id, free2.id, linked.id])).toEqual([linked.id]);
+  });
+
+  it('removeMany handles more ids than one statement can bind', async () => {
+    const d = db();
+    const created = await questionsSvc.createMany(
+      d,
+      Array.from({ length: 120 }, (_, i) => mcqInput({ prompt: `Bulk del ${i}` })),
+    );
+    const ids = created.map((q) => q.id);
+    const result = await questionsSvc.removeMany(d, ids);
+    expect(result).toEqual({ deleted: 120, skippedInUse: 0 });
+    expect(await idsPresent(d, ids)).toEqual([]);
+  });
+
+  it('removeMany on an empty selection touches nothing', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Survivor' }));
+    expect(await questionsSvc.removeMany(d, [])).toEqual({ deleted: 0, skippedInUse: 0 });
+    expect(await idsPresent(d, [q.id])).toEqual([q.id]);
+  });
+
+  it('bulkSetMeta writes grade level and difficulty across a chunk boundary', async () => {
+    const d = db();
+    const created = await questionsSvc.createMany(
+      d,
+      Array.from({ length: 120 }, (_, i) =>
+        mcqInput({ prompt: `Meta ${i}`, gradeLevelId: null, difficulty: 'easy' }),
+      ),
+    );
+    const ids = created.map((q) => q.id);
+    const n = await questionsSvc.bulkSetMeta(d, ids, {
+      gradeLevelId: 'gl9',
+      difficulty: 'hard',
+    });
+    expect(n).toBe(120);
+
+    const idSet = new Set(ids);
+    const rows = (await d.select().from(questionsTable)).filter((r) => idSet.has(r.id));
+    expect(rows.length).toBe(120);
+    expect(rows.every((r) => r.gradeLevelId === 'gl9' && r.difficulty === 'hard')).toBe(true);
+  });
+
+  it('bulkSetMeta clears a field when given null, and leaves the other alone', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ gradeLevelId: 'gl6', difficulty: 'medium' }));
+    await questionsSvc.bulkSetMeta(d, [q.id], { difficulty: null });
+    const after = await getQuestion(d, q.id);
+    expect(after.difficulty).toBe(null);
+    expect(after.gradeLevelId).toBe('gl6');
+  });
+
+  it('bulkSetMeta works on a question locked by an attempt — metadata is not the answer', async () => {
+    const d = db();
+    const q = await questionsSvc.create(d, mcqInput({ prompt: 'Locked but taggable' }));
+    const testId = await seedTest(d, 'Attempted Test');
+    await linkQuestion(d, testId, q.id);
+    await seedAttempt(d, testId);
+
+    // `update` would 409 here if the patch touched type/options/answerKey. Grade and difficulty
+    // cannot invalidate a graded attempt, so the bulk path is allowed to write them.
+    await questionsSvc.bulkSetMeta(d, [q.id], { difficulty: 'hard' });
+    expect((await getQuestion(d, q.id)).difficulty).toBe('hard');
+  });
+
+  it('bulkAddTags merges without duplicating, and skips rows that already have the tag', async () => {
+    const d = db();
+    const a = await questionsSvc.create(d, mcqInput({ prompt: 'A', tags: ['algebra'] }));
+    const b = await questionsSvc.create(d, mcqInput({ prompt: 'B', tags: ['geometry'] }));
+
+    expect(await questionsSvc.bulkAddTags(d, [a.id, b.id], ['unit 3'])).toBe(2);
+    expect((await getQuestion(d, a.id)).tags).toEqual(['algebra', 'unit 3']);
+    expect((await getQuestion(d, b.id)).tags).toEqual(['geometry', 'unit 3']);
+
+    // Re-running the same add is free: both rows already carry it, so nothing is written and
+    // updatedAt (which the bank sorts by) does not churn.
+    expect(await questionsSvc.bulkAddTags(d, [a.id, b.id], ['unit 3'])).toBe(0);
+    expect((await getQuestion(d, a.id)).tags).toEqual(['algebra', 'unit 3']);
+  });
+
+  it('bulkAddTags respects the twenty-tag cap rather than dropping an older tag', async () => {
+    const d = db();
+    const full = Array.from({ length: 20 }, (_, i) => `t${i}`);
+    const q = await questionsSvc.create(d, mcqInput({ tags: full }));
+    await questionsSvc.bulkAddTags(d, [q.id], ['overflow']);
+    const after = await getQuestion(d, q.id);
+    expect(after.tags).toEqual(full);
+    expect(after.tags).not.toContain('overflow');
   });
 
   it('createMany inserts every row and returns them in submitted order', async () => {
@@ -1290,6 +1410,46 @@ describe('questions', () => {
     const row = after.find((x) => x.id === q.id);
     expect(row.type).toBe('mcq');
     expect(row.options).toEqual(OPTS);
+  });
+
+  /**
+   * LAST IN THIS DESCRIBE ON PURPOSE. `wipe` is global by definition and this suite shares one
+   * database with no per-test cleanup, so anything running after these would find the bank emptied
+   * out from under it. Keep new question tests above this line.
+   */
+  describe('wipe', () => {
+    it('empties the bank, detaches every test, and cascades the students answers away', async () => {
+      const d = db();
+      const linked = await questionsSvc.create(d, mcqInput({ prompt: 'On a test' }));
+      const testId = await seedTest(d, 'Wipe Test');
+      await linkQuestion(d, testId, linked.id);
+      const { attemptId } = await seedAttempt(d, testId, 'Wipe Student');
+      await d
+        .insert(testAnswers)
+        .values({ attemptId, questionId: linked.id, answer: '"b"', correct: 1 });
+
+      // Counted rather than hard-coded: earlier tests in this file left their own rows behind.
+      const [{ n: before }] = await d.select({ n: sql`count(*)` }).from(questionsTable);
+      const result = await questionsSvc.wipe(d);
+      expect(result.deleted).toBe(Number(before));
+      expect(result.detachedFromTests).toBeGreaterThanOrEqual(1);
+
+      expect(await d.select().from(questionsTable)).toEqual([]);
+      expect(await d.select().from(testQuestions)).toEqual([]);
+      // test_answers.questionId DOES cascade, so this row is gone with it. That is the real cost of
+      // the wipe, and the confirmation dialog says so in as many words.
+      expect(await d.select().from(testAnswers)).toEqual([]);
+      // The test and the attempt survive, so any score already recorded is untouched.
+      expect((await d.select().from(testsTable).where(eq(testsTable.id, testId))).length).toBe(1);
+      expect(
+        (await d.select().from(testAttempts).where(eq(testAttempts.id, attemptId))).length,
+      ).toBe(1);
+    });
+
+    it('reports nothing and does not throw on an already empty bank', async () => {
+      const d = db();
+      expect(await questionsSvc.wipe(d)).toEqual({ deleted: 0, detachedFromTests: 0 });
+    });
   });
 });
 

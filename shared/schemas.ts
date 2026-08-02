@@ -569,6 +569,44 @@ export const QuestionsImportInput = z.object({
 });
 export type QuestionsImportInput = z.infer<typeof QuestionsImportInput>;
 
+/* ── Question bank bulk actions (multi-select on the bank screen) ─────────────────────────── */
+
+/**
+ * A selection of questions to act on. The cap is generous rather than meaningful — the screen can
+ * only select what it has rendered — but an unbounded id array is an unbounded number of bound
+ * parameters, and the service chunks against a 100-parameter ceiling.
+ */
+const QuestionIds = z.array(z.string().min(1)).min(1).max(1000);
+
+export const QuestionsBulkDeleteInput = z.object({ ids: QuestionIds });
+export type QuestionsBulkDeleteInput = z.infer<typeof QuestionsBulkDeleteInput>;
+
+/**
+ * Bulk metadata edit. Only the two fields that cannot invalidate a graded attempt are here, which is
+ * what lets the service skip the `question_locked` check entirely — see `bulkSetMeta`.
+ *
+ * `.nullish()` is load-bearing on both: an explicit `null` is how the UI clears a grade level or a
+ * difficulty, and is different from the field being absent (leave it alone). The refine rejects a
+ * patch that would change nothing, so a stray submit cannot bump `updatedAt` on a whole selection.
+ */
+export const QuestionsBulkMetaInput = z
+  .object({
+    ids: QuestionIds,
+    gradeLevelId: QuestionInputBase.shape.gradeLevelId,
+    difficulty: QuestionInputBase.shape.difficulty,
+  })
+  .refine((v) => v.gradeLevelId !== undefined || v.difficulty !== undefined, {
+    message: 'nothing to change',
+  });
+export type QuestionsBulkMetaInput = z.infer<typeof QuestionsBulkMetaInput>;
+
+/** Tags to merge into every selected question. Same per-tag rules as the question's own field. */
+export const QuestionsBulkTagsInput = z.object({
+  ids: QuestionIds,
+  tags: z.array(z.string().trim().min(1).max(50)).min(1).max(20),
+});
+export type QuestionsBulkTagsInput = z.infer<typeof QuestionsBulkTagsInput>;
+
 export const TestInput = z.object({
   title: z.string().trim().min(1).max(200),
   classId: z.string().nullish(),

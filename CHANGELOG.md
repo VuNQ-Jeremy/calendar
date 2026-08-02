@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0079 — 2026-08-02
+Question bank gets multi-select with bulk actions (set grade level, set difficulty, add a tag, delete selected) and a Wipe bank danger button. Bulk delete keeps questions a test still uses and says how many; the wipe detaches every test and warns that students' stored answers go with it.
+
 ## v0.0078 — 2026-08-02
 Question import now reads a CSV you prepare yourself instead of calling Claude to read the paper. A new question-csv skill turns a test paper (and its separate answer key) into that CSV in a chat, the app parses it in the browser for free, and the AI extraction endpoint is gone.
 

@@ -14,6 +14,9 @@ import {
   QuestionInput,
   QuestionInputBase,
   QuestionsImportInput,
+  QuestionsBulkDeleteInput,
+  QuestionsBulkMetaInput,
+  QuestionsBulkTagsInput,
   parsePatch,
 } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -79,21 +82,55 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return { ok: true };
     }
 
-    // Bulk save from the file-import review screen. Handled before `preprocessQRaw` because the
-    // whole list rides as one `payload` JSON string — there are no flat per-question fields.
-    if (intent === 'import') {
+    /**
+     * Empties the whole bank, detaching every question from every test and cascading away each
+     * student's stored answers. Deliberately payload-free: there is nothing to get wrong, and the
+     * only guard that matters is the confirmation the UI puts in front of it.
+     */
+    if (intent === 'wipe') {
+      return { ok: true, ...(await questionsSvc.wipe(db)) };
+    }
+
+    // Bulk save from the file-import review screen, and the three bulk actions from the bank's
+    // multi-select bar. All handled before `preprocessQRaw` because each rides as one `payload` JSON
+    // string — there are no flat per-question fields to coerce.
+    if (intent === 'import' || intent.startsWith('bulk-')) {
       let payload: unknown;
       try {
         payload = JSON.parse((formData.get('payload') as string) ?? '{}');
       } catch {
         return Response.json({ error: 'bad payload json' }, { status: 400 });
       }
-      const parsed = QuestionsImportInput.safeParse(payload);
-      if (!parsed.success) {
-        return Response.json({ error: 'invalid', errors: parsed.error.flatten() }, { status: 400 });
+      const invalid = (errors: unknown) =>
+        Response.json({ error: 'invalid', errors }, { status: 400 });
+
+      if (intent === 'import') {
+        const parsed = QuestionsImportInput.safeParse(payload);
+        if (!parsed.success) return invalid(parsed.error.flatten());
+        const created = await questionsSvc.createMany(db, parsed.data.questions);
+        return { ok: true, created: created.length };
       }
-      const created = await questionsSvc.createMany(db, parsed.data.questions);
-      return { ok: true, created: created.length };
+
+      if (intent === 'bulk-delete') {
+        const parsed = QuestionsBulkDeleteInput.safeParse(payload);
+        if (!parsed.success) return invalid(parsed.error.flatten());
+        return { ok: true, ...(await questionsSvc.removeMany(db, parsed.data.ids)) };
+      }
+
+      if (intent === 'bulk-meta') {
+        const parsed = QuestionsBulkMetaInput.safeParse(payload);
+        if (!parsed.success) return invalid(parsed.error.flatten());
+        const { ids, ...patch } = parsed.data;
+        const updated = await questionsSvc.bulkSetMeta(db, ids, patch);
+        return { ok: true, updated };
+      }
+
+      if (intent === 'bulk-tags') {
+        const parsed = QuestionsBulkTagsInput.safeParse(payload);
+        if (!parsed.success) return invalid(parsed.error.flatten());
+        const updated = await questionsSvc.bulkAddTags(db, parsed.data.ids, parsed.data.tags);
+        return { ok: true, updated };
+      }
     }
 
     const raw = preprocessQRaw(Object.fromEntries(formData) as Record<string, unknown>);

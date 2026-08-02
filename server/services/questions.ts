@@ -228,3 +228,170 @@ export async function remove(db: Db, id: string): Promise<void> {
   if (used.length) throw Response.json({ error: 'question_in_use' }, { status: 409 });
   await db.delete(questions).where(eq(questions.id, id));
 }
+
+/**
+ * Run a list of prepared statements as one atomic batch.
+ *
+ * `db.batch` wants a non-empty tuple, and every bulk operation below can legitimately end up with
+ * nothing to do (all ids in use, every row already tagged), so the empty and single-statement cases
+ * are handled once here rather than at four call sites.
+ */
+async function runBatch(db: Db, statements: unknown[]): Promise<void> {
+  if (!statements.length) return;
+  if (statements.length === 1) {
+    await (statements[0] as Promise<unknown>);
+    return;
+  }
+  await db.batch(statements as unknown as Parameters<Db['batch']>[0]);
+}
+
+/** The ids in `ids` that at least one test still includes. */
+async function idsInUse(db: Db, ids: string[]): Promise<Set<string>> {
+  const rows = (
+    await Promise.all(
+      chunk(ids, D1_MAX_BOUND_PARAMS).map((part) =>
+        db
+          .select({ questionId: testQuestions.questionId })
+          .from(testQuestions)
+          .where(inArray(testQuestions.questionId, part)),
+      ),
+    )
+  ).flat();
+  return new Set(rows.map((r) => r.questionId));
+}
+
+/**
+ * Delete many questions at once, keeping any that a test still uses.
+ *
+ * The per-row `remove` refuses outright, which is right for one deliberate click but wrong for a
+ * selection of forty: the teacher meant "clear these out", and failing the whole batch because three
+ * of them are on a test helps nobody. So the in-use ones are kept and COUNTED, and the caller reports
+ * the split — the honest middle ground between silently skipping and refusing everything.
+ */
+export async function removeMany(
+  db: Db,
+  ids: string[],
+): Promise<{ deleted: number; skippedInUse: number }> {
+  if (!ids.length) return { deleted: 0, skippedInUse: 0 };
+  const unique = [...new Set(ids)];
+  const inUse = await idsInUse(db, unique);
+  const deletable = unique.filter((id) => !inUse.has(id));
+  await runBatch(
+    db,
+    chunk(deletable, D1_MAX_BOUND_PARAMS).map((part) =>
+      db.delete(questions).where(inArray(questions.id, part)),
+    ),
+  );
+  return { deleted: deletable.length, skippedInUse: unique.length - deletable.length };
+}
+
+/** What `bulkSetMeta` may change: metadata only, never anything that shapes an answer. */
+export type QuestionMetaPatch = {
+  gradeLevelId?: string | null;
+  difficulty?: QuestionRow['difficulty'];
+};
+
+/**
+ * Set grade level and/or difficulty across many questions in one statement per chunk.
+ *
+ * Deliberately NOT routed through `update`: that does a SELECT plus an UPDATE per id and re-validates
+ * the merged row, which for forty questions is eighty statements to change one column.
+ *
+ * Equally deliberately NOT lock-checked. `ANSWER_SHAPING_KEYS` is type/options/answerKey; a grade
+ * level or a difficulty label cannot invalidate a graded attempt, and the single-question path
+ * already lets you rename a locked question for the same reason. The safety here is structural — the
+ * function can only write these two columns, so no caller can smuggle an answer change through it.
+ */
+export async function bulkSetMeta(
+  db: Db,
+  ids: string[],
+  patch: QuestionMetaPatch,
+): Promise<number> {
+  const unique = [...new Set(ids)];
+  const set: Partial<typeof questions.$inferInsert> = { updatedAt: new Date().toISOString() };
+  if (patch.gradeLevelId !== undefined) set.gradeLevelId = patch.gradeLevelId;
+  if (patch.difficulty !== undefined) set.difficulty = patch.difficulty;
+  // Nothing to do — the route rejects an empty patch, so this is only reachable with no ids.
+  if (!unique.length || Object.keys(set).length === 1) return 0;
+
+  // Every SET value binds a parameter too, so the ids get what is left of the ceiling rather than
+  // all of it. Off-by-one here is a runtime D1 error on a big selection, not a type error.
+  const perStatement = Math.max(1, D1_MAX_BOUND_PARAMS - Object.keys(set).length);
+  await runBatch(
+    db,
+    chunk(unique, perStatement).map((part) =>
+      db.update(questions).set(set).where(inArray(questions.id, part)),
+    ),
+  );
+  return unique.length;
+}
+
+/** Mirrors `QuestionInputBase.tags`' `.max(20)` in shared/schemas.ts. */
+const MAX_TAGS_PER_QUESTION = 20;
+
+/**
+ * Add tags to many questions, merging with whatever each already has.
+ *
+ * `tags` is a JSON text column, so this cannot be one UPDATE: each row's existing list has to be
+ * read, merged and written back. Rows that already carry every tag are left alone, so re-running the
+ * same add is free and does not churn `updatedAt` (which the bank sorts by).
+ *
+ * Caps mirror the zod field: 50 characters per tag, 20 tags per question. A row already at the cap
+ * keeps what it has rather than losing an older tag to make room.
+ */
+export async function bulkAddTags(db: Db, ids: string[], tags: string[]): Promise<number> {
+  const unique = [...new Set(ids)];
+  const adding = [...new Set(tags.map((t) => t.trim()).filter(Boolean))].map((t) => t.slice(0, 50));
+  if (!unique.length || !adding.length) return 0;
+
+  const rows = (
+    await Promise.all(
+      chunk(unique, D1_MAX_BOUND_PARAMS).map((part) =>
+        db
+          .select({ id: questions.id, tags: questions.tags })
+          .from(questions)
+          .where(inArray(questions.id, part)),
+      ),
+    )
+  ).flat();
+
+  const now = new Date().toISOString();
+  const updates: unknown[] = [];
+  for (const row of rows) {
+    const current = parseJson<string[]>(row.tags, []);
+    const merged = [...new Set([...current, ...adding])].slice(0, MAX_TAGS_PER_QUESTION);
+    if (merged.length === current.length && merged.every((t, i) => t === current[i])) continue;
+    updates.push(
+      db
+        .update(questions)
+        .set({ tags: JSON.stringify(merged), updatedAt: now })
+        .where(eq(questions.id, row.id)),
+    );
+  }
+  await runBatch(db, updates);
+  return updates.length;
+}
+
+/**
+ * Empty the whole question bank, detaching every question from every test on the way out.
+ *
+ * This is the one place that overrides the no-cascade rule on `test_questions.questionId`, because
+ * the teacher has asked for exactly that. Worth knowing what it costs, and what it does not:
+ *
+ *   - Every test's question list becomes empty. The tests themselves survive.
+ *   - `test_answers.questionId` DOES cascade, so each student's stored answer to each question is
+ *     deleted with it. Attempt rows keep their scores (rawScore / normalizedScore live on
+ *     `test_attempts`, and any synced score_record is untouched), but per-question review is gone.
+ *
+ * The two deletes must go in this order — questions first would be rejected by the foreign key — and
+ * they go as ONE batch so the bank can never be left with orphaned links if the second fails. Both
+ * are unfiltered, so there are no bound parameters and nothing to chunk however large the bank is.
+ */
+export async function wipe(db: Db): Promise<{ deleted: number; detachedFromTests: number }> {
+  const [questionCount] = await db.select({ n: sql<number>`count(*)` }).from(questions);
+  const [linkCount] = await db.select({ n: sql<number>`count(*)` }).from(testQuestions);
+  const deleted = Number(questionCount?.n ?? 0);
+  if (!deleted) return { deleted: 0, detachedFromTests: 0 };
+  await db.batch([db.delete(testQuestions), db.delete(questions)]);
+  return { deleted, detachedFromTests: Number(linkCount?.n ?? 0) };
+}
