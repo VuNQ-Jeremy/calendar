@@ -28,17 +28,21 @@ const STALL_MS = 2 * PING_INTERVAL_MS + 5000;
 const MAX_BACKOFF_MS = 30_000;
 
 /**
- * Set when a badge-affecting message arrives, read (and cleared) by
- * shouldRevalidate in app/routes/_app.tsx. That function otherwise refuses
- * every revalidator-driven revalidation, which is what keeps ordinary
- * navigation cheap — this flag is the narrow exception for live updates.
+ * True while a live update is asking for the layout loader to re-run. Read by
+ * shouldRevalidate in app/routes/_app.tsx, which otherwise refuses every
+ * revalidator-driven revalidation — that refusal is what keeps ordinary
+ * navigation cheap, and this flag is the narrow exception for live updates.
+ *
+ * It must stay set for the whole revalidation rather than being cleared on
+ * read. React Router calls shouldRevalidate several times per revalidation
+ * (three, in practice) and honours the LAST answer: a consume-on-read flag
+ * returns true once and false afterwards, so React Router decides there is
+ * nothing to fetch and the badge never moves.
  */
 let layoutRefreshPending = false;
 
-export function consumeLiveLayoutRefresh(): boolean {
-  const pending = layoutRefreshPending;
-  layoutRefreshPending = false;
-  return pending;
+export function isLiveLayoutRefreshPending(): boolean {
+  return layoutRefreshPending;
 }
 
 /**
@@ -46,7 +50,7 @@ export function consumeLiveLayoutRefresh(): boolean {
  * React Router's involvement (badge counts); ordinary route data refreshes
  * itself through the cache subscription. Returns a cleanup function.
  */
-export function startLive(revalidate: () => void): () => void {
+export function startLive(revalidate: () => Promise<void> | null): () => void {
   let ws: WebSocket | null = null;
   let stopped = false;
   let attempts = 0;
@@ -58,13 +62,18 @@ export function startLive(revalidate: () => void): () => void {
   const lastApplied = new Map<MutationDomain, number>();
   const deferredWhileHidden = new Set<MutationDomain>();
 
+  const requestLayoutRefresh = () => {
+    layoutRefreshPending = true;
+    const running = revalidate();
+    // Null means the caller was busy and declined. Leave the flag set so the
+    // revalidation already under way — or the next one — still picks it up.
+    if (running) void running.finally(() => (layoutRefreshPending = false));
+  };
+
   const apply = (domain: MutationDomain) => {
     lastApplied.set(domain, Date.now());
     invalidateAfterRemoteMutation(domain);
-    if (BADGE_DOMAINS.has(domain)) {
-      layoutRefreshPending = true;
-      revalidate();
-    }
+    if (BADGE_DOMAINS.has(domain)) requestLayoutRefresh();
   };
 
   const handle = (domain: MutationDomain) => {
@@ -109,8 +118,7 @@ export function startLive(revalidate: () => void): () => void {
         // Messages sent while we were disconnected (sleep, deploy, flaky wifi)
         // are gone. Assume everything cached is suspect and refresh.
         markStale('route:');
-        layoutRefreshPending = true;
-        revalidate();
+        requestLayoutRefresh();
       }
       everConnected = true;
     };
@@ -191,6 +199,9 @@ export function startLive(revalidate: () => void): () => void {
 
   return () => {
     stopped = true;
+    // The shell is going away (logout, mostly); a pending layout refresh for a
+    // session that no longer exists would only make the next one revalidate.
+    layoutRefreshPending = false;
     document.removeEventListener('visibilitychange', onVisibility);
     window.clearTimeout(reconnectTimer);
     window.clearInterval(heartbeat);

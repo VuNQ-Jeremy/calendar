@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0082 — 2026-08-02
+Fix live sidebar badges: the layout-refresh flag cleared itself on read, but React Router asks shouldRevalidate several times per revalidation and acts on the last answer, so it never refetched. Adds e2e coverage against the deployment.
+
 ## v0.0081 — 2026-08-02
 Live updates: a LiveHub Durable Object broadcasts mutation domains over WebSocket, so open tabs refresh their data and sidebar badges without a reload. Mobile API writes notify web clients too.
 

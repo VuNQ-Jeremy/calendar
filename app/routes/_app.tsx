@@ -14,7 +14,7 @@ import {
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from 'react-router';
 import { cacheGet, subscribe } from '../../src/lib/cache.js';
 import { cacheKeyForPath } from '../../src/lib/route-cache.js';
-import { startLive, consumeLiveLayoutRefresh } from '../../src/lib/live.js';
+import { startLive, isLiveLayoutRefreshPending } from '../../src/lib/live.js';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
 import type { IconName } from '../../src/icons.jsx';
@@ -133,11 +133,11 @@ export function shouldRevalidate({
   formData,
 }: ShouldRevalidateFunctionArgs) {
   // A live update announced a change to invites / feedback / grading somewhere
-  // else, so the badge counts really are out of date. src/lib/live.ts sets the
-  // flag immediately before calling revalidate() and it is cleared on read, so
-  // this stays a narrow exception rather than reopening the layout loader to
-  // every revalidation.
-  if (consumeLiveLayoutRefresh()) return true;
+  // else, so the badge counts really are out of date. The flag is owned by
+  // src/lib/live.ts and stays set for the duration of that one revalidation —
+  // React Router asks this question several times per revalidation and acts on
+  // the last answer, so it cannot be a read-once flag.
+  if (isLiveLayoutRefreshPending()) return true;
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
   const path = formAction.split('?')[0];
   if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
@@ -306,11 +306,10 @@ function useLiveUpdates() {
     () =>
       startLive(() => {
         const cur = ref.current;
-        // If something is already in flight the pending flag survives and the
-        // revalidation now underway picks it up — delayed, not dropped.
-        if (cur.navigation.state === 'idle' && cur.revalidator.state === 'idle') {
-          cur.revalidator.revalidate();
-        }
+        // Returning null says "busy, not now": the caller keeps its flag set so
+        // the revalidation already under way still re-runs this loader.
+        if (cur.navigation.state !== 'idle' || cur.revalidator.state !== 'idle') return null;
+        return cur.revalidator.revalidate();
       }),
     [],
   );
