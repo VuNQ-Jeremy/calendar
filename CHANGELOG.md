@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0083 — 2026-08-02
+Stabilise the live-update e2e specs: wait out the gap between the socket request and the hub accepting it.
+
 ## v0.0082 — 2026-08-02
 Fix live sidebar badges: the layout-refresh flag cleared itself on read, but React Router asks shouldRevalidate several times per revalidation and acts on the last answer, so it never refetched. Adds e2e coverage against the deployment.
 

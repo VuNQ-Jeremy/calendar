@@ -17,7 +17,7 @@ import {
  *
  *   MOCHI_EMAIL=... MOCHI_PASSWORD=... npm run test:e2e
  *
- * Both specs write to the live database and delete what they created.
+ * Every spec writes to the live database and deletes what it created.
  */
 
 const EMAIL = process.env.MOCHI_EMAIL;
@@ -74,11 +74,15 @@ function recordLive(page: Page) {
   return { opened, domains };
 }
 
-async function waitForSocket(live: { opened: string[] }) {
+async function waitForSocket(page: Page, live: { opened: string[] }) {
   await expect
     .poll(() => live.opened.length, { timeout: 20_000, message: 'live socket never opened' })
     .toBeGreaterThan(0);
   expect(live.opened[0]).toMatch(/\/ws$/);
+  // Playwright reports the socket when the request goes out, a moment before
+  // the hub has accepted it. Broadcasting into that gap loses the message —
+  // barely matters in real use, but it makes these specs flaky.
+  await page.waitForTimeout(1500);
 }
 
 test.describe('live updates', () => {
@@ -92,10 +96,10 @@ test.describe('live updates', () => {
     await signIn(page, EMAIL!, PASSWORD!);
     await page.click('.sb a[href="/calendar"]');
     await expect(page).toHaveURL(/\/calendar/);
-    await waitForSocket(live);
+    await waitForSocket(page, live);
 
-    // The calendar renders the viewer's LOCAL week, so an event stamped with the
-    // UTC date can land outside it — the school runs at UTC+7.
+    // The calendar renders the viewer's LOCAL week, so an event stamped with
+    // the UTC date can land outside it — the school runs at UTC+7.
     const today = await page.evaluate(() => new Date().toLocaleDateString('en-CA'));
 
     const refetches: string[] = [];
@@ -137,7 +141,7 @@ test.describe('live updates', () => {
 
     const live = recordLive(page);
     await signIn(page, EMAIL!, PASSWORD!);
-    await waitForSocket(live);
+    await waitForSocket(page, live);
 
     const badge = page.locator('.sb a[href="/feedback"] .count');
     const readBadge = async () =>
@@ -164,7 +168,7 @@ test.describe('live updates', () => {
 
     const live = recordLive(page);
     await signIn(page, STUDENT_EMAIL!, STUDENT_PASSWORD!);
-    await waitForSocket(live);
+    await waitForSocket(page, live);
 
     const created = await api.post('/api/feedback', {
       data: { message: `live-e2e student isolation ${Date.now()}`, category: 'other' },
