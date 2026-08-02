@@ -507,7 +507,10 @@ export function QuestionImportModal({
         {phase === 'review' && (
           <div className="m-stack" style={{ gap: 12 }}>
             <MC style={{ padding: 12 }}>
-              <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div
+                className="m-row qi-bulkbar"
+                style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}
+              >
                 <MBtn
                   variant="ghost"
                   size="sm"

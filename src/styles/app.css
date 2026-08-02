@@ -1078,6 +1078,12 @@ body {
 .hw-grade-score .mochi-field {
   margin-bottom: 0;
 }
+/* question-import bulk bar: buttons sit beside labelled fields, and the
+   form-field bottom margin would bottom-align the wrappers rather than the
+   controls, leaving the select/input floating above the buttons */
+.qi-bulkbar .mochi-field {
+  margin-bottom: 0;
+}
 @keyframes mfade {
   from {
     opacity: 0;
