@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0078 — 2026-08-02
+Question import now reads a CSV you prepare yourself instead of calling Claude to read the paper. A new question-csv skill turns a test paper (and its separate answer key) into that CSV in a chat, the app parses it in the browser for free, and the AI extraction endpoint is gone.
+
 ## v0.0074 — 2026-08-01
 Question import v2: reading passages and section instructions are kept as a new per-question passage field, the model returns questions grouped with their printed numbers, a separate answer key can be pasted or uploaded on the review screen, and underlines survive Word import.
 

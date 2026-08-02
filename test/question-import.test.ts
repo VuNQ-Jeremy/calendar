@@ -1,31 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { QuestionExtractInput, QuestionsImportInput, QuestionInput } from '../shared/schemas';
+import { QuestionsImportInput, QuestionInput } from '../shared/schemas';
 import {
-  sanitizeExtractedQuestions,
+  sanitizeQuestion,
   type ImportedQuestionDraft,
-  type RawExtractedQuestion,
+  type RawQuestionRow,
 } from '../shared/logic/question-import';
 
-// The Anthropic call itself is not tested (network-bound, like enrich.ts and generate.ts). What IS
-// tested is everything downstream of it: the request schema, the sanitizer the review UI trusts,
-// and the import schema that decides what may reach the question bank.
+// Everything here is about ONE row. `sanitizeQuestion` is where a parsed spreadsheet row becomes
+// something the question bank will accept, and the only place option ids exist — so this is where
+// the answer-remapping, the type reconciliation and the letter map are pinned down. Reading a file
+// into rows is question-csv.test.ts; the import schema that decides what may reach the bank is at
+// the bottom of this file.
 
-/** Deterministic ids so a test can assert which option an answer index resolved to. */
+/** Deterministic ids so a test can assert which option an answer position resolved to. */
 const seqIds = () => {
   let n = 0;
   return () => `opt${++n}`;
 };
 
-const sanitize = (rows: RawExtractedQuestion[]): ImportedQuestionDraft[] =>
-  sanitizeExtractedQuestions(rows, seqIds());
-
-const one = (row: RawExtractedQuestion): ImportedQuestionDraft => {
-  const out = sanitize([row]);
-  expect(out).toHaveLength(1);
-  return out[0];
+const one = (row: RawQuestionRow, context: string | null = null): ImportedQuestionDraft => {
+  const draft = sanitizeQuestion(row, context, seqIds());
+  if (!draft) throw new Error('the row produced no draft');
+  return draft;
 };
 
-const mcq = (over: Partial<RawExtractedQuestion> = {}): RawExtractedQuestion => ({
+const mcq = (over: Partial<RawQuestionRow> = {}): RawQuestionRow => ({
   type: 'mcq',
   prompt: 'What is 2 + 2?',
   options: ['3', '4', '5'],
@@ -35,23 +34,6 @@ const mcq = (over: Partial<RawExtractedQuestion> = {}): RawExtractedQuestion => 
   difficulty: 'unknown',
   tags: [],
   ...over,
-});
-
-describe('QuestionExtractInput', () => {
-  it('requires text for a text request and base64 for a pdf request', () => {
-    expect(QuestionExtractInput.safeParse({ kind: 'text', text: '1. Hi?' }).success).toBe(true);
-    expect(QuestionExtractInput.safeParse({ kind: 'text' }).success).toBe(false);
-    expect(QuestionExtractInput.safeParse({ kind: 'text', text: '   ' }).success).toBe(false);
-    expect(QuestionExtractInput.safeParse({ kind: 'pdf', dataBase64: 'JVBER' }).success).toBe(true);
-    expect(QuestionExtractInput.safeParse({ kind: 'pdf' }).success).toBe(false);
-  });
-
-  it('rejects an unknown kind and an oversized payload', () => {
-    expect(QuestionExtractInput.safeParse({ kind: 'docx', text: 'x' }).success).toBe(false);
-    expect(
-      QuestionExtractInput.safeParse({ kind: 'text', text: 'x'.repeat(200_001) }).success,
-    ).toBe(false);
-  });
 });
 
 describe('QuestionsImportInput', () => {
@@ -79,8 +61,8 @@ describe('QuestionsImportInput', () => {
   });
 });
 
-describe('sanitizeExtractedQuestions', () => {
-  it('assigns option ids and resolves the answer index against them', () => {
+describe('sanitizeQuestion', () => {
+  it('assigns option ids and resolves the answer position against them', () => {
     const q = one(mcq());
     expect(q.options).toEqual([
       { id: 'opt1', text: '3' },
@@ -91,19 +73,57 @@ describe('sanitizeExtractedQuestions', () => {
     expect(q.issues).toEqual([]);
   });
 
-  it('remaps the answer index after blank and duplicate options are dropped', () => {
-    // Raw index 3 ('B') is the answer. Index 0 is blank and index 2 duplicates index 1, so after
-    // filtering 'B' is the second surviving option — the key must follow it, not the index.
-    const q = one(mcq({ options: ['  ', 'A', 'a', 'B'], correctOptionIndexes: [3] }));
+  it('remaps the answer position after blank and duplicate options are dropped', () => {
+    // Position 3 ('D' as printed) is the answer. Position 0 is blank and position 2 repeats position
+    // 1 exactly, so after filtering it is the second surviving option — the key must follow it.
+    const q = one(mcq({ options: ['  ', 'A', 'A', 'B'], correctOptionIndexes: [3] }));
     expect(q.options.map((o) => o.text)).toEqual(['A', 'B']);
     expect(q.answerKey).toBe(q.options[1].id);
     expect(q.issues).toEqual([]);
   });
 
-  it('drops an answer index that pointed at a removed option, flagging the row', () => {
+  it('keeps options that differ only in capitalisation — that is the whole question', () => {
+    // "Choose the correct capitalisation" is a routine item on a Vietnamese English paper. Folding
+    // these into one option would delete the distractors, leave a two-option question that looks
+    // deliberate, and — with the answer naming one of the deleted letters — resolve to nothing.
+    const q = one(
+      mcq({ options: ['hanoi', 'Hanoi', 'HANOI', 'HaNoi'], correctOptionIndexes: [1] }),
+    );
+    expect(q.options.map((o) => o.text)).toEqual(['hanoi', 'Hanoi', 'HANOI', 'HaNoi']);
+    expect(q.answerKey).toBe(q.options[1].id);
+    expect(q.issues).toEqual([]);
+  });
+
+  it('drops an answer position that pointed at a removed option, flagging the row', () => {
     const q = one(mcq({ options: ['A', '   ', 'B'], correctOptionIndexes: [1] }));
     expect(q.answerKey).toBe('');
     expect(q.issues).toContain('qi_issue_no_answer');
+  });
+
+  it('flags a multi whose answer named a position that is not there', () => {
+    // The file has three option columns and the answer says "C,D" — D resolves to nothing. Keeping
+    // the C that DID resolve, silently, is the dangerous outcome: the row looks answered, so the
+    // review screen pre-checks it and saves it, and multi grading is all-or-nothing — a student who
+    // picks every printed correct option is then marked wrong.
+    const q = one(
+      mcq({ type: 'multi', options: ['Dolphin', 'Shark', 'Bat'], correctOptionIndexes: [2, 3] }),
+    );
+    expect(q.type).toBe('multi');
+    expect(q.answerKey).toEqual([q.options[2].id]);
+    expect(q.issues).toContain('qi_issue_partial_answer');
+  });
+
+  it('flags an mcq whose two answer letters only half resolved', () => {
+    const q = one(mcq({ options: ['A', '  ', 'C'], correctOptionIndexes: [1, 2] }));
+    expect(q.answerKey).toBe(q.options[1].id);
+    expect(q.issues).toContain('qi_issue_partial_answer');
+  });
+
+  it('does not flag a partial answer when nothing resolved at all', () => {
+    // That is the ordinary "the key lives in another file" case, and it has its own flag; carrying
+    // both would tell the teacher two different things about one row.
+    const q = one(mcq({ options: ['A', 'B'], correctOptionIndexes: [7] }));
+    expect(q.issues).toEqual(['qi_issue_no_answer']);
   });
 
   it('promotes a claimed mcq with several correct options to multi', () => {
@@ -113,7 +133,7 @@ describe('sanitizeExtractedQuestions', () => {
     expect(q.issues).toEqual([]);
   });
 
-  it('keeps a choice question whose answer the document never marked, unresolved but intact', () => {
+  it('keeps a choice question whose answer the file never gave, unresolved but intact', () => {
     const q = one(mcq({ correctOptionIndexes: [] }));
     expect(q.type).toBe('mcq');
     expect(q.options).toHaveLength(3);
@@ -121,7 +141,7 @@ describe('sanitizeExtractedQuestions', () => {
     expect(q.issues).toEqual(['qi_issue_no_answer']);
   });
 
-  it('dedupes repeated correct indexes', () => {
+  it('dedupes repeated correct positions', () => {
     const q = one(mcq({ type: 'multi', correctOptionIndexes: [1, 1, 2] }));
     expect(q.answerKey).toEqual(['opt2', 'opt3']);
   });
@@ -171,8 +191,9 @@ describe('sanitizeExtractedQuestions', () => {
   });
 
   it('normalizes decomposed Vietnamese diacritics to NFC', () => {
-    // 'ạ' written as 'a' + U+0323 (combining dot below) — how a PDF text layer often carries it.
-    const decomposed = `Bạn nào đúng?`;
+    // 'ạ' written as 'a' + U+0323 (combining dot below) — how a cell pasted out of a PDF often
+    // carries it, and Excel preserves whatever it was given.
+    const decomposed = `Bạn nào đúng?`;
     const q = one(mcq({ prompt: decomposed }));
     expect(q.prompt).toBe(decomposed.normalize('NFC'));
     expect(q.prompt).toBe('Bạn nào đúng?');
@@ -187,8 +208,10 @@ describe('sanitizeExtractedQuestions', () => {
         explanation: 'e'.repeat(2500),
         tags: ['t'.repeat(80)],
       }),
+      'c'.repeat(9000),
     );
     expect(q.prompt).toHaveLength(4000);
+    expect(q.context).toHaveLength(8000);
     expect(q.options[0].text).toHaveLength(500);
     expect(q.explanation).toHaveLength(2000);
     expect(q.tags[0]).toHaveLength(50);
@@ -208,29 +231,70 @@ describe('sanitizeExtractedQuestions', () => {
     expect(one(mcq({ difficulty: 'HARD' })).difficulty).toBe('hard');
   });
 
-  it('infers a type when the model omits or misnames it', () => {
+  it('infers a type when the row omits or misnames it', () => {
     expect(one(mcq({ type: undefined })).type).toBe('mcq');
     expect(one(mcq({ type: 'true_false' })).type).toBe('mcq');
     expect(one(mcq({ type: 'weird', options: [], acceptedAnswers: ['x'] })).type).toBe('text');
   });
 
-  it('drops questions with no prompt rather than importing a blank row', () => {
-    expect(sanitize([mcq({ prompt: '   ' }), mcq()])).toHaveLength(1);
+  it('carries the shared context through, and has none rather than an empty one', () => {
+    const passage = 'Read the passage and answer.\n\nWater covers most of the planet.';
+    expect(one(mcq(), passage).context).toBe(passage);
+    expect(one(mcq(), '   ').context).toBeNull();
+    expect(one(mcq(), null).context).toBeNull();
   });
 
-  it('caps the batch at fifty questions', () => {
-    const many = Array.from({ length: 60 }, (_, i) => mcq({ prompt: `Q${i}` }));
-    expect(sanitize(many)).toHaveLength(50);
+  it('keeps the printed question number and drops a nonsense one', () => {
+    expect(one(mcq({ sourceNumber: 17 })).sourceNumber).toBe(17);
+    expect(one(mcq({ sourceNumber: 0 })).sourceNumber).toBeNull();
+    expect(one(mcq({ sourceNumber: undefined })).sourceNumber).toBeNull();
+    expect(one(mcq({ sourceNumber: -3 })).sourceNumber).toBeNull();
   });
 
-  it('survives malformed model output rather than throwing at the UI', () => {
-    expect(sanitizeExtractedQuestions(undefined)).toEqual([]);
-    expect(sanitizeExtractedQuestions(null)).toEqual([]);
-    expect(sanitizeExtractedQuestions('not an array')).toEqual([]);
-    expect(sanitizeExtractedQuestions([null, undefined, {}, 42])).toEqual([]);
-    expect(
-      sanitizeExtractedQuestions([{ prompt: 'Q', options: 'nope', correctOptionIndexes: 'nope' }]),
-    ).toHaveLength(1);
+  it('returns null for a row with no prompt rather than importing a blank question', () => {
+    expect(sanitizeQuestion(mcq({ prompt: '   ' }), null, seqIds())).toBeNull();
+    expect(sanitizeQuestion({}, null, seqIds())).toBeNull();
+  });
+
+  it('survives a row whose fields are not the shape they should be', () => {
+    // Nothing upstream guarantees these shapes — a hand-edited sheet, or the review modal
+    // re-normalizing a draft it has been editing, can hand over anything. Degrade, never throw.
+    const malformed = {
+      prompt: 'Q',
+      options: 'nope',
+      correctOptionIndexes: 'nope',
+      tags: 'nope',
+    } as unknown as RawQuestionRow;
+    const q = one(malformed);
+    expect(q.type).toBe('essay');
+    expect(q.options).toEqual([]);
+    expect(q.tags).toEqual([]);
+    expect(sanitizeQuestion(undefined as unknown as RawQuestionRow, null, seqIds())).toBeNull();
+  });
+
+  /**
+   * The subtle one. "17. C" names the THIRD option AS PRINTED. If a blank or duplicate option was
+   * dropped in between, counting into the surviving array would silently shift the answer, so the
+   * map has to be keyed on the original position with a hole where an option went. `applyAnswerKey`
+   * in shared/logic/answer-key.ts reads nothing else.
+   */
+  it('maps every printed option position to its id, with holes for dropped options', () => {
+    const q = one(mcq({ options: ['A', '   ', 'A', 'B'], correctOptionIndexes: [] }));
+    expect(q.options.map((o) => o.text)).toEqual(['A', 'B']);
+    // Printed A, B(blank), C(repeats A), D -> only A and D survive, at their own positions.
+    expect(q.letterIds).toEqual([q.options[0].id, null, null, q.options[1].id]);
+  });
+
+  it('has no letter map for a question with no options', () => {
+    expect(one(mcq({ type: 'essay', options: [] })).letterIds).toEqual([]);
+    expect(one(mcq({ type: 'text', options: [], acceptedAnswers: ['x'] })).letterIds).toEqual([]);
+  });
+
+  it('leaves a hole for an option dropped by the ten-option cap', () => {
+    const options = Array.from({ length: 12 }, (_, i) => `option ${i}`);
+    const q = one(mcq({ options, correctOptionIndexes: [0] }));
+    expect(q.letterIds).toHaveLength(12);
+    expect(q.letterIds.slice(10)).toEqual([null, null]);
   });
 
   /**
@@ -239,7 +303,7 @@ describe('sanitizeExtractedQuestions', () => {
    * If this breaks, teachers get a 400 on a row the UI told them was fine.
    */
   it('returns only rows the server will accept when there are no issues', () => {
-    const raws: RawExtractedQuestion[] = [
+    const raws: RawQuestionRow[] = [
       mcq(),
       mcq({ correctOptionIndexes: [0, 1] }),
       mcq({ type: 'text', options: [], acceptedAnswers: ['Hà Nội'] }),
@@ -248,7 +312,11 @@ describe('sanitizeExtractedQuestions', () => {
       mcq({ prompt: 'p'.repeat(4200), explanation: 'e'.repeat(2500), tags: ['x'.repeat(80)] }),
       mcq({ type: 'multi', correctOptionIndexes: [1, 1, 2] }),
     ];
-    const drafts = sanitize(raws);
+    // One id generator across the batch, so no two rows can share an option id.
+    const newId = seqIds();
+    const drafts = raws
+      .map((raw) => sanitizeQuestion(raw, 'A shared passage.', newId))
+      .filter((draft): draft is ImportedQuestionDraft => draft != null);
     expect(drafts.length).toBe(raws.length);
     for (const draft of drafts) {
       if (draft.issues.length) continue;
@@ -267,131 +335,5 @@ describe('sanitizeExtractedQuestions', () => {
         true,
       );
     }
-  });
-});
-
-/**
- * The model returns questions grouped, so a reading passage is emitted once instead of being
- * repeated under each of the seven questions about it. Flattening is where that shared text turns
- * into the per-question `context` the rest of the app stores.
- */
-describe('sanitizeExtractedQuestions — groups', () => {
-  const grouped = (groups: unknown) => sanitizeExtractedQuestions({ groups }, seqIds());
-
-  it('copies the group instruction and passage onto every question in it', () => {
-    const out = grouped([
-      {
-        instruction: 'Read the passage and answer the questions.',
-        text: 'Water covers most of the planet.',
-        questions: [mcq({ prompt: 'Q1' }), mcq({ prompt: 'Q2' })],
-      },
-      { instruction: '', text: '', questions: [mcq({ prompt: 'Q3' })] },
-    ]);
-    expect(out).toHaveLength(3);
-    expect(out[0].context).toBe(
-      'Read the passage and answer the questions.\n\nWater covers most of the planet.',
-    );
-    expect(out[1].context).toBe(out[0].context);
-    // A standalone question carries no context at all rather than an empty string.
-    expect(out[2].context).toBeNull();
-  });
-
-  it('keeps an instruction-only or passage-only group, and clamps a very long passage', () => {
-    expect(
-      grouped([{ instruction: 'Choose the odd one out.', questions: [mcq()] }])[0].context,
-    ).toBe('Choose the odd one out.');
-    expect(grouped([{ text: 'Just a passage.', questions: [mcq()] }])[0].context).toBe(
-      'Just a passage.',
-    );
-    expect(grouped([{ text: 'p'.repeat(9000), questions: [mcq()] }])[0].context).toHaveLength(8000);
-  });
-
-  it('caps the whole batch at fifty across groups', () => {
-    const out = grouped(
-      Array.from({ length: 6 }, (_, g) => ({
-        text: `passage ${g}`,
-        questions: Array.from({ length: 10 }, (_, i) => mcq({ prompt: `G${g}Q${i}` })),
-      })),
-    );
-    expect(out).toHaveLength(50);
-  });
-
-  /**
-   * The load-bearing guard against the model answering the paper instead of transcribing it. A
-   * document that gives its answers nowhere is reported once, up front, and that verdict is
-   * binding on every question that came back with it — however confidently they were answered.
-   */
-  it('discards every answer when the document gives its answers nowhere', () => {
-    const out = sanitizeExtractedQuestions(
-      {
-        answerKeySource: 'none',
-        answerKeyEvidence: '',
-        groups: [
-          {
-            questions: [
-              mcq({ correctOptionIndexes: [1] }),
-              mcq({ type: 'multi', correctOptionIndexes: [0, 2] }),
-              mcq({ type: 'text', options: [], acceptedAnswers: ['Hà Nội'] }),
-              mcq({ type: 'essay', options: [], acceptedAnswers: [] }),
-            ],
-          },
-        ],
-      },
-      seqIds(),
-    );
-    expect(out.map((q) => q.answerKey)).toEqual(['', [], [], null]);
-    expect(out.slice(0, 3).every((q) => q.issues.includes('qi_issue_no_answer'))).toBe(true);
-    // An essay has no answer to discard, so it is not flagged as missing one.
-    expect(out[3].issues).toEqual([]);
-  });
-
-  it('keeps the answers when the document does mark them', () => {
-    const out = sanitizeExtractedQuestions(
-      {
-        answerKeySource: 'marked',
-        answerKeyEvidence: '<strong>4</strong>',
-        groups: [{ questions: [mcq({ correctOptionIndexes: [1] })] }],
-      },
-      seqIds(),
-    );
-    expect(out[0].answerKey).toBe('opt2');
-    expect(out[0].issues).toEqual([]);
-  });
-
-  it('still accepts a flat list of questions, in case the model ignores the grouping', () => {
-    const out = sanitizeExtractedQuestions({ questions: [mcq()] }, seqIds());
-    expect(out).toHaveLength(1);
-    expect(out[0].context).toBeNull();
-  });
-
-  it('keeps the printed question number and drops a nonsense one', () => {
-    expect(one(mcq({ sourceNumber: 17 })).sourceNumber).toBe(17);
-    expect(one(mcq({ sourceNumber: 0 })).sourceNumber).toBeNull();
-    expect(one(mcq({ sourceNumber: undefined })).sourceNumber).toBeNull();
-    expect(one(mcq({ sourceNumber: -3 })).sourceNumber).toBeNull();
-  });
-
-  /**
-   * The subtle one. "17. C" names the THIRD option AS PRINTED. If a blank or duplicate option was
-   * dropped in between, counting into the surviving array would silently shift the answer, so the
-   * map has to be keyed on the original position with a hole where an option went.
-   */
-  it('maps every printed option position to its id, with holes for dropped options', () => {
-    const q = one(mcq({ options: ['A', '   ', 'a', 'B'], correctOptionIndexes: [] }));
-    expect(q.options.map((o) => o.text)).toEqual(['A', 'B']);
-    // Printed A, B(blank), C(duplicate of A), D -> only A and D survive, at their own positions.
-    expect(q.letterIds).toEqual([q.options[0].id, null, null, q.options[1].id]);
-  });
-
-  it('has no letter map for a question with no options', () => {
-    expect(one(mcq({ type: 'essay', options: [] })).letterIds).toEqual([]);
-    expect(one(mcq({ type: 'text', options: [], acceptedAnswers: ['x'] })).letterIds).toEqual([]);
-  });
-
-  it('leaves a hole for an option dropped by the ten-option cap', () => {
-    const options = Array.from({ length: 12 }, (_, i) => `option ${i}`);
-    const q = one(mcq({ options, correctOptionIndexes: [0] }));
-    expect(q.letterIds).toHaveLength(12);
-    expect(q.letterIds.slice(10)).toEqual([null, null]);
   });
 });

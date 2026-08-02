@@ -1,0 +1,6 @@
+number,type,context,prompt,optionA,optionB,optionC,optionD,answer,explanation,difficulty,tags
+1,mcq,,"Choose the word whose underlined part is pronounced differently.",pleas_ed_,wash_ed_,lik_ed_,laugh_ed_,A,"After a voiced sound, -ed is pronounced /d/.",easy,pronunciation
+2,multi,,"Which TWO of these animals are mammals?",Dolphin,Shark,Bat,Tuna,"A,C",,medium,"biology;animals"
+3,mcq,"Read the passage and answer questions 3 and 4.  Sewage pollution harms marine life in many ways.","According to the passage, sewage pollution can ___.","harm marine life","improve farming","clean rivers","reduce costs",A,,medium,reading
+4,text,"Read the passage and answer questions 3 and 4.  Sewage pollution harms marine life in many ways.","What does sewage pollution harm, according to the passage?",,,,,marine life|sea life,,medium,reading
+5,essay,,"Write about 120 words on how your school could reduce plastic waste.",,,,,,"Any reasoned answer with two suggestions.",hard,writing

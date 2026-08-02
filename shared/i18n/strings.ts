@@ -230,10 +230,12 @@ const en_strings = {
   qi_open: 'Import from file',
   qi_title: 'Import questions from a file',
   qi_intro:
-    'Upload a test paper and the questions in it are read out for you to check before saving.',
+    'Questions are imported from a spreadsheet — one question per row, with its options, answer and passage. Start from the template, or have the file written for you.',
+  qi_template: 'Download template',
+  qi_skill_hint:
+    'Give Claude the test paper and the answer key, ask for a Mochi question CSV, and upload the file it writes.',
   qi_choose_file: 'Choose a file',
-  qi_formats: 'Word, PDF, Excel, Markdown or plain text · up to 10MB',
-  qi_extracting: 'Reading the questions…',
+  qi_formats: '.csv, .xlsx or .xls · up to {max} questions per file',
   qi_found: '{n} questions found in {file}',
   qi_saving: 'Saving…',
   qi_import_n: 'Import {n} questions',
@@ -246,10 +248,15 @@ const en_strings = {
   qi_over_test_cap:
     'This test already has {have} questions, so {pick} more would pass the limit of 100. Unselect some.',
   qi_issue_no_answer: 'No answer marked',
+  qi_issue_partial_answer: 'Part of the answer is missing',
   qi_issue_downgraded: 'Type changed',
   qi_issue_options_capped: 'Extra options dropped',
   qi_q_number: 'Q{n}',
   qi_has_context: 'with passage',
+  qi_rows_skipped: 'Rows with no question text were skipped: {list}.',
+  qi_truncated:
+    'Only the first {max} questions were read. Put the rest in a second file, keeping the same numbering, and import that too.',
+  qi_and_more: '+{n} more',
   qi_missing_numbers: 'Not found in the file: {list}. Check those questions in the original.',
   qi_key_title: 'Answer key from another file',
   qi_key_show: 'Add key',
@@ -262,18 +269,18 @@ const en_strings = {
   qi_key_matched: '{n} answers filled in',
   qi_key_unmatched: 'no question numbered {list}',
   qi_key_unresolved: 'answer not one of the options for {list}',
+  qi_key_ambiguous: 'two questions numbered {list}, so those were left alone',
   qi_key_err_none: 'No answers were found in that key. Use one line per question, like "1. B".',
-  qi_key_err_pdf: 'A PDF key cannot be read here — open it and paste the answers instead.',
-  qi_err_unsupported: 'That file type cannot be read. Use Word, PDF, Excel, Markdown or text.',
-  qi_err_doc_legacy: 'Old .doc files cannot be read. Save it as .docx or PDF and try again.',
+  qi_err_unsupported: 'That file type cannot be read. Use one of the formats listed on the picker.',
+  qi_err_doc_legacy: 'Old .doc files cannot be read. Save it as .docx and try again.',
   qi_err_too_big: 'That file is over 10MB. Split it, or save a smaller copy.',
   qi_err_empty: 'No text was found in that file.',
   qi_err_read_failed: 'That file could not be opened. It may be damaged.',
-  qi_err_none_found: 'No questions were found in that file.',
-  qi_err_extract_failed: 'The questions could not be read. Please try again.',
-  qi_err_truncated:
-    'That file has too many questions to read at once. Split it and import in parts.',
-  qi_err_disabled: 'Question import is not set up on this server.',
+  qi_err_not_utf8:
+    'The accents in that file came through broken. In Excel, use Save As → "CSV UTF-8 (Comma delimited)", or save it as .xlsx, then upload it again.',
+  qi_err_bad_header:
+    'That file has no "prompt" column, so there is nothing to read. Start from the template.',
+  qi_err_none_found: 'No question rows were found in that file.',
   qi_err_save_failed: 'The questions could not be saved. Please try again.',
   qi_err_attach_locked:
     'Students have already attempted this test, so its questions cannot change. {n} questions were saved to the bank.',
@@ -1073,10 +1080,13 @@ export const STRINGS = {
     qb_err_no_accepted: 'Hãy thêm ít nhất một đáp án được chấp nhận.',
     qi_open: 'Nhập từ tệp',
     qi_title: 'Nhập câu hỏi từ tệp',
-    qi_intro: 'Tải lên một đề kiểm tra, các câu hỏi sẽ được đọc ra để bạn kiểm tra trước khi lưu.',
+    qi_intro:
+      'Câu hỏi được nhập từ một tệp bảng tính — mỗi dòng một câu, kèm phương án, đáp án và đoạn văn. Bạn có thể tải tệp mẫu về để điền, hoặc nhờ Claude viết sẵn tệp.',
+    qi_template: 'Tải tệp mẫu',
+    qi_skill_hint:
+      'Gửi đề kiểm tra và bảng đáp án cho Claude, yêu cầu tệp CSV nhập câu hỏi cho Mochi, rồi tải tệp đó lên đây.',
     qi_choose_file: 'Chọn tệp',
-    qi_formats: 'Word, PDF, Excel, Markdown hoặc văn bản thuần · tối đa 10MB',
-    qi_extracting: 'Đang đọc câu hỏi…',
+    qi_formats: '.csv, .xlsx hoặc .xls · tối đa {max} câu mỗi tệp',
     qi_found: 'Tìm thấy {n} câu hỏi trong {file}',
     qi_saving: 'Đang lưu…',
     qi_import_n: 'Nhập {n} câu hỏi',
@@ -1089,10 +1099,15 @@ export const STRINGS = {
     qi_over_test_cap:
       'Bài kiểm tra này đã có {have} câu, thêm {pick} câu nữa sẽ vượt giới hạn 100 câu. Hãy bỏ chọn một số câu.',
     qi_issue_no_answer: 'Chưa có đáp án',
+    qi_issue_partial_answer: 'Đáp án còn thiếu một phần',
     qi_issue_downgraded: 'Đã đổi dạng câu hỏi',
     qi_issue_options_capped: 'Đã bỏ phương án dư',
     qi_q_number: 'Câu {n}',
     qi_has_context: 'có đoạn văn',
+    qi_rows_skipped: 'Đã bỏ qua những dòng không có nội dung câu hỏi: {list}.',
+    qi_truncated:
+      'Chỉ {max} câu đầu tiên được đọc. Hãy đưa các câu còn lại sang một tệp thứ hai, giữ nguyên cách đánh số, rồi nhập tiếp tệp đó.',
+    qi_and_more: '+{n} câu nữa',
     qi_missing_numbers:
       'Không tìm thấy trong tệp: {list}. Hãy kiểm tra lại các câu đó trong bản gốc.',
     qi_key_title: 'Đáp án từ tệp khác',
@@ -1106,19 +1121,19 @@ export const STRINGS = {
     qi_key_matched: 'Đã điền {n} đáp án',
     qi_key_unmatched: 'không có câu số {list}',
     qi_key_unresolved: 'đáp án không nằm trong các phương án của câu {list}',
+    qi_key_ambiguous: 'có hai câu cùng số {list} nên đã bỏ qua các câu đó',
     qi_key_err_none: 'Không đọc được đáp án nào. Hãy ghi mỗi câu một dòng, ví dụ "1. B".',
-    qi_key_err_pdf: 'Không đọc được tệp đáp án PDF ở đây — hãy mở tệp và dán đáp án vào ô trên.',
     qi_err_unsupported:
-      'Không đọc được loại tệp này. Hãy dùng Word, PDF, Excel, Markdown hoặc văn bản.',
-    qi_err_doc_legacy: 'Không đọc được tệp .doc cũ. Hãy lưu thành .docx hoặc PDF rồi thử lại.',
+      'Không đọc được loại tệp này. Hãy dùng một trong các định dạng được ghi ở ô chọn tệp.',
+    qi_err_doc_legacy: 'Không đọc được tệp .doc cũ. Hãy lưu thành .docx rồi thử lại.',
     qi_err_too_big: 'Tệp này lớn hơn 10MB. Hãy tách ra hoặc lưu bản nhỏ hơn.',
     qi_err_empty: 'Không tìm thấy văn bản nào trong tệp đó.',
     qi_err_read_failed: 'Không mở được tệp đó. Tệp có thể bị lỗi.',
-    qi_err_none_found: 'Không tìm thấy câu hỏi nào trong tệp đó.',
-    qi_err_extract_failed: 'Không đọc được câu hỏi. Vui lòng thử lại.',
-    qi_err_truncated:
-      'Tệp này có quá nhiều câu hỏi để đọc một lần. Hãy tách ra và nhập theo từng phần.',
-    qi_err_disabled: 'Chức năng nhập câu hỏi chưa được thiết lập trên máy chủ này.',
+    qi_err_not_utf8:
+      'Dấu tiếng Việt trong tệp đó bị lỗi. Trong Excel hãy chọn Save As → "CSV UTF-8 (Comma delimited)", hoặc lưu thành .xlsx, rồi tải lên lại.',
+    qi_err_bad_header:
+      'Tệp này không có cột "prompt" nên không có gì để đọc. Hãy bắt đầu từ tệp mẫu.',
+    qi_err_none_found: 'Không tìm thấy dòng câu hỏi nào trong tệp đó.',
     qi_err_save_failed: 'Không lưu được câu hỏi. Vui lòng thử lại.',
     qi_err_attach_locked:
       'Học sinh đã làm bài kiểm tra này nên không thể đổi câu hỏi. {n} câu hỏi đã được lưu vào kho.',

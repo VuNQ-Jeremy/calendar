@@ -1,0 +1,3 @@
+number,type,context,question_text,optionA,optionB,optionC,optionD,answer,explanation,difficulty,tags
+1,mcq,,"Choose the correct word.",go,goes,going,gone,B,,easy,grammar
+2,mcq,,"Choose the correct word.",was,were,is,are,A,,easy,grammar

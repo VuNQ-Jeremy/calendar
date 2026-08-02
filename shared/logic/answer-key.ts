@@ -121,8 +121,14 @@ export function parseAnswerKey(input: string): AnswerKeyEntry[] {
     const end = i + 1 < marks.length ? marks[i + 1].markStart : text.length;
     const body = text.slice(mark.bodyStart, Math.max(mark.bodyStart, end));
     if (seen.has(mark.number)) return;
-    const letters = lettersOf(body);
-    const raw = body.trim().replace(/\s+/g, ' ').slice(0, MAX_RAW);
+    // An answer belongs to the line it was written on. The slice above runs to the next marker,
+    // which for the LAST entry in a key is the end of the whole paste — so a teacher's sign-off
+    // ("Chúc các em làm bài tốt nhé!") would otherwise be glued onto the final answer. For a letter
+    // that is harmless, but for a short-answer question `raw` becomes the accepted answer, and a
+    // student would have to type the sign-off too in order to be marked right.
+    const line = body.split(/\r?\n/).find((l) => l.trim() !== '') ?? '';
+    const letters = lettersOf(line);
+    const raw = line.trim().replace(/\s+/g, ' ').slice(0, MAX_RAW);
     if (!letters.length && !raw) return;
     seen.add(mark.number);
     out.push({ number: mark.number, letters, raw });
@@ -154,6 +160,11 @@ export type KeyResult = {
   unmatchedNumbers: number[];
   /** Numbers whose letters point at options this question does not have. */
   unresolvedNumbers: number[];
+  /**
+   * Numbers carried by more than one question in the batch, so the key cannot say which it meant.
+   * Those questions are left untouched rather than all given the same answer.
+   */
+  ambiguousNumbers: number[];
 };
 
 const letterIndex = (letter: string): number => LETTERS.indexOf(letter.toUpperCase());
@@ -161,34 +172,62 @@ const letterIndex = (letter: string): number => LETTERS.indexOf(letter.toUpperCa
 /**
  * Match parsed key entries onto drafts by their printed question number.
  *
- * The key is AUTHORITATIVE: a teacher who pastes one is correcting the paper, so it overwrites an
- * answer the model thought it read. An essay question is skipped (there is nothing to overwrite),
- * and a question whose letters resolve to nothing is left exactly as it was rather than half-set.
+ * The key is AUTHORITATIVE: a teacher who pastes one is correcting the paper, so it overwrites
+ * whatever the uploaded sheet's answer column said. An essay question is skipped — there is nothing
+ * to overwrite.
+ *
+ * Everything else is all-or-nothing, and the three "nothing" cases are reported separately so the
+ * modal can say which happened. A question is left exactly as it was — flag intact, still unchecked
+ * — unless EVERY letter the key names resolves to one of its printed options. Half-writing an answer
+ * is the one outcome worth going out of the way to avoid: it looks identical to success, clears the
+ * flag that asks a human to look, and is then saved and graded against.
  */
 export function applyAnswerKey(targets: KeyTarget[], entries: AnswerKeyEntry[]): KeyResult {
   const byNumber = new Map<number, AnswerKeyEntry>();
   for (const e of entries) if (!byNumber.has(e.number)) byNumber.set(e.number, e);
 
+  // A printed number carried by two questions cannot be resolved by a key that names it once.
+  // Vietnamese papers restart numbering per section ("Phần I" 1-5, "Phần II" 1-5), so a batch
+  // holding both sections has ten questions and five numbers. Applying the entry to every match
+  // would write one section's answers onto the other's questions and mark them all as ready.
+  const numberCounts = new Map<number, number>();
+  for (const t of targets) {
+    if (t.sourceNumber != null) {
+      numberCounts.set(t.sourceNumber, (numberCounts.get(t.sourceNumber) ?? 0) + 1);
+    }
+  }
+
   const applied: KeyApplication[] = [];
   const used = new Set<number>();
   const unresolvedNumbers: number[] = [];
+  const ambiguousNumbers: number[] = [];
 
   targets.forEach((target, index) => {
     if (target.sourceNumber == null) return;
     const entry = byNumber.get(target.sourceNumber);
     if (!entry) return;
 
+    if ((numberCounts.get(target.sourceNumber) ?? 0) > 1) {
+      used.add(entry.number);
+      if (!ambiguousNumbers.includes(entry.number)) ambiguousNumbers.push(entry.number);
+      return;
+    }
+
     if (target.type === 'essay') return;
 
     if (target.type === 'mcq' || target.type === 'multi') {
+      const wanted = new Set(entry.letters.map((letter) => letter.toUpperCase()));
       const ids = [
         ...new Set(
-          entry.letters
+          [...wanted]
             .map((letter) => target.letterIds[letterIndex(letter)] ?? null)
             .filter((id): id is string => id != null),
         ),
       ];
-      if (!ids.length) {
+      // All or nothing. Writing only the letters that happened to resolve would turn "B and D" into
+      // a single-answer question, clear the flag that says a human should look, and report the row
+      // as matched — leaving a two-answer question that no student can answer correctly.
+      if (ids.length !== wanted.size) {
         used.add(entry.number);
         unresolvedNumbers.push(entry.number);
         return;
@@ -211,5 +250,10 @@ export function applyAnswerKey(targets: KeyTarget[], entries: AnswerKeyEntry[]):
   });
 
   const unmatchedNumbers = [...byNumber.keys()].filter((n) => !used.has(n)).sort((a, b) => a - b);
-  return { applied, unmatchedNumbers, unresolvedNumbers };
+  return {
+    applied,
+    unmatchedNumbers,
+    unresolvedNumbers,
+    ambiguousNumbers: ambiguousNumbers.sort((a, b) => a - b),
+  };
 }

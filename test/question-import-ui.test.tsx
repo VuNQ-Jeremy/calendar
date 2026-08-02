@@ -7,8 +7,8 @@ import { QuestionInput } from '../shared/schemas';
 import { toPayload } from '../src/tests/question-import.jsx';
 import { validateDraft, type QuestionDraft } from '../src/tests/question-editor.jsx';
 
-// Regressions from the question-import review screen. Both bugs here were silent: one threw away
-// a whole extraction on a stray keypress, the other turned one bad row into a failed batch.
+// Regressions from the question-import review screen. Both bugs here were silent: one threw away a
+// whole imported file on a stray keypress, the other turned one bad row into a failed batch.
 
 function withLang(el: React.ReactElement) {
   return React.createElement(LanguageProvider, null, el);

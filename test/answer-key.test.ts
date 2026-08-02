@@ -80,6 +80,20 @@ describe('parseAnswerKey', () => {
     expect(parseAnswerKey('')).toEqual([]);
     expect(parseAnswerKey('Good luck everyone!')).toEqual([]);
   });
+
+  it('does not swallow a sign-off into the last answer', () => {
+    // The last entry's slice runs to the end of the paste, so a friendly closing line would become
+    // part of the answer. Harmless for a letter; for a short-answer question the accepted answer
+    // becomes "since Chúc các em làm bài tốt nhé!" and no student can ever type it.
+    const entries = parseAnswerKey('1. B\n2. C\n3. since\nChúc các em làm bài tốt nhé!');
+    expect(entries.at(-1)?.raw).toBe('since');
+  });
+
+  it('keeps a parenthetical on the same line as the answer', () => {
+    expect(parseAnswerKey('3. since (the blank needs a preposition)').at(0)?.raw).toBe(
+      'since (the blank needs a preposition)',
+    );
+  });
 });
 
 describe('stripHtml', () => {
@@ -168,6 +182,48 @@ describe('applyAnswerKey', () => {
     expect(unresolvedNumbers).toEqual([1]);
   });
 
+  it('applies nothing when only SOME of the named letters resolve', () => {
+    // "B and D" on a question whose option D was blank. Writing just B would turn a two-answer
+    // question into a one-answer one, clear the flag asking a human to look, and count as matched —
+    // and grading is all-or-nothing, so the printed correct answer becomes unreachable.
+    const { applied, unresolvedNumbers } = applyAnswerKey(
+      [target({ letterIds: ['a1', 'a2', 'a3', null] })],
+      parseAnswerKey('1. B and D'),
+    );
+    expect(applied).toEqual([]);
+    expect(unresolvedNumbers).toEqual([1]);
+  });
+
+  it('leaves both questions alone when two of them carry the same printed number', () => {
+    // A paper numbered per section — Phần I 1-2, Phần II 1-2 — imported as one batch. The key names
+    // "1" once and cannot say which section it meant, so answering both is answering one wrongly.
+    const targets = [
+      target({ sourceNumber: 1 }),
+      target({ sourceNumber: 2 }),
+      target({ sourceNumber: 1 }),
+      target({ sourceNumber: 2 }),
+    ];
+    const { applied, ambiguousNumbers, unmatchedNumbers } = applyAnswerKey(
+      targets,
+      parseAnswerKey('1. A\n2. D'),
+    );
+    expect(applied).toEqual([]);
+    expect(ambiguousNumbers).toEqual([1, 2]);
+    // Reported as ambiguous, not as "no question numbered 1" — the questions are there.
+    expect(unmatchedNumbers).toEqual([]);
+  });
+
+  it('still applies to a number that only one question carries', () => {
+    const targets = [
+      target({ sourceNumber: 1 }),
+      target({ sourceNumber: 1 }),
+      target({ sourceNumber: 5 }),
+    ];
+    const { applied, ambiguousNumbers } = applyAnswerKey(targets, parseAnswerKey('1. A\n5. C'));
+    expect(applied).toEqual([{ index: 2, type: 'mcq', answerKey: 'a3' }]);
+    expect(ambiguousNumbers).toEqual([1]);
+  });
+
   it('skips a question the document never numbered', () => {
     const { applied, unmatchedNumbers } = applyAnswerKey(
       [target({ sourceNumber: null })],
@@ -188,5 +244,17 @@ describe('applyAnswerKey', () => {
     expect(applied[2].answerKey).toBe('a3');
     expect(unmatchedNumbers).toEqual([]);
     expect(unresolvedNumbers).toEqual([]);
+  });
+
+  it('reports the whole rest of a split paper’s key as unmatched, not as an error', () => {
+    // Importing part 2 of a 100-question paper and pasting the full key is the intended workflow;
+    // the key box only ever sees the batch on screen. Every number from part 1 is legitimately
+    // unmatched, which is why the modal caps how many it will spell out.
+    const key = Array.from({ length: 100 }, (_, i) => `${i + 1}. ${'ABCD'[i % 4]}`).join('  ');
+    const targets = Array.from({ length: 50 }, (_, i) => target({ sourceNumber: i + 51 }));
+    const { applied, unmatchedNumbers } = applyAnswerKey(targets, parseAnswerKey(key));
+    expect(applied).toHaveLength(50);
+    expect(unmatchedNumbers).toHaveLength(50);
+    expect(unmatchedNumbers[0]).toBe(1);
   });
 });

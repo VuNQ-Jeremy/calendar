@@ -1,0 +1,3 @@
+number,type,context,prompt,optionA,optionB,optionC,optionD,answer,explanation,difficulty,tags
+1,mcq,,"Choose the correct word: She ___ to school every day.",go,goes,going,gone,B,,easy,grammar
+2,mcq,,"Choose the word whose underlined part is pronounced differently.",st_o_p,,g_o_,h_o_me,B,,medium,pronunciation

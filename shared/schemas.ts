@@ -550,33 +550,15 @@ export const QuestionInput = QuestionInputBase.superRefine((q, ctx) => {
 });
 export type QuestionInput = z.infer<typeof QuestionInput>;
 
-/* ── Question import (upload a docx/pdf/xlsx/md test paper, extract with Claude) ─────────── */
-
-/** Hard cap on how many questions one file may yield — also stated in the model's prompt. */
-export const MAX_IMPORT_QUESTIONS = 50;
+/* ── Question import (a pre-formatted CSV of questions, parsed in the browser) ───────────── */
 
 /**
- * One extraction request. `text` carries what the browser already parsed out of a docx/xlsx/md
- * file; `dataBase64` carries a whole PDF, which is handed to Claude as a native document block
- * instead (a scanned test paper has no text layer to extract client-side).
- *
- * The base64 cap corresponds to the 10MB file limit the picker enforces (base64 inflates by 4/3).
+ * Hard cap on how many questions one imported file may yield. `parseQuestionRows` in
+ * shared/logic/question-csv.ts stops here and reports the file as truncated, so an oversized file
+ * still produces a batch a teacher can read through row by row on the review screen instead of one
+ * nobody can check before saving it into the bank.
  */
-export const QuestionExtractInput = z
-  .object({
-    kind: z.enum(['text', 'pdf']),
-    text: z.string().max(200_000).optional(),
-    dataBase64: z.string().max(14_400_000).optional(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.kind === 'text' && !v.text?.trim()) {
-      ctx.addIssue({ code: 'custom', message: 'text is required', path: ['text'] });
-    }
-    if (v.kind === 'pdf' && !v.dataBase64) {
-      ctx.addIssue({ code: 'custom', message: 'dataBase64 is required', path: ['dataBase64'] });
-    }
-  });
-export type QuestionExtractInput = z.infer<typeof QuestionExtractInput>;
+export const MAX_IMPORT_QUESTIONS = 50;
 
 /**
  * The confirmed rows from the review screen. Each item goes through the FULL refined

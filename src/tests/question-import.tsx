@@ -7,14 +7,19 @@ import { useLang } from '../lib/i18n.jsx';
 import {
   ACCEPT,
   KEY_ACCEPT,
-  extractFileContent,
+  readQuestionRows,
   extractKeyText,
   ExtractInputError,
-  type ExtractPayload,
 } from './import-extract.js';
 import { QuestionEditorModal, validateDraft, type QuestionDraft } from './question-editor.jsx';
 import type { ImportedQuestionDraft } from '../../shared/logic/question-import.js';
+import {
+  parseQuestionRows,
+  TEMPLATE_CSV,
+  type ParsedCsv,
+} from '../../shared/logic/question-csv.js';
 import { parseAnswerKey, applyAnswerKey, stripHtml } from '../../shared/logic/answer-key.js';
+import { MAX_IMPORT_QUESTIONS } from '../../shared/schemas.js';
 import type { GradeLevelRow } from '../../server/services/grade-levels.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Checkbox: MCheck } = DS;
@@ -32,6 +37,9 @@ const TYPE_COLOR: Record<QuestionDraft['type'], string> = {
   text: 'green',
   essay: 'orange',
 };
+
+/** How many question numbers a one-line notice will spell out before it starts counting instead. */
+const NUMBER_LIST_MAX = 12;
 
 /** A draft plus the review screen's own per-row state. */
 type Row = {
@@ -112,7 +120,7 @@ interface QuestionImportModalProps {
   onClose: () => void;
 }
 
-type Phase = 'pick' | 'extracting' | 'review';
+type Phase = 'pick' | 'review';
 
 export function QuestionImportModal({
   mode,
@@ -134,6 +142,15 @@ export function QuestionImportModal({
   const [fileName, setFileName] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<Row[]>([]);
+  /**
+   * True while the file is being read. The parse itself is instant, but `readQuestionRows` has to
+   * fetch the SheetJS chunk first, which on a school connection is a visible wait.
+   */
+  const [busy, setBusy] = React.useState(false);
+  /** Spreadsheet rows that held something but no question text, by 1-based row number. */
+  const [skipped, setSkipped] = React.useState<number[]>([]);
+  /** The file held more questions than one import can carry, and the rest were left behind. */
+  const [truncated, setTruncated] = React.useState(false);
   const [bulkGrade, setBulkGrade] = React.useState(defaultGradeLevelId ?? '');
   const [points, setPoints] = React.useState(1);
   /**
@@ -152,6 +169,7 @@ export function QuestionImportModal({
     matched: number;
     unmatched: number[];
     unresolved: number[];
+    ambiguous: number[];
   } | null>(null);
 
   const saving = fetcher.state !== 'idle';
@@ -179,63 +197,69 @@ export function QuestionImportModal({
         : t('qi_err_save_failed')
     : null;
 
+  /**
+   * The template, as a link the browser can save.
+   *
+   * The byte-order mark is not decoration: Excel decides a .csv's encoding from its first bytes, and
+   * without the mark it falls back to the system codepage, so the Vietnamese in the example rows
+   * opens as mojibake and the teacher's reasonable conclusion is that the template is broken. The
+   * parser tolerates the mark on the way back in.
+   *
+   * Minted in an effect rather than inline so that it is created once per open, revoked when the
+   * modal closes, and never touched while rendering — `URL.createObjectURL` does not exist during
+   * SSR, and a URL revoked straight after a click is a race some browsers lose by downloading an
+   * empty file.
+   */
+  const [templateUrl, setTemplateUrl] = React.useState('');
+  React.useEffect(() => {
+    const url = URL.createObjectURL(
+      new Blob(['\uFEFF' + TEMPLATE_CSV], { type: 'text/csv;charset=utf-8' }),
+    );
+    setTemplateUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, []);
+
+  /**
+   * Read the picked sheet and go straight to review. No round trip, nothing guessed: what the review
+   * screen shows is what the file said, so a mistake the teacher spots there is a mistake they can
+   * fix in the file itself and re-upload.
+   */
   const pick = async (file: File) => {
     setError(null);
     setFileName(file.name);
-    setPhase('extracting');
-    let payload: ExtractPayload;
+    setBusy(true);
+    let parsed: ParsedCsv;
     try {
-      payload = await extractFileContent(file);
+      parsed = parseQuestionRows(await readQuestionRows(file));
     } catch (e) {
+      // Both the reader and the parser throw an i18n key as the message — a bad header, an
+      // unreadable file type, a file over the size cap — and anything else is a real fault.
       setError(t(e instanceof ExtractInputError ? e.message : 'qi_err_read_failed'));
-      setPhase('pick');
+      setBusy(false);
       return;
     }
+    setBusy(false);
 
-    try {
-      const res = await fetch('/extract-questions', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(
-          t(
-            body.error === 'extract_truncated'
-              ? 'qi_err_truncated'
-              : body.error === 'disabled'
-                ? 'qi_err_disabled'
-                : 'qi_err_extract_failed',
-          ),
-        );
-        setPhase('pick');
-        return;
-      }
-      const { questions } = (await res.json()) as { questions: ImportedQuestionDraft[] };
-      if (!questions.length) {
-        setError(t('qi_err_none_found'));
-        setPhase('pick');
-        return;
-      }
-      setRows(
-        questions.map((q, i) => ({
-          key: `${i}`,
-          draft: { ...toDraft(q), gradeLevelId: defaultGradeLevelId ?? '' },
-          issues: q.issues,
-          // A row the model could not fully resolve starts unchecked: importing a question with
-          // no answer key would silently create something no student can be graded against.
-          checked: q.issues.length === 0,
-          sourceNumber: q.sourceNumber,
-          letterIds: q.letterIds,
-        })),
-      );
-      setKeyResult(null);
-      setPhase('review');
-    } catch {
-      setError(t('qi_err_extract_failed'));
-      setPhase('pick');
+    if (!parsed.drafts.length) {
+      setError(t('qi_err_none_found'));
+      return;
     }
+    setRows(
+      parsed.drafts.map((q, i) => ({
+        key: `${i}`,
+        draft: { ...toDraft(q), gradeLevelId: defaultGradeLevelId ?? '' },
+        issues: q.issues,
+        // A row the file did not fully answer starts unchecked: importing a question with no answer
+        // key would silently create something no student can be graded against.
+        checked: q.issues.length === 0,
+        sourceNumber: q.sourceNumber,
+        letterIds: q.letterIds,
+      })),
+    );
+    setSkipped(parsed.skipped);
+    setTruncated(parsed.truncated);
+    setKeyResult(null);
+    setPhase('review');
   };
 
   const patchRow = (index: number, next: Partial<Row>) =>
@@ -278,9 +302,9 @@ export function QuestionImportModal({
   /**
    * Match the key onto the rows by the question number printed in the document.
    *
-   * The key wins over anything the model thought it read: a teacher who pastes one is stating what
-   * the answers are. Rows it fixes are re-validated and re-checked, so a paper that arrived with
-   * forty "no answer marked" rows becomes importable in one click.
+   * The key wins over whatever the sheet's own answer column said: a teacher who pastes one is
+   * stating what the answers are. Rows it fixes are re-validated and re-checked, so a paper that
+   * arrived with forty "no answer marked" rows becomes importable in one click.
    */
   const applyKey = () => {
     setKeyError(null);
@@ -290,7 +314,7 @@ export function QuestionImportModal({
       setKeyError(t('qi_key_err_none'));
       return;
     }
-    const { applied, unmatchedNumbers, unresolvedNumbers } = applyAnswerKey(
+    const { applied, unmatchedNumbers, unresolvedNumbers, ambiguousNumbers } = applyAnswerKey(
       rows.map((row) => ({
         type: row.draft.type,
         letterIds: row.letterIds,
@@ -305,9 +329,12 @@ export function QuestionImportModal({
         if (!hit) return row;
         const draft = { ...row.draft, type: hit.type, answerKey: hit.answerKey };
         const problem = validateDraft(draft);
-        // The "no answer marked" flag is exactly what the key answers; anything else the sanitizer
-        // reported (options capped, type downgraded) still deserves a look.
-        const issues = row.issues.filter((issue) => issue !== 'qi_issue_no_answer');
+        // Both answer flags are exactly what the key answers, and it only ever applies when every
+        // letter it named resolved — so a row it touched has a whole answer, not a partial one.
+        // Anything else the sanitizer reported (options capped, type downgraded) still wants a look.
+        const issues = row.issues.filter(
+          (issue) => issue !== 'qi_issue_no_answer' && issue !== 'qi_issue_partial_answer',
+        );
         if (problem && !issues.includes(problem)) issues.push(problem);
         return { ...row, draft, issues, checked: problem == null };
       }),
@@ -316,12 +343,13 @@ export function QuestionImportModal({
       matched: applied.length,
       unmatched: unmatchedNumbers,
       unresolved: unresolvedNumbers,
+      ambiguous: ambiguousNumbers,
     });
   };
 
   /**
-   * Numbers the document uses that no row carries — the model silently dropped a question. Only
-   * meaningful once most rows are numbered, and only within the range actually extracted.
+   * Numbers the file uses that no row carries — a question went missing between the paper and the
+   * sheet. Only meaningful once most rows are numbered, and only within the range the file covers.
    */
   const missingNumbers = React.useMemo(() => {
     const numbers = rows.map((row) => row.sourceNumber).filter((n): n is number => n != null);
@@ -335,6 +363,20 @@ export function QuestionImportModal({
     // the warning is noise rather than a lost question.
     return out.length > 10 ? [] : out;
   }, [rows]);
+
+  /**
+   * Spell out a list of question numbers, then start counting.
+   *
+   * These land in one-line notices, and a legitimately partial key produces a long list: importing
+   * part 2 of a split paper and pasting the whole key is the intended workflow, and "no question
+   * numbered 1, 2, 3, … 50" in danger red reads as "your answer key is wrong" when nothing is.
+   */
+  const joinNumbers = (numbers: number[]): string =>
+    numbers.length <= NUMBER_LIST_MAX
+      ? numbers.join(', ')
+      : `${numbers.slice(0, NUMBER_LIST_MAX).join(', ')} ${t('qi_and_more', {
+          n: numbers.length - NUMBER_LIST_MAX,
+        })}`;
 
   const selected = rows.filter((row) => row.checked);
   const blocked = selected.filter((row) => validateDraft(row.draft) != null);
@@ -387,7 +429,7 @@ export function QuestionImportModal({
           )
         }
       >
-        {phase !== 'review' && (
+        {phase === 'pick' && (
           <div className="m-stack" style={{ gap: 12 }}>
             <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
               {t('qi_intro')}
@@ -401,21 +443,21 @@ export function QuestionImportModal({
                 padding: 24,
                 border: '2px dashed var(--border)',
                 borderRadius: 'var(--radius-md, 12px)',
-                cursor: phase === 'extracting' ? 'progress' : 'pointer',
+                cursor: busy ? 'progress' : 'pointer',
                 textAlign: 'center',
               }}
             >
-              <MIcon name={phase === 'extracting' ? 'clock' : 'upload'} size={22} />
+              <MIcon name={busy ? 'clock' : 'upload'} size={22} />
               <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>
-                {phase === 'extracting' ? t('qi_extracting') : t('qi_choose_file')}
+                {t('qi_choose_file')}
               </span>
               <span className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
-                {phase === 'extracting' ? fileName : t('qi_formats')}
+                {busy ? fileName : t('qi_formats', { max: MAX_IMPORT_QUESTIONS })}
               </span>
               <input
                 type="file"
                 accept={ACCEPT}
-                disabled={phase === 'extracting'}
+                disabled={busy}
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -425,6 +467,35 @@ export function QuestionImportModal({
                 }}
               />
             </label>
+            {/* The DS Button always renders a <button>, and a download needs an <a download>, so this
+                is a plain anchor wearing the same dashed styling as the key-file control further
+                down. */}
+            <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <a
+                href={templateUrl || undefined}
+                download="mochi-questions-template.csv"
+                className="m-row"
+                style={{
+                  gap: 6,
+                  padding: '6px 12px',
+                  border: '1.5px dashed var(--border-strong)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-muted)',
+                  fontSize: 'var(--text-sm)',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                <MIcon name="download" size={16} />
+                {t('qi_template')}
+              </a>
+              <span
+                className="m-muted"
+                style={{ fontSize: 'var(--text-xs)', flex: 1, minWidth: 200 }}
+              >
+                {t('qi_skill_hint')}
+              </span>
+            </div>
             {error && (
               <div style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
                 {error}
@@ -549,9 +620,11 @@ export function QuestionImportModal({
                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
                       {t('qi_key_matched', { n: keyResult.matched })}
                       {keyResult.unmatched.length > 0 &&
-                        ` · ${t('qi_key_unmatched', { list: keyResult.unmatched.join(', ') })}`}
+                        ` · ${t('qi_key_unmatched', { list: joinNumbers(keyResult.unmatched) })}`}
                       {keyResult.unresolved.length > 0 &&
-                        ` · ${t('qi_key_unresolved', { list: keyResult.unresolved.join(', ') })}`}
+                        ` · ${t('qi_key_unresolved', { list: joinNumbers(keyResult.unresolved) })}`}
+                      {keyResult.ambiguous.length > 0 &&
+                        ` · ${t('qi_key_ambiguous', { list: joinNumbers(keyResult.ambiguous) })}`}
                     </span>
                   )}
                 </div>
@@ -627,9 +700,19 @@ export function QuestionImportModal({
               })}
             </div>
 
+            {skipped.length > 0 && (
+              <span className="m-muted" style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+                {t('qi_rows_skipped', { list: skipped.join(', ') })}
+              </span>
+            )}
+            {truncated && (
+              <span style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+                {t('qi_truncated', { max: MAX_IMPORT_QUESTIONS })}
+              </span>
+            )}
             {missingNumbers.length > 0 && (
               <span className="m-muted" style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
-                {t('qi_missing_numbers', { list: missingNumbers.join(', ') })}
+                {t('qi_missing_numbers', { list: joinNumbers(missingNumbers) })}
               </span>
             )}
             {blocked.length > 0 && (

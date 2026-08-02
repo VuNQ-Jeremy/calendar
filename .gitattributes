@@ -1,0 +1,11 @@
+# This repo is worked on with core.autocrlf=true, so git rewrites line endings on checkout for
+# anything it decides is text. That is harmless for source, and NOT harmless for a file whose exact
+# bytes are asserted: `.claude/skills/question-csv/template.csv` must equal the `TEMPLATE_CSV`
+# constant in shared/logic/question-csv.ts, which is deliberately built with join('\n'). Without the
+# pin below, a fresh clone or a branch switch brings the template back with CRLF and
+# test/skill-validator.test.ts fails on a file nobody touched — on Windows only, so CI stays green
+# and only the maintainer ever sees it.
+#
+# The fixtures do not need it functionally (SheetJS and validate.mjs both read CRLF), but they are
+# byte-level test data too, so pinning them keeps the next fixture honest.
+*.csv text eol=lf

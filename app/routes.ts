@@ -11,9 +11,6 @@ export default [
   route('tests/:id/print', 'routes/tests.$id.print.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
-  // Reads questions off an uploaded test paper. Outside `_app` on purpose: extraction only
-  // proposes drafts, so it must not invalidate the questions/tests route caches.
-  route('extract-questions', 'routes/extract-questions.tsx'),
 
   // ---- JSON API (mobile app; see docs/api.md) ----
   // Resource routes only: none of these has a default export, and none is inside the

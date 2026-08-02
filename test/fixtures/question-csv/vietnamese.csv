@@ -1,0 +1,4 @@
+number,type,context,prompt,optionA,optionB,optionC,optionD,answer,explanation,difficulty,tags
+1,text,,"Thủ đô của Việt Nam là thành phố nào?",,,,,Hà Nội,,easy,"địa lí"
+2,mcq,,"Chọn cách viết hoa đúng:",hà nội,Hà Nội,HÀ NỘI,Hà nội,B,"Tên riêng viết hoa chữ đầu mỗi âm tiết.",easy,"chính tả"
+3,multi,"Đọc đoạn văn rồi trả lời.  Đồng bằng sông Cửu Long là vùng trồng lúa lớn nhất nước ta.","Theo đoạn văn, đâu là HAI ý đúng?","Đồng bằng sông Cửu Long trồng lúa","Đây là vùng trồng lúa lớn nhất","Vùng này không trồng lúa","Lúa chỉ trồng ở miền Bắc","A,B",,medium,"đọc hiểu"

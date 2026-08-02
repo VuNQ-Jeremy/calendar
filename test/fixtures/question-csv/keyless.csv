@@ -1,0 +1,6 @@
+number,type,context,prompt,optionA,optionB,optionC,optionD,answer,explanation,difficulty,tags
+1,mcq,,"Choose the word whose underlined part is pronounced differently.",need_ed_,want_ed_,walk_ed_,decid_ed_,,,easy,pronunciation
+2,mcq,,"Choose the correct answer: My brother ___ football every Sunday.",play,plays,played,playing,,,easy,grammar
+3,multi,,"Which of these are renewable sources of energy?",Solar,Coal,Wind,Diesel,,,medium,science
+4,mcq,"Read the passage and answer questions 4 and 5.  Bees pollinate a third of the food we eat.","What do bees pollinate, according to the passage?","a third of our food","all our food","only flowers","nothing we eat",,,medium,reading
+5,text,"Read the passage and answer questions 4 and 5.  Bees pollinate a third of the food we eat.","Give one reason bees matter to farmers.",,,,,,,hard,reading
