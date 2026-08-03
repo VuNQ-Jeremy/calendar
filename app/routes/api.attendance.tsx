@@ -16,8 +16,12 @@ export const loader = withAuth('staff', async ({ request, db }) => {
   return svc.listForOccurrence(db, eventId, date);
 });
 
-export const action = withAuth('staff', async ({ request, db }) => {
-  const input = await parseBody(request, AttendanceSaveInput);
-  // Delete-then-insert: omitting a student unmarks them.
-  return svc.saveOccurrence(db, input.eventId, input.date, input.records);
-});
+export const action = withAuth(
+  'staff',
+  async ({ request, db }) => {
+    const input = await parseBody(request, AttendanceSaveInput);
+    // Delete-then-insert: omitting a student unmarks them.
+    return svc.saveOccurrence(db, input.eventId, input.date, input.records);
+  },
+  { live: 'attendance' },
+);

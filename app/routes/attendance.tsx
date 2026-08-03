@@ -4,6 +4,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as attendanceSvc from '../../server/services/attendance';
 import { AttendanceSaveInput } from '../../shared/schemas';
+import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -17,7 +18,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   return { records };
 }
 
-export async function action({ request, context }: ActionFunctionArgs) {
+async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
@@ -48,3 +49,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
   );
   return { ok: true, records };
 }
+
+export const action = withLiveAction('attendance', actionImpl);

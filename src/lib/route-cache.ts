@@ -139,6 +139,11 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // profile edits change name/color which surface in many lists; profile has
   // no cache of its own, so mark everything stale (still served instantly).
   profile: { hard: [], stale: ['route:'] },
+  // Attendance rows live under 'att:<eventId>:<date>' and are read by
+  // useCachedLoad in the calendar event modal, not by a route loader. Stale
+  // rather than hard: the modal is usually open on the very key being marked,
+  // and deleting it would blank the roster mid-edit.
+  attendance: { hard: [], stale: ['att:'] },
 };
 
 /**
@@ -150,6 +155,16 @@ const lastLocalMutationAt = new Map<MutationDomain, number>();
 
 export function lastLocalMutation(domain: MutationDomain): number {
   return lastLocalMutationAt.get(domain) ?? 0;
+}
+
+/**
+ * Record a local write WITHOUT invalidating anything, for callers that already
+ * put the server's response straight into the cache (the attendance tab in
+ * src/calendar/event-modal.tsx). Without this the server's own broadcast comes
+ * back as an echo and the saving tab refetches data it just wrote.
+ */
+export function noteLocalMutation(domain: MutationDomain): void {
+  lastLocalMutationAt.set(domain, Date.now());
 }
 
 export function invalidateAfterMutation(domain: MutationDomain): void {

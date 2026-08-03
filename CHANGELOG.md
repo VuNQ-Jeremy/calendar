@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0084 — 2026-08-03
+Attendance is now live: useCachedLoad does stale-while-revalidate, so a roster marked by one teacher appears in another open event modal.
+
 ## v0.0083 — 2026-08-02
 Stabilise the live-update e2e specs: wait out the gap between the socket request and the hub accepting it.
 

@@ -24,6 +24,7 @@ export const MUTATION_DOMAINS = [
   'config',
   'feedback',
   'profile',
+  'attendance',
 ] as const;
 
 export type MutationDomain = (typeof MUTATION_DOMAINS)[number];

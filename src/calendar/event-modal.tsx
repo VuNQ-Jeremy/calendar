@@ -11,6 +11,7 @@ import { MaterialsTab } from './materials-tab.jsx';
 import { MaterialSearchDropdown } from '../material-search.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
 import { cacheSet, markStale } from '../lib/cache.js';
+import { noteLocalMutation } from '../lib/route-cache.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
@@ -65,6 +66,9 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
   React.useEffect(() => {
     if (saveFetcher.data?.ok && saveFetcher.data.records) {
       cacheSet(attKey, { records: saveFetcher.data.records });
+      // The save response IS the fresh state, so ignore the server's broadcast
+      // of our own write rather than refetching it.
+      noteLocalMutation('attendance');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saveFetcher.data]);

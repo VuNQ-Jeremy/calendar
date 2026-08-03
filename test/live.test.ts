@@ -74,6 +74,19 @@ describe('live client', () => {
     stop?.();
   });
 
+  it('marks attendance rows stale, which useCachedLoad refreshes', () => {
+    // 'att:<eventId>:<date>' is read by useCachedLoad in the event modal, not
+    // by a route loader, so this is the only thing that reaches it.
+    cacheSet('att:evt-1:2026-08-03', { records: [] });
+    const socket = start();
+
+    socket.receive({ type: 'invalidate', domain: 'attendance', ts: Date.now() });
+
+    expect(isStale('att:evt-1:2026-08-03')).toBe(true);
+    expect(cacheGet('att:evt-1:2026-08-03')).toBeDefined();
+    stop?.();
+  });
+
   it('ignores a message announcing a domain it does not know', () => {
     cacheSet(K.calendar, { events: [] });
     const socket = start();
