@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0085 — 2026-08-03
+Regenerate worker-configuration.d.ts from wrangler; secrets now declared in globals.d.ts so regeneration cannot silently drop them.
+
 ## v0.0084 — 2026-08-03
 Attendance is now live: useCachedLoad does stale-while-revalidate, so a roster marked by one teacher appears in another open event modal.
 
