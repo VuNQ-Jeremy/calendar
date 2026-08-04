@@ -35,6 +35,7 @@
     "clsx": "^2.1.1",
     "docx-preview": "^0.4.0",
     "drizzle-orm": "^0.45.2",
+    "html-to-image": "^1.11.13",
     "isbot": "^5",
     "lucide-react": "^1.25.0",
     "mammoth": "^1.12.0",

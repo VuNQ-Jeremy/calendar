@@ -9,13 +9,15 @@ import { TuitionMonth } from '../../shared/schemas';
 import { studentFees } from '../../shared/logic/tuition';
 
 /**
- * Printable tuition slip (phiếu thu) for one student and one month.
+ * Tuition slip (phiếu thu) for one student and one month.
  *
  * Registered OUTSIDE the `_app` layout — a document, not an app screen: no shell, no nav chrome,
  * and no route cache (`cacheKeyForPath` only matches the single-segment month URL).
  *
- * The returned shape is deliberately flat and self-contained. Customizable slip themes are a
- * planned follow-up, and keeping the loader data stable means a theme only swaps the view.
+ * The slip is copied to the clipboard as an image (parents get it over Zalo), not printed, so this
+ * is really a rendering surface for `src/tuition/slip-themes.tsx`. The returned shape is the theme
+ * contract: flat, self-contained, and the same for every theme — adding a theme touches no server
+ * code at all.
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -27,9 +29,10 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const month = parsedMonth.data;
   const studentId = params.studentId!;
 
-  const [report, students] = await Promise.all([
+  const [report, students, parents] = await Promise.all([
     tuitionSvc.getMonthReport(db, month),
     peopleSvc.listStudents(db),
+    peopleSvc.listParents(db),
   ]);
 
   const student = students.find((s) => s.id === studentId);
@@ -39,9 +42,13 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     (f) => f.studentId === studentId,
   );
 
+  // The paper pads have an SĐT line. Students carry no phone of their own, so it comes from the
+  // first linked parent who has one — null when nobody does, and the theme just omits the line.
+  const phone = parents.find((p) => p.studentIds.includes(studentId) && p.phone)?.phone ?? null;
+
   return {
     month,
-    student: { id: student.id, name: student.name, guardian: student.guardian },
+    student: { id: student.id, name: student.name, guardian: student.guardian, phone },
     // A student with nothing billed still gets a valid (zero) slip rather than an error page.
     fee: fee ?? {
       studentId,

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0089 — 2026-08-04
+Fee slip is now a themed image you copy to the clipboard for Zalo instead of a print document: new Cute pastel style (default) plus Classic, an SDT line from the parent's phone, and no more signature or provisional lines.
+
 ## v0.0088 — 2026-08-04
 Tuition: clearing the payment date no longer fails the whole payment save with a 400.
 
