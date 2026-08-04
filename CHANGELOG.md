@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0091 — 2026-08-04
+New Minimal fee-slip style, copied from the centre's typed receipts: a Buoi hoc / Ngay hoc table of every session date, the per-session price, and the total spelled out in Vietnamese words.
+
 ## v0.0090 — 2026-08-04
 Fee slip fixes found by screenshotting it: the Classic layout's month line no longer inherits the calendar's grid, the bow doodle draws correctly, and the month reads as a name instead of 2031-03.
 

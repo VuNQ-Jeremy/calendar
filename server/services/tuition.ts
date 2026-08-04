@@ -164,6 +164,12 @@ export type TuitionLine = {
   className: string;
   /** Billable sessions, per the settings in force. */
   sessions: number;
+  /**
+   * The billable session dates, ascending, one entry per billed session — so two events of the same
+   * class on one day appear twice, matching `sessions`. The Minimal slip lists them ("Buổi học /
+   * Ngày học"). Empty for months closed before the column existed (migration 0021).
+   */
+  dates: string[];
   /** Every status seen, billable or not — the slip shows the breakdown. */
   statusCounts: Record<string, number>;
   unitPriceVnd: number;
@@ -208,13 +214,15 @@ export async function computeMonthLines(
   settings: TuitionSettings,
 ): Promise<{ lines: TuitionLine[]; missingPriceClasses: { id: string; name: string }[] }> {
   const [start, end] = monthRange(month);
-  const [counts, prices, classRows] = await Promise.all([
+  // One row per attendance record rather than a grouped count: the Minimal slip lists the individual
+  // session dates, so the dates have to come back with the rows. One centre-month is a few hundred.
+  const [marks, prices, classRows] = await Promise.all([
     db
       .select({
         studentId: attendanceRecords.studentId,
         classId: events.classId,
         status: attendanceRecords.status,
-        n: sql<number>`count(*)`,
+        date: attendanceRecords.date,
       })
       .from(attendanceRecords)
       .innerJoin(events, eq(attendanceRecords.eventId, events.id))
@@ -225,7 +233,7 @@ export async function computeMonthLines(
           isNotNull(events.classId),
         ),
       )
-      .groupBy(attendanceRecords.studentId, events.classId, attendanceRecords.status),
+      .orderBy(asc(attendanceRecords.date)),
     listPrices(db),
     db.select({ id: classes.id, name: classes.name }).from(classes),
   ]);
@@ -234,10 +242,10 @@ export async function computeMonthLines(
   const billable = new Set<string>(settings.billableStatuses);
 
   const byPair = new Map<string, TuitionLine>();
-  for (const row of counts) {
+  for (const row of marks) {
     const classId = row.classId;
     if (!classId) continue; // isNotNull already excludes these; narrowing for TypeScript
-    const key = `${row.studentId} ${classId}`;
+    const key = `${row.studentId} ${classId}`;
     let line = byPair.get(key);
     if (!line) {
       line = {
@@ -245,14 +253,18 @@ export async function computeMonthLines(
         classId,
         className: classNames.get(classId) ?? classId,
         sessions: 0,
+        dates: [],
         statusCounts: {},
         unitPriceVnd: 0,
         amountVnd: 0,
       };
       byPair.set(key, line);
     }
-    line.statusCounts[row.status] = (line.statusCounts[row.status] ?? 0) + Number(row.n);
-    if (billable.has(row.status)) line.sessions += Number(row.n);
+    line.statusCounts[row.status] = (line.statusCounts[row.status] ?? 0) + 1;
+    if (billable.has(row.status)) {
+      line.sessions += 1;
+      line.dates.push(row.date);
+    }
   }
 
   const missing = new Map<string, string>();
@@ -300,6 +312,15 @@ async function listStudentMonths(db: Db, month: string): Promise<StudentMonthRow
   return rows.map(mapStudentMonth);
 }
 
+/** A snapshot column that holds JSON. Corrupt or pre-migration values read as the fallback. */
+function parseJson<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 async function listSnapshotLines(db: Db, month: string): Promise<TuitionLine[]> {
   const rows = await db
     .select()
@@ -307,18 +328,13 @@ async function listSnapshotLines(db: Db, month: string): Promise<TuitionLine[]> 
     .where(eq(tuitionLines.month, month))
     .orderBy(asc(tuitionLines.studentId), asc(tuitionLines.className));
   return rows.map((r) => {
-    let statusCounts: Record<string, number> = {};
-    try {
-      statusCounts = JSON.parse(r.statusCounts) as Record<string, number>;
-    } catch {
-      statusCounts = {};
-    }
     return {
       studentId: r.studentId,
       classId: r.classId,
       className: r.className,
       sessions: r.sessions,
-      statusCounts,
+      dates: parseJson<string[]>(r.dates, []),
+      statusCounts: parseJson<Record<string, number>>(r.statusCounts, {}),
       unitPriceVnd: r.unitPriceVnd,
       amountVnd: r.amountVnd,
     };
@@ -367,7 +383,7 @@ export class MissingPriceError extends Error {
 }
 
 /** The columns each tuition_lines row binds — see `rowsPerStatement`. */
-const TUITION_LINE_COLUMNS = 9;
+const TUITION_LINE_COLUMNS = 10;
 
 /**
  * Freeze the month. Idempotent: closing an already-closed month recomputes and replaces the
@@ -386,6 +402,7 @@ export async function closeMonth(db: Db, month: string, closedBy: string): Promi
     classId: l.classId,
     className: l.className,
     sessions: l.sessions,
+    dates: JSON.stringify(l.dates),
     statusCounts: JSON.stringify(l.statusCounts),
     unitPriceVnd: l.unitPriceVnd,
     amountVnd: l.amountVnd,
@@ -402,8 +419,8 @@ export async function closeMonth(db: Db, month: string, closedBy: string): Promi
       set: { status: 'closed', closedAt, closedBy, billableStatuses: billableJson },
     });
   const del = db.delete(tuitionLines).where(eq(tuitionLines.month, month));
-  // A line binds 9 parameters, so one INSERT of every line would blow D1's 100-parameter ceiling
-  // past 11 lines. Chunked, but in the same batch as the delete — that is what keeps a month from
+  // A line binds 10 parameters, so one INSERT of every line would blow D1's 100-parameter ceiling
+  // past 10 lines. Chunked, but in the same batch as the delete — that is what keeps a month from
   // being left marked closed with a half-written snapshot.
   const inserts = chunk(values, rowsPerStatement(TUITION_LINE_COLUMNS)).map((part) =>
     db.insert(tuitionLines).values(part),

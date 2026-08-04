@@ -1,5 +1,11 @@
 import type { StudentFee } from '../../shared/logic/tuition.js';
-import { formatVnd, monthLabel } from '../../shared/logic/tuition.js';
+import {
+  dongToWords,
+  formatDmy,
+  formatVnd,
+  monthLabel,
+  monthNumeric,
+} from '../../shared/logic/tuition.js';
 import { useLang } from '../lib/i18n.jsx';
 
 /**
@@ -22,7 +28,7 @@ export type SlipData = {
   fee: StudentFee;
 };
 
-export type SlipThemeId = 'cute-pastel' | 'classic';
+export type SlipThemeId = 'cute-pastel' | 'minimal' | 'classic';
 
 export type SlipTheme = {
   id: SlipThemeId;
@@ -430,15 +436,153 @@ function ClassicSlip({ month, student, fee }: SlipData) {
   );
 }
 
+/* ── Minimal ────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Modelled on the centre's typed receipts: a narrow serif column, a bordered "Buổi học / Ngày học"
+ * table listing every session, the per-session price, and the total with the amount in words.
+ */
+export const MINIMAL_CSS = `
+.slip-minimal {
+  --ink: #000;
+  width: 480px;
+  box-sizing: border-box;
+  background: #fff;
+  color: var(--ink);
+  font-family: 'Times New Roman', Times, Georgia, serif;
+  font-size: 16px;
+  line-height: 1.45;
+  padding: 26px 30px 30px;
+}
+.slip-minimal__title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+.slip-minimal__who { margin: 0 0 16px; font-size: 15px; text-align: center; }
+.slip-minimal__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.slip-minimal__table th,
+.slip-minimal__table td {
+  border: 1px solid var(--ink);
+  padding: 5px 8px;
+  text-align: center;
+}
+.slip-minimal__table th { font-weight: 700; }
+/* The session column is a narrow index; the date column takes the rest. */
+.slip-minimal__table th:first-child,
+.slip-minimal__table td:first-child { width: 34%; }
+.slip-minimal__class { margin: 0 0 6px; font-size: 15px; font-weight: 700; }
+.slip-minimal__rate { margin: 0 0 4px; font-size: 15px; font-style: italic; }
+.slip-minimal__total { margin: 8px 0 0; font-size: 16px; font-weight: 700; }
+.slip-minimal__line { margin: 2px 0 0; font-size: 15px; }
+.slip-minimal__empty { margin: 0; font-size: 15px; font-style: italic; }
+`;
+
+function MinimalSlip({ month, student, fee }: SlipData) {
+  const { t, lang } = useLang();
+  // Only worth naming the class per table when there is more than one to tell apart.
+  const showClassNames = fee.lines.length > 1;
+
+  return (
+    <div className="slip-minimal">
+      {/* Both forms go in; each language's template picks the one that reads correctly, since
+          the Vietnamese sentence already contains the word "tháng". */}
+      <h1 className="slip-minimal__title">
+        {t('slip_fee_for', {
+          month: monthLabel(month, lang),
+          monthNum: monthNumeric(month),
+        })}
+      </h1>
+      <p className="slip-minimal__who">
+        {student.name}
+        {student.phone ? ` · ${student.phone}` : ''}
+      </p>
+
+      {fee.lines.length === 0 ? (
+        <p className="slip-minimal__empty">{t('slip_no_lines')}</p>
+      ) : (
+        fee.lines.map((line) => (
+          <div key={line.classId}>
+            {showClassNames ? <p className="slip-minimal__class">{line.className}</p> : null}
+            <table className="slip-minimal__table">
+              <thead>
+                <tr>
+                  <th>{t('slip_session_no')}</th>
+                  <th>{t('slip_session_date')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {line.dates.length > 0 ? (
+                  line.dates.map((date, i) => (
+                    <tr key={`${date}-${i}`}>
+                      <td>{i + 1}</td>
+                      <td>{formatDmy(date)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  // A month closed before the dates were stored (migration 0021) knows only the
+                  // count, so show that rather than an empty table.
+                  <tr>
+                    <td>{line.sessions}</td>
+                    <td>—</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <p className="slip-minimal__rate">
+              {t('slip_fee_per_session', { price: formatVnd(line.unitPriceVnd) })}
+            </p>
+          </div>
+        ))
+      )}
+
+      {fee.adjustmentVnd !== 0 ? (
+        <p className="slip-minimal__line">
+          {t('tuition_adjustment')}
+          {fee.adjustmentNote ? ` (${fee.adjustmentNote})` : ''}: {formatVnd(fee.adjustmentVnd)}
+        </p>
+      ) : null}
+
+      <p className="slip-minimal__total">
+        {t('slip_grand_total')}: {formatVnd(fee.dueVnd)} ({dongToWords(fee.dueVnd)})
+      </p>
+
+      {/* Nothing paid yet means outstanding equals the total, so the extra line would only repeat
+          it — the paper receipts don't carry one either. */}
+      {fee.paidVnd > 0 ? (
+        <>
+          <p className="slip-minimal__line">
+            {t('slip_received')}
+            {fee.paidAt ? ` · ${formatDmy(fee.paidAt)}` : ''}: {formatVnd(fee.paidVnd)}
+          </p>
+          {fee.outstandingVnd > 0 ? (
+            <p className="slip-minimal__line">
+              {t('slip_outstanding')}: {formatVnd(fee.outstandingVnd)}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 /* ── Registry ───────────────────────────────────────────────────────────────────────────── */
 
 export const SLIP_THEMES: SlipTheme[] = [
   { id: 'cute-pastel', labelKey: 'slip_theme_cute', Component: CutePastelSlip },
+  { id: 'minimal', labelKey: 'slip_theme_minimal', Component: MinimalSlip },
   { id: 'classic', labelKey: 'slip_theme_classic', Component: ClassicSlip },
 ];
 
 export const SLIP_THEME_CSS: Record<SlipThemeId, string> = {
   'cute-pastel': CUTE_PASTEL_CSS,
+  minimal: MINIMAL_CSS,
   classic: CLASSIC_CSS,
 };
 

@@ -23,6 +23,86 @@ export function formatVnd(amount: number): string {
   return `${sign}${grouped} ₫`;
 }
 
+/**
+ * '2026-07' -> '7/2026'. For Vietnamese sentences that already say "tháng", where `monthLabel`'s
+ * "Tháng 7 2026" would read as "học phí tháng Tháng 7 2026".
+ */
+export function monthNumeric(month: string): string {
+  const [year, monthNo] = month.split('-');
+  return `${Number(monthNo)}/${year}`;
+}
+
+/** 'YYYY-MM-DD' -> '04/05/2026'. What the paper receipts write, and unambiguous in Vietnam. */
+export function formatDmy(date: string): string {
+  const [y, m, d] = date.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : date;
+}
+
+const VI_DIGITS = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'] as const;
+/** Group scale words, ascending: units, thousands, millions, billions. */
+const VI_SCALES = ['', 'nghìn', 'triệu', 'tỷ'] as const;
+
+/** One group of three digits. `lead` is true for the highest non-zero group, which needs no padding. */
+function readViGroup(n: number, lead: boolean): string {
+  const hundreds = Math.floor(n / 100);
+  const tens = Math.floor(n / 10) % 10;
+  const units = n % 10;
+  const words: string[] = [];
+
+  if (hundreds > 0) words.push(VI_DIGITS[hundreds], 'trăm');
+  else if (!lead) words.push('không', 'trăm');
+
+  if (tens === 0) {
+    // "lẻ" is the spoken filler for a missing tens place: 105 -> "một trăm lẻ năm".
+    if (units > 0 && (hundreds > 0 || !lead)) words.push('lẻ');
+    if (units > 0) words.push(VI_DIGITS[units]);
+  } else if (tens === 1) {
+    words.push('mười');
+    // 11 -> "mười một", but 15 -> "mười lăm": five changes shape after a tens word.
+    if (units === 5) words.push('lăm');
+    else if (units > 0) words.push(VI_DIGITS[units]);
+  } else {
+    words.push(VI_DIGITS[tens], 'mươi');
+    // 21 -> "hai mươi mốt", 25 -> "hai mươi lăm".
+    if (units === 1) words.push('mốt');
+    else if (units === 5) words.push('lăm');
+    else if (units > 0) words.push(VI_DIGITS[units]);
+  }
+
+  return words.join(' ');
+}
+
+/**
+ * An amount of đồng written out in Vietnamese: 2400000 -> 'Hai triệu bốn trăm nghìn đồng'.
+ *
+ * Vietnamese receipts carry the total in words next to the figure, so an altered digit is obvious.
+ * All-zero groups are dropped the way they are spoken — 2.400.000 is "hai triệu bốn trăm nghìn", not
+ * "hai triệu bốn trăm nghìn không trăm". A negative amount is not a thing on a receipt, so it is
+ * read as its absolute value.
+ */
+export function dongToWords(amount: number): string {
+  const n = Math.abs(Math.round(amount));
+  if (n === 0) return 'Không đồng';
+
+  // Split into groups of three, least significant first.
+  const groups: number[] = [];
+  for (let rest = n; rest > 0; rest = Math.floor(rest / 1000)) groups.push(rest % 1000);
+
+  const parts: string[] = [];
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const group = groups[i];
+    if (group === 0) continue; // an empty group is simply not spoken
+    const isLead = parts.length === 0;
+    // Past a thousand billion the scale word repeats ("tỷ tỷ"); the schema caps amounts long
+    // before that, so the last scale is reused rather than invented.
+    const scale = VI_SCALES[Math.min(i, VI_SCALES.length - 1)];
+    parts.push([readViGroup(group, isLead), scale].filter(Boolean).join(' '));
+  }
+
+  const sentence = `${parts.join(' ')} đồng`;
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
 
 /** Nothing owed counts as paid — a fully discounted month should not read as "unpaid". */

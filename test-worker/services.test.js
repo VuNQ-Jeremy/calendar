@@ -2917,6 +2917,37 @@ describe('tuition — computing a month from attendance', () => {
     expect(strictLine.amountVnd).toBe(300_000);
   });
 
+  it('records which dates were billed, and freezes them into the snapshot', async () => {
+    const d = db();
+    const month = '2031-08';
+    const { student, ev } = await tuitionFixture(d, { month, name: 'Tuition Dates' });
+
+    // Two billable sessions and one excused one; only the billable dates should be listed.
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-04`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-18`, [
+      { studentId: student.id, status: 'late' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-25`, [
+      { studentId: student.id, status: 'excused' },
+    ]);
+
+    const open = await tuitionSvc.getMonthReport(d, month);
+    const line = open.lines.find((l) => l.studentId === student.id);
+    expect(line.sessions).toBe(2);
+    expect(line.dates).toEqual([`${month}-04`, `${month}-18`]);
+
+    // The dates survive the close, which is what lets a closed month print its session list.
+    await tuitionSvc.closeMonth(d, month, 'Test Admin');
+    const closed = await tuitionSvc.getMonthReport(d, month);
+    expect(closed.status).toBe('closed');
+    expect(closed.lines.find((l) => l.studentId === student.id).dates).toEqual([
+      `${month}-04`,
+      `${month}-18`,
+    ]);
+  });
+
   it('aggregates per student and class, and respects the month boundaries', async () => {
     const d = db();
     const month = '2031-02';

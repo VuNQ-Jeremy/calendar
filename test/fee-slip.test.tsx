@@ -11,6 +11,7 @@ const LINE = {
   classId: 'cls-1',
   className: 'Toán 9',
   sessions: 4,
+  dates: ['2031-03-04', '2031-03-11', '2031-03-18', '2031-03-25'],
   statusCounts: { present: 3, late: 1 },
   unitPriceVnd: 150_000,
   amountVnd: 600_000,
@@ -59,9 +60,10 @@ function themePicker(): HTMLSelectElement {
 
 describe('slip theme registry', () => {
   it('has a stable default and recognises only its own ids', () => {
-    expect(SLIP_THEMES.map((x) => x.id)).toEqual(['cute-pastel', 'classic']);
+    expect(SLIP_THEMES.map((x) => x.id)).toEqual(['cute-pastel', 'minimal', 'classic']);
     expect(DEFAULT_SLIP_THEME).toBe('cute-pastel');
     expect(isSlipThemeId('cute-pastel')).toBe(true);
+    expect(isSlipThemeId('minimal')).toBe(true);
     expect(isSlipThemeId('classic')).toBe(true);
     expect(isSlipThemeId('nope')).toBe(false);
     expect(isSlipThemeId(null)).toBe(false);
@@ -119,6 +121,57 @@ describe('FeeSlipView', () => {
   it('falls back to the default theme when ?theme= is nonsense', async () => {
     await renderSlip(loaderData(), '/?theme=sparkles');
     expect(themePicker().value).toBe('cute-pastel');
+  });
+
+  it('lists every session date and the total in words on the Minimal theme', async () => {
+    await renderSlip(loaderData(), '/?theme=minimal');
+    expect(themePicker().value).toBe('minimal');
+    expect(screen.getByText('Session')).toBeInTheDocument();
+    // One numbered row per billed session, dates written the way the paper receipts do.
+    expect(screen.getByText('04/03/2031')).toBeInTheDocument();
+    expect(screen.getByText('25/03/2031')).toBeInTheDocument();
+    expect(screen.getByText(/Tuition: 150.000 ₫ \/ session/)).toBeInTheDocument();
+    // 600.000 billed − 50.000 adjustment, spelled out beside the figure.
+    expect(
+      screen.getByText(/Total: 550.000 ₫ \(Năm trăm năm mươi nghìn đồng\)/),
+    ).toBeInTheDocument();
+    // A single class needs no heading to tell it apart.
+    expect(screen.queryByText('Toán 9')).not.toBeInTheDocument();
+  });
+
+  it('names each class when the student is billed for more than one', async () => {
+    await renderSlip(
+      loaderData({
+        fee: {
+          ...loaderData().fee,
+          lines: [
+            LINE,
+            {
+              ...LINE,
+              classId: 'cls-2',
+              className: 'Lý 9',
+              sessions: 1,
+              dates: ['2031-03-06'],
+              amountVnd: 150_000,
+            },
+          ],
+        },
+      }),
+      '/?theme=minimal',
+    );
+    expect(screen.getByText('Toán 9')).toBeInTheDocument();
+    expect(screen.getByText('Lý 9')).toBeInTheDocument();
+  });
+
+  it('shows the session count when a pre-0021 closed month has no stored dates', async () => {
+    await renderSlip(
+      loaderData({
+        fee: { ...loaderData().fee, lines: [{ ...LINE, dates: [] }] },
+      }),
+      '/?theme=minimal',
+    );
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
   });
 
   it('renders a zero slip without a phone line when nothing was billed', async () => {

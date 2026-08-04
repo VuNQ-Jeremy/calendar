@@ -575,6 +575,11 @@ export const tuitionLines = sqliteTable(
     className: text('class_name').notNull(),
     /** Billable session count. */
     sessions: integer('sessions').notNull(),
+    /**
+     * JSON ["YYYY-MM-DD", ...] — one entry per billed session, so the Minimal slip can print the
+     * session list on a closed month. Empty for lines frozen before migration 0021.
+     */
+    dates: text('dates').notNull().default('[]'),
     /** JSON {"present":10,"late":1,...} — all statuses, so the slip can show the breakdown. */
     statusCounts: text('status_counts').notNull().default('{}'),
     unitPriceVnd: integer('unit_price_vnd').notNull(),

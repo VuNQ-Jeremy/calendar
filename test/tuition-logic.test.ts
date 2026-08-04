@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { formatVnd, paymentStatus, shiftMonth, studentFees } from '../shared/logic/tuition';
+import {
+  dongToWords,
+  formatDmy,
+  formatVnd,
+  monthLabel,
+  monthNumeric,
+  paymentStatus,
+  shiftMonth,
+  studentFees,
+} from '../shared/logic/tuition';
 import type { TuitionLine } from '../server/services/tuition';
 import {
   TuitionMonth,
@@ -7,6 +16,7 @@ import {
   TuitionAdjustmentInput,
   TuitionPaymentInput,
 } from '../shared/schemas';
+import { translate } from '../shared/i18n/strings';
 
 function line(over: Partial<TuitionLine> = {}): TuitionLine {
   return {
@@ -14,12 +24,77 @@ function line(over: Partial<TuitionLine> = {}): TuitionLine {
     classId: 'c1',
     className: 'Toán 9',
     sessions: 4,
+    dates: ['2031-03-04', '2031-03-11', '2031-03-18', '2031-03-25'],
     statusCounts: { present: 4 },
     unitPriceVnd: 100_000,
     amountVnd: 400_000,
     ...over,
   };
 }
+
+describe('formatDmy', () => {
+  it('writes an ISO date the way the paper receipts do', () => {
+    expect(formatDmy('2026-05-04')).toBe('04/05/2026');
+    expect(formatDmy('2026-12-31')).toBe('31/12/2026');
+  });
+
+  it('passes a value it cannot parse through untouched', () => {
+    expect(formatDmy('')).toBe('');
+    expect(formatDmy('soon')).toBe('soon');
+  });
+});
+
+describe('the Minimal slip title', () => {
+  it('says "tháng" exactly once in Vietnamese', () => {
+    // The vi sentence already contains "tháng", so it interpolates the numeric form; passing
+    // monthLabel's "Tháng 7 2026" there would read "Học phí tháng Tháng 7 2026".
+    // The component passes the ACTIVE language's label, plus the numeric form, every render.
+    const vars = (lang: string) => ({
+      month: monthLabel('2026-07', lang),
+      monthNum: monthNumeric('2026-07'),
+    });
+    expect(translate('vi', 'slip_fee_for', vars('vi'))).toBe('Học phí tháng 7/2026');
+    expect(translate('en', 'slip_fee_for', vars('en'))).toBe('Tuition · July 2026');
+  });
+
+  it('formats a numeric month without a leading zero', () => {
+    expect(monthNumeric('2026-07')).toBe('7/2026');
+    expect(monthNumeric('2026-12')).toBe('12/2026');
+  });
+});
+
+describe('dongToWords', () => {
+  it('writes the totals a tuition slip actually shows', () => {
+    // The figure from the operator's reference receipt.
+    expect(dongToWords(2_400_000)).toBe('Hai triệu bốn trăm nghìn đồng');
+    expect(dongToWords(200_000)).toBe('Hai trăm nghìn đồng');
+    expect(dongToWords(450_000)).toBe('Bốn trăm năm mươi nghìn đồng');
+    expect(dongToWords(880_000)).toBe('Tám trăm tám mươi nghìn đồng');
+    expect(dongToWords(1_500_000)).toBe('Một triệu năm trăm nghìn đồng');
+    expect(dongToWords(0)).toBe('Không đồng');
+  });
+
+  it('reshapes one and five after a tens word, the way they are spoken', () => {
+    expect(dongToWords(15_000)).toBe('Mười lăm nghìn đồng');
+    expect(dongToWords(11_000)).toBe('Mười một nghìn đồng');
+    expect(dongToWords(21_000)).toBe('Hai mươi mốt nghìn đồng');
+    expect(dongToWords(25_000)).toBe('Hai mươi lăm nghìn đồng');
+    expect(dongToWords(35)).toBe('Ba mươi lăm đồng');
+  });
+
+  it('speaks a missing tens place as "lẻ" and skips empty groups', () => {
+    expect(dongToWords(105)).toBe('Một trăm lẻ năm đồng');
+    expect(dongToWords(1_000_500)).toBe('Một triệu năm trăm đồng');
+    expect(dongToWords(2_000_000)).toBe('Hai triệu đồng');
+    expect(dongToWords(1_000_000_000)).toBe('Một tỷ đồng');
+  });
+
+  it('pads a lower group that lost its hundreds, and ignores a negative sign', () => {
+    // 1.020.000: the thousands group is 020, so it needs "không trăm" to stay unambiguous.
+    expect(dongToWords(1_020_000)).toBe('Một triệu không trăm hai mươi nghìn đồng');
+    expect(dongToWords(-450_000)).toBe('Bốn trăm năm mươi nghìn đồng');
+  });
+});
 
 describe('formatVnd', () => {
   it('groups thousands with dots, the Vietnamese way', () => {
