@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0092 — 2026-08-04
+Minimal slip: keep the serif title. The design system styles every h1 globally, which was overriding it with the display font.
+
 ## v0.0091 — 2026-08-04
 New Minimal fee-slip style, copied from the centre's typed receipts: a Buoi hoc / Ngay hoc table of every session date, the per-session price, and the total spelled out in Vietnamese words.
 

@@ -454,10 +454,16 @@ export const MINIMAL_CSS = `
   line-height: 1.45;
   padding: 26px 30px 30px;
 }
+/* font-family and letter-spacing are load-bearing, not decoration: the design system styles every
+   h1-h5 with --font-display globally (src/ds/styles/tokens/base.css), which lands on this title too
+   and replaces the serif the whole theme is built around. */
 .slip-minimal__title {
   margin: 0 0 4px;
+  font-family: inherit;
   font-size: 18px;
   font-weight: 700;
+  letter-spacing: 0;
+  color: inherit;
   text-align: center;
 }
 .slip-minimal__who { margin: 0 0 16px; font-size: 15px; text-align: center; }
