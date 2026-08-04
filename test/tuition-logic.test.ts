@@ -112,6 +112,26 @@ describe('studentFees', () => {
     expect(fees[0].paidVnd).toBe(200_000);
   });
 
+  it('drops an all-zero payment row, so zeroing a payment undoes it', () => {
+    // There is no way to delete a tuition_student_months row, so zeroing the amounts is the only
+    // undo an admin has; an empty row must not leave the student listed as "Paid in full".
+    const fees = studentFees(
+      [],
+      [
+        {
+          month: '2031-03',
+          studentId: 'mistake',
+          adjustmentVnd: 0,
+          adjustmentNote: null,
+          paidVnd: 0,
+          paidAt: null,
+          paymentNote: null,
+        },
+      ],
+    );
+    expect(fees).toEqual([]);
+  });
+
   it('gives a student with lines but no payment row a zero-paid entry', () => {
     const [fee] = studentFees([line()], []);
     expect(fee.paidVnd).toBe(0);

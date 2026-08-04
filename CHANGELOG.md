@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0087 — 2026-08-04
+Tuition: an all-zero payment row no longer lists a student as paid on a month where nothing was billed, which also makes zeroing a payment work as an undo.
+
 ## v0.0086 — 2026-08-04
 Tuition (học phí) module: per-session class prices with effective dates, monthly fees computed from attendance, payment and adjustment tracking, explicit month close that freezes amounts, and a printable phiếu thu. Admin-only.
 

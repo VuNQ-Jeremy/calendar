@@ -50,9 +50,11 @@ export type StudentFee = {
 /**
  * One row per student for a month.
  *
- * Students with a payment row but no fee lines are included: a month can be reopened after the
- * attendance it was billed from was corrected away, and dropping the row would hide money that
- * was actually collected.
+ * A student with a payment row but no fee lines is still listed, as long as the row says something:
+ * a month can be reopened after the attendance it was billed from was corrected away, and dropping
+ * the row would hide money that was actually collected. An all-zero row says nothing, so it is
+ * skipped — that is also what makes zeroing a payment work as an undo, since there is no way to
+ * delete the row itself.
  */
 export function studentFees(lines: TuitionLine[], studentMonths: StudentMonthRow[]): StudentFee[] {
   const byStudent = new Map<string, TuitionLine[]>();
@@ -62,8 +64,10 @@ export function studentFees(lines: TuitionLine[], studentMonths: StudentMonthRow
     else byStudent.set(line.studentId, [line]);
   }
   const paymentByStudent = new Map(studentMonths.map((s) => [s.studentId, s]));
-  for (const studentId of paymentByStudent.keys()) {
-    if (!byStudent.has(studentId)) byStudent.set(studentId, []);
+  for (const [studentId, row] of paymentByStudent) {
+    if (byStudent.has(studentId)) continue;
+    if (row.paidVnd === 0 && row.adjustmentVnd === 0) continue;
+    byStudent.set(studentId, []);
   }
 
   const out: StudentFee[] = [];
