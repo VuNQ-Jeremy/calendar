@@ -985,7 +985,6 @@ const en_strings = {
   print_empty: 'This test has no questions yet.',
   // Tuition slip (/tuition/:month/:studentId/print) — copied to the clipboard as an image.
   slip_title: 'TUITION FEE SLIP',
-  slip_month: 'Month',
   slip_student: 'Student',
   slip_guardian: 'Guardian',
   slip_parent_student: 'Guardian / Student',
@@ -1912,7 +1911,6 @@ export const STRINGS = {
     print_hide_key: 'Ẩn đáp án',
     print_empty: 'Bài kiểm tra này chưa có câu hỏi.',
     slip_title: 'PHIẾU THU HỌC PHÍ',
-    slip_month: 'Tháng',
     slip_student: 'Học sinh',
     slip_guardian: 'Phụ huynh',
     slip_parent_student: 'Phụ huynh / Học sinh',

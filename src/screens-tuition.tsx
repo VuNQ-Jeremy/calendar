@@ -4,10 +4,9 @@ import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PageHeader, Empty, Modal, MDatePicker, useConfirm } from './ui.jsx';
 import { useLang } from './lib/i18n.jsx';
-import { getCal } from '../shared/i18n/strings.js';
 import { ATTENDANCE_META } from '../shared/logic/assess.js';
 import type { AttendanceStatusId } from '../shared/logic/assess.js';
-import { formatVnd, shiftMonth, studentFees } from '../shared/logic/tuition.js';
+import { formatVnd, monthLabel, shiftMonth, studentFees } from '../shared/logic/tuition.js';
 import type { StudentFee } from '../shared/logic/tuition.js';
 import type {
   ClassPriceRow,
@@ -35,14 +34,10 @@ const STATUS_BADGE: Record<StudentFee['status'], { tk: string; color: string }> 
   unpaid: { tk: 'tuition_status_unpaid', color: 'rose' },
 };
 
-/** '2026-03' -> 'March 2026' / 'Tháng 3 2026', using the same month names as the calendar. */
+/** Bound to the active language; the formatting itself is shared with the fee slip. */
 function useMonthLabel() {
   const { lang } = useLang();
-  const { months } = getCal(lang);
-  return (month: string) => {
-    const [y, m] = month.split('-');
-    return `${months[Number(m) - 1]} ${y}`;
-  };
+  return (month: string) => monthLabel(month, lang);
 }
 
 /** Digits only — money is integer VND, and a stray separator must not become a different amount. */
@@ -265,7 +260,7 @@ function TuitionScreen() {
   const fetcher = useFetcher<{ error?: string; classes?: { id: string; name: string }[] }>();
   const navigate = useNavigate();
   const { t } = useLang();
-  const monthLabel = useMonthLabel();
+  const fmtMonth = useMonthLabel();
   const [confirm, confirmNode] = useConfirm();
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [payment, setPayment] = React.useState<PaymentDraft | null>(null);
@@ -310,7 +305,7 @@ function TuitionScreen() {
 
   const closeMonth = async () => {
     const ok = await confirm({
-      title: t('tuition_close_confirm', { month: monthLabel(month) }),
+      title: t('tuition_close_confirm', { month: fmtMonth(month) }),
       message: t('tuition_close_confirm_msg'),
     });
     if (!ok) return;
@@ -322,7 +317,7 @@ function TuitionScreen() {
 
   const reopenMonth = async () => {
     const ok = await confirm({
-      title: t('tuition_reopen_confirm', { month: monthLabel(month) }),
+      title: t('tuition_reopen_confirm', { month: fmtMonth(month) }),
       message: t('tuition_reopen_confirm_msg'),
       danger: true,
     });
@@ -370,16 +365,16 @@ function TuitionScreen() {
         actions={
           <div className="m-row" style={{ gap: 8 }}>
             <IconButton
-              label={monthLabel(shiftMonth(month, -1))}
+              label={fmtMonth(shiftMonth(month, -1))}
               onClick={() => navigate(`/tuition/${shiftMonth(month, -1)}`)}
             >
               <MIcon name="chevronLeft" size={18} />
             </IconButton>
             <span style={{ fontWeight: 800, minWidth: 130, textAlign: 'center' }}>
-              {monthLabel(month)}
+              {fmtMonth(month)}
             </span>
             <IconButton
-              label={monthLabel(shiftMonth(month, 1))}
+              label={fmtMonth(shiftMonth(month, 1))}
               onClick={() => navigate(`/tuition/${shiftMonth(month, 1)}`)}
             >
               <MIcon name="chevronRight" size={18} />

@@ -72,6 +72,8 @@ describe('FeeSlipView', () => {
   it('renders the cute theme by default with the money, the class and the phone', async () => {
     await renderSlip(loaderData());
     expect(screen.getByText('TUITION FEE SLIP')).toBeInTheDocument();
+    // The month reads as a name, not as the raw key.
+    expect(screen.getByText(/March 2031/)).toBeInTheDocument();
     expect(screen.getByText(/Nguyễn Bình \/ Nguyễn An/)).toBeInTheDocument();
     expect(screen.getByText('0901234567')).toBeInTheDocument();
     expect(screen.getByText('4 × 150.000 ₫')).toBeInTheDocument();
@@ -106,6 +108,10 @@ describe('FeeSlipView', () => {
     // The classic theme is the table layout, so it has column headers the cute one does not.
     expect(screen.getByText('Sessions')).toBeInTheDocument();
     expect(screen.getByText('Subtotal')).toBeInTheDocument();
+    // Namespaced classes only: a bare `.month` inherits the calendar's 7-column grid from the
+    // global stylesheet, which used to break this line in half.
+    expect(document.querySelector('.slip-classic__month')).not.toBeNull();
+    expect(document.querySelector('.slip-classic .month')).toBeNull();
     expect(screen.getByRole('option', { name: 'Cute pastel' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Classic' })).toBeInTheDocument();
   });

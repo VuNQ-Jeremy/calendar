@@ -1,5 +1,5 @@
 import type { StudentFee } from '../../shared/logic/tuition.js';
-import { formatVnd } from '../../shared/logic/tuition.js';
+import { formatVnd, monthLabel } from '../../shared/logic/tuition.js';
 import { useLang } from '../lib/i18n.jsx';
 
 /**
@@ -151,38 +151,51 @@ export const CUTE_PASTEL_CSS = `
 function CuteDoodles() {
   return (
     <span className="slip-cute__doodles" aria-hidden="true">
-      <svg width="150" height="52" viewBox="0 0 150 52" fill="none">
-        {/* teacup */}
+      <svg width="176" height="60" viewBox="0 0 176 60" fill="none">
+        {/* teacup, with steam */}
         <path
-          d="M14 24h26v10a13 13 0 0 1-13 13h0A13 13 0 0 1 14 34V24Z"
+          d="M14 26h30v11a15 15 0 0 1-15 15A15 15 0 0 1 14 37V26Z"
           fill="#FFF6DA"
           stroke="#B99A63"
-          strokeWidth="2"
+          strokeWidth="2.2"
         />
-        <path d="M40 27h5a6 6 0 0 1 0 12h-1" stroke="#B99A63" strokeWidth="2" />
-        <path d="M20 16c2-4 6-4 8 0M30 14c2-4 6-4 8 0" stroke="#E4BE7C" strokeWidth="2" />
+        <path d="M44 30h5a7 7 0 0 1 0 14h-1" stroke="#B99A63" strokeWidth="2.2" />
+        <path
+          d="M22 17c2-5 6-5 8 0M32 14c2-5 6-5 8 0"
+          stroke="#E4BE7C"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+        />
         {/* cloud */}
         <path
-          d="M74 40a9 9 0 0 1 1-18 12 12 0 0 1 23 3 8 8 0 0 1-2 15H74Z"
+          d="M80 45a10 10 0 0 1 1-20 13 13 0 0 1 25 3 9 9 0 0 1-2 17H80Z"
           fill="#EAF4FB"
           stroke="#9DC2DA"
-          strokeWidth="2"
+          strokeWidth="2.2"
         />
-        {/* bow */}
+        {/* bow: two triangles and a knot, so the shape survives at any size */}
         <path
-          d="M126 30c-7-8-13-5-13 1s6 9 13 1c7 8 13 5 13-1s-6-9-13-1Z"
+          d="M148 24 162 34 148 44Z"
           fill="#FBD9C0"
           stroke="#E39A6A"
-          strokeWidth="2"
+          strokeWidth="2.2"
+          strokeLinejoin="round"
         />
-        <circle cx="126" cy="31" r="3" fill="#F2762E" />
+        <path
+          d="M176 24 162 34 176 44Z"
+          fill="#FBD9C0"
+          stroke="#E39A6A"
+          strokeWidth="2.2"
+          strokeLinejoin="round"
+        />
+        <circle cx="162" cy="34" r="4" fill="#F2762E" />
       </svg>
     </span>
   );
 }
 
 function CutePastelSlip({ month, student, fee }: SlipData) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const classes = fee.lines.map((l) => l.className).join(', ');
 
   return (
@@ -194,9 +207,7 @@ function CutePastelSlip({ month, student, fee }: SlipData) {
         <div className="slip-cute__body">
           <div className="slip-cute__head">
             <h1 className="slip-cute__title">{t('slip_title')}</h1>
-            <p className="slip-cute__month">
-              {t('slip_month')} {month}
-            </p>
+            <p className="slip-cute__month">{monthLabel(month, lang)}</p>
           </div>
 
           <p className="slip-cute__field">
@@ -277,6 +288,11 @@ function CutePastelSlip({ month, student, fee }: SlipData) {
 
 /* ── Classic ────────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Every class is namespaced, including inside the theme's own root. Generic names collide with the
+ * app stylesheet, which is global: a bare `.month` picked up the calendar's 7-column grid and broke
+ * this slip's month line into two cells.
+ */
 export const CLASSIC_CSS = `
 .slip-classic {
   --ink: #000;
@@ -289,45 +305,47 @@ export const CLASSIC_CSS = `
   line-height: 1.45;
   padding: 28px 32px;
 }
-.slip-classic h1 {
+.slip-classic__title {
   font-size: 21px;
   letter-spacing: 0.08em;
   text-align: center;
   margin: 0 0 3px;
 }
-.slip-classic .month { text-align: center; font-size: 15px; margin: 0 0 16px; }
-.slip-classic .who { margin: 0 0 12px; font-size: 14.5px; }
-.slip-classic .who div { margin: 0 0 3px; }
-.slip-classic table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 14.5px; }
-.slip-classic th,
-.slip-classic td { border-bottom: 1px solid var(--ink); padding: 5px 3px; text-align: left; }
-.slip-classic th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
-.slip-classic td.num,
-.slip-classic th.num { text-align: right; white-space: nowrap; }
-.slip-classic .totals { font-size: 14.5px; }
-.slip-classic .totals div { display: flex; justify-content: space-between; padding: 2px 0; }
-.slip-classic .totals .grand {
+.slip-classic__month { text-align: center; font-size: 15px; margin: 0 0 16px; }
+.slip-classic__who { margin: 0 0 12px; font-size: 14.5px; }
+.slip-classic__who div { margin: 0 0 3px; }
+.slip-classic__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 14.5px;
+}
+.slip-classic__table th,
+.slip-classic__table td { border-bottom: 1px solid var(--ink); padding: 5px 3px; text-align: left; }
+.slip-classic__table th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+.slip-classic__num { text-align: right; white-space: nowrap; }
+.slip-classic__totals { font-size: 14.5px; }
+.slip-classic__row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+.slip-classic__row--grand {
   font-size: 17px;
   font-weight: 700;
   border-top: 2px solid var(--ink);
   padding-top: 5px;
   margin-top: 3px;
 }
-.slip-classic .note { font-size: 13px; font-style: italic; margin: 10px 0 0; }
-.slip-classic .empty { font-style: italic; }
+.slip-classic__note { font-size: 13px; font-style: italic; margin: 10px 0 0; }
+.slip-classic__empty { font-style: italic; }
 `;
 
 function ClassicSlip({ month, student, fee }: SlipData) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   return (
     <div className="slip-classic">
-      <h1>{t('slip_title')}</h1>
-      <p className="month">
-        {t('slip_month')} {month}
-      </p>
+      <h1 className="slip-classic__title">{t('slip_title')}</h1>
+      <p className="slip-classic__month">{monthLabel(month, lang)}</p>
 
-      <div className="who">
+      <div className="slip-classic__who">
         <div>
           <strong>{t('slip_student')}:</strong> {student.name}
         </div>
@@ -344,37 +362,37 @@ function ClassicSlip({ month, student, fee }: SlipData) {
       </div>
 
       {fee.lines.length === 0 ? (
-        <p className="empty">{t('slip_no_lines')}</p>
+        <p className="slip-classic__empty">{t('slip_no_lines')}</p>
       ) : (
-        <table>
+        <table className="slip-classic__table">
           <thead>
             <tr>
               <th>{t('slip_col_class')}</th>
-              <th className="num">{t('slip_col_sessions')}</th>
-              <th className="num">{t('slip_col_price')}</th>
-              <th className="num">{t('slip_col_amount')}</th>
+              <th className="slip-classic__num">{t('slip_col_sessions')}</th>
+              <th className="slip-classic__num">{t('slip_col_price')}</th>
+              <th className="slip-classic__num">{t('slip_col_amount')}</th>
             </tr>
           </thead>
           <tbody>
             {fee.lines.map((line) => (
               <tr key={line.classId}>
                 <td>{line.className}</td>
-                <td className="num">{line.sessions}</td>
-                <td className="num">{formatVnd(line.unitPriceVnd)}</td>
-                <td className="num">{formatVnd(line.amountVnd)}</td>
+                <td className="slip-classic__num">{line.sessions}</td>
+                <td className="slip-classic__num">{formatVnd(line.unitPriceVnd)}</td>
+                <td className="slip-classic__num">{formatVnd(line.amountVnd)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
-      <div className="totals">
-        <div>
+      <div className="slip-classic__totals">
+        <div className="slip-classic__row">
           <span>{t('slip_subtotal')}</span>
           <span>{formatVnd(fee.billedVnd)}</span>
         </div>
         {fee.adjustmentVnd !== 0 ? (
-          <div>
+          <div className="slip-classic__row">
             <span>
               {t('tuition_adjustment')}
               {fee.adjustmentNote ? ` (${fee.adjustmentNote})` : ''}
@@ -382,12 +400,12 @@ function ClassicSlip({ month, student, fee }: SlipData) {
             <span>{formatVnd(fee.adjustmentVnd)}</span>
           </div>
         ) : null}
-        <div className="grand">
+        <div className="slip-classic__row slip-classic__row--grand">
           <span>{t('slip_total')}</span>
           <span>{formatVnd(fee.dueVnd)}</span>
         </div>
         {fee.paidVnd > 0 ? (
-          <div>
+          <div className="slip-classic__row">
             <span>
               {t('slip_received')}
               {fee.paidAt ? ` · ${fee.paidAt}` : ''}
@@ -396,7 +414,7 @@ function ClassicSlip({ month, student, fee }: SlipData) {
           </div>
         ) : null}
         {fee.outstandingVnd > 0 ? (
-          <div>
+          <div className="slip-classic__row">
             <span>
               <strong>{t('slip_outstanding')}</strong>
             </span>
@@ -407,7 +425,7 @@ function ClassicSlip({ month, student, fee }: SlipData) {
         ) : null}
       </div>
 
-      {fee.paymentNote ? <p className="note">{fee.paymentNote}</p> : null}
+      {fee.paymentNote ? <p className="slip-classic__note">{fee.paymentNote}</p> : null}
     </div>
   );
 }
