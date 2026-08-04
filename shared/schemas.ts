@@ -684,3 +684,49 @@ export const AttemptGradeInput = z.object({
   comment: z.string().max(2000).nullish(),
 });
 export type AttemptGradeInput = z.infer<typeof AttemptGradeInput>;
+
+/* ── Tuition module: class prices, month close, payments ────────────────────────────────── */
+
+/** YYYY-MM. The unit a fee is billed in. */
+export const TuitionMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expected a YYYY-MM month');
+
+/**
+ * Money is integer VND end-to-end — no floats, no minor unit (the đồng has none in practice).
+ * The cap is a typo guard: a single session costing more than a billion đồng is a slipped
+ * keyboard, not a price.
+ */
+const VndAmount = z.coerce.number().int().min(0).max(1_000_000_000);
+
+export const ClassPriceInput = z.object({
+  classId: z.string().min(1),
+  priceVnd: VndAmount,
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type ClassPriceInput = z.infer<typeof ClassPriceInput>;
+
+/**
+ * Which attendance statuses a session must have to be billed. Configurable because centres
+ * disagree: some charge for an unexcused absence (the seat was held), some do not. A student with
+ * no attendance row at all is never billed, whatever this says.
+ */
+export const TuitionSettingsInput = z.object({
+  billableStatuses: z.array(AttendanceStatus).min(1),
+});
+export type TuitionSettingsInput = z.infer<typeof TuitionSettingsInput>;
+
+export const TuitionPaymentInput = z.object({
+  paidVnd: VndAmount,
+  paidAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullish(),
+  paymentNote: z.string().max(500).nullish(),
+});
+export type TuitionPaymentInput = z.infer<typeof TuitionPaymentInput>;
+
+/** Signed: a discount is negative, a surcharge positive. */
+export const TuitionAdjustmentInput = z.object({
+  adjustmentVnd: z.coerce.number().int().min(-1_000_000_000).max(1_000_000_000),
+  adjustmentNote: z.string().max(500).nullish(),
+});
+export type TuitionAdjustmentInput = z.infer<typeof TuitionAdjustmentInput>;

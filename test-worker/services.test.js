@@ -14,6 +14,7 @@ import * as assessSvc from '../server/services/assessments';
 import * as typesSvc from '../server/services/assessment-types';
 import * as attendanceSvc from '../server/services/attendance';
 import * as gradeLevelsSvc from '../server/services/grade-levels';
+import * as tuitionSvc from '../server/services/tuition';
 import * as questionsSvc from '../server/services/questions';
 import * as testsSvc from '../server/services/tests';
 import * as attemptsSvc from '../server/services/attempts';
@@ -37,6 +38,9 @@ import {
   testQuestions,
   testAttempts,
   testAnswers,
+  classPrices,
+  tuitionLines,
+  tuitionMonths,
 } from '../server/db/schema';
 
 function db() {
@@ -2817,5 +2821,335 @@ describe('attempts service', () => {
     // Open ones sort ahead of closed ones.
     const positions = withClosed.map((i) => i.window);
     expect(positions.indexOf('closed')).toBe(positions.length - 1);
+  });
+});
+
+// ---- Tuition (học phí) ----
+//
+// Each test picks its own month so the shared test database cannot leak attendance between them.
+
+describe('tuition — price effective dating', () => {
+  it('bills a month at the price in force on its 1st', () => {
+    const prices = [
+      { id: 'p1', classId: 'c1', priceVnd: 100_000, effectiveFrom: '2031-01-01' },
+      { id: 'p2', classId: 'c1', priceVnd: 150_000, effectiveFrom: '2031-06-01' },
+      { id: 'p3', classId: 'c2', priceVnd: 999_000, effectiveFrom: '2031-01-01' },
+    ];
+    expect(tuitionSvc.priceForMonth(prices, 'c1', '2031-03')).toBe(100_000);
+    expect(tuitionSvc.priceForMonth(prices, 'c1', '2031-06')).toBe(150_000);
+    expect(tuitionSvc.priceForMonth(prices, 'c1', '2031-12')).toBe(150_000);
+    // Before any price exists, and for a class with no price at all.
+    expect(tuitionSvc.priceForMonth(prices, 'c1', '2030-12')).toBe(null);
+    expect(tuitionSvc.priceForMonth(prices, 'c3', '2031-03')).toBe(null);
+  });
+
+  it('applies a mid-month price change only from the following month', () => {
+    const prices = [
+      { id: 'p1', classId: 'c1', priceVnd: 100_000, effectiveFrom: '2031-01-01' },
+      { id: 'p2', classId: 'c1', priceVnd: 200_000, effectiveFrom: '2031-03-10' },
+    ];
+    expect(tuitionSvc.priceForMonth(prices, 'c1', '2031-03')).toBe(100_000);
+    expect(tuitionSvc.priceForMonth(prices, 'c1', '2031-04')).toBe(200_000);
+  });
+});
+
+async function tuitionFixture(d, { month, price = 100_000, name }) {
+  const cls = await classesSvc.create(d, { name, color: 'blue', studentIds: [] });
+  const student = await peopleSvc.createStudent(d, {
+    name: `${name} Student`,
+    color: 'blue',
+    classIds: [cls.id],
+  });
+  const ev = await eventsSvc.create(d, {
+    title: `${name} Session`,
+    date: `${month}-02`,
+    classId: cls.id,
+    recurrence: 'none',
+  });
+  if (price != null) {
+    await tuitionSvc.setPrice(d, {
+      classId: cls.id,
+      priceVnd: price,
+      effectiveFrom: `${month}-01`,
+    });
+  }
+  return { cls, student, ev };
+}
+
+describe('tuition — computing a month from attendance', () => {
+  it('counts billable statuses only, and never bills an unmarked student', async () => {
+    const d = db();
+    const month = '2031-01';
+    const { cls, student, ev } = await tuitionFixture(d, { month, name: 'Tuition Billable' });
+    const other = await peopleSvc.createStudent(d, {
+      name: 'Tuition Unmarked Student',
+      color: 'green',
+      classIds: [cls.id],
+    });
+
+    // 2 present, 1 late, 1 absent, 1 excused across five occurrence dates of the same event.
+    for (const [date, status] of [
+      [`${month}-02`, 'present'],
+      [`${month}-09`, 'present'],
+      [`${month}-16`, 'late'],
+      [`${month}-23`, 'absent'],
+      [`${month}-30`, 'excused'],
+    ]) {
+      await attendanceSvc.saveOccurrence(d, ev.id, date, [{ studentId: student.id, status }]);
+    }
+
+    const dflt = await tuitionSvc.computeMonthLines(d, month, tuitionSvc.DEFAULT_TUITION_SETTINGS);
+    const line = dflt.lines.find((l) => l.studentId === student.id && l.classId === cls.id);
+    // The default bills everything except excused: 2 present + 1 late + 1 absent.
+    expect(line.sessions).toBe(4);
+    expect(line.unitPriceVnd).toBe(100_000);
+    expect(line.amountVnd).toBe(400_000);
+    expect(line.statusCounts).toEqual({ present: 2, late: 1, absent: 1, excused: 1 });
+    // The classmate nobody ever marked has no line at all.
+    expect(dflt.lines.some((l) => l.studentId === other.id)).toBe(false);
+
+    // A stricter policy: only sessions actually attended.
+    const strict = await tuitionSvc.computeMonthLines(d, month, {
+      billableStatuses: ['present', 'late'],
+    });
+    const strictLine = strict.lines.find((l) => l.studentId === student.id);
+    expect(strictLine.sessions).toBe(3);
+    expect(strictLine.amountVnd).toBe(300_000);
+  });
+
+  it('aggregates per student and class, and respects the month boundaries', async () => {
+    const d = db();
+    const month = '2031-02';
+    const a = await tuitionFixture(d, { month, name: 'Tuition Class A', price: 100_000 });
+    const b = await tuitionFixture(d, { month, name: 'Tuition Class B', price: 250_000 });
+    await peopleSvc.updateStudent(d, a.student.id, { classIds: [a.cls.id, b.cls.id] });
+
+    await attendanceSvc.saveOccurrence(d, a.ev.id, `${month}-01`, [
+      { studentId: a.student.id, status: 'present' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, a.ev.id, `${month}-28`, [
+      { studentId: a.student.id, status: 'present' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, b.ev.id, `${month}-10`, [
+      { studentId: a.student.id, status: 'present' },
+    ]);
+    // Just outside the month on both sides — neither may be billed to it.
+    await attendanceSvc.saveOccurrence(d, a.ev.id, '2031-01-31', [
+      { studentId: a.student.id, status: 'present' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, a.ev.id, '2031-03-01', [
+      { studentId: a.student.id, status: 'present' },
+    ]);
+
+    const { lines } = await tuitionSvc.computeMonthLines(
+      d,
+      month,
+      tuitionSvc.DEFAULT_TUITION_SETTINGS,
+    );
+    const mine = lines.filter((l) => l.studentId === a.student.id);
+    expect(mine.length).toBe(2);
+    expect(mine.find((l) => l.classId === a.cls.id).sessions).toBe(2);
+    expect(mine.find((l) => l.classId === a.cls.id).amountVnd).toBe(200_000);
+    expect(mine.find((l) => l.classId === b.cls.id).sessions).toBe(1);
+    expect(mine.find((l) => l.classId === b.cls.id).amountVnd).toBe(250_000);
+  });
+
+  it('ignores attendance on an event with no class, and reports classes with no price', async () => {
+    const d = db();
+    const month = '2031-03';
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Tuition Classless Student',
+      color: 'rose',
+      classIds: [],
+    });
+    const classless = await eventsSvc.create(d, {
+      title: 'Tuition Classless Event',
+      date: `${month}-05`,
+      recurrence: 'none',
+    });
+    await attendanceSvc.saveOccurrence(d, classless.id, `${month}-05`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+
+    const unpriced = await tuitionFixture(d, { month, name: 'Tuition Unpriced', price: null });
+    await attendanceSvc.saveOccurrence(d, unpriced.ev.id, `${month}-05`, [
+      { studentId: unpriced.student.id, status: 'present' },
+    ]);
+
+    const { lines, missingPriceClasses } = await tuitionSvc.computeMonthLines(
+      d,
+      month,
+      tuitionSvc.DEFAULT_TUITION_SETTINGS,
+    );
+    expect(lines.some((l) => l.studentId === student.id)).toBe(false);
+    expect(lines.some((l) => l.classId === unpriced.cls.id)).toBe(false);
+    expect(missingPriceClasses.some((c) => c.id === unpriced.cls.id)).toBe(true);
+  });
+});
+
+describe('tuition — closing a month freezes it', () => {
+  it('keeps amounts fixed against later attendance, price and setting edits', async () => {
+    const d = db();
+    const month = '2031-04';
+    const { cls, student, ev } = await tuitionFixture(d, { month, name: 'Tuition Freeze' });
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-02`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-09`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+
+    await tuitionSvc.closeMonth(d, month, 'Test Admin');
+    const closed = await tuitionSvc.getMonthReport(d, month);
+    expect(closed.status).toBe('closed');
+    expect(closed.closedBy).toBe('Test Admin');
+    expect(closed.closedAt).toBeTruthy();
+    expect(closed.lines.find((l) => l.studentId === student.id).sessions).toBe(2);
+    expect(closed.lines.find((l) => l.studentId === student.id).amountVnd).toBe(200_000);
+    // A closed month reads a snapshot, so it prices nothing and can never lack a price.
+    expect(closed.missingPriceClasses).toEqual([]);
+
+    // Everything that would move the number if the month were still open.
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-16`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+    await tuitionSvc.setPrice(d, {
+      classId: cls.id,
+      priceVnd: 500_000,
+      effectiveFrom: `${month}-01`,
+    });
+    await tuitionSvc.setTuitionSettings(d, { billableStatuses: ['present'] });
+
+    const after = await tuitionSvc.getMonthReport(d, month);
+    expect(after.lines.find((l) => l.studentId === student.id).sessions).toBe(2);
+    expect(after.lines.find((l) => l.studentId === student.id).amountVnd).toBe(200_000);
+
+    // Reopening drops the snapshot; the third session shows up, at the new price.
+    await tuitionSvc.reopenMonth(d, month);
+    const reopened = await tuitionSvc.getMonthReport(d, month);
+    expect(reopened.status).toBe('open');
+    expect(await d.select().from(tuitionLines).where(eq(tuitionLines.month, month))).toEqual([]);
+    const live = reopened.lines.find((l) => l.studentId === student.id);
+    expect(live.sessions).toBe(3);
+    expect(live.unitPriceVnd).toBe(500_000);
+    expect(live.amountVnd).toBe(1_500_000);
+
+    // Re-closing replaces the snapshot rather than colliding with the old rows.
+    await tuitionSvc.closeMonth(d, month, 'Test Admin');
+    const reclosed = await tuitionSvc.getMonthReport(d, month);
+    expect(reclosed.status).toBe('closed');
+    expect(reclosed.lines.find((l) => l.studentId === student.id).amountVnd).toBe(1_500_000);
+    expect(
+      (await d.select().from(tuitionMonths).where(eq(tuitionMonths.month, month))).length,
+    ).toBe(1);
+
+    await tuitionSvc.setTuitionSettings(d, tuitionSvc.DEFAULT_TUITION_SETTINGS);
+  });
+
+  it('refuses to close a month whose class has no price', async () => {
+    const d = db();
+    const month = '2031-05';
+    const { ev, student, cls } = await tuitionFixture(d, {
+      month,
+      name: 'Tuition NoPrice',
+      price: null,
+    });
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-02`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+
+    await expect(tuitionSvc.closeMonth(d, month, 'Test Admin')).rejects.toThrow(/no price/i);
+    // Nothing was written: the month stays open.
+    expect((await tuitionSvc.getMonthStatus(d, month)).status).toBe('open');
+
+    await tuitionSvc.setPrice(d, {
+      classId: cls.id,
+      priceVnd: 80_000,
+      effectiveFrom: `${month}-01`,
+    });
+    await tuitionSvc.closeMonth(d, month, 'Test Admin');
+    expect((await tuitionSvc.getMonthStatus(d, month)).status).toBe('closed');
+  });
+
+  it('keeps a closed month readable after its class is deleted', async () => {
+    const d = db();
+    const month = '2031-06';
+    const { cls, student, ev } = await tuitionFixture(d, { month, name: 'Tuition Vanishing' });
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-02`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+    await tuitionSvc.closeMonth(d, month, 'Test Admin');
+
+    await classesSvc.remove(d, cls.id);
+
+    const after = await tuitionSvc.getMonthReport(d, month);
+    const line = after.lines.find((l) => l.studentId === student.id);
+    expect(line.className).toBe('Tuition Vanishing');
+    expect(line.amountVnd).toBe(100_000);
+    // The price rows cascaded away with the class; the frozen line does not depend on them.
+    expect(await d.select().from(classPrices).where(eq(classPrices.classId, cls.id))).toEqual([]);
+  });
+});
+
+describe('tuition — payments and adjustments', () => {
+  it('upserts one row per student-month and stays editable after close', async () => {
+    const d = db();
+    const month = '2031-07';
+    const { student, ev } = await tuitionFixture(d, { month, name: 'Tuition Payment' });
+    await attendanceSvc.saveOccurrence(d, ev.id, `${month}-02`, [
+      { studentId: student.id, status: 'present' },
+    ]);
+
+    await tuitionSvc.saveStudentMonth(d, month, student.id, {
+      adjustmentVnd: -20_000,
+      adjustmentNote: 'Giảm giá em thứ hai',
+    });
+    // The payment modal and the adjustment modal send separate patches; neither may clear the other.
+    const row = await tuitionSvc.saveStudentMonth(d, month, student.id, {
+      paidVnd: 50_000,
+      paidAt: `${month}-05`,
+      paymentNote: 'Chuyển khoản',
+    });
+    expect(row.adjustmentVnd).toBe(-20_000);
+    expect(row.adjustmentNote).toBe('Giảm giá em thứ hai');
+    expect(row.paidVnd).toBe(50_000);
+    expect(row.paidAt).toBe(`${month}-05`);
+
+    const open = await tuitionSvc.getMonthReport(d, month);
+    const sm = open.studentMonths.find((s) => s.studentId === student.id);
+    const due = open.lines
+      .filter((l) => l.studentId === student.id)
+      .reduce((n, l) => n + l.amountVnd, 0);
+    // 100.000 billed − 20.000 adjustment − 50.000 paid → 30.000 still owed.
+    expect(due + sm.adjustmentVnd - sm.paidVnd).toBe(30_000);
+
+    // Money is collected after the month closes, so the row must survive close and stay writable.
+    await tuitionSvc.closeMonth(d, month, 'Test Admin');
+    const afterClose = await tuitionSvc.getMonthReport(d, month);
+    expect(afterClose.studentMonths.find((s) => s.studentId === student.id).paidVnd).toBe(50_000);
+    const settled = await tuitionSvc.saveStudentMonth(d, month, student.id, {
+      paidVnd: 80_000,
+      paidAt: `${month}-20`,
+    });
+    expect(settled.paidVnd).toBe(80_000);
+    expect(settled.adjustmentNote).toBe('Giảm giá em thứ hai');
+
+    await tuitionSvc.reopenMonth(d, month);
+    const afterReopen = await tuitionSvc.getMonthReport(d, month);
+    expect(afterReopen.studentMonths.find((s) => s.studentId === student.id).paidVnd).toBe(80_000);
+  });
+});
+
+describe('tuition — settings', () => {
+  it('round-trips billable statuses and falls back to the default when unset or empty', async () => {
+    const d = db();
+    expect(await tuitionSvc.getTuitionSettings(d)).toEqual(tuitionSvc.DEFAULT_TUITION_SETTINGS);
+    const saved = await tuitionSvc.setTuitionSettings(d, { billableStatuses: ['present'] });
+    expect(saved.billableStatuses).toEqual(['present']);
+    expect((await tuitionSvc.getTuitionSettings(d)).billableStatuses).toEqual(['present']);
+    // An empty list would bill nothing at all — read it back as "not configured".
+    await tuitionSvc.setTuitionSettings(d, { billableStatuses: [] });
+    expect(await tuitionSvc.getTuitionSettings(d)).toEqual(tuitionSvc.DEFAULT_TUITION_SETTINGS);
+    await tuitionSvc.setTuitionSettings(d, tuitionSvc.DEFAULT_TUITION_SETTINGS);
   });
 });

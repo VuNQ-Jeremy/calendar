@@ -4,8 +4,11 @@ import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PageHeader, Empty, Modal, useConfirm } from './ui.jsx';
 import { useLang } from './lib/i18n.jsx';
+import { ATTENDANCE_STATUSES, ATTENDANCE_META } from '../shared/logic/assess.js';
+import type { AttendanceStatusId } from '../shared/logic/assess.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
+import type { TuitionSettings } from '../server/services/tuition.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
 
@@ -15,11 +18,15 @@ interface ConfigLoaderData {
   types: AssessmentTypeRow[];
   gradeLevels: GradeLevelRow[];
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
+  tuitionSettings: TuitionSettings;
 }
 
 // Mock colors are hardcoded hex (same values as the DS tokens) so each card
 // always previews its own style regardless of the currently active preset.
-const SB_PRESETS: Record<ScrollbarStyle, { tk: string; track: string; thumb: string; barW: number }> = {
+const SB_PRESETS: Record<
+  ScrollbarStyle,
+  { tk: string; track: string; thumb: string; barW: number }
+> = {
   slim: { tk: 'cfg_sb_slim', track: 'transparent', thumb: '#B8A893', barW: 6 },
   inset: { tk: 'cfg_sb_inset', track: '#F6EDDF', thumb: '#DBCBB4', barW: 9 },
   brand: { tk: 'cfg_sb_brand', track: 'transparent', thumb: '#F79A4E', barW: 6 },
@@ -38,6 +45,58 @@ const TB_LABEL: Record<TabBarStyle, string> = {
 };
 
 type TypeDraft = { id?: string; name: string };
+
+/**
+ * Which attendance statuses the tuition module charges for. Its own component so the checkbox
+ * state cannot collide with the cards around it; the amounts it changes live on /tuition.
+ */
+function TuitionSettingsSection({ settings }: { settings: TuitionSettings }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+
+  // Optimistic: the checkbox must respond on click, not after the round trip.
+  const [local, setLocal] = React.useState<AttendanceStatusId[] | null>(null);
+  const selected = local ?? (settings.billableStatuses as AttendanceStatusId[]);
+
+  const toggle = (status: AttendanceStatusId) => {
+    const next = selected.includes(status)
+      ? selected.filter((s) => s !== status)
+      : [...selected, status];
+    // Billing nothing at all is not a state worth saving — the server would read it back as unset.
+    if (next.length === 0) return;
+    setLocal(next);
+    const fd = new FormData();
+    fd.set('intent', 'tuition-settings');
+    fd.set('billableStatuses', JSON.stringify(next));
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+  };
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_tuition_title')}</h2>
+        <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('cfg_tuition_sub')}
+        </p>
+      </div>
+      <div className="m-row" style={{ gap: 18, flexWrap: 'wrap' }}>
+        {ATTENDANCE_STATUSES.map((status) => (
+          <label key={status} className="m-row" style={{ gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={selected.includes(status)}
+              onChange={() => toggle(status)}
+            />
+            <span style={{ fontWeight: 600 }}>{t(ATTENDANCE_META[status].tk)}</span>
+          </label>
+        ))}
+      </div>
+      <p className="m-muted" style={{ margin: '10px 0 0', fontSize: 'var(--text-sm)' }}>
+        {t('cfg_tuition_hint')}
+      </p>
+    </Card>
+  );
+}
 
 /**
  * Managed grade levels (Khối 6..9). Structural clone of the assessment-types card above,
@@ -241,7 +300,7 @@ function GradeLevelsSection({ levels }: { levels: GradeLevelRow[] }) {
 }
 
 function SystemConfigScreen() {
-  const { types, gradeLevels, uiPrefs } = useLoaderData() as ConfigLoaderData;
+  const { types, gradeLevels, uiPrefs, tuitionSettings } = useLoaderData() as ConfigLoaderData;
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
   const [confirm, confirmNode] = useConfirm();
@@ -425,6 +484,8 @@ function SystemConfigScreen() {
       </Card>
 
       <GradeLevelsSection levels={gradeLevels} />
+
+      <TuitionSettingsSection settings={tuitionSettings} />
 
       <Card style={{ padding: 18, marginTop: 16 }}>
         <div style={{ marginBottom: 12 }}>

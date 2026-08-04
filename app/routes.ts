@@ -9,6 +9,8 @@ export default [
   route('event-materials', 'routes/event-materials.tsx'),
   // Printable test document — outside the _app layout on purpose: no app shell, no nav chrome.
   route('tests/:id/print', 'routes/tests.$id.print.tsx'),
+  // Printable tuition slip (phiếu thu), same reasoning.
+  route('tuition/:month/:studentId/print', 'routes/tuition.$month.$studentId.print.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
 
@@ -76,6 +78,9 @@ export default [
     route('assessments', 'routes/assessments.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),
     route('vocabulary/:slug', 'routes/flashcards.$slug.tsx'),
+    // The month sits in the PATH, not a query string: cacheKeyForPath only sees pathnames, so a
+    // `?month=` would give every month the same cache entry.
+    route('tuition/:month?', 'routes/tuition.tsx'),
     route('config', 'routes/config.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),

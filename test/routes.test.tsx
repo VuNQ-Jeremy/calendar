@@ -124,6 +124,35 @@ describe('AppLayout (_app.tsx)', () => {
     expect(screen.getByRole('link', { name: 'System Config' })).toBeInTheDocument();
   });
 
+  it('shows Tuition to an Admin and hides it from everyone else', async () => {
+    const makeStub = (role: string) =>
+      createRoutesStub([
+        {
+          path: '/',
+          Component: AppLayout,
+          loader: () => ({ ...STUB_LOADER_DATA, user: { ...TEST_USER, role } }),
+          children: [
+            {
+              path: 'dashboard',
+              Component: () => React.createElement('div', null, 'Dashboard content'),
+            },
+          ],
+        },
+      ]);
+
+    const Teacher = makeStub('Teacher');
+    await act(async () => {
+      render(withLang(React.createElement(Teacher, { initialEntries: ['/dashboard'] })));
+    });
+    expect(screen.queryByRole('link', { name: 'Tuition' })).not.toBeInTheDocument();
+
+    const Admin = makeStub('Admin');
+    await act(async () => {
+      render(withLang(React.createElement(Admin, { initialEntries: ['/dashboard'] })));
+    });
+    expect(screen.getByRole('link', { name: 'Tuition' })).toBeInTheDocument();
+  });
+
   it('links the sidebar brand to /dashboard for staff', async () => {
     const Stub = createRoutesStub([
       {

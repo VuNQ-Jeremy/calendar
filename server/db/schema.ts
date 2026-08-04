@@ -522,3 +522,88 @@ export const testAnswers = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.attemptId, t.questionId] })],
 );
+
+/**
+ * Tuition module — see migrations/0020_tuition.sql. Attendance rows become a monthly fee: each
+ * class has a per-session price (effective-dated), a month is computed live until an admin closes
+ * it, and closing freezes the numbers into `tuitionLines`. Every amount is integer VND.
+ */
+export const classPrices = sqliteTable(
+  'class_prices',
+  {
+    id: text('id').primaryKey(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    /** Per session. */
+    priceVnd: integer('price_vnd').notNull(),
+    /** YYYY-MM-DD; applies to months whose 1st is >= this date. */
+    effectiveFrom: text('effective_from').notNull(),
+    createdAt: text('created_at'),
+  },
+  (t) => [unique('uq_class_prices').on(t.classId, t.effectiveFrom)],
+);
+
+/** No row for a month means that month is open. */
+export const tuitionMonths = sqliteTable('tuition_months', {
+  /** YYYY-MM */
+  month: text('month').primaryKey(),
+  /** open | closed */
+  status: text('status').notNull().default('open'),
+  /** UTC ISO */
+  closedAt: text('closed_at'),
+  closedBy: text('closed_by'),
+  /** JSON snapshot of the billable-status setting used at close, for audit. */
+  billableStatuses: text('billable_statuses'),
+});
+
+export const tuitionLines = sqliteTable(
+  'tuition_lines',
+  {
+    id: text('id').primaryKey(),
+    month: text('month')
+      .notNull()
+      .references(() => tuitionMonths.month, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /**
+     * No reference to classes on purpose, and `className` is denormalized: a closed month is a
+     * financial record and must survive the class being renamed or deleted.
+     */
+    classId: text('class_id').notNull(),
+    className: text('class_name').notNull(),
+    /** Billable session count. */
+    sessions: integer('sessions').notNull(),
+    /** JSON {"present":10,"late":1,...} — all statuses, so the slip can show the breakdown. */
+    statusCounts: text('status_counts').notNull().default('{}'),
+    unitPriceVnd: integer('unit_price_vnd').notNull(),
+    amountVnd: integer('amount_vnd').notNull(),
+  },
+  (t) => [
+    unique('uq_tuition_lines').on(t.month, t.studentId, t.classId),
+    index('idx_tuition_lines_student').on(t.studentId, t.month),
+  ],
+);
+
+/**
+ * Payment and one-off adjustment for a student-month. Deliberately outside the close snapshot:
+ * money is collected after the month is closed, so these stay editable either way.
+ */
+export const tuitionStudentMonths = sqliteTable(
+  'tuition_student_months',
+  {
+    month: text('month').notNull(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** Signed. */
+    adjustmentVnd: integer('adjustment_vnd').notNull().default(0),
+    adjustmentNote: text('adjustment_note'),
+    paidVnd: integer('paid_vnd').notNull().default(0),
+    /** YYYY-MM-DD, last payment date. */
+    paidAt: text('paid_at'),
+    paymentNote: text('payment_note'),
+  },
+  (t) => [primaryKey({ columns: [t.month, t.studentId] })],
+);

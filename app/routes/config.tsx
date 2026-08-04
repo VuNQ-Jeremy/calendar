@@ -11,11 +11,13 @@ import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
 import * as levelsSvc from '../../server/services/grade-levels';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
+import * as tuitionSvc from '../../server/services/tuition';
 import {
   AssessmentTypeInput,
   AssessmentTypeReorder,
   GradeLevelInput,
   GradeLevelReorder,
+  TuitionSettingsInput,
   UiPrefsInput,
   parsePatch,
 } from '../../shared/schemas';
@@ -26,12 +28,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
-  const [types, gradeLevels, uiPrefs] = await Promise.all([
+  const [types, gradeLevels, uiPrefs, tuitionSettings] = await Promise.all([
     typesSvc.list(db),
     levelsSvc.list(db),
     uiPrefsSvc.getUiPrefs(db),
+    tuitionSvc.getTuitionSettings(db),
   ]);
-  return { types, gradeLevels, uiPrefs };
+  return { types, gradeLevels, uiPrefs, tuitionSettings };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -135,6 +138,21 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       await levelsSvc.reorder(db, parsed.data.ids);
       return { ok: true };
+    }
+
+    if (intent === 'tuition-settings') {
+      let billableStatuses: unknown;
+      try {
+        billableStatuses = JSON.parse((formData.get('billableStatuses') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid billableStatuses' }, { status: 400 });
+      }
+      const parsed = TuitionSettingsInput.safeParse({ billableStatuses });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const tuitionSettings = await tuitionSvc.setTuitionSettings(db, parsed.data);
+      return { ok: true, tuitionSettings };
     }
 
     if (intent === 'ui-prefs') {

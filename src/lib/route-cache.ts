@@ -37,6 +37,7 @@ export const K = {
   questions: 'route:questions',
   tests: 'route:tests',
   myTests: 'route:my-tests',
+  tuition: 'route:tuition',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -47,6 +48,9 @@ export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
  * (which hard-invalidates K.tests) also drops every cached test detail page.
  */
 export const testDetailKey = (id: string) => `route:tests:${id}`;
+
+/** Same prefix trick again: K.tuition drops every cached month at once. */
+export const tuitionMonthKey = (month: string) => `route:tuition:${month}`;
 
 /**
  * Stale-while-revalidate loader for route clientLoaders.
@@ -99,6 +103,8 @@ export type { MutationDomain };
  *   questions:   questions, grade levels, per-question test-usage counts
  *   tests:       tests, their questions, attempts, classes, students, assessment types, grade levels
  *   my-tests:    the student's own open/published tests plus their own attempts
+ *   tuition:     one month's fee lines (live from attendance, or the close snapshot), class
+ *                prices, payments, students, classes, the billable-status setting
  *
  * Note the two-way tests <-> assessments coupling:
  *   - paper score entry and attempt grading WRITE score_records
@@ -133,8 +139,9 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // stat — all four surfaces must refresh.
   tests: { hard: [K.tests], stale: [K.assessments, K.classes, K.myTests, K.dashboard] },
   // Grade-level and assessment-type edits surface on the question bank and the
-  // test pages as well as on assessments.
-  config: { hard: [K.config], stale: [K.assessments, K.questions, K.tests] },
+  // test pages as well as on assessments; the billable-status setting changes
+  // every open month's fee amounts.
+  config: { hard: [K.config], stale: [K.assessments, K.questions, K.tests, K.tuition] },
   feedback: { hard: [K.feedback], stale: [] },
   // profile edits change name/color which surface in many lists; profile has
   // no cache of its own, so mark everything stale (still served instantly).
@@ -142,8 +149,13 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // Attendance rows live under 'att:<eventId>:<date>' and are read by
   // useCachedLoad in the calendar event modal, not by a route loader. Stale
   // rather than hard: the modal is usually open on the very key being marked,
-  // and deleting it would blank the roster mid-edit.
-  attendance: { hard: [], stale: ['att:'] },
+  // and deleting it would blank the roster mid-edit. K.tuition goes with it —
+  // an open month's fee is computed from exactly these rows.
+  attendance: { hard: [], stale: ['att:', K.tuition] },
+  // K.tuition is a prefix of every 'route:tuition:<month>' key, so any fee
+  // mutation drops all cached months (closing one changes what the others can
+  // show, and a payment is recorded from the month page itself).
+  tuition: { hard: [K.tuition], stale: [] },
 };
 
 /**
@@ -206,6 +218,9 @@ export function cacheKeyForPath(pathname: string): string | null {
   // uncached) does NOT match, and a bare `/tests` falls through to the map below.
   const td = pathname.match(/^\/tests\/([^/]+)\/?$/);
   if (td) return testDetailKey(decodeURIComponent(td[1]));
+  // Months only, so `/tuition/:month/:studentId/print` (a document, uncached) does not match.
+  const tm = pathname.match(/^\/tuition\/(\d{4}-\d{2})\/?$/);
+  if (tm) return tuitionMonthKey(tm[1]);
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   const map: Record<string, string> = {
     '/dashboard': K.dashboard,
@@ -220,6 +235,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/questions': K.questions,
     '/tests': K.tests,
     '/my-tests': K.myTests,
+    '/tuition': K.tuition,
   };
   return map[clean] ?? null;
 }

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0086 — 2026-08-04
+Tuition (học phí) module: per-session class prices with effective dates, monthly fees computed from attendance, payment and adjustment tracking, explicit month close that freezes amounts, and a printable phiếu thu. Admin-only.
+
 ## v0.0085 — 2026-08-03
 Regenerate worker-configuration.d.ts from wrangler; secrets now declared in globals.d.ts so regeneration cannot silently drop them.
 

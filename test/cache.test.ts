@@ -214,4 +214,14 @@ describe('cacheKeyForPath', () => {
     expect(cacheKeyForPath('/vocabulary/animals/')).toBe('route:flashcards:animals');
     expect(cacheKeyForPath('/vocabulary/b%C3%A0i%201')).toBe('route:flashcards:bài 1');
   });
+
+  it('gives each tuition month its own key, and leaves the printable slip uncached', () => {
+    expect(cacheKeyForPath('/tuition')).toBe(K.tuition);
+    expect(cacheKeyForPath('/tuition/2031-03')).toBe('route:tuition:2031-03');
+    expect(cacheKeyForPath('/tuition/2031-03/')).toBe('route:tuition:2031-03');
+    // A slip must never be served from a month's cache entry.
+    expect(cacheKeyForPath('/tuition/2031-03/student-1/print')).toBeNull();
+    // Not a month.
+    expect(cacheKeyForPath('/tuition/march')).toBeNull();
+  });
 });

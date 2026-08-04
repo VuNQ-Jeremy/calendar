@@ -9,6 +9,7 @@ import { ClassesScreen, StudentsScreen } from '../src/screens-manage/index.jsx';
 import { FeedbackScreen } from '../src/feedback.jsx';
 import { AuthScreen } from '../src/auth.jsx';
 import { CalendarScreen } from '../src/calendar/index.jsx';
+import { TuitionScreen } from '../src/screens-tuition.jsx';
 import type { AppUser } from '../src/screens-core.jsx';
 
 const TEST_USER: AppUser = {
@@ -146,5 +147,110 @@ describe('AuthScreen', () => {
     render(withLang(React.createElement(AuthScreen, { onLogin: () => {}, invites: [] })));
     expect(screen.getByText('Welcome back')).toBeInTheDocument();
     expect(screen.getByText('Sign in')).toBeInTheDocument();
+  });
+});
+
+describe('TuitionScreen', () => {
+  const LINE = {
+    studentId: 'stu-1',
+    classId: 'cls-1',
+    className: 'Toán 9',
+    sessions: 4,
+    statusCounts: { present: 3, late: 1 },
+    unitPriceVnd: 150_000,
+    amountVnd: 600_000,
+  };
+
+  const baseData = (over: Record<string, unknown> = {}) => ({
+    month: '2031-03',
+    report: {
+      month: '2031-03',
+      status: 'open' as const,
+      closedAt: null,
+      closedBy: null,
+      lines: [LINE],
+      studentMonths: [],
+      missingPriceClasses: [],
+    },
+    prices: [{ id: 'p1', classId: 'cls-1', priceVnd: 150_000, effectiveFrom: '2031-03-01' }],
+    classes: [{ id: 'cls-1', name: 'Toán 9', color: 'blue' }],
+    students: [
+      {
+        id: 'stu-1',
+        name: 'Nguyễn An',
+        grade: null,
+        guardian: null,
+        email: null,
+        color: 'blue',
+        classIds: ['cls-1'],
+      },
+    ],
+    settings: { billableStatuses: ['present', 'late', 'absent'] },
+    ...over,
+  });
+
+  it('shows the month, the amount due and an unpaid badge for an open month', async () => {
+    const Stub = makeStub(baseData(), TuitionScreen);
+    await renderStub(Stub);
+    expect(screen.getByText('March 2031')).toBeInTheDocument();
+    expect(screen.getByText('Nguyễn An')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByText('Close month')).toBeInTheDocument();
+    // 4 billable sessions × 150.000, nothing paid.
+    expect(screen.getAllByText('600.000 ₫').length).toBeGreaterThan(0);
+    expect(screen.getByText('Unpaid')).toBeInTheDocument();
+  });
+
+  it('offers Reopen instead of Close once the month is closed', async () => {
+    const Stub = makeStub(
+      baseData({
+        report: {
+          month: '2031-03',
+          status: 'closed' as const,
+          closedAt: '2031-04-01T02:00:00.000Z',
+          closedBy: 'Admin One',
+          lines: [LINE],
+          studentMonths: [
+            {
+              month: '2031-03',
+              studentId: 'stu-1',
+              adjustmentVnd: 0,
+              adjustmentNote: null,
+              paidVnd: 600_000,
+              paidAt: '2031-03-20',
+              paymentNote: null,
+            },
+          ],
+          missingPriceClasses: [],
+        },
+      }),
+      TuitionScreen,
+    );
+    await renderStub(Stub);
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.getByText('Reopen month')).toBeInTheDocument();
+    expect(screen.queryByText('Close month')).not.toBeInTheDocument();
+    expect(screen.getByText('Paid in full')).toBeInTheDocument();
+    expect(screen.getByText(/Closed 2031-04-01 by Admin One/)).toBeInTheDocument();
+  });
+
+  it('names the classes that block a close when a price is missing', async () => {
+    const Stub = makeStub(
+      baseData({
+        report: {
+          month: '2031-03',
+          status: 'open' as const,
+          closedAt: null,
+          closedBy: null,
+          lines: [],
+          studentMonths: [],
+          missingPriceClasses: [{ id: 'cls-9', name: 'Lý 9' }],
+        },
+      }),
+      TuitionScreen,
+    );
+    await renderStub(Stub);
+    expect(screen.getByText(/Lý 9/)).toBeInTheDocument();
+    expect(screen.getByText('No fees this month')).toBeInTheDocument();
   });
 });

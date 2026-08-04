@@ -75,6 +75,14 @@ const NAV = [
         studentOnly: true,
       },
       {
+        id: 'tuition',
+        path: '/tuition',
+        tk: 'nav_tuition',
+        icon: 'banknote',
+        adminOnly: true,
+        staffOnly: true,
+      },
+      {
         id: 'config',
         path: '/config',
         tk: 'nav_config',
