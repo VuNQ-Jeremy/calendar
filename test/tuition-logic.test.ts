@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { formatVnd, paymentStatus, shiftMonth, studentFees } from '../shared/logic/tuition';
 import type { TuitionLine } from '../server/services/tuition';
-import { TuitionMonth, ClassPriceInput, TuitionAdjustmentInput } from '../shared/schemas';
+import {
+  TuitionMonth,
+  ClassPriceInput,
+  TuitionAdjustmentInput,
+  TuitionPaymentInput,
+} from '../shared/schemas';
 
 function line(over: Partial<TuitionLine> = {}): TuitionLine {
   return {
@@ -187,5 +192,18 @@ describe('tuition schemas', () => {
   it('allows a negative adjustment — that is what a discount is', () => {
     const parsed = TuitionAdjustmentInput.safeParse({ adjustmentVnd: '-50000' });
     expect(parsed.success && parsed.data.adjustmentVnd).toBe(-50_000);
+  });
+
+  it('reads a cleared payment date as no date, and still rejects a malformed one', () => {
+    // The picker is clearable and an empty form field arrives as '', not as a missing key. Before
+    // the literal branch this failed the regex and 400'd the entire payment save.
+    const cleared = TuitionPaymentInput.safeParse({ paidVnd: '250000', paidAt: '' });
+    expect(cleared.success).toBe(true);
+    expect(cleared.success && cleared.data.paidAt).toBe(null);
+
+    const real = TuitionPaymentInput.safeParse({ paidVnd: '250000', paidAt: '2031-03-05' });
+    expect(real.success && real.data.paidAt).toBe('2031-03-05');
+
+    expect(TuitionPaymentInput.safeParse({ paidVnd: '1', paidAt: '5 March' }).success).toBe(false);
   });
 });

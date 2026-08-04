@@ -716,10 +716,16 @@ export type TuitionSettingsInput = z.infer<typeof TuitionSettingsInput>;
 
 export const TuitionPaymentInput = z.object({
   paidVnd: VndAmount,
+  /**
+   * The date picker is clearable, and an empty form field arrives as `''`, not as a missing key —
+   * so `''` has to mean "no date" here. Without the literal branch, clearing the date failed the
+   * regex and took the whole payment save down with a 400.
+   */
   paidAt: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullish(),
+    .nullish()
+    .or(z.literal('').transform(() => null)),
   paymentNote: z.string().max(500).nullish(),
 });
 export type TuitionPaymentInput = z.infer<typeof TuitionPaymentInput>;
