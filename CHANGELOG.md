@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0098 — 2026-08-05
+Assessments: month filter is a labelled dropdown of recorded months, with a separate All-time reset button
+
 ## v0.0097 — 2026-08-05
 Feedback is a kanban board: New / Reviewed / Resolved columns with drag-and-drop between them, and the changelog moves out of a tab into a modal opened from the page header.
 

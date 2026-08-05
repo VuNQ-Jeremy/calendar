@@ -16,7 +16,7 @@ import {
   scoreStats,
   type BehaviorTypeId,
 } from './lib/assess.js';
-import { monthLabel, shiftMonth } from '../shared/logic/month.js';
+import { monthLabel } from '../shared/logic/month.js';
 import type { ScoreRow, BehaviorRow, RemarkRow } from '../server/services/assessments.js';
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
@@ -225,8 +225,8 @@ function AssessmentsScreen() {
   const [classFilter, setClassFilter] = React.useState('all');
   const [studentId, setStudentId] = React.useState<string>(students[0]?.id ?? '');
   const [tab, setTab] = React.useState<'scores' | 'behavior' | 'report'>('scores');
-  // null = all time. The stepper is the only month control on the screen; the report tab, which
-  // must name a concrete month, falls back to the current one while the filter is off.
+  // null = all time. The month dropdown is the only month control on the screen; the report tab,
+  // which must name a concrete month, falls back to the current one while the filter is off.
   const [monthFilter, setMonthFilter] = React.useState<string | null>(null);
   const [scoreModal, setScoreModal] = React.useState<ScoreDraft | null>(null);
   const [behaviorModal, setBehaviorModal] = React.useState<BehaviorDraft | null>(null);
@@ -396,9 +396,21 @@ function AssessmentsScreen() {
     fetcher.submit(fd, { action: '/assessments', method: 'post' });
   };
 
-  /** Steps the filter; the first press from "All time" lands on the current month. */
-  const stepMonth = (delta: number) =>
-    setMonthFilter(monthFilter ? shiftMonth(monthFilter, delta) : currentMonth);
+  /**
+   * Months the dropdown offers: every month anything was recorded in, plus the current one (you
+   * can always write this month's report) and whatever is selected. Built from ALL records, not
+   * the active student's, so switching student never blanks the picker.
+   */
+  const monthOptions = React.useMemo(() => {
+    const set = new Set<string>([currentMonth]);
+    for (const r of scores) set.add(r.date.slice(0, 7));
+    for (const r of behavior) set.add(r.date.slice(0, 7));
+    if (monthFilter) set.add(monthFilter);
+    // Newest first: 'YYYY-MM' sorts lexicographically, so a descending compare is the whole job.
+    return [...set]
+      .sort((a, b) => b.localeCompare(a))
+      .map((m) => ({ value: m, label: monthLabel(m, lang) }));
+  }, [scores, behavior, currentMonth, monthFilter, lang]);
 
   const incidentsChartTitle = monthFilter
     ? t('assess_incidents_chart_month', { month: monthLabel(monthFilter, lang) })
@@ -448,33 +460,28 @@ function AssessmentsScreen() {
             options={visibleStudents.map((s) => ({ value: s.id, label: s.name }))}
           />
         </div>
-        <div className="m-row" style={{ gap: 8, marginTop: 14, alignItems: 'center' }}>
-          <IconButton
-            label={monthLabel(shiftMonth(reportMonth, -1), lang)}
-            onClick={() => stepMonth(-1)}
+        {/* The month picker and its reset are two separate controls: the dropdown only ever names
+            a real month, and "All time" is the one button that clears the filter. */}
+        <div className="m-row" style={{ gap: 10, marginTop: 14, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <MSelect
+              label={t('assess_month')}
+              value={monthFilter ?? ''}
+              // '' is the no-month-picked slot, shown as a dash so the field is never a blank
+              // box. It must normalise back to null — `'' ?? currentMonth` is `''`, which would
+              // leave the report tab with no month at all.
+              onChange={(v) => setMonthFilter(v || null)}
+              options={[{ value: '', label: '—' }, ...monthOptions]}
+            />
+          </div>
+          <Button
+            variant={monthFilter ? 'secondary' : 'primary'}
+            disabled={!monthFilter}
+            iconLeft={<MIcon name="x" size={16} />}
+            onClick={() => setMonthFilter(null)}
           >
-            <MIcon name="chevronLeft" size={18} />
-          </IconButton>
-          <span style={{ fontWeight: 800, minWidth: 130, textAlign: 'center' }}>
-            {monthFilter ? monthLabel(monthFilter, lang) : t('month_all')}
-          </span>
-          <IconButton
-            label={monthLabel(shiftMonth(reportMonth, 1), lang)}
-            onClick={() => stepMonth(1)}
-          >
-            <MIcon name="chevronRight" size={18} />
-          </IconButton>
-          {monthFilter && (
-            <button
-              type="button"
-              className="mchip"
-              style={{ cursor: 'pointer', gap: 5 }}
-              onClick={() => setMonthFilter(null)}
-            >
-              <MIcon name="x" size={14} />
-              {t('month_all')}
-            </button>
-          )}
+            {t('month_all')}
+          </Button>
         </div>
       </Card>
 
