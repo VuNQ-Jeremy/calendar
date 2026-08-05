@@ -20,6 +20,28 @@ export function parseISO(s: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/**
+ * A stored `createdAt` -> "4 thg 8, 15:54". The day is localised, the clock is not: a
+ * hand-built 24-hour time is identical in the browser and in Hermes on Android, where Intl's
+ * time formatting is not, and a stamp that reads differently on the two clients is a stamp
+ * you cannot compare.
+ *
+ * Rows written before the server stamped a clock hold a bare 'YYYY-MM-DD'. Those get the day
+ * alone — inventing a time for them would be a lie, and `parseISO` keeps them on the right
+ * calendar day, where `new Date` would read them as UTC midnight and shift them a day west
+ * of Greenwich.
+ */
+export function fmtStamp(value: string, localeStr: string): string {
+  const dateOnly = value.length === 10;
+  const d = dateOnly ? parseISO(value) : new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const day = d.toLocaleDateString(localeStr, { month: 'short', day: 'numeric' });
+  if (dateOnly) return day;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${day}, ${hh}:${mm}`;
+}
+
 /** A new `Date` shifted by n days. Does not mutate the input. */
 export function addDays(d: Date | string | number, n: number): Date {
   const x = new Date(d);

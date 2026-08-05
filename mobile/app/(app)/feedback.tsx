@@ -7,6 +7,7 @@ import { ChipSelect } from '~/components/ChipSelect';
 import { ScreenHeader } from '~/components/ScreenHeader';
 import { useAuth } from '~/lib/auth';
 import { useLang, locale } from '~/lib/i18n';
+import { fmtStamp } from '~/lib/cal';
 import * as api from '~/lib/endpoints';
 import { useFeedback, useInvalidateStaff } from '~/lib/staff-data';
 import type { FeedbackRow } from '~/lib/types';
@@ -202,14 +203,7 @@ export default function Feedback() {
             <View style={{ flexDirection: 'row', gap: th.spacing[2], flexWrap: 'wrap' }}>
               <Tag color={CAT_COLOR[f.category]}>{t(`cat_${f.category}`)}</Tag>
               {f.author ? <Muted>{f.author}</Muted> : null}
-              {f.createdAt ? (
-                <Muted>
-                  {new Date(f.createdAt).toLocaleDateString(locale(lang), {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </Muted>
-              ) : null}
+              {f.createdAt ? <Muted>{fmtStamp(f.createdAt, locale(lang))}</Muted> : null}
             </View>
 
             {f.appVersion ? <Mono numberOfLines={1}>{f.appVersion}</Mono> : null}

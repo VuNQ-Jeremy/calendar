@@ -1,4 +1,12 @@
-import { addDays, addMin, iso, parseISO, startOfWeek, toMin } from '@mochi/shared/logic/dates';
+import {
+  addDays,
+  addMin,
+  fmtStamp,
+  iso,
+  parseISO,
+  startOfWeek,
+  toMin,
+} from '@mochi/shared/logic/dates';
 import { expandEvents, type Expanded } from '@mochi/shared/logic/recurrence';
 import type { EventRow } from './types';
 
@@ -11,7 +19,7 @@ import type { EventRow } from './types';
  * screen in this phase would be untrustworthy.
  */
 
-export { addDays, addMin, iso, parseISO, startOfWeek, toMin, expandEvents };
+export { addDays, addMin, fmtStamp, iso, parseISO, startOfWeek, toMin, expandEvents };
 
 export type ExpandedEvent = Expanded<EventRow>;
 

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0094 — 2026-08-05
+Feedback stamps carry the time of day, localised and shared by web and mobile. The server is now the sole author of createdAt, and a migration gives the old time-less rows a time.
+
 ## v0.0093 — 2026-08-05
 Feedback inbox shows the time of day, not just the date. The server now stamps createdAt with a full ISO timestamp for both web and mobile submissions.
 

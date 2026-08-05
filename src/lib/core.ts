@@ -52,7 +52,15 @@ TODAY.setHours(0, 0, 0, 0);
 
 // Date helpers live in shared/logic/dates.ts so the mobile app uses the identical
 // implementations. Re-exported here — ~20 files import them from this module.
-export { iso, addDays, parseISO, startOfWeek, toMin, addMin } from '../../shared/logic/dates';
+export {
+  iso,
+  addDays,
+  parseISO,
+  startOfWeek,
+  toMin,
+  addMin,
+  fmtStamp,
+} from '../../shared/logic/dates';
 
 // Invite codes moved to shared/logic/invite-code.ts in phase 5 — the phone generates them too,
 // and the XXX-XXX format is validated server-side.

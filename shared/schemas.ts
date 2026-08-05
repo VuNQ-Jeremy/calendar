@@ -133,6 +133,11 @@ export const FeedbackInput = z.object({
   category: z.enum(['idea', 'bug', 'praise', 'other']).default('idea'),
   author: z.string().max(200).nullish(),
   status: z.enum(['new', 'reviewed', 'done']).default('new'),
+  /**
+   * Server-assigned, and ignored on write — `services/feedback.create` always stamps its own
+   * ISO timestamp. It stays on the input schema because the API *returns* it and mobile derives
+   * `FeedbackRow` from this schema (see mobile/lib/types.ts).
+   */
   createdAt: z.string().nullish(),
   /** Which build the report came from, e.g. "v0.0042 · a1b2c3d". Nullish: older clients omit it. */
   appVersion: z.string().max(100).nullish(),

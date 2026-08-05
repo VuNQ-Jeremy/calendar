@@ -38,10 +38,11 @@ export async function create(db: Db, input: FeedbackInput): Promise<FeedbackRow>
     category: input.category,
     author: input.author ?? null,
     status: input.status,
-    // Stamped here, not by the caller: web and mobile both wanted "now", and the server is the
-    // one clock they agree on. A full ISO timestamp, so the inbox can show a time of day —
-    // clients used to send a bare 'YYYY-MM-DD', which is where time-less rows come from.
-    createdAt: input.createdAt || new Date().toISOString(),
+    // Stamped here, and `input.createdAt` is deliberately ignored: web and mobile both wanted
+    // "now", and the server is the one clock they agree on. Older clients post a bare
+    // 'YYYY-MM-DD' — a phone keeps doing so until the OTA reaches it — and honouring that is
+    // what produced rows the inbox could not show a time for. A full ISO timestamp, always.
+    createdAt: new Date().toISOString(),
     appVersion: input.appVersion ?? null,
   });
   const rows = await db.select().from(feedback).where(eq(feedback.id, id));

@@ -3,8 +3,8 @@ import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { Modal, MSelect, PageHeader, Empty } from './ui.jsx';
-import { colorOf } from './lib/core.js';
-import { useLang } from './lib/i18n.jsx';
+import { colorOf, fmtStamp } from './lib/core.js';
+import { useLang, locale } from './lib/i18n.jsx';
 import { BUILD_ID } from './lib/build-id.js';
 import { CHANGELOG } from './lib/changelog.js';
 import type { FeedbackRow } from '../server/services/feedback.js';
@@ -33,25 +33,6 @@ const STATUS: Record<string, { tk: string; badge: string }> = {
 const ICON_TINT = (color: string) => {
   const c = colorOf(color);
   return { background: c.soft, color: c.ink };
-};
-
-/**
- * "Aug 5, 2:30 PM" — the time matters here: two reports from the same afternoon are usually
- * the same person mid-thought, and the day alone hides that.
- *
- * Rows created before the server stamped a clock hold a bare 'YYYY-MM-DD', which `new Date`
- * reads as UTC midnight — rendering a time for those would invent one (07:00 in Hanoi), so
- * they keep showing the day alone.
- */
-const fmtCreated = (value: string) => {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  if (value.includes('T')) {
-    opts.hour = 'numeric';
-    opts.minute = '2-digit';
-  }
-  return d.toLocaleString('en-US', opts);
 };
 
 export interface FeedbackDraft {
@@ -198,7 +179,7 @@ function ChangelogList() {
 export function FeedbackScreen({ user }: FeedbackScreenProps) {
   const { feedback: list } = useLoaderData() as { feedback: FeedbackRow[] };
   const fetcher = useFetcher();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [filter, setFilter] = React.useState('new');
   const [modal, setModal] = React.useState<FeedbackDraft | null>(null);
 
@@ -307,7 +288,7 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                     {f.createdAt && (
                       <span className="m-row" style={{ gap: 5 }}>
                         <MIcon name="clock" size={13} />
-                        {fmtCreated(f.createdAt)}
+                        {fmtStamp(f.createdAt, locale(lang))}
                       </span>
                     )}
                     {f.appVersion && (
