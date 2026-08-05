@@ -7,7 +7,6 @@ import { ChipSelect } from '~/components/ChipSelect';
 import { ScreenHeader } from '~/components/ScreenHeader';
 import { useAuth } from '~/lib/auth';
 import { useLang, locale } from '~/lib/i18n';
-import { iso, todayDate } from '~/lib/cal';
 import * as api from '~/lib/endpoints';
 import { useFeedback, useInvalidateStaff } from '~/lib/staff-data';
 import type { FeedbackRow } from '~/lib/types';
@@ -78,8 +77,8 @@ export default function Feedback() {
         ? api.feedback.update(editing.id, base)
         : api.feedback.create({
             ...base,
+            // No createdAt: the server stamps it, with a time of day the inbox can show.
             status: 'new' as const,
-            createdAt: iso(todayDate()),
             appVersion: versionStamp(),
           });
     },

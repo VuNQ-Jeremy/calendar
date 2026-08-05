@@ -355,7 +355,6 @@ export default function AppLayout() {
     fd.set('category', f.category);
     fd.set('author', f.author || '');
     fd.set('status', f.status);
-    fd.set('createdAt', f.createdAt || '');
     fd.set('appVersion', BUILD_ID);
     feedbackFetcher.submit(fd, { action: '/feedback', method: 'post' });
     setFeedbackDraft(null);

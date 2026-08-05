@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0093 — 2026-08-05
+Feedback inbox shows the time of day, not just the date. The server now stamps createdAt with a full ISO timestamp for both web and mobile submissions.
+
 ## v0.0092 — 2026-08-04
 Minimal slip: keep the serif title. The design system styles every h1 globally, which was overriding it with the display font.
 
