@@ -7,10 +7,16 @@ export default [
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
+  route('event-previews', 'routes/event-previews.tsx'),
   // Printable test document — outside the _app layout on purpose: no app shell, no nav chrome.
   route('tests/:id/print', 'routes/tests.$id.print.tsx'),
   // Printable tuition slip (phiếu thu), same reasoning.
   route('tuition/:month/:studentId/print', 'routes/tuition.$month.$studentId.print.tsx'),
+  // Printable monthly report (phiếu nhận xét) — the only thing about assessments a parent sees,
+  // so it is a document, not an app screen.
+  route('assessments/:month/:studentId/report', 'routes/assessments.$month.$studentId.report.tsx'),
+  // "Nhắc buổi sau" share card — an image for the class Zalo group, same reasoning again.
+  route('session-preview/:eventId/:date/print', 'routes/session-preview.$eventId.$date.print.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
 
@@ -34,12 +40,15 @@ export default [
   route('api/materials/:id?', 'routes/api.materials.tsx'),
   route('api/assessments/scores/:id?', 'routes/api.assessments.scores.tsx'),
   route('api/assessments/behavior/:id?', 'routes/api.assessments.behavior.tsx'),
+  route('api/assessments/remarks/:id?', 'routes/api.assessments.remarks.tsx'),
   route('api/assessment-types/reorder', 'routes/api.assessment-types.reorder.tsx'),
   route('api/assessment-types/:id?', 'routes/api.assessment-types.tsx'),
   route('api/grade-levels/reorder', 'routes/api.grade-levels.reorder.tsx'),
   route('api/grade-levels/:id?', 'routes/api.grade-levels.tsx'),
   route('api/attendance', 'routes/api.attendance.tsx'),
   route('api/event-materials', 'routes/api.event-materials.tsx'),
+  route('api/event-previews', 'routes/api.event-previews.tsx'),
+  route('api/my-sessions', 'routes/api.my-sessions.tsx'),
   route('api/flashcards/topics/:id?', 'routes/api.flashcards.topics.tsx'),
   route('api/flashcards/topic/:slug', 'routes/api.flashcards.topics.$slug.tsx'),
   route('api/flashcards/words/:id?', 'routes/api.flashcards.words.tsx'),
@@ -74,6 +83,7 @@ export default [
     route('tests/:id', 'routes/tests.$id.tsx'),
     route('my-tests', 'routes/my-tests.tsx'),
     route('my-tests/:id', 'routes/my-tests.$id.tsx'),
+    route('my-schedule', 'routes/my-schedule.tsx'),
     route('questions', 'routes/questions.tsx'),
     route('assessments', 'routes/assessments.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),

@@ -1,11 +1,13 @@
 import { and, gte, isNotNull } from 'drizzle-orm';
-import { flashcardResults, students } from '../db/schema';
+import { flashcardResults, staff, students } from '../db/schema';
 import { createDb, type Db } from '../db/index';
 import { expandEvents } from '../../shared/logic/recurrence';
 import { iso, parseISO, toMin } from '../../shared/logic/dates';
+import { previewLine } from '../../shared/logic/preview';
 import * as classesSvc from './classes';
 import * as eventsSvc from './events';
 import { getNotifPrefs } from './notif-prefs';
+import * as previewSvc from './session-preview';
 import * as push from './push';
 import type { ExpoPushMessage } from './push';
 
@@ -79,6 +81,14 @@ export async function runClassReminders(db: Db, at: Date = new Date()): Promise<
   if (!todo.length) return 0;
 
   const classes = await classesSvc.list(db);
+  // What the teacher said this occurrence covers, so the reminder is about the lesson and not just
+  // the clock. Composed in one bulk call for the whole sweep.
+  const previews = await previewSvc.composeMany(
+    db,
+    todo
+      .filter((e) => e.classId)
+      .map((e) => ({ id: e.id, classId: e.classId as string, date: e.date })),
+  );
   const messages: ExpoPushMessage[] = [];
   const doneKeys: string[] = [];
 
@@ -93,13 +103,19 @@ export async function runClassReminders(db: Db, at: Date = new Date()): Promise<
     doneKeys.push(`class:${ev.id}:${ev.date}`);
     if (!tokens.length) continue;
 
+    // Only the teacher's own words go in this body, not the whole preview: a notification arriving
+    // 30 minutes ahead is a nudge out the door, and the tests are already on the schedule screen.
+    const focus = previews.get(previewSvc.previewKey(ev.id, ev.date))?.focusText.trim();
+
     for (const to of tokens) {
       messages.push({
         to,
         title: cls.name,
         // The event's own "Room or place", not the class's — `classes.room` is gone from the
         // product. Same information for anyone who filled the field in, and it is per-occurrence.
-        body: `${ev.title} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}`,
+        body:
+          `${ev.title} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}` +
+          (focus ? ` · ${focus.slice(0, 90)}` : ''),
         // Deep link straight to the occurrence, not the app's home screen.
         data: { url: `/event/${ev.id}`, kind: 'class' },
         channelId: 'reminders',
@@ -170,6 +186,115 @@ export async function runDailyDigest(db: Db, at: Date = new Date()): Promise<num
   return messages.length;
 }
 
+/**
+ * Job C — tomorrow's sessions. 12:00 UTC = 19:00 ICT, the `reminders` channel.
+ *
+ * Evening on purpose. The 15-minute job already covers "your class starts soon", which is too late
+ * to do anything about; this one lands while there is still an evening left to learn the words and
+ * find the book. Students get one message per class they are in; staff get one summary of the
+ * whole day, because the thing a teacher needs is the list, not five separate pings.
+ */
+export async function runEveningPreview(db: Db, at: Date = new Date()): Promise<number> {
+  const prefs = await getNotifPrefs(db);
+  if (!prefs.previewEvening) return 0;
+
+  const { dateIso } = ictNow(at);
+  const tomorrow = addDaysIso(dateIso, 1);
+
+  const all = await eventsSvc.list(db);
+  // Same expansion the calendar and the 15-minute sweep use, so all three agree on which weeks a
+  // recurring class actually runs.
+  const occs = expandEvents(all, parseISO(tomorrow), parseISO(tomorrow))
+    .filter((e) => e.date === tomorrow && !!e.classId)
+    .sort((a, b) => (a.start ?? '99:99').localeCompare(b.start ?? '99:99'));
+  if (!occs.length) return 0;
+
+  const [classes, previews] = await Promise.all([
+    classesSvc.list(db),
+    previewSvc.composeMany(
+      db,
+      occs.map((e) => ({ id: e.id, classId: e.classId as string, date: e.date })),
+    ),
+  ]);
+
+  const messages: ExpoPushMessage[] = [];
+  const doneKeys: string[] = [];
+
+  // ---- Students: one message per occurrence, idempotent per (event, date) ----
+  const studentKeys = occs.map((e) => `preview:${e.id}:${e.date}`);
+  const sentStudent = await push.alreadySent(db, studentKeys);
+
+  for (const ev of occs) {
+    const key = `preview:${ev.id}:${ev.date}`;
+    if (sentStudent.has(key)) continue;
+    const cls = classes.find((c) => c.id === ev.classId);
+    if (!cls) continue;
+    // Marked done even when nobody is registered, for the same reason as the class sweep.
+    doneKeys.push(key);
+
+    const tokens = await push.tokensForAccounts(
+      db,
+      await push.accountIdsForStudents(db, cls.studentIds),
+    );
+    if (!tokens.length) continue;
+
+    const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW);
+    for (const to of tokens) {
+      messages.push({
+        to,
+        title: `Ngày mai: ${cls.name}${ev.start ? ` · ${ev.start}` : ''}`,
+        // A session with nothing written about it still deserves the reminder that it exists.
+        body: line || 'Chuẩn bị cho buổi học ngày mai nhé!',
+        // `/schedule` only exists in builds carrying the student-schedule OTA. Do not ship this job
+        // before that update has propagated, or taps dead-end on not-found — the same hazard the
+        // digest's `/flashcards` comment above describes.
+        data: { url: '/schedule', kind: 'preview' },
+        channelId: 'reminders',
+      });
+    }
+  }
+
+  // ---- Staff: one summary for the day ----
+  //
+  // Every staff account gets it. There is no class_staff table (a deliberate absence — the school
+  // has one or two teachers), so "the teachers of this class" is not a query that exists yet.
+  const staffKey = `preview-staff:${tomorrow}`;
+  if (!(await push.alreadySent(db, [staffKey])).has(staffKey)) {
+    doneKeys.push(staffKey);
+    const staffIds = (await db.select({ id: staff.id }).from(staff)).map((r) => r.id);
+    const tokens = await push.tokensForAccounts(db, await push.accountIdsForStaff(db, staffIds));
+    if (tokens.length) {
+      const summary = occs
+        .map((ev) => {
+          const cls = classes.find((c) => c.id === ev.classId);
+          const line = previewLine(
+            previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW,
+            60,
+          );
+          return `${ev.start ?? '--:--'} ${cls?.name ?? ev.title}${line ? ` — ${line}` : ''}`;
+        })
+        .join('\n');
+      for (const to of tokens) {
+        messages.push({
+          to,
+          title: `Ngày mai có ${occs.length} buổi dạy`,
+          // Expo truncates long bodies itself; cap it so the notification tray stays readable.
+          body: summary.slice(0, 400),
+          data: { url: '/calendar', kind: 'preview' },
+          channelId: 'reminders',
+        });
+      }
+    }
+  }
+
+  await deliver(db, messages);
+  await push.markSent(db, doneKeys);
+  return messages.length;
+}
+
+/** For an occurrence nobody wrote a preview for. previewLine returns '' for it. */
+const EMPTY_PREVIEW = { focusText: '', vocabTopic: null, tests: [] };
+
 /** Send, then delete whatever Expo said is gone. */
 async function deliver(db: Db, messages: ExpoPushMessage[]): Promise<void> {
   if (!messages.length) return;
@@ -185,6 +310,10 @@ export async function runScheduled(cron: string, env: Env, at: Date = new Date()
   const db = createDb(env);
   const started = Date.now();
   const sent =
-    cron === '0 1 * * *' ? await runDailyDigest(db, at) : await runClassReminders(db, at);
+    cron === '0 1 * * *'
+      ? await runDailyDigest(db, at)
+      : cron === '0 12 * * *'
+        ? await runEveningPreview(db, at)
+        : await runClassReminders(db, at);
   console.log('[cron]', { cron, sent, ms: Date.now() - started });
 }

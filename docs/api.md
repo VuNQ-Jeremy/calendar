@@ -118,6 +118,7 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/materials/:id?` | staff | `MaterialInput` — **multipart**, see below |
 | `/api/assessments/scores/:id?` | staff | `ScoreRecordInput` |
 | `/api/assessments/behavior/:id?` | staff | `BehaviorRecordInput` |
+| `/api/assessments/remarks/:id?` | staff | `MonthlyRemarkInput` — one row per (student, month); POST upserts on that pair |
 | `/api/assessment-types/:id?` | **admin** | `AssessmentTypeInput` |
 | `/api/grade-levels/:id?` | **admin** | `GradeLevelInput` — managed Khối 6..9 list, categorizes questions and tests |
 | `/api/feedback/:id?` | staff | `FeedbackInput` |
@@ -134,6 +135,8 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/grade-levels/reorder` | admin | `{ ids: string[] }` |
 | GET POST | `/api/attendance` | staff | GET needs `?eventId=&date=`. POST is delete-then-insert: omitting a student unmarks them |
 | GET POST | `/api/event-materials` | staff | GET `?eventId=` for one event, omit for the whole join table |
+| GET POST | `/api/event-previews` | staff | "Preview buổi sau" for one occurrence. GET needs `?eventId=&date=` and replies `{ preview, topics }` (the vocabulary topics feed the picker). POST takes `SessionPreviewInput` and upserts on (eventId, date) |
+| GET | `/api/my-sessions` | **user** | Upcoming sessions with composed previews, `?days=` 1-14 (default 7). A student sees their own classes, staff see every class. Tests appear as title + window only. Computed against the server clock — do not cache |
 | GET | `/api/flashcards/topics/:id?` | **user** | Students play games |
 | POST PATCH DELETE | `/api/flashcards/topics/:id?` | staff | Replies with the refreshed topic list |
 | GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, results, mastery }` — one round trip, and exactly what an offline download stores. `results` is user-level because the web gives students the leaderboard too; `mastery` is empty for staff |

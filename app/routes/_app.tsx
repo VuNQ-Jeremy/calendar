@@ -74,6 +74,14 @@ const NAV = [
         icon: 'clipboard',
         studentOnly: true,
       },
+      // Students only — staff see the same sessions on /calendar.
+      {
+        id: 'my-schedule',
+        path: '/my-schedule',
+        tk: 'nav_my_schedule',
+        icon: 'calendar',
+        studentOnly: true,
+      },
       {
         id: 'tuition',
         path: '/tuition',

@@ -255,6 +255,30 @@ export const behaviorRecords = sqliteTable(
   ],
 );
 
+/**
+ * One teacher-written monthly report per student. The ratings are 1-5; the stats a report shows
+ * next to them are computed from scoreRecords/behaviorRecords at read time, never stored.
+ */
+export const monthlyRemarks = sqliteTable(
+  'monthly_remarks',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(),
+    attitude: integer('attitude').notNull(),
+    homework: integer('homework').notNull(),
+    participation: integer('participation').notNull(),
+    progress: integer('progress').notNull(),
+    comment: text('comment'),
+  },
+  (t) => [
+    unique('uq_monthly_remarks_student_month').on(t.studentId, t.month),
+    index('idx_monthly_remarks_month').on(t.month),
+  ],
+);
+
 export const attendanceRecords = sqliteTable(
   'attendance_records',
   {
@@ -270,6 +294,32 @@ export const attendanceRecords = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.eventId, t.date, t.studentId] }),
     index('idx_attendance_student').on(t.studentId, t.date),
+  ],
+);
+
+/**
+ * "Preview buổi sau" — what one occurrence of a class will cover. Keyed like attendanceRecords
+ * above, and for the same reason: a weekly class is one `events` row, so anything that differs
+ * week to week cannot live on the event. See migrations/0024_session_previews.sql.
+ *
+ * The `vocabTopicId` reference resolves lazily, so declaring this above flashcardTopics is fine.
+ */
+export const sessionPreviews = sqliteTable(
+  'session_previews',
+  {
+    eventId: text('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    focusText: text('focus_text').notNull().default(''),
+    vocabTopicId: text('vocab_topic_id').references(() => flashcardTopics.id, {
+      onDelete: 'set null',
+    }),
+    updatedAt: text('updated_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.date] }),
+    index('idx_session_previews_date').on(t.date),
   ],
 );
 

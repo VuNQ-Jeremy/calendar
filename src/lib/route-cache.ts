@@ -156,6 +156,12 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // mutation drops all cached months (closing one changes what the others can
   // show, and a payment is recorded from the month page itself).
   tuition: { hard: [K.tuition], stale: [] },
+  // Session previews live under 'prev:<eventId>:<date>', read by useCachedLoad
+  // in the calendar event modal — same arrangement as attendance above, and
+  // stale for the same reason: the modal is usually open on the very key being
+  // marked, and deleting it would blank the textarea mid-edit. Nothing else
+  // caches previews; the student schedule screens skip the cache entirely.
+  previews: { hard: [], stale: ['prev:'] },
 };
 
 /**

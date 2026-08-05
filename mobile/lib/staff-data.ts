@@ -7,6 +7,7 @@ import type {
   DashboardResponse,
   EventRow,
   MaterialRow,
+  SessionPreviewPayload,
   StudentRow,
   ThemeRow,
 } from './types';
@@ -71,6 +72,10 @@ export function useBehavior() {
   return useQuery({ queryKey: qk.behavior, queryFn: api.behavior.list });
 }
 
+export function useRemarks() {
+  return useQuery({ queryKey: qk.remarks, queryFn: api.remarks.list });
+}
+
 export function useFeedback() {
   return useQuery({ queryKey: qk.feedback, queryFn: api.feedback.list });
 }
@@ -108,6 +113,18 @@ export function useAttendance(eventId: string | undefined, date: string | undefi
   return useQuery({
     queryKey: qk.attendance(eventId ?? '', date ?? ''),
     queryFn: () => api.listAttendance(eventId!, date!),
+    enabled: !!eventId && !!date,
+  });
+}
+
+/**
+ * One occurrence's "preview buổi sau". Keyed per occurrence for the same reason attendance is:
+ * a weekly class is one event row, and next Monday is not this Monday.
+ */
+export function useEventPreview(eventId: string | undefined, date: string | undefined) {
+  return useQuery({
+    queryKey: qk.eventPreview(eventId ?? '', date ?? ''),
+    queryFn: () => api.eventPreviews.get(eventId!, date!),
     enabled: !!eventId && !!date,
   });
 }
@@ -151,6 +168,29 @@ export function useSaveAttendance(eventId: string, date: string) {
     mutationFn: (records: { studentId: string; status: AttendanceRow['status'] }[]) =>
       api.saveAttendance({ eventId, date, records }),
     onSuccess: (rows) => qc.setQueryData(qk.attendance(eventId, date), rows),
+  });
+}
+
+/**
+ * Saving a preview. The reply is the stored row, so it goes straight into this occurrence's cache
+ * — but the student-facing list has to be refetched, since it carries composed data (the tests
+ * falling on that day) this reply knows nothing about.
+ *
+ * No offline outbox: the outbox exists for flashcard results, which are generated while playing
+ * with no network. A teacher writing next week's lesson plan can be told to try again.
+ */
+export function useSavePreview(eventId: string, date: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { focusText: string; vocabTopicId: string | null }) =>
+      api.eventPreviews.save({ eventId, date, ...input }),
+    onSuccess: (row) => {
+      qc.setQueryData(qk.eventPreview(eventId, date), (old: SessionPreviewPayload | undefined) => ({
+        preview: row,
+        topics: old?.topics ?? [],
+      }));
+      qc.invalidateQueries({ queryKey: qk.mySessions });
+    },
   });
 }
 

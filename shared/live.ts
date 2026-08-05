@@ -26,6 +26,7 @@ export const MUTATION_DOMAINS = [
   'profile',
   'attendance',
   'tuition',
+  'previews',
 ] as const;
 
 export type MutationDomain = (typeof MUTATION_DOMAINS)[number];
@@ -41,6 +42,11 @@ export function isMutationDomain(value: unknown): value is MutationDomain {
  * two domains. The rest describe staff-only tables — a bare domain name leaks
  * little, but there is no reason to tell a student session that someone is
  * editing the people list.
+ *
+ * 'previews' is deliberately absent even though students see session previews:
+ * their schedule screens are uncached and refetch on focus (server-clock
+ * sensitive, see server/services/session-preview.ts), so there is nothing for
+ * an invalidation message to invalidate.
  */
 export const STUDENT_LIVE_DOMAINS: ReadonlySet<MutationDomain> = new Set(['flashcards', 'tests']);
 

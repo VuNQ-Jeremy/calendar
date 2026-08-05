@@ -9,7 +9,7 @@ import { BUILD_ID } from './lib/build-id.js';
 import { CHANGELOG } from './lib/changelog.js';
 import type { FeedbackRow } from '../server/services/feedback.js';
 
-const { Card: FC, Button: FBtn, IconButton: FIB, Tag: FTag, Badge: FBadge } = DS;
+const { Card: FC, Button: FBtn, IconButton: FIB, Tag: FTag } = DS;
 
 interface FeedbackCategory {
   tk: string;
@@ -24,11 +24,14 @@ export const FEEDBACK_CATEGORIES: Record<string, FeedbackCategory> = {
   other: { tk: 'cat_other', icon: 'message', color: 'cocoa' },
 };
 
-const STATUS: Record<string, { tk: string; badge: string }> = {
-  new: { tk: 'st_new', badge: 'brand' },
-  reviewed: { tk: 'st_reviewed', badge: 'blue' },
-  done: { tk: 'st_done', badge: 'green' },
+const STATUS: Record<string, { tk: string; color: string }> = {
+  new: { tk: 'st_new', color: 'orange' },
+  reviewed: { tk: 'st_reviewed', color: 'blue' },
+  done: { tk: 'st_done', color: 'green' },
 };
+
+/** Board columns, left to right — the order a report travels through. */
+const COLUMNS = ['new', 'reviewed', 'done'];
 
 const ICON_TINT = (color: string) => {
   const c = colorOf(color);
@@ -131,9 +134,30 @@ interface FeedbackScreenProps {
  * Release notes for the running build, from CHANGELOG.md (baked in at build time).
  *
  * Deliberately untranslated, like the version stamp: entries are written once per push in
- * English and describe code, not UI. Sits on this page because the version chip on a
- * feedback report is only useful if you can look up what that version changed.
+ * English and describe code, not UI. Lives behind a button on this page because the version
+ * chip on a feedback report is only useful if you can look up what that version changed —
+ * a lookup, not a work queue, so it opens as a modal rather than sharing the board.
  */
+function ChangelogModal({ onClose }: { onClose: () => void }) {
+  const { t } = useLang();
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={t('fb_changelog')}
+      subtitle={t('fb_changelog_sub')}
+      width={620}
+      footer={
+        <FBtn variant="secondary" onClick={onClose}>
+          {t('close')}
+        </FBtn>
+      }
+    >
+      <ChangelogList />
+    </Modal>
+  );
+}
+
 function ChangelogList() {
   return (
     <div className="m-stack">
@@ -180,15 +204,20 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
   const { feedback: list } = useLoaderData() as { feedback: FeedbackRow[] };
   const fetcher = useFetcher();
   const { t, lang } = useLang();
-  const [filter, setFilter] = React.useState('new');
   const [modal, setModal] = React.useState<FeedbackDraft | null>(null);
+  const [changelogOpen, setChangelogOpen] = React.useState(false);
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [overCol, setOverCol] = React.useState<string | null>(null);
 
-  const shown = list.filter((f) => f.status === filter);
-  const counts = {
-    new: list.filter((f) => f.status === 'new').length,
-    reviewed: list.filter((f) => f.status === 'reviewed').length,
-    done: list.filter((f) => f.status === 'done').length,
-  };
+  // A status change is a round trip, and the loader keeps the old value until it lands.
+  // Reading the in-flight FormData lets the card sit in its new column the moment it is
+  // dropped, instead of snapping back for a beat.
+  const pending = fetcher.formData;
+  const moving =
+    pending && pending.get('intent') === 'update' && pending.get('status')
+      ? { id: String(pending.get('id')), status: String(pending.get('status')) }
+      : null;
+  const statusOf = (f: FeedbackRow) => (moving && moving.id === f.id ? moving.status : f.status);
 
   const openNew = () => setModal(newFeedbackDraft(user));
 
@@ -214,12 +243,23 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
     setModal(null);
   };
 
-  const toggleDone = (f: FeedbackRow) => {
+  const setStatus = (id: string, status: string) => {
     const fd = new FormData();
     fd.set('intent', 'update');
-    fd.set('id', f.id);
-    fd.set('status', f.status === 'done' ? 'new' : 'done');
+    fd.set('id', id);
+    fd.set('status', status);
     fetcher.submit(fd, { action: '/feedback', method: 'post' });
+  };
+
+  const toggleDone = (f: FeedbackRow) => setStatus(f.id, statusOf(f) === 'done' ? 'new' : 'done');
+
+  const dropOn = (col: string) => {
+    const id = dragId;
+    setDragId(null);
+    setOverCol(null);
+    if (!id) return;
+    const row = list.find((f) => f.id === id);
+    if (row && statusOf(row) !== col) setStatus(id, col);
   };
 
   const removeFeedback = (id: string) => {
@@ -235,103 +275,129 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
         title={t('fb_title')}
         subtitle={t('fb_sub')}
         actions={
-          <FBtn variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openNew}>
-            {t('fb_log')}
-          </FBtn>
+          <>
+            <FBtn
+              variant="secondary"
+              iconLeft={<MIcon name="sparkle" size={18} />}
+              onClick={() => setChangelogOpen(true)}
+            >
+              {t('fb_changelog')}
+            </FBtn>
+            <FBtn variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openNew}>
+              {t('fb_log')}
+            </FBtn>
+          </>
         }
       />
-      <DS.Tabs
-        value={filter}
-        onChange={setFilter}
-        tabs={[
-          { id: 'new', label: t('fb_tab_new', { n: counts.new }) },
-          { id: 'reviewed', label: t('fb_tab_reviewed', { n: counts.reviewed }) },
-          { id: 'done', label: t('fb_tab_done', { n: counts.done }) },
-          // No count: the others size a work queue, "32 releases" is just noise.
-          { id: 'changelog', label: t('fb_tab_changelog') },
-        ]}
-      />
-      {filter === 'changelog' ? (
-        <ChangelogList />
-      ) : shown.length ? (
-        <div className="m-stack">
-          {shown.map((f) => {
-            const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
-            const st = STATUS[f.status] ?? STATUS.new;
+      {list.length ? (
+        <div className="m-board">
+          {COLUMNS.map((col) => {
+            const st = STATUS[col];
+            const cards = list.filter((f) => statusOf(f) === col);
             return (
-              <div key={f.id} className="lrow" style={{ alignItems: 'flex-start' }}>
-                <div
-                  className="iconwrap"
-                  style={{ width: 40, height: 40, ...ICON_TINT(cat.color) }}
-                >
-                  <MIcon name={cat.icon} size={18} />
+              <div
+                key={col}
+                className={'m-board__col' + (overCol === col ? ' is-over' : '')}
+                onDragOver={(e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setOverCol(col);
+                }}
+                onDragLeave={(e) => {
+                  // Ignore the leave events fired while crossing a card inside this column.
+                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                  setOverCol((c) => (c === col ? null : c));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  dropOn(col);
+                }}
+              >
+                <div className="m-board__head">
+                  <span
+                    className="m-board__dot"
+                    style={{ background: colorOf(st.color).base }}
+                    aria-hidden="true"
+                  />
+                  <span className="m-board__title">{t(st.tk)}</span>
+                  <span className="m-board__count">{cards.length}</span>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      color: 'var(--text-strong)',
-                      fontSize: 'var(--text-md)',
-                      textWrap: 'pretty' as React.CSSProperties['textWrap'],
-                    }}
-                  >
-                    {f.message}
-                  </div>
-                  <div className="lrow__meta">
-                    <FTag color={cat.color as 'blue'}>{t(cat.tk)}</FTag>
-                    {f.author && (
-                      <span className="m-row" style={{ gap: 5 }}>
-                        <MIcon name="users" size={13} />
-                        {f.author}
-                      </span>
-                    )}
-                    {f.createdAt && (
-                      <span className="m-row" style={{ gap: 5 }}>
-                        <MIcon name="clock" size={13} />
-                        {fmtStamp(f.createdAt, locale(lang))}
-                      </span>
-                    )}
-                    {f.appVersion && (
-                      <span
-                        className="m-row"
-                        style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
-                        title="Build the report came from"
-                      >
-                        {f.appVersion}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {/* Badge and buttons ride in one group: the row is top-aligned for
-                    multi-line messages, but these two must stay centred on each other,
-                    and the auto-margin belongs to the group so the badge can't drift
-                    left with a short message. */}
-                <div
-                  style={{
-                    marginLeft: 'auto',
-                    alignSelf: 'center',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                  }}
-                >
-                  <FBadge color={st.badge as 'brand'}>{t(st.tk)}</FBadge>
-                  <div className="lrow__actions" style={{ marginLeft: 0 }}>
-                    <FIB
-                      label={f.status === 'done' ? t('fb_reopen') : t('fb_resolve')}
-                      size="sm"
-                      onClick={() => toggleDone(f)}
+                {cards.map((f) => {
+                  const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
+                  const done = statusOf(f) === 'done';
+                  return (
+                    <div
+                      key={f.id}
+                      className={'kcard' + (dragId === f.id ? ' is-dragging' : '')}
+                      draggable
+                      onDragStart={(e) => {
+                        setDragId(f.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', f.id);
+                      }}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setOverCol(null);
+                      }}
                     >
-                      <MIcon name="check" size={16} />
-                    </FIB>
-                    <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
-                      <MIcon name="edit" size={16} />
-                    </FIB>
-                    <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
-                      <MIcon name="trash" size={16} />
-                    </FIB>
-                  </div>
-                </div>
+                      <div className="kcard__top">
+                        <div
+                          className="iconwrap"
+                          style={{ width: 32, height: 32, ...ICON_TINT(cat.color) }}
+                        >
+                          <MIcon name={cat.icon} size={16} />
+                        </div>
+                        <div className="kcard__msg">{f.message}</div>
+                        <span className="lrow__grip" title={t('fb_drag_status')} aria-hidden="true">
+                          <MIcon name="grip" size={16} />
+                        </span>
+                      </div>
+                      <div className="lrow__meta">
+                        {f.author && (
+                          <span className="m-row" style={{ gap: 5 }}>
+                            <MIcon name="users" size={13} />
+                            {f.author}
+                          </span>
+                        )}
+                        {f.createdAt && (
+                          <span className="m-row" style={{ gap: 5 }}>
+                            <MIcon name="clock" size={13} />
+                            {fmtStamp(f.createdAt, locale(lang))}
+                          </span>
+                        )}
+                        {f.appVersion && (
+                          <span
+                            className="m-row"
+                            style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                            title="Build the report came from"
+                          >
+                            {f.appVersion}
+                          </span>
+                        )}
+                      </div>
+                      <div className="kcard__foot">
+                        <FTag color={cat.color as 'blue'}>{t(cat.tk)}</FTag>
+                        <div className="lrow__actions">
+                          <FIB
+                            label={done ? t('fb_reopen') : t('fb_resolve')}
+                            size="sm"
+                            onClick={() => toggleDone(f)}
+                          >
+                            <MIcon name="check" size={16} />
+                          </FIB>
+                          <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
+                            <MIcon name="edit" size={16} />
+                          </FIB>
+                          <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
+                            <MIcon name="trash" size={16} />
+                          </FIB>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!cards.length && <div className="m-board__empty">{t('fb_col_empty')}</div>}
               </div>
             );
           })}
@@ -350,6 +416,7 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
           onSave={save}
         />
       )}
+      {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
     </div>
   );
 }

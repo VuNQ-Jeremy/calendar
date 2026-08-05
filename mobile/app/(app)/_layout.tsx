@@ -3,6 +3,7 @@ import { Redirect, Tabs, usePathname } from 'expo-router';
 import { BackHandler, type ColorValue } from 'react-native';
 import {
   BookOpen,
+  CalendarClock,
   CalendarDays,
   Home,
   Layers,
@@ -27,7 +28,7 @@ import { useTabBarStyle } from '~/lib/use-ui-prefs';
  * `href` values, not with the file tree.
  */
 const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/vocabulary', '/more'];
-const STUDENT_TAB_ROOTS = ['/vocabulary', '/profile'];
+const STUDENT_TAB_ROOTS = ['/vocabulary', '/schedule', '/profile'];
 
 /**
  * Back on a tab is a dead end, not a hop to the tab you were on before — so it asks first.
@@ -219,6 +220,16 @@ export default function AppLayout() {
           options={{ title: t('nav_flashcards'), tabBarIcon: TabIconCards }}
         />
         <Tabs.Screen
+          name="schedule"
+          options={{
+            title: t('sched_title'),
+            // The mirror of `profile` below: a tab for students, nothing for staff, who reach the
+            // same sessions through the calendar.
+            href: staff ? null : undefined,
+            tabBarIcon: TabIconSchedule,
+          }}
+        />
+        <Tabs.Screen
           name="more"
           options={{ title: t('m_more'), href: staff ? undefined : null, tabBarIcon: TabIconMore }}
         />
@@ -283,3 +294,7 @@ const TabIconMore = ({ color, size }: IconArgs) => (
   <MoreHorizontal color={hex(color)} size={size} />
 );
 const TabIconProfile = ({ color, size }: IconArgs) => <UserRound color={hex(color)} size={size} />;
+// A clock, not the plain calendar staff get: this list is "what is coming up", not a month grid.
+const TabIconSchedule = ({ color, size }: IconArgs) => (
+  <CalendarClock color={hex(color)} size={size} />
+);

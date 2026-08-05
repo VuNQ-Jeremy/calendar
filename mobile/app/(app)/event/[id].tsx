@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronRight, FileText, Trash2 } from 'lucide-react-native';
 import { AttendanceEditor } from '~/components/AttendanceEditor';
 import { ChipSelect } from '~/components/ChipSelect';
+import { PreviewEditor } from '~/components/PreviewEditor';
 import { DateTimeField } from '~/components/DateTimeField';
 import { ScreenHeader } from '~/components/ScreenHeader';
 import { useLang } from '~/lib/i18n';
@@ -35,7 +36,7 @@ import type { EventInput } from '@mochi/shared/schemas';
  * modal. Attendance and materials both hang off a class; a personal event has neither.
  */
 
-type TabId = 'details' | 'materials' | 'attendance';
+type TabId = 'details' | 'materials' | 'attendance' | 'preview';
 
 interface Draft {
   title: string;
@@ -100,8 +101,7 @@ export default function EventDetail() {
     setDraft(draftFrom(event));
   }, [event]);
 
-  const set = <K extends keyof Draft>(k: K, v: Draft[K]) =>
-    setDraft((d) => ({ ...d, [k]: v }));
+  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   const cls = classes?.find((c) => c.id === draft.classId);
   const showTabs = !isNew && !!event && !!draft.classId;
@@ -157,6 +157,7 @@ export default function EventDetail() {
             tabs={[
               { id: 'details', label: t('ev_details') },
               { id: 'attendance', label: t('att_tab') },
+              { id: 'preview', label: t('prev_tab') },
               { id: 'materials', label: t('mat_tab') },
             ]}
           />
@@ -230,11 +231,7 @@ export default function EventDetail() {
               onChangeText={(v) => set('location', v)}
             />
 
-            <ColorPicker
-              label={t('color')}
-              value={draft.color}
-              onChange={(v) => set('color', v)}
-            />
+            <ColorPicker label={t('color')} value={draft.color} onChange={(v) => set('color', v)} />
 
             <Input
               label={t('ev_notes')}
@@ -268,6 +265,10 @@ export default function EventDetail() {
             date={occurrence}
             classId={draft.classId || null}
           />
+        ) : tab === 'preview' ? (
+          // `occurrence`, not `draft.date`: the preview belongs to the instance being looked at,
+          // and draft.date is the SERIES date the details tab edits.
+          <PreviewEditor key={`${id}:${occurrence}`} eventId={id} date={occurrence} />
         ) : (
           <EventMaterialsTab eventId={id} classId={draft.classId} />
         )}

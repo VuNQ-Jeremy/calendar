@@ -54,6 +54,7 @@
     "crons": [
       "*/15 * * * *", // class starting soon
       "0 1 * * *", // 08:00 ICT daily digest
+      "0 12 * * *", // 19:00 ICT — tomorrow's session previews
     ],
   },
   "observability": {

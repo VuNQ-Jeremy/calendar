@@ -186,6 +186,18 @@ export const AttendanceSaveInput = z.object({
 });
 export type AttendanceSaveInput = z.infer<typeof AttendanceSaveInput>;
 
+/**
+ * "Preview buổi sau" for one occurrence. `date` identifies the occurrence, not the series — the
+ * same (eventId, date) addressing AttendanceSaveInput uses.
+ */
+export const SessionPreviewInput = z.object({
+  eventId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  focusText: z.string().max(2000).default(''),
+  vocabTopicId: z.string().nullish(),
+});
+export type SessionPreviewInput = z.infer<typeof SessionPreviewInput>;
+
 export const EventMaterialsSaveInput = z.object({
   eventId: z.string().min(1),
   materialIds: z.array(z.string().min(1)),
@@ -409,6 +421,8 @@ export const NotifPrefsInput = z.object({
   classReminders: FormBool.default(true),
   classLeadMinutes: z.coerce.number().int().min(15).max(120).default(30),
   studyNudges: FormBool.default(false),
+  /** The evening "here is tomorrow's session" push. On by default: it is the point of previews. */
+  previewEvening: FormBool.default(true),
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;
 
@@ -741,3 +755,19 @@ export const TuitionAdjustmentInput = z.object({
   adjustmentNote: z.string().max(500).nullish(),
 });
 export type TuitionAdjustmentInput = z.infer<typeof TuitionAdjustmentInput>;
+
+/* ── Monthly remark (nhận xét tháng): one report per (student, month) ───────────────────── */
+
+/** 1-5, the teacher's tap on one of five stars. Coerced: the web form posts FormData strings. */
+const RemarkRating = z.coerce.number().int().min(1).max(5);
+
+export const MonthlyRemarkInput = z.object({
+  studentId: z.string().min(1),
+  month: TuitionMonth,
+  attitude: RemarkRating,
+  homework: RemarkRating,
+  participation: RemarkRating,
+  progress: RemarkRating,
+  comment: z.string().max(4000).nullish(),
+});
+export type MonthlyRemarkInput = z.infer<typeof MonthlyRemarkInput>;

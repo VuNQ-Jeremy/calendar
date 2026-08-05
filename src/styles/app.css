@@ -1339,6 +1339,108 @@ body {
   cursor: grabbing;
 }
 
+/* kanban board — one column per status, cards drag between them */
+.m-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .m-board {
+    grid-template-columns: 1fr;
+  }
+}
+.m-board__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  min-height: 150px;
+  border-radius: var(--radius-lg);
+  /* transparent, not none: the drop highlight must not resize the column */
+  border: var(--border-width) solid transparent;
+  background: var(--surface-sunken);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.m-board__col.is-over {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.m-board__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+.m-board__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+.m-board__title {
+  font-weight: 800;
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+.m-board__count {
+  margin-left: auto;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.m-board__empty {
+  padding: var(--space-5) var(--space-2);
+  border: var(--border-width) dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.kcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-subtle);
+  background: var(--surface-card);
+  cursor: grab;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.kcard:hover {
+  box-shadow: var(--shadow-sm);
+}
+.kcard.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+.kcard__top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.kcard__msg {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+  text-wrap: pretty;
+}
+.kcard__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* chips for material type / dot */
 .mchip {
   display: inline-flex;

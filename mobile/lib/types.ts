@@ -10,6 +10,7 @@ import type {
   FlashcardWordInput,
   InviteInput,
   MaterialInput,
+  MonthlyRemarkInput,
   ParentInput,
   ScoreRecordInput,
   StaffInput,
@@ -48,6 +49,7 @@ export type MaterialRow = Row<z.infer<typeof MaterialInput>> & { fileKey?: strin
 export type FeedbackRow = Row<z.infer<typeof FeedbackInput>>;
 export type ScoreRecordRow = Row<z.infer<typeof ScoreRecordInput>>;
 export type BehaviorRecordRow = Row<z.infer<typeof BehaviorRecordInput>>;
+export type MonthlyRemarkRow = Row<z.infer<typeof MonthlyRemarkInput>>;
 export type AssessmentTypeRow = Row<z.infer<typeof AssessmentTypeInput>>;
 /**
  * The flashcard rows are spelled out rather than derived from their input schemas, because the
@@ -187,6 +189,60 @@ export interface AttendanceRow {
   date: string;
   studentId: string;
   status: AttendanceStatus;
+}
+
+/**
+ * "Preview buổi sau" — the stored half, keyed per occurrence like AttendanceRow above.
+ * `null` from the API means nobody has written one for this (eventId, date) yet.
+ */
+export interface SessionPreviewRow {
+  eventId: string;
+  date: string;
+  focusText: string;
+  vocabTopicId: string | null;
+  updatedAt: string | null;
+}
+
+/** `/api/event-previews` GET — the row plus the topics the picker offers. */
+export interface SessionPreviewPayload {
+  preview: SessionPreviewRow | null;
+  topics: { id: string; name: string }[];
+}
+
+/** A test as it appears inside a preview: enough to name it, nothing more. */
+export interface PreviewTestLite {
+  id: string;
+  title: string;
+  mode: string;
+  date: string | null;
+  openAt: string | null;
+  closeAt: string | null;
+}
+
+/** The composed preview — the teacher's text, plus what the server worked out on its own. */
+export interface ComposedPreview {
+  focusText: string;
+  vocabTopic: { id: string; name: string; slug: string | null; wordCount: number } | null;
+  tests: PreviewTestLite[];
+}
+
+export interface UpcomingSession {
+  eventId: string;
+  date: string;
+  start: string | null;
+  end: string | null;
+  title: string;
+  location: string | null;
+  classId: string;
+  className: string;
+  classColor: string;
+  preview: ComposedPreview;
+}
+
+/** `/api/my-sessions` — computed against the server clock, hence `serverNow`. */
+export interface MySessionsResponse {
+  serverNow: string;
+  items: UpcomingSession[];
 }
 
 /** `/api/dashboard` — the mirror of the web's /dashboard loader. */

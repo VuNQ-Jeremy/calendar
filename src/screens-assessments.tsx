@@ -11,11 +11,13 @@ import {
   BEHAVIOR_TYPES,
   NEGATIVE_TYPES,
   bucketBehaviorByWeek,
+  bucketBehaviorByWeekInMonth,
   scoreColorId,
   scoreStats,
   type BehaviorTypeId,
 } from './lib/assess.js';
-import type { ScoreRow, BehaviorRow } from '../server/services/assessments.js';
+import { monthLabel, shiftMonth } from '../shared/logic/month.js';
+import type { ScoreRow, BehaviorRow, RemarkRow } from '../server/services/assessments.js';
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
@@ -27,10 +29,27 @@ const INCIDENT_WEEKS = 12;
 interface AssessLoaderData {
   scores: ScoreRow[];
   behavior: BehaviorRow[];
+  remarks: RemarkRow[];
   students: StudentRow[];
   classes: ClassLite[];
   types: AssessmentTypeRow[];
 }
+
+/** The four things a monthly report rates, in the order the form shows them. */
+const RATING_FIELDS = [
+  ['attitude', 'remark_attitude'],
+  ['homework', 'remark_homework'],
+  ['participation', 'remark_participation'],
+  ['progress', 'remark_progress'],
+] as const;
+
+type RemarkDraft = {
+  attitude: number;
+  homework: number;
+  participation: number;
+  progress: number;
+  comment: string;
+};
 
 type ScoreDraft = {
   id?: string;
@@ -84,6 +103,110 @@ function ScoreBadge({ score }: { score: number | null }) {
   );
 }
 
+/** Five stars, `value` of them lit. Clicking star N sets the rating to N. */
+function RatingStars({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const lit = colorOf('orange');
+  return (
+    <span className="m-row" style={{ gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <button
+          key={i}
+          type="button"
+          aria-label={String(i)}
+          aria-pressed={i === value}
+          onClick={() => onChange(i)}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 2,
+            cursor: 'pointer',
+            lineHeight: 0,
+            color: i <= value ? lit.base : 'var(--line, #ECE0CF)',
+          }}
+        >
+          <MIcon name={i <= value ? 'starFill' : 'star'} size={22} />
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * The monthly remark form. Mounted with a `key` of student+month so switching either resets the
+ * draft — the alternative, syncing state to props in an effect, is where this kind of form goes
+ * wrong (a half-typed comment surviving onto another student's report).
+ */
+function RemarkForm({
+  existing,
+  printHref,
+  onSave,
+  onDelete,
+}: {
+  existing: RemarkRow | undefined;
+  printHref: string;
+  onSave: (d: RemarkDraft) => void;
+  onDelete: () => void;
+}) {
+  const { t } = useLang();
+  const [draft, setDraft] = React.useState<RemarkDraft>({
+    attitude: existing?.attitude ?? 0,
+    homework: existing?.homework ?? 0,
+    participation: existing?.participation ?? 0,
+    progress: existing?.progress ?? 0,
+    comment: existing?.comment ?? '',
+  });
+  // Every rating is required: a report with a blank row reads as an oversight, not a judgement.
+  const complete = RATING_FIELDS.every(([f]) => draft[f] >= 1);
+
+  return (
+    <Card style={{ padding: 18 }}>
+      <div className="m-spread" style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('remark_title')}</h2>
+        {existing && (
+          <div className="m-row" style={{ gap: 8 }}>
+            <a className="m-textlink" href={printHref} target="_blank" rel="noreferrer">
+              {t('remark_print')}
+            </a>
+            <IconButton label={t('delete')} onClick={onDelete}>
+              <MIcon name="trash" size={16} />
+            </IconButton>
+          </div>
+        )}
+      </div>
+
+      <div className="m-stack" style={{ gap: 8 }}>
+        {RATING_FIELDS.map(([field, tk]) => (
+          <div key={field} className="m-spread">
+            <span>{t(tk)}</span>
+            <RatingStars
+              value={draft[field]}
+              onChange={(v) => setDraft({ ...draft, [field]: v })}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="mochi-field" style={{ marginTop: 14 }}>
+        <label className="mochi-field__label">{t('remark_comment')}</label>
+        <textarea
+          className="mochi-input"
+          rows={4}
+          style={{ resize: 'vertical', minHeight: 92, paddingTop: 10 }}
+          value={draft.comment}
+          placeholder={t('remark_comment_ph')}
+          onChange={(e) => setDraft({ ...draft, comment: e.target.value })}
+        />
+      </div>
+
+      <div className="m-row" style={{ justifyContent: 'flex-end', marginTop: 14 }}>
+        <Button variant="primary" disabled={!complete} onClick={() => onSave(draft)}>
+          {t('remark_save')}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function TypeBadge({ type, label }: { type: BehaviorTypeId; label: string }) {
   const c = colorOf(BEHAVIOR_META[type].color);
   return (
@@ -94,16 +217,22 @@ function TypeBadge({ type, label }: { type: BehaviorTypeId; label: string }) {
 }
 
 function AssessmentsScreen() {
-  const { scores, behavior, students, classes, types } = useLoaderData() as AssessLoaderData;
+  const { scores, behavior, remarks, students, classes, types } =
+    useLoaderData() as AssessLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const [confirm, confirmNode] = useConfirm();
   const [classFilter, setClassFilter] = React.useState('all');
   const [studentId, setStudentId] = React.useState<string>(students[0]?.id ?? '');
-  const [tab, setTab] = React.useState<'scores' | 'behavior'>('scores');
+  const [tab, setTab] = React.useState<'scores' | 'behavior' | 'report'>('scores');
+  // null = all time. The stepper is the only month control on the screen; the report tab, which
+  // must name a concrete month, falls back to the current one while the filter is off.
+  const [monthFilter, setMonthFilter] = React.useState<string | null>(null);
   const [scoreModal, setScoreModal] = React.useState<ScoreDraft | null>(null);
   const [behaviorModal, setBehaviorModal] = React.useState<BehaviorDraft | null>(null);
   const today = iso(TODAY);
+  const currentMonth = today.slice(0, 7);
+  const reportMonth = monthFilter ?? currentMonth;
 
   const visibleStudents =
     classFilter === 'all' ? students : students.filter((s) => s.classIds.includes(classFilter));
@@ -122,15 +251,25 @@ function AssessmentsScreen() {
     );
   }
 
+  const inMonth = (date: string) => !monthFilter || date.startsWith(monthFilter);
   const studentScores = scores.filter(
-    (r) => r.studentId === activeStudentId && (classFilter === 'all' || r.classId === classFilter),
+    (r) =>
+      r.studentId === activeStudentId &&
+      (classFilter === 'all' || r.classId === classFilter) &&
+      inMonth(r.date),
   );
   const studentBehavior = behavior.filter(
-    (r) => r.studentId === activeStudentId && (classFilter === 'all' || r.classId === classFilter),
+    (r) =>
+      r.studentId === activeStudentId &&
+      (classFilter === 'all' || r.classId === classFilter) &&
+      inMonth(r.date),
   );
 
   const stats = scoreStats(studentScores);
-  const buckets = bucketBehaviorByWeek(studentBehavior, INCIDENT_WEEKS, today);
+  // A picked month re-windows the chart to that month's weeks; otherwise it is the trailing 12.
+  const buckets = monthFilter
+    ? bucketBehaviorByWeekInMonth(studentBehavior, monthFilter)
+    : bucketBehaviorByWeek(studentBehavior, INCIDENT_WEEKS, today);
   const windowStart = buckets[0]?.key;
   const inWindow = (r: BehaviorRow) => !windowStart || r.date >= windowStart;
   const typeCounts: Record<string, number> = {};
@@ -216,20 +355,80 @@ function AssessmentsScreen() {
     fetcher.submit(fd, { action: '/assessments', method: 'post' });
   };
 
+  // The report covers the whole student for the month — the class filter narrows the record tabs,
+  // but a monthly report that silently omitted one of the student's classes would be a lie.
+  const reportScores = scores.filter(
+    (r) => r.studentId === activeStudentId && r.date.startsWith(reportMonth),
+  );
+  const reportBehavior = behavior.filter(
+    (r) => r.studentId === activeStudentId && r.date.startsWith(reportMonth),
+  );
+  const reportStats = scoreStats(reportScores);
+  const reportIncidents: Record<string, number> = {};
+  for (const ty of NEGATIVE_TYPES) {
+    const n = reportBehavior.filter((r) => r.type === ty).length;
+    if (n > 0) reportIncidents[ty] = n;
+  }
+  const reportIncidentTotal = Object.values(reportIncidents).reduce((a, b) => a + b, 0);
+  const reportPraise = reportBehavior.filter((r) => r.type === 'praise').length;
+  const existingRemark = remarks.find(
+    (r) => r.studentId === activeStudentId && r.month === reportMonth,
+  );
+
+  const saveRemark = (d: RemarkDraft) => {
+    const fd = new FormData();
+    fd.set('intent', existingRemark ? 'update-remark' : 'create-remark');
+    if (existingRemark) fd.set('id', existingRemark.id);
+    fd.set('studentId', activeStudentId);
+    fd.set('month', reportMonth);
+    for (const [field] of RATING_FIELDS) fd.set(field, String(d[field]));
+    if (d.comment.trim()) fd.set('comment', d.comment.trim());
+    fetcher.submit(fd, { action: '/assessments', method: 'post' });
+  };
+
+  const removeRemarkRec = async () => {
+    if (!existingRemark) return;
+    const ok = await confirm({ title: t('delete'), message: t('delete') + '?', danger: true });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'delete-remark');
+    fd.set('id', existingRemark.id);
+    fetcher.submit(fd, { action: '/assessments', method: 'post' });
+  };
+
+  /** Steps the filter; the first press from "All time" lands on the current month. */
+  const stepMonth = (delta: number) =>
+    setMonthFilter(monthFilter ? shiftMonth(monthFilter, delta) : currentMonth);
+
+  const incidentsChartTitle = monthFilter
+    ? t('assess_incidents_chart_month', { month: monthLabel(monthFilter, lang) })
+    : t('assess_incidents_chart', { n: INCIDENT_WEEKS });
+
   return (
     <div className="content">
       <PageHeader
         title={t('assess_title')}
         subtitle={t('assess_sub')}
         actions={
-          <Button
-            variant="primary"
-            iconLeft={<MIcon name="plus" size={18} />}
-            onClick={tab === 'scores' ? openNewScore : openNewBehavior}
-          >
-            {tab === 'scores' ? t('assess_add_score') : t('assess_add_behavior')}
-          </Button>
+          tab === 'report' ? undefined : (
+            <Button
+              variant="primary"
+              iconLeft={<MIcon name="plus" size={18} />}
+              onClick={tab === 'scores' ? openNewScore : openNewBehavior}
+            >
+              {tab === 'scores' ? t('assess_add_score') : t('assess_add_behavior')}
+            </Button>
+          )
         }
+      />
+      <Tabs
+        value={tab}
+        onChange={(id) => setTab(id as 'scores' | 'behavior' | 'report')}
+        tabs={[
+          { id: 'scores', label: t('assess_tab_scores') },
+          { id: 'behavior', label: t('assess_tab_behavior') },
+          { id: 'report', label: t('assess_tab_report') },
+        ]}
       />
       <Card style={{ padding: 18 }}>
         <div className="m-grid cols-2" style={{ gap: 14 }}>
@@ -249,15 +448,35 @@ function AssessmentsScreen() {
             options={visibleStudents.map((s) => ({ value: s.id, label: s.name }))}
           />
         </div>
+        <div className="m-row" style={{ gap: 8, marginTop: 14, alignItems: 'center' }}>
+          <IconButton
+            label={monthLabel(shiftMonth(reportMonth, -1), lang)}
+            onClick={() => stepMonth(-1)}
+          >
+            <MIcon name="chevronLeft" size={18} />
+          </IconButton>
+          <span style={{ fontWeight: 800, minWidth: 130, textAlign: 'center' }}>
+            {monthFilter ? monthLabel(monthFilter, lang) : t('month_all')}
+          </span>
+          <IconButton
+            label={monthLabel(shiftMonth(reportMonth, 1), lang)}
+            onClick={() => stepMonth(1)}
+          >
+            <MIcon name="chevronRight" size={18} />
+          </IconButton>
+          {monthFilter && (
+            <button
+              type="button"
+              className="mchip"
+              style={{ cursor: 'pointer', gap: 5 }}
+              onClick={() => setMonthFilter(null)}
+            >
+              <MIcon name="x" size={14} />
+              {t('month_all')}
+            </button>
+          )}
+        </div>
       </Card>
-      <Tabs
-        value={tab}
-        onChange={(id) => setTab(id as 'scores' | 'behavior')}
-        tabs={[
-          { id: 'scores', label: t('assess_tab_scores') },
-          { id: 'behavior', label: t('assess_tab_behavior') },
-        ]}
-      />
 
       {tab === 'scores' ? (
         <>
@@ -356,7 +575,7 @@ function AssessmentsScreen() {
             )}
           </div>
         </>
-      ) : (
+      ) : tab === 'behavior' ? (
         <>
           <div className="m-grid cols-4">
             <Stat
@@ -378,10 +597,10 @@ function AssessmentsScreen() {
           </div>
           <Card style={{ padding: 18 }}>
             <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
-              {t('assess_incidents_chart', { n: INCIDENT_WEEKS })}
+              {incidentsChartTitle}
             </h2>
             <StackedBarChart
-              ariaLabel={t('assess_incidents_chart', { n: INCIDENT_WEEKS })}
+              ariaLabel={incidentsChartTitle}
               buckets={buckets.map((b) => ({
                 key: b.key,
                 label: fmtWeek(b.key),
@@ -481,6 +700,42 @@ function AssessmentsScreen() {
               </Card>
             )}
           </div>
+        </>
+      ) : (
+        <>
+          <Card style={{ padding: 18 }}>
+            <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
+              {t('remark_stats_title')} · {monthLabel(reportMonth, lang)}
+            </h2>
+            <div className="m-grid cols-4">
+              <Stat
+                num={reportStats.average ?? '—'}
+                label={t('assess_avg')}
+                color={reportStats.average == null ? 'blue' : scoreColorId(reportStats.average)}
+              />
+              <Stat num={reportScores.length} label={t('remark_stat_tests')} color="violet" />
+              <Stat num={reportIncidentTotal} label={t('remark_stat_incidents')} color="rose" />
+              <Stat num={reportPraise} label={t('assess_praise_count')} color="green" />
+            </div>
+            {reportIncidentTotal > 0 && (
+              <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+                {Object.entries(reportIncidents).map(([ty, n]) => (
+                  <TypeBadge
+                    key={ty}
+                    type={ty as BehaviorTypeId}
+                    label={`${t(BEHAVIOR_META[ty as BehaviorTypeId].tk)} · ${n}`}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
+          <RemarkForm
+            key={`${activeStudentId}:${reportMonth}`}
+            existing={existingRemark}
+            printHref={`/assessments/${reportMonth}/${activeStudentId}/report`}
+            onSave={saveRemark}
+            onDelete={() => void removeRemarkRec()}
+          />
         </>
       )}
 

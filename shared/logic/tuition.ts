@@ -6,7 +6,6 @@
  */
 
 import type { StudentMonthRow, TuitionLine } from '../../server/services/tuition';
-import { getCal } from '../i18n/strings';
 
 /**
  * VND, grouped with dots: 1500000 -> '1.500.000 ₫'.
@@ -175,21 +174,7 @@ export function studentFees(lines: TuitionLine[], studentMonths: StudentMonthRow
   return out;
 }
 
-/**
- * '2026-03' -> 'March 2026' / 'Tháng 3 2026', reusing the calendar's own month names so the two
- * screens never disagree about what to call a month.
- */
-export function monthLabel(month: string, lang: string): string {
-  const { months } = getCal(lang);
-  const [year, monthNo] = month.split('-');
-  return `${months[Number(monthNo) - 1] ?? monthNo} ${year}`;
-}
-
-/** '2026-03' + 1 -> '2026-04'. Plain string math; no Date, so no timezone can get involved. */
-export function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split('-').map(Number);
-  const zeroBased = y * 12 + (m - 1) + delta;
-  const year = Math.floor(zeroBased / 12);
-  const monthNo = (zeroBased % 12) + 1;
-  return `${String(year).padStart(4, '0')}-${String(monthNo).padStart(2, '0')}`;
-}
+// monthLabel/shiftMonth moved to shared/logic/month.ts so the mobile app can use them — this
+// file type-imports server/services/tuition, which React Native cannot follow. Re-exported here
+// because ~3 web modules and the tuition tests already import them from this path.
+export { monthLabel, shiftMonth } from './month';

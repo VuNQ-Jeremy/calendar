@@ -41,6 +41,7 @@ export const qk = {
   flashcardStudentStats: ['flashcards', 'studentStats'] as const,
   scores: ['assessments', 'scores'] as const,
   behavior: ['assessments', 'behavior'] as const,
+  remarks: ['assessments', 'remarks'] as const,
   materials: ['materials'] as const,
   /** The calendar theme (`--cal-bg` and friends), from /api/settings/theme. */
   calTheme: ['calTheme'] as const,
@@ -58,6 +59,13 @@ export const qk = {
   flashcardTopic: (slug: string) => ['flashcards', 'topic', slug] as const,
   attendance: (eventId: string, date: string) => ['attendance', eventId, date] as const,
   eventMaterials: (eventId: string) => ['eventMaterials', eventId] as const,
+  /** Per-occurrence, same reasoning as `attendance` — web `prev:{eventId}:{date}`. */
+  eventPreview: (eventId: string, date: string) => ['eventPreview', eventId, date] as const,
+  /**
+   * The student's upcoming sessions. No web counterpart key: /my-schedule deliberately skips the
+   * route cache because the list is computed against the server clock.
+   */
+  mySessions: ['mySessions'] as const,
 };
 
 export const queryClient = new QueryClient({

@@ -12,7 +12,12 @@ import * as assessSvc from '../../server/services/assessments';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
 import * as typesSvc from '../../server/services/assessment-types';
-import { ScoreRecordInput, BehaviorRecordInput, parsePatch } from '../../shared/schemas';
+import {
+  ScoreRecordInput,
+  BehaviorRecordInput,
+  MonthlyRemarkInput,
+  parsePatch,
+} from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
 
@@ -20,14 +25,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [scores, behavior, students, classes, types] = await Promise.all([
+  const [scores, behavior, remarks, students, classes, types] = await Promise.all([
     assessSvc.listScores(db),
     assessSvc.listBehavior(db),
+    assessSvc.listRemarks(db),
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
     typesSvc.list(db),
   ]);
-  return { scores, behavior, students, classes, types };
+  return { scores, behavior, remarks, students, classes, types };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -43,6 +49,7 @@ function preprocessRaw(raw: Record<string, unknown>) {
   if (out.classId === '') delete out.classId;
   if (out.assessmentTypeId === '') out.assessmentTypeId = null;
   if (out.notes === '') delete out.notes;
+  if (out.comment === '') delete out.comment;
   return out;
 }
 
@@ -54,10 +61,11 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;
 
-  if (intent === 'delete-score' || intent === 'delete-behavior') {
+  if (intent === 'delete-score' || intent === 'delete-behavior' || intent === 'delete-remark') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     if (intent === 'delete-score') await assessSvc.removeScore(db, id);
-    else await assessSvc.removeBehavior(db, id);
+    else if (intent === 'delete-behavior') await assessSvc.removeBehavior(db, id);
+    else await assessSvc.removeRemark(db, id);
     return { ok: true };
   }
 
@@ -87,6 +95,21 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     const parsed = parsePatch(BehaviorRecordInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await assessSvc.updateBehavior(db, id, parsed.data);
+    return { ok: true };
+  }
+  // create-remark upserts on (studentId, month), so a save from a screen that had not yet seen
+  // an existing report updates it instead of failing the UNIQUE.
+  if (intent === 'create-remark') {
+    const parsed = MonthlyRemarkInput.safeParse(raw);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    await assessSvc.createRemark(db, parsed.data);
+    return { ok: true };
+  }
+  if (intent === 'update-remark') {
+    if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+    const parsed = parsePatch(MonthlyRemarkInput, raw);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    await assessSvc.updateRemark(db, id, parsed.data);
     return { ok: true };
   }
 

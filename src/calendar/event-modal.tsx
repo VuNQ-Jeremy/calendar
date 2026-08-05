@@ -16,11 +16,14 @@ import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { AttendanceRow } from '../../server/services/attendance.js';
+import type { SessionPreviewRow } from '../../server/services/session-preview.js';
 import type { MaterialRow } from '../../server/services/materials.js';
 
 const { Button: CBtn, Tabs: CTabs, IconButton: CIBtn } = DS;
 
 type EventDraft = Partial<EventRow> & { recurrence?: string };
+
+type EventModalTab = 'details' | 'attendance' | 'materials' | 'preview';
 
 interface EventModalProps {
   open: boolean;
@@ -150,6 +153,107 @@ function AttendanceTab({ eventId, date, classId, classes, students }: Attendance
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+type PreviewPayload = {
+  preview: SessionPreviewRow | null;
+  topics: { id: string; name: string }[];
+};
+
+/**
+ * "Buổi sau" — what this ONE occurrence will cover, and which vocabulary to revise.
+ *
+ * Keyed on (eventId, date) like the attendance tab beside it: a weekly class is a single event
+ * row, so anything written here has to belong to the instance the teacher clicked, not the series
+ * (that is what the Details tab's Notes field is for).
+ *
+ * Saved on a button rather than on every keystroke, unlike attendance — this is prose, and
+ * autosaving prose means saving half-written sentences into something a parent may be reading.
+ */
+function PreviewTab({ eventId, date }: { eventId: string; date: string }) {
+  const { t } = useLang();
+  const prevKey = `prev:${eventId}:${date}`;
+  const { data } = useCachedLoad<PreviewPayload>(
+    prevKey,
+    `/event-previews?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
+  );
+  const saveFetcher = useFetcher<{ ok: boolean; preview: SessionPreviewRow }>();
+  const [focusText, setFocusText] = React.useState('');
+  const [vocabTopicId, setVocabTopicId] = React.useState('');
+
+  React.useEffect(() => {
+    if (!data) return;
+    setFocusText(data.preview?.focusText ?? '');
+    setVocabTopicId(data.preview?.vocabTopicId ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  React.useEffect(() => {
+    if (saveFetcher.data?.ok && saveFetcher.data.preview) {
+      cacheSet(prevKey, { preview: saveFetcher.data.preview, topics: data?.topics ?? [] });
+      // The save response IS the fresh state, so ignore the server's broadcast of our own write.
+      noteLocalMutation('previews');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveFetcher.data]);
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('intent', 'save');
+    fd.set('eventId', eventId);
+    fd.set('date', date);
+    fd.set('focusText', focusText);
+    fd.set('vocabTopicId', vocabTopicId);
+    saveFetcher.submit(fd, { action: '/event-previews', method: 'post' });
+  };
+
+  const topicOpts = [
+    { value: '', label: t('prev_vocab_none') },
+    ...(data?.topics ?? []).map((x) => ({ value: x.id, label: x.name })),
+  ];
+  return (
+    <div className="m-stack">
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('prev_focus_label')}</label>
+        <textarea
+          className="mochi-input"
+          rows={5}
+          placeholder={t('prev_focus_ph')}
+          value={focusText}
+          onChange={(e) => setFocusText(e.target.value)}
+          style={{ resize: 'vertical', minHeight: 110 }}
+        />
+      </div>
+      <MSelect
+        label={t('prev_vocab_label')}
+        value={vocabTopicId}
+        onChange={setVocabTopicId}
+        options={topicOpts}
+      />
+      <p className="m-muted" style={{ fontSize: 'var(--text-sm)', margin: 0 }}>
+        {t('prev_tests_auto')}
+      </p>
+      <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
+        <CBtn variant="primary" size="sm" onClick={save} disabled={saveFetcher.state !== 'idle'}>
+          {t('save')}
+        </CBtn>
+        {saveFetcher.data?.ok && saveFetcher.state === 'idle' && (
+          <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+            {t('prev_saved')}
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        <a
+          className="m-textlink"
+          href={`/session-preview/${encodeURIComponent(eventId)}/${encodeURIComponent(date)}/print`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {t('prev_make_image')}
+        </a>
+      </div>
     </div>
   );
 }
@@ -320,7 +424,7 @@ export function EventModal({
 }: EventModalProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<EventDraft>(draft || {});
-  const [tab, setTab] = React.useState<'details' | 'attendance' | 'materials'>('details');
+  const [tab, setTab] = React.useState<EventModalTab>('details');
   React.useEffect(() => {
     setF(draft || {});
     setTab('details');
@@ -385,16 +489,21 @@ export function EventModal({
       {showTabs && (
         <CTabs
           value={tab}
-          onChange={(id: string) => setTab(id as 'details' | 'attendance' | 'materials')}
+          onChange={(id: string) => setTab(id as EventModalTab)}
           tabs={[
             { id: 'details', label: t('ev_details') },
             { id: 'attendance', label: t('att_tab') },
+            { id: 'preview', label: t('prev_tab') },
             { id: 'materials', label: t('mat_tab') },
           ]}
         />
       )}
 
-      {tab === 'attendance' && showTabs ? (
+      {tab === 'preview' && showTabs ? (
+        <div className="evm-pane-scroll">
+          <PreviewTab eventId={f.id!} date={f.date || ''} />
+        </div>
+      ) : tab === 'attendance' && showTabs ? (
         <div className="evm-pane-scroll">
           <AttendanceTab
             eventId={f.id!}

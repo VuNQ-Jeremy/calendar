@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { createRoutesStub } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
 import { DashboardScreen } from '../src/screens-core.jsx';
@@ -111,7 +111,7 @@ describe('FeedbackScreen', () => {
     expect(screen.getByText('Feedback')).toBeInTheDocument();
   });
 
-  it('shows release notes on the Changelog tab, without row actions', async () => {
+  it('shows release notes in the Changelog modal, without row actions', async () => {
     const Stub = makeStub({ feedback: [] }, FeedbackScreen, { user: TEST_USER });
     await renderStub(Stub);
     // __CHANGELOG__ is stubbed in vitest.config.js.
@@ -122,6 +122,79 @@ describe('FeedbackScreen', () => {
     expect(screen.getByText('Test entry')).toBeInTheDocument();
     expect(screen.getByText('v0.0001')).toBeInTheDocument();
     expect(screen.queryByLabelText('Mark resolved')).not.toBeInTheDocument();
+  });
+});
+
+describe('FeedbackScreen board', () => {
+  const row = (id: string, message: string, status: string) => ({
+    id,
+    message,
+    category: 'idea',
+    author: null,
+    status,
+    createdAt: null,
+    appVersion: null,
+  });
+  const ROWS = [
+    row('f1', 'Fresh idea', 'new'),
+    row('f2', 'Looked at it', 'reviewed'),
+    row('f3', 'Shipped it', 'done'),
+    row('f4', 'Second idea', 'new'),
+  ];
+
+  /** Board + a real `/feedback` action, so the fetcher submit has somewhere to land. */
+  function boardStub(seen: FormData[]) {
+    const Wrapper = () => React.createElement(FeedbackScreen, { user: TEST_USER });
+    return createRoutesStub([
+      {
+        path: '/feedback',
+        Component: Wrapper,
+        loader: () => ({ feedback: ROWS }),
+        action: async ({ request }) => {
+          seen.push(await request.formData());
+          return { ok: true };
+        },
+      },
+    ]);
+  }
+
+  const column = (title: string) => screen.getByText(title).closest('.m-board__col') as HTMLElement;
+
+  it('sorts reports into one column per status, with counts', async () => {
+    const Stub = boardStub([]);
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/feedback'] })));
+    });
+    expect(column('New')).toContainElement(screen.getByText('Fresh idea'));
+    expect(column('New')).toContainElement(screen.getByText('Second idea'));
+    expect(column('Reviewed')).toContainElement(screen.getByText('Looked at it'));
+    expect(column('Resolved')).toContainElement(screen.getByText('Shipped it'));
+    expect(column('New').querySelector('.m-board__count')).toHaveTextContent('2');
+    expect(column('Resolved').querySelector('.m-board__count')).toHaveTextContent('1');
+  });
+
+  it('dropping a card on another column submits that status', async () => {
+    const seen: FormData[] = [];
+    const Stub = boardStub(seen);
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/feedback'] })));
+    });
+    const card = screen.getByText('Fresh idea').closest('.kcard') as HTMLElement;
+    // jsdom has no DataTransfer; the handlers only set effectAllowed/dropEffect and setData.
+    const dataTransfer = { effectAllowed: '', dropEffect: '', setData: () => {} };
+    // One act per event: the drop handler reads state the dragStart set, which only
+    // lands once React has flushed.
+    await act(async () => {
+      fireEvent.dragStart(card, { dataTransfer });
+    });
+    await act(async () => {
+      fireEvent.dragOver(column('Resolved'), { dataTransfer });
+    });
+    await act(async () => {
+      fireEvent.drop(column('Resolved'), { dataTransfer });
+    });
+    expect(seen).toHaveLength(1);
+    expect(Object.fromEntries(seen[0])).toEqual({ intent: 'update', id: 'f1', status: 'done' });
   });
 });
 

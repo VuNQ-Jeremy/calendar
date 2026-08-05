@@ -83,11 +83,12 @@ export async function accountIdsForStudents(db: Db, studentIds: string[]): Promi
 /**
  * Account ids for a set of staff records.
  *
- * **Called by nothing today, and kept deliberately.** Phase 6 asks for class reminders to reach
- * "the enrolled students and the class's staff"; only the students half shipped, because no table
- * links a staff member to a class — `classes` has no teacher column and there is no `class_staff`
- * join. This is the half of the lookup that does exist. When the relation lands, the caller is one
- * line in `runClassReminders`. See docs/mobile-parity.md, "Knowingly not built".
+ * Its one caller is `runEveningPreview`, which sends EVERY staff member the same summary of
+ * tomorrow's teaching. That is not a shortcut around per-class targeting so much as the absence of
+ * it: no table links a staff member to a class — `classes` has no teacher column and there is no
+ * `class_staff` join — and with one or two teachers in the school there is nothing to narrow.
+ * `runClassReminders` still reaches students only, for the same missing relation. When it lands,
+ * both callers become a filter on this list. See docs/mobile-parity.md, "Knowingly not built".
  */
 export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<string[]> {
   if (!staffIds.length) return [];

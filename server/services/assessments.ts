@@ -1,7 +1,11 @@
-import { eq, asc } from 'drizzle-orm';
-import { scoreRecords, behaviorRecords } from '../db/schema';
+import { eq, and, asc } from 'drizzle-orm';
+import { scoreRecords, behaviorRecords, monthlyRemarks } from '../db/schema';
 import type { Db } from '../db/index';
-import type { ScoreRecordInput, BehaviorRecordInput } from '../../shared/schemas';
+import type {
+  ScoreRecordInput,
+  BehaviorRecordInput,
+  MonthlyRemarkInput,
+} from '../../shared/schemas';
 
 export type ScoreRow = {
   id: string;
@@ -127,4 +131,93 @@ export async function updateBehavior(
 
 export async function removeBehavior(db: Db, id: string): Promise<void> {
   await db.delete(behaviorRecords).where(eq(behaviorRecords.id, id));
+}
+
+export type RemarkRow = {
+  id: string;
+  studentId: string;
+  month: string;
+  attitude: number;
+  homework: number;
+  participation: number;
+  progress: number;
+  comment: string | null;
+};
+
+function mapRemark(r: typeof monthlyRemarks.$inferSelect): RemarkRow {
+  return {
+    id: r.id,
+    studentId: r.studentId,
+    month: r.month,
+    attitude: r.attitude,
+    homework: r.homework,
+    participation: r.participation,
+    progress: r.progress,
+    comment: r.comment,
+  };
+}
+
+export async function listRemarks(db: Db): Promise<RemarkRow[]> {
+  const rows = await db.select().from(monthlyRemarks).orderBy(asc(monthlyRemarks.month));
+  return rows.map(mapRemark);
+}
+
+/** One student's report for one month, or null. The printable slip loads exactly this. */
+export async function getRemark(
+  db: Db,
+  studentId: string,
+  month: string,
+): Promise<RemarkRow | null> {
+  const rows = await db
+    .select()
+    .from(monthlyRemarks)
+    .where(and(eq(monthlyRemarks.studentId, studentId), eq(monthlyRemarks.month, month)));
+  return rows[0] ? mapRemark(rows[0]) : null;
+}
+
+/**
+ * UPSERT on (student_id, month). There is exactly one report per student per month, so a second
+ * "create" from a client that had not seen the first must land on the same row rather than fail
+ * the UNIQUE constraint — the teacher would only see an opaque 500 for what is a save.
+ */
+export async function createRemark(db: Db, input: MonthlyRemarkInput): Promise<RemarkRow> {
+  const fields = {
+    attitude: input.attitude,
+    homework: input.homework,
+    participation: input.participation,
+    progress: input.progress,
+    comment: input.comment ?? null,
+  };
+  await db
+    .insert(monthlyRemarks)
+    .values({ id: crypto.randomUUID(), studentId: input.studentId, month: input.month, ...fields })
+    .onConflictDoUpdate({
+      target: [monthlyRemarks.studentId, monthlyRemarks.month],
+      set: fields,
+    });
+  return (await getRemark(db, input.studentId, input.month))!;
+}
+
+export async function updateRemark(
+  db: Db,
+  id: string,
+  patch: Partial<MonthlyRemarkInput>,
+): Promise<RemarkRow> {
+  const set: Partial<typeof monthlyRemarks.$inferInsert> = {};
+  if (patch.studentId !== undefined) set.studentId = patch.studentId;
+  if (patch.month !== undefined) set.month = patch.month;
+  if (patch.attitude !== undefined) set.attitude = patch.attitude;
+  if (patch.homework !== undefined) set.homework = patch.homework;
+  if (patch.participation !== undefined) set.participation = patch.participation;
+  if (patch.progress !== undefined) set.progress = patch.progress;
+  if (patch.comment !== undefined) set.comment = patch.comment ?? null;
+  if (Object.keys(set).length) {
+    await db.update(monthlyRemarks).set(set).where(eq(monthlyRemarks.id, id));
+  }
+  const rows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.id, id));
+  return mapRemark(rows[0]);
+}
+
+export async function removeRemark(db: Db, id: string): Promise<void> {
+  await db.delete(monthlyRemarks).where(eq(monthlyRemarks.id, id));
 }

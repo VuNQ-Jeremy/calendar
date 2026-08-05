@@ -18,12 +18,14 @@ import type {
   InviteInput,
   LoginInput,
   MaterialInput,
+  MonthlyRemarkInput,
   NotifPrefsInput,
   ParentInput,
   ProfileInput,
   PushRegisterInput,
   RedeemInviteInput,
   ScoreRecordInput,
+  SessionPreviewInput,
   StaffInput,
   StudentInput,
   ThemeInput,
@@ -49,9 +51,13 @@ import type {
   LoginResponse,
   MaterialRow,
   MeResponse,
+  MonthlyRemarkRow,
+  MySessionsResponse,
   ParentRow,
   ProfileRow,
   ScoreRecordRow,
+  SessionPreviewPayload,
+  SessionPreviewRow,
   StaffRow,
   StudentRow,
   ThemeRow,
@@ -124,6 +130,8 @@ export const scores = collection<ScoreRecordRow, ScoreRecordInput>('/api/assessm
 export const behavior = collection<BehaviorRecordRow, BehaviorRecordInput>(
   '/api/assessments/behavior',
 );
+/** POST upserts on (studentId, month) — one report per student per month. */
+export const remarks = collection<MonthlyRemarkRow, MonthlyRemarkInput>('/api/assessments/remarks');
 export const assessmentTypes = collection<AssessmentTypeRow, AssessmentTypeInput>(
   '/api/assessment-types',
 );
@@ -133,7 +141,8 @@ export const invites = {
   list: () => apiFetch<InviteRow[]>('/api/invites'),
   create: (input: InviteInput) =>
     apiFetch<InviteRow>('/api/invites', { method: 'POST', body: input }),
-  remove: (id: string) => apiFetch<{ ok: true }>('/api/invites', { method: 'DELETE', query: { id } }),
+  remove: (id: string) =>
+    apiFetch<{ ok: true }>('/api/invites', { method: 'DELETE', query: { id } }),
 };
 
 export const reorderAssessmentTypes = (ids: string[]) =>
@@ -182,6 +191,20 @@ export const listAllEventMaterials = () =>
 
 export const saveEventMaterials = (input: EventMaterialsSaveInput) =>
   apiFetch<{ ok: true }>('/api/event-materials', { method: 'POST', body: input });
+
+/**
+ * "Preview buổi sau" for one occurrence. GET brings the vocabulary topics along so the picker
+ * does not need a request of its own.
+ */
+export const eventPreviews = {
+  get: (eventId: string, date: string) =>
+    apiFetch<SessionPreviewPayload>('/api/event-previews', { query: { eventId, date } }),
+  save: (input: SessionPreviewInput) =>
+    apiFetch<SessionPreviewRow>('/api/event-previews', { method: 'POST', body: input }),
+};
+
+/** The signed-in user's upcoming sessions with previews — a student's own classes, or all of them. */
+export const mySessions = () => apiFetch<MySessionsResponse>('/api/my-sessions');
 
 // ---- Flashcards ----
 

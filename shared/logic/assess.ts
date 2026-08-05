@@ -96,6 +96,49 @@ export function bucketBehaviorByWeek(
   return keys.map((k) => buckets.get(k)!);
 }
 
+/** Monday keys of every week that overlaps the month 'YYYY-MM', in order (4–6 keys). */
+export function monthWeekStarts(month: string): string[] {
+  const first = weekStart(`${month}-01`);
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate(); // day 0 of the next month = last day of this one
+  const last = weekStart(`${month}-${String(lastDay).padStart(2, '0')}`);
+  const keys: string[] = [];
+  let [cy, cm, cd] = first.split('-').map(Number);
+  for (;;) {
+    const key = `${cy}-${String(cm).padStart(2, '0')}-${String(cd).padStart(2, '0')}`;
+    keys.push(key);
+    if (key === last) break;
+    const dt = new Date(cy, cm - 1, cd + 7);
+    cy = dt.getFullYear();
+    cm = dt.getMonth() + 1;
+    cd = dt.getDate();
+  }
+  return keys;
+}
+
+/**
+ * `bucketBehaviorByWeek`, but the window is one month instead of the trailing N weeks.
+ *
+ * Only records dated inside the month are counted. A boundary week (say Jul 27 – Aug 2) shows up
+ * in both months' charts, but each chart counts only its own month's days — the alternative,
+ * dropping the partial week, would hide incidents entirely.
+ */
+export function bucketBehaviorByWeekInMonth(records: BehaviorLike[], month: string): WeekBucket[] {
+  const keys = monthWeekStarts(month);
+  const buckets = new Map<string, WeekBucket>(
+    keys.map((k) => [k, { key: k, counts: {}, total: 0 }]),
+  );
+  for (const r of records) {
+    if (!r.date.startsWith(month)) continue;
+    if (!NEGATIVE_TYPES.includes(r.type as BehaviorTypeId)) continue;
+    const b = buckets.get(weekStart(r.date));
+    if (!b) continue;
+    b.counts[r.type] = (b.counts[r.type] || 0) + 1;
+    b.total += 1;
+  }
+  return keys.map((k) => buckets.get(k)!);
+}
+
 export const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'excused'] as const;
 export type AttendanceStatusId = (typeof ATTENDANCE_STATUSES)[number];
 

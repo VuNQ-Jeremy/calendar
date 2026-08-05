@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0096 — 2026-08-05
+Preview buổi sau: per-occurrence lesson preview for students, parents (Zalo card) and teachers, with an evening push. Plus monthly remarks (nhận xét tháng) from a parallel session.
+
 ## v0.0095 — 2026-08-05
 Scores follow one colour convention everywhere: red under 5, orange 5-7, green 7 and up. The progress chart's dots and each line segment take the colour of the score they land on.
 

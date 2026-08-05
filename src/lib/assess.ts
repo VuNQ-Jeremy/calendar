@@ -12,6 +12,8 @@ export {
   BEHAVIOR_TYPES,
   NEGATIVE_TYPES,
   bucketBehaviorByWeek,
+  bucketBehaviorByWeekInMonth,
+  monthWeekStarts,
   scoreColorId,
   scoreStats,
   weekStart,

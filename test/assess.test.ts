@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { weekStart, bucketBehaviorByWeek, scoreColorId, scoreStats } from '../src/lib/assess.js';
+import {
+  weekStart,
+  bucketBehaviorByWeek,
+  bucketBehaviorByWeekInMonth,
+  monthWeekStarts,
+  scoreColorId,
+  scoreStats,
+} from '../src/lib/assess.js';
 import type { BehaviorRow, ScoreRow } from '../server/services/assessments.js';
 
 function beh(date: string, type: string): BehaviorRow {
@@ -115,5 +122,53 @@ describe('scoreColorId()', () => {
   it('is green from 7 up', () => {
     expect(scoreColorId(7)).toBe('green');
     expect(scoreColorId(10)).toBe('green');
+  });
+});
+
+describe('monthWeekStarts()', () => {
+  it('covers a month that starts mid-week, including the overlapping week before it', () => {
+    // Aug 1 2026 is a Saturday, so the first bucket is the Monday of the week it falls in.
+    const keys = monthWeekStarts('2026-08');
+    expect(keys[0]).toBe('2026-07-27');
+    expect(keys[keys.length - 1]).toBe('2026-08-31');
+    expect(keys).toHaveLength(6);
+  });
+
+  it('gives exactly four weeks for a 28-day month that starts on a Monday', () => {
+    // Feb 2027: Feb 1 is a Monday and there are 28 days, so the weeks line up exactly.
+    expect(monthWeekStarts('2027-02')).toEqual([
+      '2027-02-01',
+      '2027-02-08',
+      '2027-02-15',
+      '2027-02-22',
+    ]);
+  });
+
+  it('starts on the 1st when the 1st is a Monday', () => {
+    expect(monthWeekStarts('2026-06')[0]).toBe('2026-06-01');
+  });
+});
+
+describe('bucketBehaviorByWeekInMonth()', () => {
+  it('keeps the overlapping week but counts only that month’s days', () => {
+    const rows = [
+      beh('2026-07-31', 'late'), // same week as the 2026-07-27 bucket, but July
+      beh('2026-08-01', 'late'), // August, and lands in that same bucket
+    ];
+    const buckets = bucketBehaviorByWeekInMonth(rows, '2026-08');
+    expect(buckets[0].key).toBe('2026-07-27');
+    expect(buckets[0].counts.late).toBe(1);
+    expect(buckets[0].total).toBe(1);
+  });
+
+  it('excludes praise, like the trailing-weeks bucketing does', () => {
+    const buckets = bucketBehaviorByWeekInMonth([beh('2026-08-10', 'praise')], '2026-08');
+    expect(buckets.reduce((a, b) => a + b.total, 0)).toBe(0);
+  });
+
+  it('returns every week of an empty month at zero', () => {
+    const buckets = bucketBehaviorByWeekInMonth([], '2027-02');
+    expect(buckets.map((b) => b.key)).toEqual(monthWeekStarts('2027-02'));
+    expect(buckets.every((b) => b.total === 0)).toBe(true);
   });
 });

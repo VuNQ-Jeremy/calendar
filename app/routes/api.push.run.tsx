@@ -1,5 +1,9 @@
 import { fail, withAuth } from '../../server/api/handler';
-import { runClassReminders, runDailyDigest } from '../../server/services/notify';
+import {
+  runClassReminders,
+  runDailyDigest,
+  runEveningPreview,
+} from '../../server/services/notify';
 
 /**
  * Run a notification job on demand. **Admin only.**
@@ -18,11 +22,17 @@ import { runClassReminders, runDailyDigest } from '../../server/services/notify'
  *
  *   POST /api/push/run?job=class    — the class-starting-soon sweep
  *   POST /api/push/run?job=digest   — the daily digest
+ *   POST /api/push/run?job=preview  — the evening "tomorrow's sessions" preview
  */
 export const action = withAuth('admin', async ({ request, db }) => {
   const job = new URL(request.url).searchParams.get('job');
-  if (job !== 'class' && job !== 'digest') throw fail('bad_job', 400);
+  if (job !== 'class' && job !== 'digest' && job !== 'preview') throw fail('bad_job', 400);
 
-  const sent = job === 'digest' ? await runDailyDigest(db) : await runClassReminders(db);
+  const sent =
+    job === 'digest'
+      ? await runDailyDigest(db)
+      : job === 'preview'
+        ? await runEveningPreview(db)
+        : await runClassReminders(db);
   return { job, sent };
 });
