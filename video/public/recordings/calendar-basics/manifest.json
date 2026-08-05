@@ -1,0 +1,175 @@
+{
+  "id": "calendar-basics",
+  "recordedAt": "2026-08-04T08:39:12.671Z",
+  "baseUrl": "https://calendar.ngqv0712.workers.dev",
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "pixelSize": {
+    "width": 1600,
+    "height": 900
+  },
+  "syncFlashFrame": 24,
+  "footageStartFrame": 29,
+  "durationMs": 33911,
+  "steps": [
+    {
+      "id": "open-calendar",
+      "tStartMs": 769,
+      "tEndMs": 2710,
+      "target": {
+        "x": 0,
+        "y": 0,
+        "width": 260,
+        "height": 900
+      },
+      "click": {
+        "x": 129.5,
+        "y": 183.671875
+      }
+    },
+    {
+      "id": "switch-views",
+      "tStartMs": 2710,
+      "tEndMs": 4673,
+      "target": {
+        "x": 292,
+        "y": 111.046875,
+        "width": 1276,
+        "height": 45.6875
+      },
+      "click": {
+        "x": 1430.5546875,
+        "y": 133.890625
+      }
+    },
+    {
+      "id": "month-overview",
+      "tStartMs": 4673,
+      "tEndMs": 7286
+    },
+    {
+      "id": "new-event",
+      "tStartMs": 7286,
+      "tEndMs": 8847,
+      "target": {
+        "x": 1424.734375,
+        "y": 43.046875,
+        "width": 143.265625,
+        "height": 44
+      },
+      "click": {
+        "x": 1496.3671875,
+        "y": 65.046875
+      }
+    },
+    {
+      "id": "type-title",
+      "tStartMs": 8847,
+      "tEndMs": 10807,
+      "target": {
+        "x": 530,
+        "y": 45,
+        "width": 540,
+        "height": 810
+      }
+    },
+    {
+      "id": "pick-time",
+      "tStartMs": 10807,
+      "tEndMs": 14139,
+      "target": {
+        "x": 554,
+        "y": 250.796875,
+        "width": 492,
+        "height": 87.6875
+      },
+      "click": {
+        "x": 968.6640625,
+        "y": 300.484375
+      }
+    },
+    {
+      "id": "pick-class",
+      "tStartMs": 14139,
+      "tEndMs": 16520,
+      "target": {
+        "x": 554,
+        "y": 338.484375,
+        "width": 492,
+        "height": 87.6875
+      },
+      "click": {
+        "x": 673.5,
+        "y": 388.171875
+      }
+    },
+    {
+      "id": "repeat-weekly",
+      "tStartMs": 16520,
+      "tEndMs": 18698,
+      "target": {
+        "x": 554,
+        "y": 338.484375,
+        "width": 492,
+        "height": 87.6875
+      },
+      "click": {
+        "x": 926.5,
+        "y": 388.171875
+      }
+    },
+    {
+      "id": "save",
+      "tStartMs": 18698,
+      "tEndMs": 21348,
+      "target": {
+        "x": 530,
+        "y": 778,
+        "width": 540,
+        "height": 77
+      },
+      "click": {
+        "x": 981.9453125,
+        "y": 817
+      }
+    },
+    {
+      "id": "see-result",
+      "tStartMs": 21348,
+      "tEndMs": 23780,
+      "target": {
+        "x": 475,
+        "y": 341.328125,
+        "width": 182,
+        "height": 116
+      }
+    },
+    {
+      "id": "see-recurrence",
+      "tStartMs": 23780,
+      "tEndMs": 26591
+    },
+    {
+      "id": "drag-to-move",
+      "tStartMs": 26591,
+      "tEndMs": 32696,
+      "click": {
+        "x": 615.7734375,
+        "y": 633.921875
+      },
+      "target": {
+        "x": 293,
+        "y": 181.734375,
+        "width": 1274,
+        "height": 685.265625
+      }
+    },
+    {
+      "id": "_settle",
+      "tStartMs": 32696,
+      "tEndMs": 33910
+    }
+  ]
+}

@@ -15,6 +15,14 @@ mobile/.expo/
 mobile/android/
 mobile/ios/
 
+# Remotion video catalog. Standalone npm project like mobile/, so its own
+# node_modules; recordings and renders are large and regenerable (video/README.md).
+# video/public/recordings/*/manifest.json IS tracked — renders depend on it.
+video/node_modules/
+video/out/
+video/public/recordings/**/*.webm
+video/public/music/*.mp3
+
 # Playwright e2e (nav-latency suite runs against a real deployment)
 test-results/
 playwright-report/

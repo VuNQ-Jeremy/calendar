@@ -1,0 +1,12 @@
+node_modules/
+out/
+
+# Raw screen recordings are large and regenerable — re-run `npm run record <id>`.
+# The manifests next to them ARE committed: they hold the step timings the
+# compositions depend on, so a render is reproducible without a re-record.
+public/recordings/**/*.webm
+public/recordings/**/*.mp4
+
+# Licensed audio is not redistributed through this repo.
+public/music/*.mp3
+public/music/*.m4a

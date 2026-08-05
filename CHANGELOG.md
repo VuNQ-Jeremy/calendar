@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0099 — 2026-08-05
+Add the Remotion video catalog under video/: Playwright records the live app, a Remotion composition wraps it in Mochi brand with Vietnamese captions. First guide: calendar-basics.
+
 ## v0.0098 — 2026-08-05
 Assessments: month filter is a labelled dropdown of recorded months, with a separate All-time reset button
 

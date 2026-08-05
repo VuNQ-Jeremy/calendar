@@ -1,0 +1,32 @@
+{
+  "name": "mochi-video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Remotion video catalog for Mochi — Vietnamese user guides, marketing shorts, release notes.",
+  "scripts": {
+    "studio": "remotion studio",
+    "record": "tsx record/run.ts",
+    "sync": "node scripts/sync-frames.mjs",
+    "render": "node scripts/render-all.mjs",
+    "still": "remotion still",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.505",
+    "@remotion/google-fonts": "4.0.505",
+    "@remotion/media": "4.0.505",
+    "@remotion/renderer": "4.0.505",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.505"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "4.0.505",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "playwright": "^1.56.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
