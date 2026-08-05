@@ -1434,6 +1434,8 @@ body {
   font-size: var(--text-sm);
   color: var(--text-strong);
   text-wrap: pretty;
+  /* columns are narrow — a pasted URL in a bug report must not blow one out */
+  overflow-wrap: anywhere;
 }
 .kcard__foot {
   display: flex;

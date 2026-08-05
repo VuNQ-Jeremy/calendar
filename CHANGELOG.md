@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0097 — 2026-08-05
+Feedback is a kanban board: New / Reviewed / Resolved columns with drag-and-drop between them, and the changelog moves out of a tab into a modal opened from the page header.
+
 ## v0.0096 — 2026-08-05
 Preview buổi sau: per-occurrence lesson preview for students, parents (Zalo card) and teachers, with an evening push. Plus monthly remarks (nhận xét tháng) from a parallel session.
 
