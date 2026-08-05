@@ -17,6 +17,7 @@ export function ProgressLineChart({
   yMax = 10,
   height = 220,
   color = 'var(--brand)',
+  colorFor,
   formatX,
   ariaLabel,
   emptyLabel,
@@ -26,6 +27,8 @@ export function ProgressLineChart({
   yMax?: number;
   height?: number;
   color?: string;
+  /** Per-value colour (e.g. the score bands). Applies to the dots and to each line segment. */
+  colorFor?: (y: number) => string;
   formatX: (iso: string) => string;
   ariaLabel: string;
   emptyLabel?: string;
@@ -48,6 +51,9 @@ export function ProgressLineChart({
   for (let v = yMin; v <= yMax; v += 2) gridVals.push(v);
   const line = points.map((p, i) => `${px(i)},${py(p.y)}`).join(' ');
   const area = `${px(0)},${py(yMin)} ${line} ${px(points.length - 1)},${py(yMin)}`;
+  // A segment takes the colour of the point it arrives at — the reading is "where this got to",
+  // so a climb into the green band turns green as it lands there.
+  const dotColor = (i: number) => (colorFor ? colorFor(points[i].y) : color);
   // At most ~6 x labels: always first and last.
   const step = Math.max(1, Math.ceil(points.length / 6));
   const showX = (i: number) => i === 0 || i === points.length - 1 || i % step === 0;
@@ -81,23 +87,39 @@ export function ProgressLineChart({
         </g>
       ))}
       {points.length > 1 && <polygon points={area} fill={color} opacity={0.08} />}
-      {points.length > 1 && (
-        <polyline
-          points={line}
-          fill="none"
-          stroke={color}
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      )}
+      {points.length > 1 &&
+        (colorFor ? (
+          points
+            .slice(1)
+            .map((p, i) => (
+              <line
+                key={`s${i}`}
+                x1={px(i)}
+                y1={py(points[i].y)}
+                x2={px(i + 1)}
+                y2={py(p.y)}
+                stroke={dotColor(i + 1)}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+              />
+            ))
+        ) : (
+          <polyline
+            points={line}
+            fill="none"
+            stroke={color}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ))}
       {points.map((p, i) => (
         <circle
           key={i}
           cx={px(i)}
           cy={py(p.y)}
           r={4.5}
-          fill={color}
+          fill={dotColor(i)}
           stroke="#fff"
           strokeWidth={1.5}
         >

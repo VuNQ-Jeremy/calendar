@@ -7,6 +7,7 @@ import {
   BEHAVIOR_TYPES,
   NEGATIVE_TYPES,
   bucketBehaviorByWeek,
+  scoreColorId,
   scoreStats,
   type BehaviorTypeId,
 } from '@mochi/shared/logic/assess';
@@ -87,7 +88,8 @@ export default function Assessments() {
   const today = iso(todayDate());
 
   const visibleStudents = (students ?? []).filter(
-    (s) => (classFilter === 'all' || s.classIds.includes(classFilter)) && matches(q, s.name, s.grade),
+    (s) =>
+      (classFilter === 'all' || s.classIds.includes(classFilter)) && matches(q, s.name, s.grade),
   );
   // Follows the web exactly: if the current pick is filtered out, fall back to the first one left
   // rather than showing an empty screen against a stale selection.
@@ -277,9 +279,11 @@ export default function Assessments() {
                 <BarChart3 size={18} color={th.color.textMuted} />
                 <Heading style={{ flex: 1 }}>{t('assess_progress_chart')}</Heading>
               </View>
-              <View style={{ flexDirection: 'row', gap: th.spacing[4] }}>
-                <Muted>{`${t('assess_avg')}: ${stats.average ?? '—'}`}</Muted>
-                <Muted>{`${t('assess_latest')}: ${stats.latest ?? '—'}`}</Muted>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
+                <Muted>{t('assess_avg')}</Muted>
+                <ScoreTag score={stats.average} />
+                <Muted>{t('assess_latest')}</Muted>
+                <ScoreTag score={stats.latest} />
               </View>
               <ProgressLineChart
                 points={myScores.map((r) => ({
@@ -287,6 +291,7 @@ export default function Assessments() {
                   y: r.score,
                   label: typeOf(r.assessmentTypeId),
                 }))}
+                colorFor={(y) => th.category[scoreColorId(y)].base}
                 formatX={fmtShort}
                 emptyLabel={t('assess_no_scores')}
               />
@@ -312,7 +317,9 @@ export default function Assessments() {
                     })
                   }
                   onDelete={() =>
-                    confirmDelete(`${r.score} · ${fmtShort(r.date)}`, () => removeScore.mutate(r.id))
+                    confirmDelete(`${r.score} · ${fmtShort(r.date)}`, () =>
+                      removeScore.mutate(r.id),
+                    )
                   }
                 />
               ))
@@ -391,7 +398,9 @@ export default function Assessments() {
                           th.category[BEHAVIOR_META[ty].color as keyof typeof th.category].base,
                       }}
                     />
-                    <Muted style={{ fontSize: th.text.xs.fontSize }}>{t(BEHAVIOR_META[ty].tk)}</Muted>
+                    <Muted style={{ fontSize: th.text.xs.fontSize }}>
+                      {t(BEHAVIOR_META[ty].tk)}
+                    </Muted>
                   </View>
                 ))}
               </View>
@@ -414,7 +423,9 @@ export default function Assessments() {
                       notes: r.notes ?? '',
                     })
                   }
-                  onDelete={() => confirmDelete(fmtShort(r.date), () => removeBehavior.mutate(r.id))}
+                  onDelete={() =>
+                    confirmDelete(fmtShort(r.date), () => removeBehavior.mutate(r.id))
+                  }
                 />
               ))
             ) : (
@@ -434,9 +445,9 @@ export default function Assessments() {
 
 // ---- Pieces ----
 
-/** Score colour thresholds, identical to the web's `ScoreBadge`. */
-function scoreColor(score: number): string {
-  return score >= 8 ? 'green' : score >= 6.5 ? 'blue' : score >= 5 ? 'orange' : 'rose';
+/** A score in its band colour. Null (no scores yet) renders the neutral em-dash tag. */
+function ScoreTag({ score }: { score: number | null }) {
+  return <Tag color={score == null ? undefined : scoreColorId(score)}>{score ?? '—'}</Tag>;
 }
 
 function CountTile({ n, label, color }: { n: number; label: string; color: string }) {
@@ -481,7 +492,7 @@ function ScoreCard({
 }) {
   const th = useTheme();
   const { t } = useLang();
-  const cat = th.category[scoreColor(row.score) as keyof typeof th.category];
+  const cat = th.category[scoreColorId(row.score)];
 
   return (
     <Card flat style={{ padding: th.spacing[4], gap: th.spacing[2] }}>

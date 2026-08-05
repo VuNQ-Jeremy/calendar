@@ -106,6 +106,19 @@ export const ATTENDANCE_META: Record<AttendanceStatusId, { tk: string; color: st
   excused: { tk: 'att_excused', color: 'blue' },
 };
 
+export type ScoreColorId = 'green' | 'orange' | 'rose';
+
+/**
+ * The one score→colour convention, on a 0–10 scale: below 5 is red, 5 up to 7 is orange,
+ * 7 and above is green. Every score the teacher sees — badges, stat chips, chart points and
+ * the line between them — goes through this, so a colour means the same thing everywhere.
+ *
+ * Returns a ColorId understood by `colorOf()` (web) / `theme.category` (mobile).
+ */
+export function scoreColorId(score: number): ScoreColorId {
+  return score >= 7 ? 'green' : score >= 5 ? 'orange' : 'rose';
+}
+
 export type ScoreStats = { average: number | null; latest: number | null; delta: number | null };
 
 /**

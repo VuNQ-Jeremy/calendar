@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { weekStart, bucketBehaviorByWeek, scoreStats } from '../src/lib/assess.js';
+import { weekStart, bucketBehaviorByWeek, scoreColorId, scoreStats } from '../src/lib/assess.js';
 import type { BehaviorRow, ScoreRow } from '../server/services/assessments.js';
 
 function beh(date: string, type: string): BehaviorRow {
@@ -98,5 +98,22 @@ describe('scoreStats()', () => {
     expect(stats.average).toBe(6.5);
     expect(stats.latest).toBe(8);
     expect(stats.delta).toBe(3);
+  });
+});
+
+describe('scoreColorId()', () => {
+  it('is red below 5', () => {
+    expect(scoreColorId(0)).toBe('rose');
+    expect(scoreColorId(4.9)).toBe('rose');
+  });
+
+  it('is orange from 5 up to 7', () => {
+    expect(scoreColorId(5)).toBe('orange');
+    expect(scoreColorId(6.9)).toBe('orange');
+  });
+
+  it('is green from 7 up', () => {
+    expect(scoreColorId(7)).toBe('green');
+    expect(scoreColorId(10)).toBe('green');
   });
 });

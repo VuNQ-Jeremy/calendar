@@ -11,6 +11,7 @@ import {
   BEHAVIOR_TYPES,
   NEGATIVE_TYPES,
   bucketBehaviorByWeek,
+  scoreColorId,
   scoreStats,
   type BehaviorTypeId,
 } from './lib/assess.js';
@@ -67,9 +68,15 @@ function Stat({ num, label, color }: { num: React.ReactNode; label: string; colo
   );
 }
 
-function ScoreBadge({ score }: { score: number }) {
-  const colorId = score >= 8 ? 'green' : score >= 6.5 ? 'blue' : score >= 5 ? 'orange' : 'rose';
-  const c = colorOf(colorId);
+function ScoreBadge({ score }: { score: number | null }) {
+  if (score == null) {
+    return (
+      <span className="mchip" style={{ fontWeight: 700 }}>
+        —
+      </span>
+    );
+  }
+  const c = colorOf(scoreColorId(score));
   return (
     <span className="mchip" style={{ background: c.soft, color: c.ink, fontWeight: 700 }}>
       {score}
@@ -263,15 +270,11 @@ function AssessmentsScreen() {
                 <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
                   {t('assess_avg')}
                 </span>
-                <span className="mchip" style={{ fontWeight: 700 }}>
-                  {stats.average ?? '—'}
-                </span>
+                <ScoreBadge score={stats.average} />
                 <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
                   {t('assess_latest')}
                 </span>
-                <span className="mchip" style={{ fontWeight: 700 }}>
-                  {stats.latest ?? '—'}
-                </span>
+                <ScoreBadge score={stats.latest} />
               </div>
             </div>
             <ProgressLineChart
@@ -280,6 +283,7 @@ function AssessmentsScreen() {
                 y: r.score,
                 label: typeById(r.assessmentTypeId)?.name,
               }))}
+              colorFor={(y) => colorOf(scoreColorId(y)).base}
               formatX={fmtShort}
               ariaLabel={t('assess_progress_chart')}
               emptyLabel={t('assess_no_scores')}

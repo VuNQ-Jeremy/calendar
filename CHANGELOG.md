@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0095 — 2026-08-05
+Scores follow one colour convention everywhere: red under 5, orange 5-7, green 7 and up. The progress chart's dots and each line segment take the colour of the score they land on.
+
 ## v0.0094 — 2026-08-05
 Feedback stamps carry the time of day, localised and shared by web and mobile. The server is now the sole author of createdAt, and a migration gives the old time-less rows a time.
 

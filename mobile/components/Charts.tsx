@@ -36,6 +36,7 @@ export function ProgressLineChart({
   yMax = 10,
   height = 220,
   color,
+  colorFor,
   formatX,
   emptyLabel,
 }: {
@@ -44,6 +45,8 @@ export function ProgressLineChart({
   yMax?: number;
   height?: number;
   color?: string;
+  /** Per-value colour (e.g. the score bands). Applies to the dots and to each line segment. */
+  colorFor?: (y: number) => string;
   formatX: (iso: string) => string;
   emptyLabel?: string;
 }) {
@@ -72,6 +75,8 @@ export function ProgressLineChart({
   // At most ~6 x labels: always first and last.
   const step = Math.max(1, Math.ceil(points.length / 6));
   const showX = (i: number) => i === 0 || i === points.length - 1 || i % step === 0;
+  // A segment takes the colour of the point it arrives at — same rule as the web.
+  const dotColor = (i: number) => (colorFor ? colorFor(points[i].y) : stroke);
 
   return (
     <Svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} accessibilityRole="image">
@@ -98,7 +103,23 @@ export function ProgressLineChart({
       ))}
 
       {points.length > 1 ? <Polygon points={area} fill={stroke} opacity={0.08} /> : null}
-      {points.length > 1 ? (
+      {points.length > 1 && colorFor
+        ? points
+            .slice(1)
+            .map((p, i) => (
+              <Line
+                key={`s${i}`}
+                x1={px(i)}
+                y1={py(points[i].y)}
+                x2={px(i + 1)}
+                y2={py(p.y)}
+                stroke={dotColor(i + 1)}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+              />
+            ))
+        : null}
+      {points.length > 1 && !colorFor ? (
         <Polyline
           points={line}
           fill="none"
@@ -115,7 +136,7 @@ export function ProgressLineChart({
           cx={px(i)}
           cy={py(p.y)}
           r={4.5}
-          fill={stroke}
+          fill={dotColor(i)}
           stroke={th.color.surfaceCard}
           strokeWidth={1.5}
         />
@@ -214,7 +235,9 @@ export function StackedBarChart({
                 const y0 = py(acc + s.count);
                 const h = py(acc) - py(acc + s.count);
                 acc += s.count;
-                return <Rect key={s.type} x={x} y={y0} width={barW} height={h} rx={3} fill={s.color} />;
+                return (
+                  <Rect key={s.type} x={x} y={y0} width={barW} height={h} rx={3} fill={s.color} />
+                );
               })}
             {i % labelStep === 0 ? (
               <SvgText

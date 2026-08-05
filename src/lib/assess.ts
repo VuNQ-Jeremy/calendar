@@ -12,6 +12,7 @@ export {
   BEHAVIOR_TYPES,
   NEGATIVE_TYPES,
   bucketBehaviorByWeek,
+  scoreColorId,
   scoreStats,
   weekStart,
 } from '../../shared/logic/assess';
@@ -19,6 +20,7 @@ export {
 export type {
   AttendanceStatusId,
   BehaviorTypeId,
+  ScoreColorId,
   ScoreStats,
   WeekBucket,
 } from '../../shared/logic/assess';
