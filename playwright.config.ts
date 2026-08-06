@@ -9,6 +9,10 @@ import { defineConfig } from '@playwright/test';
  *   MOCHI_EMAIL=... MOCHI_PASSWORD=... npm run test:e2e
  *
  * Without credentials every spec skips itself rather than failing.
+ *
+ * To run against the isolated calendar-test environment (own D1/R2, seed data
+ * reset before every run, safe for CRUD specs): npm run test:e2e:staging.
+ * One-time provisioning: npm run test:env:setup — see scripts/test-env-setup.mjs.
  */
 export default defineConfig({
   testDir: './e2e',

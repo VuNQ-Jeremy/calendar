@@ -24,7 +24,10 @@
     "test": "vitest run && vitest run --config vitest.workers.config.js",
     "test:watch": "vitest",
     "test:worker": "vitest run --config vitest.workers.config.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:env:setup": "node scripts/test-env-setup.mjs",
+    "test:env:reset": "node scripts/test-env-reset.mjs",
+    "test:e2e:staging": "node scripts/test-e2e-staging.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",

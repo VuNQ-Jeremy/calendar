@@ -60,4 +60,43 @@
   "observability": {
     "enabled": true,
   },
+  // ---- Test environment ----
+  // A fully separate deployment (`calendar-test`) for Playwright e2e runs that
+  // write freely: its own D1 and R2, no cron triggers. Provision + deploy + seed
+  // with `npm run test:env:setup` (requires the ngqv0712 wrangler login); run the
+  // suite against it with `npm run test:e2e:staging`.
+  // The test database_id below is patched in by scripts/test-env-setup.mjs on first run.
+  "env": {
+    "test": {
+      "name": "calendar-test",
+      "assets": {
+        "directory": "./build/client",
+        "binding": "ASSETS",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "mochi-class-test",
+          "database_id": "6be1e141-d2a4-444c-aa3f-c34ca6cf4e19",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "mochi-files-test",
+        },
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },
+          { "name": "LIVE_HUB", "class_name": "LiveHub" },
+        ],
+      },
+      // The notification crons must never fire from the test worker.
+      "triggers": {
+        "crons": [],
+      },
+    },
+  },
 }
