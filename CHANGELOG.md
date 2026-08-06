@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0115 — 2026-08-06
+Project instructions: every new feature/data object must ship with an e2e spec; test-env workflow and reset-sweep rules documented.
+
 ## v0.0114 — 2026-08-06
 Fix dropdowns dismissing themselves when opened while a filled input has focus (blur scroll-reset); e2e suite now covers every CRUD variant end to end.
 

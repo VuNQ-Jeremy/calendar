@@ -49,6 +49,39 @@
   row (EAS's checkout has no git history for the commit count). The `gitSha` in the
   stamp is still correct; trust the sha, not the number.
 
+## End-to-end tests
+
+- **Every new feature, mutation intent, or data object ships with an e2e spec in
+  the same commit.** When you add or change a route action intent, a dialog, or a
+  table, extend the matching `e2e/crud-*.spec.ts` (or create a new one) with a
+  UI-driven lifecycle test — create → edit/variants → delete, through the real
+  dialogs. The suite's contract is that every write path is exercised end to end;
+  don't let it rot back to partial coverage.
+- **Run against the isolated test env, never production.** `npm run
+  test:e2e:staging` resets the `calendar-test` D1 to seed data and runs the whole
+  suite (~4 min). CRUD specs are guarded in `e2e/crud-helpers.ts` and skip unless
+  `E2E_BASE_URL` contains `calendar-test`. Provisioning / redeploying the test
+  env: `npm run test:env:setup` (needs the ngqv0712 wrangler login; the env is
+  selected at BUILD time via `CLOUDFLARE_ENV=test` — never `wrangler deploy
+  --env test`, which silently ships prod config).
+- **A feature isn't done until the full suite is green** against calendar-test:
+  `npm run test:env:setup` to deploy your change there, then the staging run.
+- **Use the helper kit in `e2e/crud-helpers.ts`** — it encodes the app's UI
+  contract: no `<form>`/`name=` attributes (locate inputs structurally by their
+  `.mochi-field` label), combobox/date menus portalled to `document.body` (locate
+  options from `page` with exact names), and dialogs that close optimistically
+  before the server responds (always `await posted(path)` — the POST to
+  `<path>.data` — before asserting on the re-rendered list).
+- **New tables must be added to the reset sweep.** `seed.sql` predates several
+  tables, so `scripts/test-accounts.sql` deletes them explicitly — otherwise a
+  failed run leaks rows into the next reset. When a migration adds a table that
+  specs will write to, add its `DELETE FROM …;` there in the same commit.
+- Test accounts: staff `dev@mochi.edu`, student `vunq@mochi.edu` (both
+  `mochi123`, re-hashed on every reset). Specs create their own throwaway rows
+  (unique `E2E … ${Date.now()}` names) and clean up after themselves; don't
+  mutate the six seeded assessment types or the four seeded remark criteria —
+  other specs and seeded score rows depend on them.
+
 ## Debugging
 
 - **When a component remounts mysteriously, look up the component tree first.**
