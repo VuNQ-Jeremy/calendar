@@ -12,7 +12,7 @@ import type { TuitionSettings } from '../server/services/tuition.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
 
-const { Card, Button, IconButton, Badge } = DS;
+const { Card, Button, IconButton, Badge, Checkbox } = DS;
 
 interface ConfigLoaderData {
   types: AssessmentTypeRow[];
@@ -81,14 +81,12 @@ function TuitionSettingsSection({ settings }: { settings: TuitionSettings }) {
       </div>
       <div className="m-row" style={{ gap: 18, flexWrap: 'wrap' }}>
         {ATTENDANCE_STATUSES.map((status) => (
-          <label key={status} className="m-row" style={{ gap: 8, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={selected.includes(status)}
-              onChange={() => toggle(status)}
-            />
-            <span style={{ fontWeight: 600 }}>{t(ATTENDANCE_META[status].tk)}</span>
-          </label>
+          <Checkbox
+            key={status}
+            label={t(ATTENDANCE_META[status].tk)}
+            checked={selected.includes(status)}
+            onChange={() => toggle(status)}
+          />
         ))}
       </div>
       <p className="m-muted" style={{ margin: '10px 0 0', fontSize: 'var(--text-sm)' }}>
