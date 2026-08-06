@@ -3,7 +3,10 @@
   // `mobile` is excluded because the Expo app has its OWN tsconfig (React Native lib types,
   // its own `~/*` paths, jsx: react-jsx via expo/tsconfig.base). Typechecking it from here
   // would resolve neither. Run `cd mobile && npx tsc --noEmit` for that project.
-  "exclude": ["node_modules", "build", "dist", ".wrangler", "design", "mobile"],
+  // `video` (the Remotion catalog) is the same arrangement: own package.json + tsconfig, deps
+  // not installed at the root — including it here broke CI typecheck (and with it deploys and
+  // D1 migrations) from the commit that added it.
+  "exclude": ["node_modules", "build", "dist", ".wrangler", "design", "mobile", "video"],
   "compilerOptions": {
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": [],

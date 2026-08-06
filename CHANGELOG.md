@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0103 — 2026-08-06
+Fix CI: exclude the Remotion video/ workspace from the root typecheck — it had been failing every push (blocking deploys and D1 migrations) since the video catalog landed
+
 ## v0.0102 — 2026-08-06
 Monthly remark criteria are now system-configurable: manage (add/rename/reorder/retire) the rating rows in System configuration; remark ratings stored per-criterion
 
