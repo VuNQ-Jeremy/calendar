@@ -68,17 +68,17 @@ test.describe('CRUD: people (teachers, parents, invites)', () => {
     await expect(row(name)).toBeVisible();
     await expect(row(name).getByText('Guardian')).toBeVisible();
 
-    // Edit via rename. (Not the Relation dropdown: with a value already
-    // selected, the edit dialog's menu self-closes on its own open-scroll —
-    // an app quirk, unworkable from a test.)
+    // Edit the relation. (This regressed once: the filled name input reset
+    // its scrollLeft on blur and the scroll dismissed the menu — fixed in
+    // src/ui.tsx's close-on-scroll guard, which this now covers.)
     await row(name).getByRole('button', { name: 'Edit' }).click();
-    await k.textIn('Full name').fill(`${name} v2`);
+    await k.pickSel('Relation', 'Other');
     post = k.posted('/people');
     await k.submit().click();
     await post;
-    await expect(row(`${name} v2`)).toBeVisible();
+    await expect(row(name).getByText('Other', { exact: true })).toBeVisible();
 
-    await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
+    await row(name).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/people');
     await k.dlgOf('Remove parent?').locator('.mochi-btn.is-danger').click();
     await post;

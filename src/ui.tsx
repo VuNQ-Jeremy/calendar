@@ -158,17 +158,23 @@ function Select({ label, value, onChange, options, hint }: SelectProps) {
     };
     const onScroll = (e: Event) => {
       // Ignore scrolling that happens inside the menu itself (e.g. a long
-      // time-picker list); only close when the underlying page/modal scrolls.
-      if (menuRef.current?.contains(e.target as Node)) return;
+      // time-picker list), and scrolls of elements that do not contain the
+      // trigger — e.g. a filled text input resetting its own scrollLeft when
+      // the trigger click blurs it, which otherwise dismissed the menu the
+      // instant it opened. Only a scrolling ancestor moves the anchored menu.
+      const t = e.target as Node & { contains?: (n: Node | null) => boolean };
+      if (menuRef.current?.contains(t)) return;
+      if (!t.contains?.(triggerRef.current ?? null)) return;
       setOpen(false);
     };
+    const onResize = () => setOpen(false);
     document.addEventListener('pointerdown', onDown);
     window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('pointerdown', onDown);
       window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
     };
   }, [open]);
 
@@ -338,14 +344,23 @@ function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps
       )
         setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    const onScroll = (e: Event) => {
+      // Same guard as Select's menu: ignore scrolls inside the popover and
+      // scrolls of elements that don't contain the trigger (a blurred input
+      // resetting its scrollLeft must not dismiss the calendar).
+      const t = e.target as Node & { contains?: (n: Node | null) => boolean };
+      if (menuRef.current?.contains(t)) return;
+      if (!t.contains?.(triggerRef.current ?? null)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
     document.addEventListener('pointerdown', onDown);
     window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('pointerdown', onDown);
       window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
     };
   }, [open]);
 
