@@ -716,7 +716,19 @@ function AssessmentsScreen() {
           </div>
         </>
       ) : (
+        /* Form first, summary second — the same shape as the scores tab (working area left,
+           fixed rail right). Source order follows the visual order so focus does too, which
+           also means the narrow layout stacks form-then-summary. */
         <div className="assess-report">
+          <RemarkForm
+            key={`${activeStudentId}:${reportMonth}`}
+            className="assess-report__form"
+            criteria={criteria.filter((c) => c.active)}
+            existing={existingRemark}
+            printHref={`/assessments/${reportMonth}/${activeStudentId}/report`}
+            onSave={saveRemark}
+            onDelete={() => void removeRemarkRec()}
+          />
           <Card className="assess-report__stats" style={{ padding: 18 }}>
             <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
               {t('remark_stats_title')} · {monthLabel(reportMonth, lang)}
@@ -743,15 +755,6 @@ function AssessmentsScreen() {
               </div>
             )}
           </Card>
-          <RemarkForm
-            key={`${activeStudentId}:${reportMonth}`}
-            className="assess-report__form"
-            criteria={criteria.filter((c) => c.active)}
-            existing={existingRemark}
-            printHref={`/assessments/${reportMonth}/${activeStudentId}/report`}
-            onSave={saveRemark}
-            onDelete={() => void removeRemarkRec()}
-          />
         </div>
       )}
 

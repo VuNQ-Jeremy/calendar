@@ -1162,12 +1162,23 @@ body {
 .assess-report__stats {
   width: 380px;
   flex: none;
-  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
 }
-/* four tiles cannot share a 380px rail, and the page-level cols-4 breakpoints key off the
-   viewport — on a wide screen they would keep all four on one line inside this column */
+/* Four tiles cannot share a 380px rail, and the page-level cols-4 breakpoints key off the
+   viewport — on a wide screen they would keep all four on one line inside this column.
+   The grid takes the rail's slack, in two equal rows, so the summary fills the row height
+   rather than stopping halfway down beside a full-height form. */
 .assess-report__stats .m-grid.cols-4 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  flex: 1;
+  min-height: 0;
+}
+/* the tile card stretches to its grid cell; its inner row has to follow or the card is
+   a tall box with the content pinned to the top */
+.assess-report__stats .statcard {
+  height: 100%;
 }
 .assess-report__form {
   flex: 1;
@@ -1217,7 +1228,6 @@ body {
   }
   .assess-report__stats {
     width: auto;
-    align-self: stretch;
   }
   .assess-report__form {
     flex: none;

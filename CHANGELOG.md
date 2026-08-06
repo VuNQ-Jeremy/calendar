@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0107 — 2026-08-06
+Monthly report: the month summary moves to the right of the remark form and fills the row height.
+
 ## v0.0106 — 2026-08-06
 Assessments: filter controls on one row, monthly report tab split into a stats rail beside the remark form, and empty states fill their column instead of sitting as stubs.
 
