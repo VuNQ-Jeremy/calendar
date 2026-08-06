@@ -65,6 +65,14 @@ test.describe('CRUD: assessments', () => {
     const row = page.locator('.lrow', { hasText: 'E2E behavior note' });
     await expect(row).toBeVisible();
 
+    // Edit: flip the type from the default "Late" to "Praise".
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await k.pickSel('Type', 'Praise');
+    post = k.posted('/assessments');
+    await k.submit().click();
+    await post;
+    await expect(row.getByText('Praise')).toBeVisible();
+
     await row.getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/assessments');
     await k.dlgOf('Delete').getByRole('button', { name: 'Confirm' }).click();
@@ -90,6 +98,13 @@ test.describe('CRUD: assessments', () => {
     await card.getByRole('button', { name: 'Save report' }).click();
     await post;
     await expect(card.locator('a', { hasText: 'Print report' })).toBeVisible();
+
+    // Second save is an update (upsert on student+month): tweak the comment.
+    await card.locator('textarea.mochi-input').fill('E2E monthly comment v2');
+    post = k.posted('/assessments');
+    await card.getByRole('button', { name: 'Save report' }).click();
+    await post;
+    await expect(card.locator('textarea.mochi-input')).toHaveValue('E2E monthly comment v2');
 
     await card.getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/assessments');

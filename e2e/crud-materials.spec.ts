@@ -29,6 +29,16 @@ test.describe('CRUD: materials', () => {
     await expect(card(title)).toBeVisible();
     await expect(card(title).locator('a', { hasText: 'Open link' })).toBeVisible();
 
+    // Favorite star: its own one-field update intent, toggling .is-on.
+    let fav = k.posted('/materials');
+    await card(title).locator('.starbtn').click();
+    await fav;
+    await expect(card(title).locator('.starbtn')).toHaveClass(/is-on/);
+    fav = k.posted('/materials');
+    await card(title).locator('.starbtn').click();
+    await fav;
+    await expect(card(title).locator('.starbtn')).not.toHaveClass(/is-on/);
+
     await card(title).getByRole('button', { name: 'Edit' }).click();
     await k.textIn('Title').fill(`${title} v2`);
     post = k.posted('/materials');

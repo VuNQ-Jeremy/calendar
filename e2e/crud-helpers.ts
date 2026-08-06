@@ -26,16 +26,29 @@ export function crudGuard() {
   test.skip(!EMAIL || !PASSWORD, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 }
 
-export async function signInStaff(page: Page) {
+async function signIn(page: Page, email: string, password: string) {
   // The app renders English by default (language only changes via a post-mount
   // localStorage read); pin it anyway so a stray toggle can't break selectors.
   await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
   await page.goto('/login');
-  await page.fill('input[name="email"]', EMAIL!);
-  await page.fill('input[name="password"]', PASSWORD!);
+  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="password"]', password);
   await page.click('form[action="/login"] button[type="submit"]');
   await page.waitForURL(/\/(dashboard|vocabulary)/, { timeout: 30_000 });
   await expect(page.locator('.sb')).toBeVisible();
+}
+
+export async function signInStaff(page: Page) {
+  await signIn(page, EMAIL!, PASSWORD!);
+}
+
+/** The seeded student account (vunq@mochi.edu = Leo Park, in Biology 9A). */
+export async function signInStudent(page: Page) {
+  await signIn(
+    page,
+    process.env.MOCHI_STUDENT_EMAIL!,
+    process.env.MOCHI_STUDENT_PASSWORD ?? PASSWORD!,
+  );
 }
 
 /**
@@ -59,8 +72,23 @@ export function ui(page: Page) {
     const textIn = (label: string) =>
       field(label).locator('input.mochi-input, textarea.mochi-input');
     const pickSel = async (label: string, option: string) => {
-      await field(label).locator('button.m-select__trigger').click();
-      await page.locator('[role="listbox"] [role="option"]', { hasText: option }).first().click();
+      // A dialog re-render (fetcher revalidation, live update) can detach the
+      // portalled menu mid-click — reopen and retry once before giving up.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await field(label).locator('button.m-select__trigger').click();
+          // Exact match: hasText is substring + case-insensitive ("Mother"
+          // would swallow a pick of "Other").
+          await page
+            .getByRole('option', { name: option, exact: true })
+            .first()
+            .click({ timeout: 5_000 });
+          return;
+        } catch (err) {
+          if (attempt >= 2) throw err;
+          await page.keyboard.press('Escape'); // close a half-open menu
+        }
+      }
     };
     return { field, textIn, pickSel };
   };

@@ -2,8 +2,10 @@ import { test, expect } from '@playwright/test';
 import { crudGuard, signInStaff, ui } from './crud-helpers';
 
 /**
- * Feedback board CRUD and the profile update. Password change is deliberately
- * NOT tested — it would revoke the shared e2e account's other sessions.
+ * Feedback board CRUD and the profile updates. The password-change test
+ * reverts itself in a finally block; the server keeps the session performing
+ * the change alive (it revokes only OTHER sessions of the account), and the
+ * staging DB reset re-seeds the password hash anyway if a run dies midway.
  */
 
 test.describe('CRUD: feedback and profile', () => {
@@ -72,5 +74,34 @@ test.describe('CRUD: feedback and profile', () => {
     await post;
     await page.reload();
     await expect(phoneInput).toHaveValue('');
+  });
+
+  test('change password and change it back', async ({ page }) => {
+    const k = ui(page);
+    const OLD = process.env.MOCHI_PASSWORD!;
+    const NEW = `${OLD}-e2e`;
+    await page.goto('/profile');
+    const current = page.locator('input[autocomplete="current-password"]');
+
+    const change = async (from: string, to: string, expectClear: boolean) => {
+      await k.on(page).textIn('Current password').fill(from);
+      await k.on(page).textIn('New password').fill(to);
+      await k.on(page).textIn('Confirm password').fill(to);
+      const post = k.posted('/profile');
+      await page.getByRole('button', { name: 'Change password' }).click();
+      await post;
+      // The input-clearing effect fires only on the ok TRANSITION, which the
+      // fetcher produces once — assert it on change #1 alone. The revert is
+      // proven by its 200 (a wrong current password returns 400, which
+      // posted() refuses to match).
+      if (expectClear) await expect(current).toHaveValue('');
+    };
+
+    try {
+      await change(OLD, NEW, true);
+      await expect(page.getByText('Password changed ✓')).toBeVisible();
+    } finally {
+      await change(NEW, OLD, false); // restore for every later spec
+    }
   });
 });
