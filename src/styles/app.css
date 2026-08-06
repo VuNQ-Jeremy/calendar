@@ -1291,10 +1291,19 @@ body {
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
+/* the two pickers are short lists, so they take a fixed width instead of the greedy
+   `flex: 1 1 180px` .assess-filters gives its fields — a class name needs nowhere near the card */
+.rank-filters .mochi-field {
+  flex: 0 0 200px;
+}
+/* .assess-filters bottom-aligns its children so labelled fields line up on their control. This
+   note has no label, so it borrows the control's own vertical padding to sit centred against the
+   dropdowns instead of on their bottom edge; the inputs size themselves the same way. */
 .rank-weights-note {
   margin-left: auto;
-  align-self: center;
   font-size: var(--text-sm);
+  padding: 11px 0;
+  line-height: var(--text-md);
 }
 /* narrow: the three numbers are the ranking, the prose breakdown is not */
 @media (max-width: 720px) {

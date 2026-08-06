@@ -1,7 +1,6 @@
 import React from 'react';
 import { useLoaderData, useNavigate } from 'react-router';
 import { DS } from './ds/index.js';
-import { MIcon } from './icons.jsx';
 import { PageHeader, Empty, MSelect } from './ui.jsx';
 import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
@@ -22,7 +21,10 @@ import type {
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
 
-const { Card, Avatar, IconButton } = DS;
+const { Card, Avatar } = DS;
+
+/** Months either side of the viewed one offered in the picker — a school year's worth each way. */
+const MONTH_WINDOW = 12;
 
 interface RankingsLoaderData {
   month: string;
@@ -114,6 +116,20 @@ export function RankingsScreen() {
     };
   }, [attendance, behavior, scores, remarks, students, weights, classFilter]);
 
+  /**
+   * A rolling window centred on the month being viewed. The loader only ever fetches one month,
+   * so unlike the assessments picker there is no history here to enumerate the real options from;
+   * a window keeps every neighbouring month one click away and always contains the current value.
+   */
+  const monthOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    for (let i = MONTH_WINDOW; i >= -MONTH_WINDOW; i--) set.add(shiftMonth(month, i));
+    // Newest first: 'YYYY-MM' sorts lexicographically, so a descending compare is the whole job.
+    return [...set]
+      .sort((a, b) => b.localeCompare(a))
+      .map((m) => ({ value: m, label: monthLabel(m, lang) }));
+  }, [month, lang]);
+
   const breakdown = (s: StudentRanking) => {
     const parts: string[] = [];
     if (s.attendance != null) parts.push(t('rank_breakdown_attendance', { v: s.attendance }));
@@ -152,32 +168,10 @@ export function RankingsScreen() {
 
   return (
     <div className="content">
-      <PageHeader
-        title={t('rank_title')}
-        subtitle={t('rank_sub')}
-        actions={
-          <div className="m-row" style={{ gap: 8 }}>
-            <IconButton
-              label={monthLabel(shiftMonth(month, -1), lang)}
-              onClick={() => navigate(`/rankings/${shiftMonth(month, -1)}`)}
-            >
-              <MIcon name="chevronLeft" size={18} />
-            </IconButton>
-            <span style={{ fontWeight: 800, minWidth: 130, textAlign: 'center' }}>
-              {monthLabel(month, lang)}
-            </span>
-            <IconButton
-              label={monthLabel(shiftMonth(month, 1), lang)}
-              onClick={() => navigate(`/rankings/${shiftMonth(month, 1)}`)}
-            >
-              <MIcon name="chevronRight" size={18} />
-            </IconButton>
-          </div>
-        }
-      />
+      <PageHeader title={t('rank_title')} subtitle={t('rank_sub')} />
 
       <Card style={{ padding: 14 }}>
-        <div className="assess-filters">
+        <div className="assess-filters rank-filters">
           <MSelect
             label={t('assess_class')}
             value={classFilter}
@@ -186,6 +180,12 @@ export function RankingsScreen() {
               { value: 'all', label: t('assess_all_classes') },
               ...classes.map((c) => ({ value: c.id, label: c.name })),
             ]}
+          />
+          <MSelect
+            label={t('assess_month')}
+            value={month}
+            onChange={(m) => navigate(`/rankings/${m}`)}
+            options={monthOptions}
           />
           <span className="m-muted rank-weights-note">
             {t('rank_weights_note', { a: weights.attitude, s: weights.score })}

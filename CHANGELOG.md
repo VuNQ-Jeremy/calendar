@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0109 — 2026-08-06
+Rankings: swap the month stepper for a dropdown, narrow the filter selects and centre the weights note against them.
+
 ## v0.0108 — 2026-08-06
 Add monthly student rankings page (bảng xếp hạng): combined leaderboard by ý thức and test average, with class and month filters and configurable weights.
 
