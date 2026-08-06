@@ -1084,6 +1084,11 @@ body {
 .qi-bulkbar .mochi-field {
   margin-bottom: 0;
 }
+/* assessments month row: "All time" sits beside the labelled month select,
+   same wrapper-vs-control bottom-alignment trap as the bulk bar above */
+.assess-month-row .mochi-field {
+  margin-bottom: 0;
+}
 @keyframes mfade {
   from {
     opacity: 0;

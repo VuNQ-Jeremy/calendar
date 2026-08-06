@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0101 — 2026-08-06
+fix: 'All time' button now bottom-aligns with the month select in assessments filters
+
 ## v0.0100 — 2026-08-06
 Tuition billable-status checkboxes now use the DS mochi Checkbox
 

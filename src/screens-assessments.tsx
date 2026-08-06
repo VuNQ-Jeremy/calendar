@@ -462,7 +462,10 @@ function AssessmentsScreen() {
         </div>
         {/* The month picker and its reset are two separate controls: the dropdown only ever names
             a real month, and "All time" is the one button that clears the filter. */}
-        <div className="m-row" style={{ gap: 10, marginTop: 14, alignItems: 'flex-end' }}>
+        <div
+          className="m-row assess-month-row"
+          style={{ gap: 10, marginTop: 14, alignItems: 'flex-end' }}
+        >
           <div style={{ flex: 1, minWidth: 0 }}>
             <MSelect
               label={t('assess_month')}
