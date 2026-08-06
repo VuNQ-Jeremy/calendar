@@ -515,10 +515,10 @@ function AssessmentsScreen() {
               }))}
               colorFor={(y) => colorOf(scoreColorId(y)).base}
               formatX={fmtShort}
-              // Narrower viewBox than the default 900: the chart now occupies part of a row,
-              // and at 900 its labels would render at roughly half size.
-              width={620}
-              height={300}
+              // Sized to the card, not to an aspect ratio — otherwise a wide window makes the
+              // chart tall enough to burst out of the card and eat the page's bottom gutter.
+              fit
+              height={240}
               ariaLabel={t('assess_progress_chart')}
               emptyLabel={t('assess_no_scores')}
             />

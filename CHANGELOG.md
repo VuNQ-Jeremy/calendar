@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0105 — 2026-08-06
+Score progress chart sizes to its card instead of to an aspect ratio, so a wide window no longer makes it overflow the card and eat the page's bottom gutter.
+
 ## v0.0104 — 2026-08-06
 Assessments scores tab: chart and test list side by side, list scrolls in place so the tab fits one screen. ProgressLineChart takes a viewBox width and no longer clips its end date labels.
 

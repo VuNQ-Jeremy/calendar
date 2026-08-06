@@ -17,6 +17,7 @@ export function ProgressLineChart({
   yMax = 10,
   width = W,
   height = 220,
+  fit = false,
   color = 'var(--brand)',
   colorFor,
   formatX,
@@ -30,10 +31,19 @@ export function ProgressLineChart({
    * viewBox width. The SVG always fills its container, so this is really a text-size dial:
    * the whole drawing scales by containerWidth / width, and the 11-unit labels with it. Pass
    * something smaller than the default when the chart sits in a narrow column, or the labels
-   * shrink with it.
+   * shrink with it. In `fit` mode this is only the pre-measurement fallback.
    */
   width?: number;
+  /** viewBox height — in `fit` mode, the minimum box height instead. */
   height?: number;
+  /**
+   * Size to the box rather than to the aspect ratio. Off, the rendered height is
+   * containerWidth × height/width, which in a wide container overflows whatever vertical
+   * space the chart was given. On, the measured pixel box becomes the viewBox: one unit is
+   * one pixel, so labels are always their literal font size and the drawing cannot outgrow
+   * its container. Needs a parent that gives the chart a height (a flex column).
+   */
+  fit?: boolean;
   color?: string;
   /** Per-value colour (e.g. the score bands). Applies to the dots and to each line segment. */
   colorFor?: (y: number) => string;
@@ -41,6 +51,20 @@ export function ProgressLineChart({
   ariaLabel: string;
   emptyLabel?: string;
 }) {
+  // Callback ref, not useRef: the empty state renders no box at all, so the observer has to
+  // re-attach when points arrive and the node mounts.
+  const [boxEl, setBoxEl] = React.useState<HTMLDivElement | null>(null);
+  const [box, setBox] = React.useState<{ w: number; h: number } | null>(null);
+  React.useLayoutEffect(() => {
+    if (!fit || !boxEl || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width: w, height: h } = entry.contentRect;
+      if (w > 0 && h > 0) setBox({ w: Math.round(w), h: Math.round(h) });
+    });
+    ro.observe(boxEl);
+    return () => ro.disconnect();
+  }, [fit, boxEl]);
+
   if (!points.length) {
     return (
       <div className="m-muted" style={{ padding: '32px 0', textAlign: 'center' }}>
@@ -48,8 +72,10 @@ export function ProgressLineChart({
       </div>
     );
   }
-  const innerW = width - PAD.left - PAD.right;
-  const innerH = height - PAD.top - PAD.bottom;
+  const vw = fit && box ? box.w : width;
+  const vh = fit && box ? box.h : height;
+  const innerW = vw - PAD.left - PAD.right;
+  const innerH = vh - PAD.top - PAD.bottom;
   // Even index spacing (ordinal x): test dates are irregular; equal spacing reads better.
   const px = (i: number) =>
     PAD.left + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
@@ -63,7 +89,7 @@ export function ProgressLineChart({
   // so a climb into the green band turns green as it lands there.
   const dotColor = (i: number) => (colorFor ? colorFor(points[i].y) : color);
   // ~one x label per 150 viewBox units (6 at the default width): always first and last.
-  const maxLabels = Math.max(3, Math.round(width / 150));
+  const maxLabels = Math.max(3, Math.round(vw / 150));
   const step = Math.max(1, Math.ceil(points.length / maxLabels));
   const showX = (i: number) => i === 0 || i === points.length - 1 || i % step === 0;
   // The end points sit on the plot edges, where a centred label would run half its width
@@ -74,10 +100,14 @@ export function ProgressLineChart({
     return i === points.length - 1 ? 'end' : 'middle';
   };
 
-  return (
+  const svg = (
     <svg
-      viewBox={`0 0 ${width} ${height}`}
-      style={{ width: '100%', height: 'auto', display: 'block' }}
+      viewBox={`0 0 ${vw} ${vh}`}
+      style={
+        fit
+          ? { width: '100%', height: '100%', display: 'block' }
+          : { width: '100%', height: 'auto', display: 'block' }
+      }
       role="img"
       aria-label={ariaLabel}
     >
@@ -85,7 +115,7 @@ export function ProgressLineChart({
         <g key={v}>
           <line
             x1={PAD.left}
-            x2={width - PAD.right}
+            x2={vw - PAD.right}
             y1={py(v)}
             y2={py(v)}
             stroke="var(--line, #ECE0CF)"
@@ -160,7 +190,7 @@ export function ProgressLineChart({
           <text
             key={`x${i}`}
             x={px(i)}
-            y={height - 8}
+            y={vh - 8}
             textAnchor={anchorX(i)}
             fontSize={11}
             fill="var(--text-muted)"
@@ -170,6 +200,15 @@ export function ProgressLineChart({
         ) : null,
       )}
     </svg>
+  );
+
+  if (!fit) return svg;
+  // `height` is the floor here, so the stacked layout — where nothing else bounds the card —
+  // still gets a usable chart instead of a box collapsed to zero.
+  return (
+    <div ref={setBoxEl} style={{ flex: 1, minHeight: height, width: '100%' }}>
+      {svg}
+    </div>
   );
 }
 

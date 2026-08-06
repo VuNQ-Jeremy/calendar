@@ -1099,11 +1099,14 @@ body {
   flex: 1;
   min-height: 0;
 }
+/* fills the row and lays its chart out as the flexible part, which is what gives the
+   `fit` chart a height to measure — the drawing then sizes to the card rather than
+   growing out of it */
 .assess-split__chart {
   flex: 1;
   min-width: 0;
-  /* natural height, pinned to the top — without this the card stretches to the row */
-  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
 }
 .assess-split__list {
   width: 400px;
@@ -1125,9 +1128,9 @@ body {
   .assess-split {
     flex-direction: column;
   }
+  /* stacked: the card takes its content height, so the chart falls back to its floor */
   .assess-split__chart {
     flex: none;
-    align-self: stretch;
   }
   .assess-split__list {
     width: auto;
