@@ -123,6 +123,14 @@ export const assessmentTypes = sqliteTable('assessment_types', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
+/** The rating rows on the monthly report — a managed enum like assessment_types. */
+export const remarkCriteria = sqliteTable('remark_criteria', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
 export const materials = sqliteTable('materials', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
@@ -267,10 +275,8 @@ export const monthlyRemarks = sqliteTable(
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
     month: text('month').notNull(),
-    attitude: integer('attitude').notNull(),
-    homework: integer('homework').notNull(),
-    participation: integer('participation').notNull(),
-    progress: integer('progress').notNull(),
+    /** JSON object: remark_criteria id -> 1-5 rating. */
+    ratings: text('ratings').notNull().default('{}'),
     comment: text('comment'),
   },
   (t) => [

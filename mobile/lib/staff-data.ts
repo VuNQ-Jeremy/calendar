@@ -76,6 +76,11 @@ export function useRemarks() {
   return useQuery({ queryKey: qk.remarks, queryFn: api.remarks.list });
 }
 
+/** The rating rows the monthly remark form shows — config-managed, so fetched, not hardcoded. */
+export function useRemarkCriteria() {
+  return useQuery({ queryKey: qk.remarkCriteria, queryFn: api.remarkCriteria.list });
+}
+
 export function useFeedback() {
   return useQuery({ queryKey: qk.feedback, queryFn: api.feedback.list });
 }

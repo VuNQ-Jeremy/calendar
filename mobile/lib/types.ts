@@ -12,6 +12,7 @@ import type {
   MaterialInput,
   MonthlyRemarkInput,
   ParentInput,
+  RemarkCriterionInput,
   ScoreRecordInput,
   StaffInput,
   StudentInput,
@@ -51,6 +52,7 @@ export type ScoreRecordRow = Row<z.infer<typeof ScoreRecordInput>>;
 export type BehaviorRecordRow = Row<z.infer<typeof BehaviorRecordInput>>;
 export type MonthlyRemarkRow = Row<z.infer<typeof MonthlyRemarkInput>>;
 export type AssessmentTypeRow = Row<z.infer<typeof AssessmentTypeInput>>;
+export type RemarkCriterionRow = Row<z.infer<typeof RemarkCriterionInput>>;
 /**
  * The flashcard rows are spelled out rather than derived from their input schemas, because the
  * server adds fields the schemas don't have and `slug` really is nullable — see the exported

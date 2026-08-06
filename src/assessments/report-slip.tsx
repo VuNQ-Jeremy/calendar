@@ -23,12 +23,12 @@ type ReportLoaderData = {
   classNames: string[];
   remark: {
     id: string;
-    attitude: number;
-    homework: number;
-    participation: number;
-    progress: number;
+    /** remark_criteria id -> 1-5 rating. */
+    ratings: Record<string, number>;
     comment: string | null;
   } | null;
+  /** Active criteria in sort order — the rating rows the slip prints. */
+  criteria: { id: string; name: string }[];
   stats: {
     average: number | null;
     testCount: number;
@@ -176,13 +176,6 @@ const SLIP_CSS = `
 .rslip__sign-rule { margin-top: 42px; border-bottom: 1.5px dotted #A9C3AF; }
 `;
 
-const RATING_KEYS = [
-  ['attitude', 'remark_attitude'],
-  ['homework', 'remark_homework'],
-  ['participation', 'remark_participation'],
-  ['progress', 'remark_progress'],
-] as const;
-
 type CopyState = { kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' };
 
 /** Five stars, `value` of them filled. Inline SVG so nothing is fetched during rasterization. */
@@ -205,7 +198,8 @@ function Stars({ value }: { value: number }) {
 }
 
 export function ReportSlipView() {
-  const { month, student, classNames, remark, stats } = useLoaderData() as ReportLoaderData;
+  const { month, student, classNames, remark, criteria, stats } =
+    useLoaderData() as ReportLoaderData;
   const { t, lang } = useLang();
   const stageRef = React.useRef<HTMLDivElement>(null);
   const [copy, setCopy] = React.useState<CopyState>({ kind: 'idle' });
@@ -311,10 +305,10 @@ export function ReportSlipView() {
               </div>
 
               <p className="rslip__section-title">{t('remark_title')}</p>
-              {RATING_KEYS.map(([field, tk]) => (
-                <div key={field} className="rslip__rating">
-                  <span className="rslip__rating-label">{t(tk)}</span>
-                  <Stars value={remark?.[field] ?? 0} />
+              {criteria.map((c) => (
+                <div key={c.id} className="rslip__rating">
+                  <span className="rslip__rating-label">{c.name}</span>
+                  <Stars value={remark?.ratings[c.id] ?? 0} />
                 </div>
               ))}
 

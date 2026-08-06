@@ -24,6 +24,7 @@ import type {
   ProfileInput,
   PushRegisterInput,
   RedeemInviteInput,
+  RemarkCriterionInput,
   ScoreRecordInput,
   SessionPreviewInput,
   StaffInput,
@@ -55,6 +56,7 @@ import type {
   MySessionsResponse,
   ParentRow,
   ProfileRow,
+  RemarkCriterionRow,
   ScoreRecordRow,
   SessionPreviewPayload,
   SessionPreviewRow,
@@ -132,6 +134,10 @@ export const behavior = collection<BehaviorRecordRow, BehaviorRecordInput>(
 );
 /** POST upserts on (studentId, month) — one report per student per month. */
 export const remarks = collection<MonthlyRemarkRow, MonthlyRemarkInput>('/api/assessments/remarks');
+/** The monthly report's rating rows. Writes are admin (config screen, web); reads are staff. */
+export const remarkCriteria = collection<RemarkCriterionRow, RemarkCriterionInput>(
+  '/api/remark-criteria',
+);
 export const assessmentTypes = collection<AssessmentTypeRow, AssessmentTypeInput>(
   '/api/assessment-types',
 );

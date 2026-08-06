@@ -35,11 +35,17 @@ import {
   useBehavior,
   useClasses,
   useInvalidateStaff,
+  useRemarkCriteria,
   useRemarks,
   useScores,
   useStudents,
 } from '~/lib/staff-data';
-import type { BehaviorRecordRow, MonthlyRemarkRow, ScoreRecordRow } from '~/lib/types';
+import type {
+  BehaviorRecordRow,
+  MonthlyRemarkRow,
+  RemarkCriterionRow,
+  ScoreRecordRow,
+} from '~/lib/types';
 import { useTheme } from '~/theme';
 import { Body, Button, Card, Heading, IconButton, Input, Muted, Screen, Tabs, Tag } from '~/ui';
 
@@ -61,19 +67,9 @@ import { Body, Button, Card, Heading, IconButton, Input, Muted, Screen, Tabs, Ta
 
 const INCIDENT_WEEKS = 12;
 
-/** The four things a monthly report rates, in the order the form shows them. */
-const RATING_FIELDS = [
-  ['attitude', 'remark_attitude'],
-  ['homework', 'remark_homework'],
-  ['participation', 'remark_participation'],
-  ['progress', 'remark_progress'],
-] as const;
-
 type RemarkDraft = {
-  attitude: number;
-  homework: number;
-  participation: number;
-  progress: number;
+  /** remark_criteria id -> 1-5. */
+  ratings: Record<string, number>;
   comment: string;
 };
 
@@ -107,6 +103,7 @@ export default function Assessments() {
   const { data: scores, isRefetching: rs } = useScores();
   const { data: behavior, isRefetching: rb } = useBehavior();
   const { data: remarks } = useRemarks();
+  const { data: remarkCriteria } = useRemarkCriteria();
 
   const [tab, setTab] = React.useState<'scores' | 'behavior' | 'report'>('scores');
   const [classFilter, setClassFilter] = React.useState('all');
@@ -193,10 +190,7 @@ export default function Assessments() {
       const input = {
         studentId: activeId,
         month: reportMonth,
-        attitude: d.attitude,
-        homework: d.homework,
-        participation: d.participation,
-        progress: d.progress,
+        ratings: d.ratings,
         comment: d.comment.trim() || null,
       };
       return existingRemark
@@ -566,6 +560,7 @@ export default function Assessments() {
             </Card>
             <RemarkFormCard
               key={`${activeId}:${reportMonth}`}
+              criteria={(remarkCriteria ?? []).filter((c) => c.active)}
               existing={existingRemark}
               month={reportMonth}
               busy={saveRemark.isPending}
@@ -622,12 +617,15 @@ function RatingStars({ value, onChange }: { value: number; onChange: (v: number)
  * phone browser would land on the login wall.
  */
 function RemarkFormCard({
+  criteria,
   existing,
   month,
   busy,
   onSave,
   onDelete,
 }: {
+  /** Active criteria, in sort order — what the form shows and what "complete" means. */
+  criteria: RemarkCriterionRow[];
   existing: MonthlyRemarkRow | undefined;
   month: string;
   busy: boolean;
@@ -637,14 +635,12 @@ function RemarkFormCard({
   const th = useTheme();
   const { t, lang } = useLang();
   const [draft, setDraft] = React.useState<RemarkDraft>({
-    attitude: existing?.attitude ?? 0,
-    homework: existing?.homework ?? 0,
-    participation: existing?.participation ?? 0,
-    progress: existing?.progress ?? 0,
+    ratings: existing?.ratings ?? {},
     comment: existing?.comment ?? '',
   });
   // Every rating is required: a report with a blank row reads as an oversight, not a judgement.
-  const complete = RATING_FIELDS.every(([f]) => draft[f] >= 1);
+  // With no criteria configured there is nothing to save — the empty state below explains why.
+  const complete = criteria.length > 0 && criteria.every((c) => (draft.ratings[c.id] ?? 0) >= 1);
 
   return (
     <Card style={{ gap: th.spacing[3] }}>
@@ -657,15 +653,19 @@ function RemarkFormCard({
         ) : null}
       </View>
 
-      {RATING_FIELDS.map(([field, tk]) => (
-        <View
-          key={field}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}
-        >
-          <Body style={{ flex: 1 }}>{t(tk)}</Body>
-          <RatingStars value={draft[field]} onChange={(v) => setDraft({ ...draft, [field]: v })} />
-        </View>
-      ))}
+      {criteria.length ? (
+        criteria.map((c) => (
+          <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
+            <Body style={{ flex: 1 }}>{c.name}</Body>
+            <RatingStars
+              value={draft.ratings[c.id] ?? 0}
+              onChange={(v) => setDraft({ ...draft, ratings: { ...draft.ratings, [c.id]: v } })}
+            />
+          </View>
+        ))
+      ) : (
+        <Muted>{t('remark_no_criteria')}</Muted>
+      )}
 
       <Input
         label={t('remark_comment')}

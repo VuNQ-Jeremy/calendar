@@ -42,6 +42,7 @@ export const qk = {
   scores: ['assessments', 'scores'] as const,
   behavior: ['assessments', 'behavior'] as const,
   remarks: ['assessments', 'remarks'] as const,
+  remarkCriteria: ['assessments', 'remarkCriteria'] as const,
   materials: ['materials'] as const,
   /** The calendar theme (`--cal-bg` and friends), from /api/settings/theme. */
   calTheme: ['calTheme'] as const,

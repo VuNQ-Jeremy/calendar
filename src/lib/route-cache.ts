@@ -96,9 +96,10 @@ export type { MutationDomain };
  *   classes:     classes, students, materials
  *   people:      students, staff, parents, invites, classesLite, flashcardStats
  *   materials:   materials, classesLite
- *   assessments: scores, behavior, students, classesLite, assessment types
+ *   assessments: scores, behavior, remarks, students, classesLite, assessment types,
+ *                remark criteria
  *   flashcards:  topics (list) / topic+words+results+mastery (slug pages)
- *   config:      assessment types, uiPrefs, grade levels
+ *   config:      assessment types, remark criteria, uiPrefs, grade levels
  *   feedback:    feedback
  *   questions:   questions, grade levels, per-question test-usage counts
  *   tests:       tests, their questions, attempts, classes, students, assessment types, grade levels

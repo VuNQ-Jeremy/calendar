@@ -137,22 +137,23 @@ export type RemarkRow = {
   id: string;
   studentId: string;
   month: string;
-  attitude: number;
-  homework: number;
-  participation: number;
-  progress: number;
+  /** remark_criteria id -> 1-5 rating. Keys for deleted criteria may linger; no screen renders them. */
+  ratings: Record<string, number>;
   comment: string | null;
 };
 
 function mapRemark(r: typeof monthlyRemarks.$inferSelect): RemarkRow {
+  let ratings: Record<string, number> = {};
+  try {
+    ratings = JSON.parse(r.ratings);
+  } catch {
+    // A corrupt row renders as an unrated report rather than a 500.
+  }
   return {
     id: r.id,
     studentId: r.studentId,
     month: r.month,
-    attitude: r.attitude,
-    homework: r.homework,
-    participation: r.participation,
-    progress: r.progress,
+    ratings,
     comment: r.comment,
   };
 }
@@ -182,10 +183,7 @@ export async function getRemark(
  */
 export async function createRemark(db: Db, input: MonthlyRemarkInput): Promise<RemarkRow> {
   const fields = {
-    attitude: input.attitude,
-    homework: input.homework,
-    participation: input.participation,
-    progress: input.progress,
+    ratings: JSON.stringify(input.ratings),
     comment: input.comment ?? null,
   };
   await db
@@ -206,10 +204,7 @@ export async function updateRemark(
   const set: Partial<typeof monthlyRemarks.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
   if (patch.month !== undefined) set.month = patch.month;
-  if (patch.attitude !== undefined) set.attitude = patch.attitude;
-  if (patch.homework !== undefined) set.homework = patch.homework;
-  if (patch.participation !== undefined) set.participation = patch.participation;
-  if (patch.progress !== undefined) set.progress = patch.progress;
+  if (patch.ratings !== undefined) set.ratings = JSON.stringify(patch.ratings);
   if (patch.comment !== undefined) set.comment = patch.comment ?? null;
   if (Object.keys(set).length) {
     await db.update(monthlyRemarks).set(set).where(eq(monthlyRemarks.id, id));

@@ -12,6 +12,7 @@ import * as assessSvc from '../../server/services/assessments';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
 import * as typesSvc from '../../server/services/assessment-types';
+import * as criteriaSvc from '../../server/services/remark-criteria';
 import {
   ScoreRecordInput,
   BehaviorRecordInput,
@@ -25,15 +26,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [scores, behavior, remarks, students, classes, types] = await Promise.all([
+  const [scores, behavior, remarks, students, classes, types, criteria] = await Promise.all([
     assessSvc.listScores(db),
     assessSvc.listBehavior(db),
     assessSvc.listRemarks(db),
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
     typesSvc.list(db),
+    criteriaSvc.list(db),
   ]);
-  return { scores, behavior, remarks, students, classes, types };
+  return { scores, behavior, remarks, students, classes, types, criteria };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {

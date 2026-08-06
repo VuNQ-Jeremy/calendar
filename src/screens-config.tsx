@@ -8,6 +8,7 @@ import { ATTENDANCE_STATUSES, ATTENDANCE_META } from '../shared/logic/assess.js'
 import type { AttendanceStatusId } from '../shared/logic/assess.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
+import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 import type { TuitionSettings } from '../server/services/tuition.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
@@ -16,6 +17,7 @@ const { Card, Button, IconButton, Badge, Checkbox } = DS;
 
 interface ConfigLoaderData {
   types: AssessmentTypeRow[];
+  remarkCriteria: RemarkCriterionRow[];
   gradeLevels: GradeLevelRow[];
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
   tuitionSettings: TuitionSettings;
@@ -297,8 +299,211 @@ function GradeLevelsSection({ levels }: { levels: GradeLevelRow[] }) {
   );
 }
 
+/**
+ * The monthly report's rating rows (remark criteria). Structural clone of GradeLevelsSection —
+ * its own component for the same reason: drag/modal state that must not collide with the cards
+ * around it.
+ */
+function RemarkCriteriaSection({ criteria }: { criteria: RemarkCriterionRow[] }) {
+  const fetcher = useFetcher<{ error?: string }>();
+  const { t } = useLang();
+  const [confirm, confirmNode] = useConfirm();
+  const [modal, setModal] = React.useState<TypeDraft | null>(null);
+
+  const submit = (fd: FormData) => fetcher.submit(fd, { action: '/config', method: 'post' });
+
+  const openAdd = () => setModal({ name: '' });
+  const openRename = (c: RemarkCriterionRow) => setModal({ id: c.id, name: c.name });
+
+  const save = (draft: TypeDraft) => {
+    const fd = new FormData();
+    fd.set('intent', draft.id ? 'update-criterion' : 'create-criterion');
+    if (draft.id) fd.set('id', draft.id);
+    fd.set('name', draft.name.trim());
+    submit(fd);
+    setModal(null);
+  };
+
+  const toggleActive = async (c: RemarkCriterionRow) => {
+    if (c.active) {
+      const ok = await confirm({
+        title: t('cfg_deactivate'),
+        message: c.name + '?',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'update-criterion');
+    fd.set('id', c.id);
+    fd.set('active', String(!c.active));
+    submit(fd);
+  };
+
+  const del = async (c: RemarkCriterionRow) => {
+    const ok = await confirm({
+      title: t('cfg_delete_q'),
+      message: t('cfg_delete_msg', { name: c.name }),
+      confirmLabel: t('delete'),
+      danger: true,
+    });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'delete-criterion');
+    fd.set('id', c.id);
+    submit(fd);
+  };
+
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [localOrder, setLocalOrder] = React.useState<string[] | null>(null);
+  const reorderPending = React.useRef(false);
+
+  const ordered = React.useMemo(() => {
+    if (!localOrder) return criteria;
+    const byId = new Map(criteria.map((c) => [c.id, c]));
+    const rows = localOrder.flatMap((id) => byId.get(id) ?? []);
+    for (const c of criteria) if (!localOrder.includes(c.id)) rows.push(c);
+    return rows;
+  }, [criteria, localOrder]);
+
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && reorderPending.current) {
+      reorderPending.current = false;
+      setLocalOrder(null);
+    }
+  }, [fetcher.state]);
+
+  const previewMove = (srcId: string, overId: string) => {
+    setLocalOrder((prev) => {
+      const cur = prev ?? criteria.map((c) => c.id);
+      const from = cur.indexOf(srcId);
+      const to = cur.indexOf(overId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = cur.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, srcId);
+      return next;
+    });
+  };
+
+  const commitOrder = () => {
+    setDragId(null);
+    if (!localOrder) return;
+    if (localOrder.join('|') === criteria.map((c) => c.id).join('|')) {
+      setLocalOrder(null);
+      return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'reorder-criteria');
+    fd.set('ids', JSON.stringify(localOrder));
+    submit(fd);
+    reorderPending.current = true;
+  };
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div
+        className="m-row"
+        style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_criteria_title')}</h2>
+          <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+            {t('cfg_criteria_sub')}
+          </p>
+        </div>
+        <Button variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openAdd}>
+          {t('cfg_add_criterion')}
+        </Button>
+      </div>
+      {ordered.length ? (
+        <div className="m-stack">
+          {ordered.map((c) => (
+            <div
+              key={c.id}
+              className={'lrow' + (dragId === c.id ? ' is-dragging' : '')}
+              draggable
+              onDragStart={(e) => {
+                setDragId(c.id);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', c.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragId && dragId !== c.id) previewMove(dragId, c.id);
+              }}
+              onDrop={(e) => e.preventDefault()}
+              onDragEnd={commitOrder}
+            >
+              <span className="lrow__grip" title={t('cfg_drag_reorder')} aria-hidden="true">
+                <MIcon name="grip" size={16} />
+              </span>
+              <div className="m-row" style={{ flex: 1, gap: 10 }}>
+                <span className="lrow__title">{c.name}</span>
+                <Badge color={c.active ? 'green' : 'neutral'}>
+                  {c.active ? t('cfg_active') : t('cfg_inactive')}
+                </Badge>
+              </div>
+              <div className="lrow__actions">
+                <IconButton label={t('cfg_rename')} size="sm" onClick={() => openRename(c)}>
+                  <MIcon name="edit" size={16} />
+                </IconButton>
+                <Button variant="secondary" size="sm" onClick={() => toggleActive(c)}>
+                  {c.active ? t('cfg_deactivate') : t('cfg_activate')}
+                </Button>
+                <IconButton label={t('delete')} size="sm" onClick={() => del(c)}>
+                  <MIcon name="trash" size={16} />
+                </IconButton>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty icon="settings" title={t('cfg_no_criteria')} />
+      )}
+
+      {modal && (
+        <Modal
+          open
+          onClose={() => setModal(null)}
+          title={modal.id ? t('cfg_rename') : t('cfg_add_criterion')}
+          width={420}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(null)}>
+                {t('cancel')}
+              </Button>
+              <Button variant="primary" disabled={!modal.name.trim()} onClick={() => save(modal)}>
+                {t('save')}
+              </Button>
+            </>
+          }
+        >
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('cfg_criterion_name_ph')}</label>
+            <input
+              className="mochi-input"
+              autoFocus
+              value={modal.name}
+              onChange={(e) => setModal((m) => (m ? { ...m, name: e.target.value } : m))}
+            />
+          </div>
+          {fetcher.data?.error && (
+            <div className="m-muted" style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)' }}>
+              {fetcher.data.error}
+            </div>
+          )}
+        </Modal>
+      )}
+      {confirmNode}
+    </Card>
+  );
+}
+
 function SystemConfigScreen() {
-  const { types, gradeLevels, uiPrefs, tuitionSettings } = useLoaderData() as ConfigLoaderData;
+  const { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings } =
+    useLoaderData() as ConfigLoaderData;
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
   const [confirm, confirmNode] = useConfirm();
@@ -480,6 +685,8 @@ function SystemConfigScreen() {
           <Empty icon="settings" title={t('cfg_no_types')} />
         )}
       </Card>
+
+      <RemarkCriteriaSection criteria={remarkCriteria} />
 
       <GradeLevelsSection levels={gradeLevels} />
 

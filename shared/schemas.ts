@@ -758,16 +758,45 @@ export type TuitionAdjustmentInput = z.infer<typeof TuitionAdjustmentInput>;
 
 /* ── Monthly remark (nhận xét tháng): one report per (student, month) ───────────────────── */
 
+/** What a monthly report rates — a managed enum, config-managed like AssessmentTypeInput. */
+export const RemarkCriterionInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  active: FormBool.default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type RemarkCriterionInput = z.infer<typeof RemarkCriterionInput>;
+
+export const RemarkCriteriaReorder = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type RemarkCriteriaReorder = z.infer<typeof RemarkCriteriaReorder>;
+
 /** 1-5, the teacher's tap on one of five stars. Coerced: the web form posts FormData strings. */
 const RemarkRating = z.coerce.number().int().min(1).max(5);
+
+/**
+ * remark_criteria id -> rating. The web form posts FormData, where the object arrives as a JSON
+ * string — hence the preprocess. A parse failure falls through as the raw string, which the
+ * record schema then rejects with a real issue instead of a thrown SyntaxError.
+ */
+const RemarkRatings = z.preprocess(
+  (v) => {
+    if (typeof v !== 'string') return v;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return v;
+    }
+  },
+  z.record(z.string().min(1), RemarkRating).refine((r) => Object.keys(r).length > 0, {
+    message: 'at least one rating required',
+  }),
+);
 
 export const MonthlyRemarkInput = z.object({
   studentId: z.string().min(1),
   month: TuitionMonth,
-  attitude: RemarkRating,
-  homework: RemarkRating,
-  participation: RemarkRating,
-  progress: RemarkRating,
+  ratings: RemarkRatings,
   comment: z.string().max(4000).nullish(),
 });
 export type MonthlyRemarkInput = z.infer<typeof MonthlyRemarkInput>;

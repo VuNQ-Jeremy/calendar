@@ -9,6 +9,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
+import * as criteriaSvc from '../../server/services/remark-criteria';
 import * as levelsSvc from '../../server/services/grade-levels';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import * as tuitionSvc from '../../server/services/tuition';
@@ -17,6 +18,8 @@ import {
   AssessmentTypeReorder,
   GradeLevelInput,
   GradeLevelReorder,
+  RemarkCriterionInput,
+  RemarkCriteriaReorder,
   TuitionSettingsInput,
   UiPrefsInput,
   parsePatch,
@@ -28,13 +31,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
-  const [types, gradeLevels, uiPrefs, tuitionSettings] = await Promise.all([
+  const [types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings] = await Promise.all([
     typesSvc.list(db),
+    criteriaSvc.list(db),
     levelsSvc.list(db),
     uiPrefsSvc.getUiPrefs(db),
     tuitionSvc.getTuitionSettings(db),
   ]);
-  return { types, gradeLevels, uiPrefs, tuitionSettings };
+  return { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -97,6 +101,46 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
       await typesSvc.reorder(db, parsed.data.ids);
+      return { ok: true };
+    }
+
+    if (intent === 'create-criterion') {
+      const parsed = RemarkCriterionInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await criteriaSvc.create(db, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'update-criterion') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      const parsed = parsePatch(RemarkCriterionInput, raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await criteriaSvc.update(db, id, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'delete-criterion') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      await criteriaSvc.remove(db, id);
+      return { ok: true };
+    }
+
+    if (intent === 'reorder-criteria') {
+      let ids: unknown;
+      try {
+        ids = JSON.parse((formData.get('ids') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid ids' }, { status: 400 });
+      }
+      const parsed = RemarkCriteriaReorder.safeParse({ ids });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await criteriaSvc.reorder(db, parsed.data.ids);
       return { ok: true };
     }
 

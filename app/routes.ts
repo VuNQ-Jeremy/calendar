@@ -43,6 +43,8 @@ export default [
   route('api/assessments/remarks/:id?', 'routes/api.assessments.remarks.tsx'),
   route('api/assessment-types/reorder', 'routes/api.assessment-types.reorder.tsx'),
   route('api/assessment-types/:id?', 'routes/api.assessment-types.tsx'),
+  route('api/remark-criteria/reorder', 'routes/api.remark-criteria.reorder.tsx'),
+  route('api/remark-criteria/:id?', 'routes/api.remark-criteria.tsx'),
   route('api/grade-levels/reorder', 'routes/api.grade-levels.reorder.tsx'),
   route('api/grade-levels/:id?', 'routes/api.grade-levels.tsx'),
   route('api/attendance', 'routes/api.attendance.tsx'),

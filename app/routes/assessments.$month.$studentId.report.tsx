@@ -4,6 +4,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as assessSvc from '../../server/services/assessments';
+import * as criteriaSvc from '../../server/services/remark-criteria';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
 import { TuitionMonth } from '../../shared/schemas';
@@ -33,12 +34,13 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const month = parsedMonth.data;
   const studentId = params.studentId!;
 
-  const [students, classes, remark, scores, behavior] = await Promise.all([
+  const [students, classes, remark, scores, behavior, criteria] = await Promise.all([
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
     assessSvc.getRemark(db, studentId, month),
     assessSvc.listScores(db),
     assessSvc.listBehavior(db),
+    criteriaSvc.list(db),
   ]);
 
   const student = students.find((s) => s.id === studentId);
@@ -62,6 +64,9 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     // null when the teacher has not written one yet — the slip renders empty stars and says so,
     // rather than 404ing on a URL that is perfectly valid.
     remark,
+    // Active criteria only: a retired criterion disappears from newly printed slips even for
+    // months whose stored ratings still carry its key.
+    criteria: criteria.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name })),
     stats: {
       average: scoreStats(monthScores).average,
       testCount: monthScores.length,

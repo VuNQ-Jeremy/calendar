@@ -21,6 +21,7 @@ import type { ScoreRow, BehaviorRow, RemarkRow } from '../server/services/assess
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
+import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 
 const { Card, Button, IconButton, Tabs } = DS;
 
@@ -33,21 +34,12 @@ interface AssessLoaderData {
   students: StudentRow[];
   classes: ClassLite[];
   types: AssessmentTypeRow[];
+  criteria: RemarkCriterionRow[];
 }
 
-/** The four things a monthly report rates, in the order the form shows them. */
-const RATING_FIELDS = [
-  ['attitude', 'remark_attitude'],
-  ['homework', 'remark_homework'],
-  ['participation', 'remark_participation'],
-  ['progress', 'remark_progress'],
-] as const;
-
 type RemarkDraft = {
-  attitude: number;
-  homework: number;
-  participation: number;
-  progress: number;
+  /** remark_criteria id -> 1-5. */
+  ratings: Record<string, number>;
   comment: string;
 };
 
@@ -137,11 +129,14 @@ function RatingStars({ value, onChange }: { value: number; onChange: (v: number)
  * wrong (a half-typed comment surviving onto another student's report).
  */
 function RemarkForm({
+  criteria,
   existing,
   printHref,
   onSave,
   onDelete,
 }: {
+  /** Active criteria, in sort order — what the form shows and what "complete" means. */
+  criteria: RemarkCriterionRow[];
   existing: RemarkRow | undefined;
   printHref: string;
   onSave: (d: RemarkDraft) => void;
@@ -149,14 +144,12 @@ function RemarkForm({
 }) {
   const { t } = useLang();
   const [draft, setDraft] = React.useState<RemarkDraft>({
-    attitude: existing?.attitude ?? 0,
-    homework: existing?.homework ?? 0,
-    participation: existing?.participation ?? 0,
-    progress: existing?.progress ?? 0,
+    ratings: existing?.ratings ?? {},
     comment: existing?.comment ?? '',
   });
   // Every rating is required: a report with a blank row reads as an oversight, not a judgement.
-  const complete = RATING_FIELDS.every(([f]) => draft[f] >= 1);
+  // With no criteria configured there is nothing to save — the empty state below explains why.
+  const complete = criteria.length > 0 && criteria.every((c) => (draft.ratings[c.id] ?? 0) >= 1);
 
   return (
     <Card style={{ padding: 18 }}>
@@ -175,15 +168,21 @@ function RemarkForm({
       </div>
 
       <div className="m-stack" style={{ gap: 8 }}>
-        {RATING_FIELDS.map(([field, tk]) => (
-          <div key={field} className="m-spread">
-            <span>{t(tk)}</span>
-            <RatingStars
-              value={draft[field]}
-              onChange={(v) => setDraft({ ...draft, [field]: v })}
-            />
-          </div>
-        ))}
+        {criteria.length ? (
+          criteria.map((c) => (
+            <div key={c.id} className="m-spread">
+              <span>{c.name}</span>
+              <RatingStars
+                value={draft.ratings[c.id] ?? 0}
+                onChange={(v) => setDraft({ ...draft, ratings: { ...draft.ratings, [c.id]: v } })}
+              />
+            </div>
+          ))
+        ) : (
+          <p className="m-muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+            {t('remark_no_criteria')}
+          </p>
+        )}
       </div>
 
       <div className="mochi-field" style={{ marginTop: 14 }}>
@@ -217,7 +216,7 @@ function TypeBadge({ type, label }: { type: BehaviorTypeId; label: string }) {
 }
 
 function AssessmentsScreen() {
-  const { scores, behavior, remarks, students, classes, types } =
+  const { scores, behavior, remarks, students, classes, types, criteria } =
     useLoaderData() as AssessLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
@@ -381,7 +380,7 @@ function AssessmentsScreen() {
     if (existingRemark) fd.set('id', existingRemark.id);
     fd.set('studentId', activeStudentId);
     fd.set('month', reportMonth);
-    for (const [field] of RATING_FIELDS) fd.set(field, String(d[field]));
+    fd.set('ratings', JSON.stringify(d.ratings));
     if (d.comment.trim()) fd.set('comment', d.comment.trim());
     fetcher.submit(fd, { action: '/assessments', method: 'post' });
   };
@@ -741,6 +740,7 @@ function AssessmentsScreen() {
           </Card>
           <RemarkForm
             key={`${activeStudentId}:${reportMonth}`}
+            criteria={criteria.filter((c) => c.active)}
             existing={existingRemark}
             printHref={`/assessments/${reportMonth}/${activeStudentId}/report`}
             onSave={saveRemark}

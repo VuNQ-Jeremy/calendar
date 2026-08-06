@@ -118,8 +118,9 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/materials/:id?` | staff | `MaterialInput` — **multipart**, see below |
 | `/api/assessments/scores/:id?` | staff | `ScoreRecordInput` |
 | `/api/assessments/behavior/:id?` | staff | `BehaviorRecordInput` |
-| `/api/assessments/remarks/:id?` | staff | `MonthlyRemarkInput` — one row per (student, month); POST upserts on that pair |
+| `/api/assessments/remarks/:id?` | staff | `MonthlyRemarkInput` — one row per (student, month); POST upserts on that pair. `ratings` is `{ criterionId: 1-5 }`, keyed by `/api/remark-criteria` ids |
 | `/api/assessment-types/:id?` | **admin** | `AssessmentTypeInput` |
+| `/api/remark-criteria/:id?` | **admin** (GET: staff) | `RemarkCriterionInput` — the monthly report's rating rows; teachers read them to render the remark form |
 | `/api/grade-levels/:id?` | **admin** | `GradeLevelInput` — managed Khối 6..9 list, categorizes questions and tests |
 | `/api/feedback/:id?` | staff | `FeedbackInput` |
 
@@ -132,6 +133,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | Method | Path | Level | Notes |
 |---|---|---|---|
 | POST | `/api/assessment-types/reorder` | admin | `{ ids: string[] }` |
+| POST | `/api/remark-criteria/reorder` | admin | `{ ids: string[] }` |
 | POST | `/api/grade-levels/reorder` | admin | `{ ids: string[] }` |
 | GET POST | `/api/attendance` | staff | GET needs `?eventId=&date=`. POST is delete-then-insert: omitting a student unmarks them |
 | GET POST | `/api/event-materials` | staff | GET `?eventId=` for one event, omit for the whole join table |
