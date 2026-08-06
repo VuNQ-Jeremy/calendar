@@ -214,12 +214,16 @@ test.describe('navigation latency', () => {
     await page.click('button.preset.preset--sb.is-active');
     await page.waitForLoadState('networkidle');
 
-    // A /config mutation stales assessments + tests (shared assessment types)...
+    // A /config mutation stales assessments + tests (shared assessment types).
+    // 1 refresh is the norm; the mutation's own live-hub broadcast can echo a
+    // second legitimate one into the window, so tolerate 1-2 — the "no
+    // retry-storm" property has its own dedicated test above.
     const staled = await recordDataRequests(page, () => clickNav(page, '/assessments'), 2500);
+    const refreshes = scopedTo(staled, 'assessments').length;
     expect(
-      scopedTo(staled, 'assessments').length,
-      `expected a background refresh of /assessments, saw: ${staled.join(', ') || '(none)'}`,
-    ).toBe(1);
+      refreshes >= 1 && refreshes <= 2,
+      `expected 1-2 background refreshes of /assessments, saw ${refreshes}: ${staled.join(', ') || '(none)'}`,
+    ).toBe(true);
 
     // ...and nothing else. /people has no dependency on ui-prefs, so it must
     // still be served from cache.
