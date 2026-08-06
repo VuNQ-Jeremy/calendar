@@ -406,6 +406,23 @@ body {
     animation: none;
     opacity: 0.6;
   }
+  /* Garden (see the garden section at the end of this file). */
+  .garden-pop,
+  .garden-sway,
+  .garden-harvest,
+  .garden-confetti span {
+    animation: none;
+  }
+  .garden-wilted {
+    animation: none;
+    /* The droop is decoration and goes; the desaturation is how a wilted plant is told apart
+       from a healthy one, so it has to stay. */
+    filter: saturate(0.55) brightness(0.97);
+  }
+  /* Confetti is pure celebration — with nothing falling it is just ten dots in a corner. */
+  .garden-confetti {
+    display: none;
+  }
 }
 /* Bottom group: language switch, then the feedback CTA, then the profile footer.
    margin-top:auto on the language bar pins the whole group to the bottom. */
@@ -2391,4 +2408,144 @@ html[data-scrollbar='ghost'] *:hover::-webkit-scrollbar-thumb:active {
   }
   /* ghost: hover-reveal isn't possible with standard properties;
      Firefox falls back to the slim style (already covered by the base rule). */
+}
+
+/* ============================================================ GARDEN (vocabulary plants) ============================================================ */
+/* Motion for garden/plant-art.tsx. The drawing already states the stage on its own, so all of
+   this is decoration on top of a readable picture — with one exception, .garden-wilted's filter,
+   which is state and therefore survives prefers-reduced-motion (see the reduce block ~line 399).
+   Declaration order matters: .garden-wilted comes last so a wilted plant that gains a stage
+   settles into its droop instead of popping. */
+
+/* one-shot pop when the plant gains a stage */
+.garden-pop {
+  animation: garden-stage-up var(--dur-slow) var(--ease-soft);
+}
+@keyframes garden-stage-up {
+  0% {
+    transform: scale(0.82);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* healthy idle: rocks from the pot, not from the middle of the plant */
+.garden-sway {
+  transform-origin: 50% 100%;
+  animation: garden-sway 4.5s var(--ease-in-out) infinite alternate;
+}
+@keyframes garden-sway {
+  from {
+    transform: rotate(-2deg);
+  }
+  to {
+    transform: rotate(2deg);
+  }
+}
+
+/* wilted: settles once into a lean and stays there (forwards), and desaturates for good */
+.garden-wilted {
+  transform-origin: 50% 100%;
+  filter: saturate(0.55) brightness(0.97);
+  animation: garden-droop var(--dur-slow) var(--ease-out) forwards;
+}
+@keyframes garden-droop {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(4deg);
+  }
+}
+
+/* harvest: the fruit falls out of the frame */
+.garden-harvest {
+  animation: garden-fruit-drop var(--dur-slow) var(--ease-out) forwards;
+}
+@keyframes garden-fruit-drop {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+
+/* Confetti: ~10 empty <span>s in a positioned container. Colours come from the markup so a
+   celebration can match whatever it is celebrating; only geometry and timing live here. */
+.garden-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+}
+.garden-confetti span {
+  position: absolute;
+  top: -14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--brand);
+  animation: garden-confetti-fall 1.7s var(--ease-out) forwards;
+}
+@keyframes garden-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(190px) rotate(240deg);
+    opacity: 0;
+  }
+}
+/* Staggered so it reads as a burst rather than a curtain. */
+.garden-confetti span:nth-child(1) {
+  left: 6%;
+  animation-delay: 0ms;
+}
+.garden-confetti span:nth-child(2) {
+  left: 17%;
+  animation-delay: 140ms;
+}
+.garden-confetti span:nth-child(3) {
+  left: 28%;
+  animation-delay: 60ms;
+}
+.garden-confetti span:nth-child(4) {
+  left: 39%;
+  animation-delay: 260ms;
+}
+.garden-confetti span:nth-child(5) {
+  left: 48%;
+  animation-delay: 30ms;
+}
+.garden-confetti span:nth-child(6) {
+  left: 57%;
+  animation-delay: 320ms;
+}
+.garden-confetti span:nth-child(7) {
+  left: 68%;
+  animation-delay: 110ms;
+}
+.garden-confetti span:nth-child(8) {
+  left: 77%;
+  animation-delay: 400ms;
+}
+.garden-confetti span:nth-child(9) {
+  left: 86%;
+  animation-delay: 200ms;
+}
+.garden-confetti span:nth-child(10) {
+  left: 94%;
+  animation-delay: 470ms;
 }

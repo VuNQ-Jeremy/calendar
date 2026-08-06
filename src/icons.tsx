@@ -71,6 +71,17 @@ const M_ICONS = {
     '<path d="M6.5 2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M18 17.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1.5"/>',
   volume:
     '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>',
+  // Garden: nav entry, the study streak, a teacher's watering, and the fruit counters.
+  sprout:
+    '<path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2"/>',
+  flame:
+    '<path d="M12 2c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3 1-3 .5 2 2 2.5 2 2.5 0-3.5-1-6.5 2-9.5"/>',
+  // A drop, not a watering can. The can needs a body, a handle and a spout to read as one, and at
+  // 16px in a card corner all three collapsed into a smudge; a drop says "water" on its own.
+  droplet:
+    '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  fruit:
+    '<circle cx="12" cy="14" r="6"/><path d="M12 8c0-2 1-3.5 3-4"/><path d="M12 8c-.6-1.2-1.8-1.8-3.5-1.8"/>',
 } as const;
 
 export type IconName = keyof typeof M_ICONS;

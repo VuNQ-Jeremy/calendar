@@ -17,6 +17,8 @@ export default [
   route('assessments/:month/:studentId/report', 'routes/assessments.$month.$studentId.report.tsx'),
   // "Nhắc buổi sau" share card — an image for the class Zalo group, same reasoning again.
   route('session-preview/:eventId/:date/print', 'routes/session-preview.$eventId.$date.print.tsx'),
+  // Class-garden share card — another image for the class group chat, so another document.
+  route('garden/:classId/share', 'routes/garden.$classId.share.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
 
@@ -59,11 +61,21 @@ export default [
   route('api/flashcards/generate-topic', 'routes/api.flashcards.generate-topic.tsx'),
   route('api/flashcards/results', 'routes/api.flashcards.results.tsx'),
   route('api/flashcards/stats', 'routes/api.flashcards.stats.tsx'),
+  // Garden. `progress` is NOT under `assignments/`: that route's `:id?` would swallow the
+  // literal segment, the same trap as `api/flashcards/generate-topic` above.
+  route('api/garden/plant', 'routes/api.garden.plant.tsx'),
+  route('api/garden/harvest', 'routes/api.garden.harvest.tsx'),
+  route('api/garden/class/:id', 'routes/api.garden.class.$id.tsx'),
+  route('api/garden/water', 'routes/api.garden.water.tsx'),
+  route('api/garden/assignments/:id?', 'routes/api.garden.assignments.$id.tsx'),
+  route('api/garden/progress/:id', 'routes/api.garden.progress.$id.tsx'),
+  route('api/garden/snapshots', 'routes/api.garden.snapshots.tsx'),
   route('api/feedback/:id?', 'routes/api.feedback.tsx'),
   route('api/profile', 'routes/api.profile.tsx'),
   route('api/settings/theme', 'routes/api.settings.theme.tsx'),
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
   route('api/settings/notifications', 'routes/api.settings.notifications.tsx'),
+  route('api/settings/garden', 'routes/api.settings.garden.tsx'),
   route('api/push/register', 'routes/api.push.register.tsx'),
   route('api/push/unregister', 'routes/api.push.unregister.tsx'),
   route('api/push/run', 'routes/api.push.run.tsx'),
@@ -92,6 +104,9 @@ export default [
     route('rankings/:month?', 'routes/rankings.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),
     route('vocabulary/:slug', 'routes/flashcards.$slug.tsx'),
+    // Class id (and the album's month) in the PATH for the same cache reason as tuition below.
+    route('garden/:classId?', 'routes/garden.tsx'),
+    route('garden/:classId/album/:month', 'routes/garden.$classId.album.$month.tsx'),
     // The month sits in the PATH, not a query string: cacheKeyForPath only sees pathnames, so a
     // `?month=` would give every month the same cache entry.
     route('tuition/:month?', 'routes/tuition.tsx'),

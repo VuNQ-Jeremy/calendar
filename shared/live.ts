@@ -27,6 +27,7 @@ export const MUTATION_DOMAINS = [
   'attendance',
   'tuition',
   'previews',
+  'garden',
 ] as const;
 
 export type MutationDomain = (typeof MUTATION_DOMAINS)[number];
@@ -38,17 +39,25 @@ export function isMutationDomain(value: unknown): value is MutationDomain {
 /**
  * Domains a student socket is allowed to receive; staff receive everything.
  *
- * Students only have /vocabulary and /my-tests, which react to exactly these
- * two domains. The rest describe staff-only tables — a bare domain name leaks
- * little, but there is no reason to tell a student session that someone is
+ * Students only have /vocabulary, /my-tests and /garden, which react to exactly
+ * these three domains. The rest describe staff-only tables — a bare domain name
+ * leaks little, but there is no reason to tell a student session that someone is
  * editing the people list.
+ *
+ * 'garden' is here because the class garden is a shared screen: a classmate
+ * finishing a round, or a teacher watering someone, should show up on an open
+ * page without a reload.
  *
  * 'previews' is deliberately absent even though students see session previews:
  * their schedule screens are uncached and refetch on focus (server-clock
  * sensitive, see server/services/session-preview.ts), so there is nothing for
  * an invalidation message to invalidate.
  */
-export const STUDENT_LIVE_DOMAINS: ReadonlySet<MutationDomain> = new Set(['flashcards', 'tests']);
+export const STUDENT_LIVE_DOMAINS: ReadonlySet<MutationDomain> = new Set([
+  'flashcards',
+  'tests',
+  'garden',
+]);
 
 export type LiveInvalidateMsg = {
   type: 'invalidate';

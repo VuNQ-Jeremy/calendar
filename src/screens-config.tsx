@@ -12,6 +12,7 @@ import type { GradeLevelRow } from '../server/services/grade-levels.js';
 import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 import type { TuitionSettings } from '../server/services/tuition.js';
 import type { RankingWeights } from '../shared/logic/rankings.js';
+import type { GardenSettings } from '../shared/logic/garden.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
 
@@ -24,6 +25,7 @@ interface ConfigLoaderData {
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
   tuitionSettings: TuitionSettings;
   rankingWeights: RankingWeights;
+  gardenSettings: GardenSettings;
 }
 
 // Mock colors are hardcoded hex (same values as the DS tokens) so each card
@@ -191,6 +193,73 @@ function RankingWeightsSection({ weights }: { weights: RankingWeights }) {
       >
         {t('cfg_rank_hint')}
       </p>
+    </Card>
+  );
+}
+
+/**
+ * How fast the vocabulary garden grows, and how long a plant survives being ignored.
+ *
+ * Held in a draft until Save, like the weights card above: these four numbers are read together by
+ * every plant in the school, and saving a half-typed field would visibly re-time everyone's garden.
+ * The bounds match `GardenSettingsInput` — the form refuses what the schema would reject anyway.
+ */
+function GardenSettingsSection({ settings }: { settings: GardenSettings }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [draft, setDraft] = React.useState<Record<string, string> | null>(null);
+
+  const FIELDS = [
+    { key: 'freeMinScorePct', tk: 'cfg_garden_min_score', min: 0, max: 100, step: 5 },
+    { key: 'wiltAfterDays', tk: 'cfg_garden_wilt', min: 1, max: 30, step: 1 },
+    { key: 'dropAfterDays', tk: 'cfg_garden_drop', min: 1, max: 60, step: 1 },
+    { key: 'dailyGrowthCap', tk: 'cfg_garden_cap', min: 1, max: 5, step: 1 },
+  ] as const;
+
+  const current =
+    draft ??
+    Object.fromEntries(FIELDS.map((f) => [f.key, String(settings[f.key])]));
+  const valid = FIELDS.every((f) => {
+    const n = Number(current[f.key]);
+    return current[f.key] !== '' && Number.isInteger(n) && n >= f.min && n <= f.max;
+  });
+
+  const save = () => {
+    if (!valid) return;
+    const fd = new FormData();
+    fd.set('intent', 'garden-settings');
+    for (const f of FIELDS) fd.set(f.key, String(Number(current[f.key])));
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+    setDraft(null);
+  };
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_garden')}</h2>
+        <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('cfg_garden_sub')}
+        </p>
+      </div>
+      <div className="m-row" style={{ gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {FIELDS.map((f) => (
+          <div key={f.key} className="mochi-field" style={{ marginBottom: 0 }}>
+            <label className="mochi-field__label">{t(f.tk)}</label>
+            <input
+              type="number"
+              min={f.min}
+              max={f.max}
+              step={f.step}
+              className="mochi-input"
+              value={current[f.key]}
+              onChange={(e) => setDraft({ ...current, [f.key]: e.target.value })}
+            />
+          </div>
+        ))}
+        <Button onClick={save} disabled={!valid || !draft}>
+          {t('save')}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -599,8 +668,15 @@ function RemarkCriteriaSection({ criteria }: { criteria: RemarkCriterionRow[] })
 }
 
 function SystemConfigScreen() {
-  const { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings, rankingWeights } =
-    useLoaderData() as ConfigLoaderData;
+  const {
+    types,
+    remarkCriteria,
+    gradeLevels,
+    uiPrefs,
+    tuitionSettings,
+    rankingWeights,
+    gardenSettings,
+  } = useLoaderData() as ConfigLoaderData;
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
   const [confirm, confirmNode] = useConfirm();
@@ -790,6 +866,8 @@ function SystemConfigScreen() {
       <TuitionSettingsSection settings={tuitionSettings} />
 
       <RankingWeightsSection weights={rankingWeights} />
+
+      <GardenSettingsSection settings={gardenSettings} />
 
       <Card style={{ padding: 18, marginTop: 16 }}>
         <div style={{ marginBottom: 12 }}>

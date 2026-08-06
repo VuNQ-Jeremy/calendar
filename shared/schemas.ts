@@ -423,6 +423,11 @@ export const NotifPrefsInput = z.object({
   studyNudges: FormBool.default(false),
   /** The evening "here is tomorrow's session" push. On by default: it is the point of previews. */
   previewEvening: FormBool.default(true),
+  /**
+   * "Your plant is wilting" / "it drops a stage tomorrow". On by default: a garden nobody is told
+   * about is a garden that quietly dies, which is the opposite of the point.
+   */
+  gardenAlerts: FormBool.default(true),
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;
 
@@ -747,6 +752,52 @@ export const RankingWeightsInput = z
     message: 'Weights must add up to 100',
   });
 export type RankingWeightsInput = z.infer<typeof RankingWeightsInput>;
+
+/* ── Vườn cây từ vựng (garden) ──────────────────────────────────────────────────────────── */
+
+/**
+ * How fast the garden grows and how fast it wilts. The bounds are the same ones
+ * `GARDEN_SETTINGS_BOUNDS` documents in shared/logic/garden.ts; a plant that wilted in 0 days or
+ * grew 20 stages an evening would make the whole metaphor meaningless.
+ */
+export const GardenSettingsInput = z.object({
+  freeMinScorePct: z.coerce.number().int().min(0).max(100),
+  wiltAfterDays: z.coerce.number().int().min(1).max(30),
+  dropAfterDays: z.coerce.number().int().min(1).max(60),
+  dailyGrowthCap: z.coerce.number().int().min(1).max(5),
+});
+export type GardenSettingsInput = z.infer<typeof GardenSettingsInput>;
+
+/** Giao bài từ vựng: one topic, one class, one deadline. */
+export const VocabAssignmentInput = z.object({
+  classId: z.string().min(1),
+  topicId: z.string().min(1),
+  requiredCount: z.coerce.number().int().min(1).max(20),
+  minScorePct: z.coerce.number().int().min(0).max(100),
+  /** ICT YYYY-MM-DD, inclusive. */
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().max(200).nullish(),
+});
+export type VocabAssignmentInput = z.infer<typeof VocabAssignmentInput>;
+
+/** What a student may change about their own plant. An empty name means "unnamed", not "". */
+export const PlantPatchInput = z.object({
+  plantName: z
+    .string()
+    .trim()
+    .max(30)
+    .nullish()
+    .or(z.literal('').transform(() => null)),
+  potColor: z.string().min(1).max(20).optional(),
+});
+export type PlantPatchInput = z.infer<typeof PlantPatchInput>;
+
+/** A teacher's watering. The note is the audit trail's own words. */
+export const WaterInput = z.object({
+  studentId: z.string().min(1),
+  note: z.string().max(200).nullish(),
+});
+export type WaterInput = z.infer<typeof WaterInput>;
 
 export const TuitionPaymentInput = z.object({
   paidVnd: VndAmount,

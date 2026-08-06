@@ -67,6 +67,8 @@ const NAV = [
       },
       { id: 'rankings', path: '/rankings', tk: 'nav_rankings', icon: 'grad', staffOnly: true },
       { id: 'vocabulary', path: '/vocabulary', tk: 'nav_flashcards', icon: 'cards' },
+      // Both roles: the class garden is the shared surface, not a staff report.
+      { id: 'garden', path: '/garden', tk: 'nav_garden', icon: 'sprout' },
       // Students only — staff manage tests from /tests instead.
       {
         id: 'my-tests',

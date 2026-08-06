@@ -9,6 +9,8 @@ import {
   staff,
 } from '../db/schema';
 import type { Db } from '../db/index';
+import * as gardenSvc from './garden';
+import type { GardenOutcome } from './garden';
 import type {
   FlashcardTopicInput,
   FlashcardWordInput,
@@ -313,31 +315,36 @@ export async function listTopicResults(
 }
 
 /**
- * Record one completed game.
+ * Record one completed game, and report what it did to the student's plant.
  *
- * @returns true if a row was written, false if `clientId` had already been recorded.
+ * `recorded` is false when `clientId` had already been seen. Idempotency matters because the
+ * mobile offline outbox retries blindly: a flush that succeeds server-side but drops on the way
+ * back would otherwise double-count the score. The whole batch is skipped on replay, not just the
+ * result row — re-applying the mastery increments would inflate the student's stats even if the
+ * result row were deduped.
  *
- * Idempotency matters because the mobile offline outbox retries blindly: a flush that
- * succeeds server-side but drops on the way back would otherwise double-count the score.
- * The whole batch is skipped on replay, not just the result row — re-applying the mastery
- * increments would inflate the student's stats even if the result row were deduped.
+ * The garden grows in a SECOND batch, after this one has committed, keyed on the result id. Two
+ * reasons: a garden hiccup must never roll back a score the student actually earned, and on the
+ * minutes after a deploy where the migration has not landed yet the plant is simply absent rather
+ * than the vocabulary screen being broken.
  */
-export async function recordResult(
+export async function recordResultWithGarden(
   db: Db,
   player: { kind: 'staff' | 'student'; id: string },
   input: FlashcardResultInput,
-): Promise<boolean> {
+): Promise<{ recorded: boolean; garden: GardenOutcome | null }> {
   if (input.clientId) {
     const existing = await db.query.flashcardResults.findFirst({
       where: eq(flashcardResults.clientId, input.clientId),
     });
-    if (existing) return false;
+    if (existing) return { recorded: false, garden: null };
   }
   const now = new Date().toISOString();
   const isStudent = player.kind === 'student';
+  const resultId = crypto.randomUUID();
   const ops: BatchItem<'sqlite'>[] = [
     db.insert(flashcardResults).values({
-      id: crypto.randomUUID(),
+      id: resultId,
       studentId: isStudent ? player.id : null,
       staffId: isStudent ? null : player.id,
       topicId: input.topicId,
@@ -376,15 +383,34 @@ export async function recordResult(
   } catch (err) {
     // Two concurrent flushes of the same clientId race past the check above; the unique
     // partial index then rejects the loser. That is the desired outcome, not an error.
-    if (input.clientId && String(err).includes('UNIQUE')) return false;
+    if (input.clientId && String(err).includes('UNIQUE')) return { recorded: false, garden: null };
     throw err;
   }
-  return true;
+
+  let garden: GardenOutcome | null = null;
+  if (isStudent) {
+    try {
+      garden = await gardenSvc.onStudentResult(db, player.id, input, resultId, now);
+    } catch (err) {
+      // Never let the garden take a recorded score down with it.
+      console.error('garden: growth skipped for result', resultId, err);
+    }
+  }
+  return { recorded: true, garden };
+}
+
+/** The plain "did it record?" form. Staff plays never touch the garden, exactly as with mastery. */
+export async function recordResult(
+  db: Db,
+  player: { kind: 'staff' | 'student'; id: string },
+  input: FlashcardResultInput,
+): Promise<boolean> {
+  return (await recordResultWithGarden(db, player, input)).recorded;
 }
 
 /**
- * Flush a batch of offline results. Each is independently idempotent.
- * @returns how many were newly recorded (the rest were already known).
+ * Flush a batch of offline results. Each is independently idempotent, and each grows the garden on
+ * its own — the count is all the phone asks for, so the return shape stays a number.
  */
 export async function recordResults(
   db: Db,

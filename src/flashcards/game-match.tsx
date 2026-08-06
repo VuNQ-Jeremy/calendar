@@ -3,6 +3,7 @@ import { DS } from '../ds/index.js';
 import { useLang } from '../lib/i18n.jsx';
 import { shuffle, fmtDuration, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
+import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 
 const { Button: FBtn } = DS;
 
@@ -20,7 +21,7 @@ function buildTiles(words: GameProps['words']) {
   return { pairs, tiles: shuffle(tiles) };
 }
 
-export function MatchGame({ words, onExit, onFinish }: GameProps) {
+export function MatchGame({ words, onExit, onFinish, garden }: GameProps & GardenRoundProps) {
   const { t } = useLang();
   const [{ pairs, tiles }, setBoard] = React.useState(() => buildTiles(words));
   const [selected, setSelected] = React.useState<Tile | null>(null);
@@ -97,13 +98,16 @@ export function MatchGame({ words, onExit, onFinish }: GameProps) {
     const perfect = pairs.filter((p) => !mistakes.get(p.id)).length;
     return (
       <div style={endWrap}>
-        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800 }}>{t('fc_round_done')}</div>
+        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800 }}>
+          {t('fc_round_done')}
+        </div>
         <div style={{ fontSize: 'var(--text-lg, 22px)', color: 'var(--text-strong)' }}>
           {t('fc_time')}: {fmtDuration(elapsed)}
         </div>
         <div style={{ color: 'var(--text-muted)' }}>
           {t('fc_pairs_matched')}: {perfect}/{pairs.length}
         </div>
+        <RoundGardenNote garden={garden} />
         <div className="m-row" style={{ gap: 10 }}>
           <FBtn variant="primary" onClick={replay}>
             {t('fc_play_again')}

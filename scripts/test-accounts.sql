@@ -20,6 +20,14 @@ DELETE FROM test_attempts;
 DELETE FROM test_questions;
 DELETE FROM tests;
 DELETE FROM questions;
+-- Garden: events/assignments/snapshots/trees would cascade off students and classes, but
+-- garden_plants and class_trees survive a topic wipe, and a leaked plant would make the
+-- next run's "empty pot" assertions fail. Sweep all five explicitly.
+DELETE FROM garden_events;
+DELETE FROM garden_snapshots;
+DELETE FROM vocab_assignments;
+DELETE FROM class_trees;
+DELETE FROM garden_plants;
 DELETE FROM flashcard_mastery;
 DELETE FROM flashcard_results;
 DELETE FROM flashcard_words;

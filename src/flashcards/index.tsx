@@ -7,14 +7,30 @@ import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import { fetchGeneratedWords } from '../lib/generate-client.js';
 import { VOCAB_TOPICS, vocabTopicLabel } from '../../shared/logic/vocab-topics';
+import { formatDmy } from '../../shared/logic/tuition.js';
+import { GardenWidget } from '../garden/garden-widget.jsx';
+import { AssignModal } from '../garden/assign-modal.jsx';
+import type {
+  AssignmentBlock,
+  StaffGardenData,
+  StudentGardenData,
+} from '../garden/garden-widget.jsx';
 import type { FlashcardTopicRow } from '../../server/services/flashcards.js';
+import type { VocabAssignmentRow } from '../../server/services/garden.js';
 
-const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput } = DS;
+const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput, Badge, Tag } = DS;
+
+/** Overdue ink. A literal palette hex, so it reads the same in both themes. */
+const DANGER = colorOf('rose');
 
 type LoaderData = {
   topics: FlashcardTopicRow[];
   kind: 'staff' | 'student';
   canUseAi: boolean;
+  /** Student only, and null while the garden's tables are missing — see the route's loadGarden. */
+  garden: StudentGardenData | null;
+  /** Staff only, same null contract. */
+  gardenStaff: StaffGardenData | null;
 };
 
 interface TopicDraft {
@@ -25,14 +41,32 @@ interface TopicDraft {
 }
 
 export function FlashcardTopicsScreen() {
-  const { topics, kind, canUseAi } = useLoaderData() as LoaderData;
+  const { topics, kind, canUseAi, garden, gardenStaff } = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useLang();
   const [modal, setModal] = React.useState<TopicDraft | null>(null);
   const [generating, setGenerating] = React.useState(false);
+  const [assigning, setAssigning] = React.useState<{
+    topic: { id: string; name: string };
+    existing: VocabAssignmentRow | null;
+  } | null>(null);
+  const [tracking, setTracking] = React.useState<AssignmentBlock | null>(null);
   const [confirm, confirmNode] = useConfirm();
   const isStaff = kind === 'staff';
+
+  // Open = the deadline has not passed in ICT. `today` comes from the loader, never from the
+  // device clock, so a teacher abroad sees the school's day.
+  const openByTopic = React.useMemo(() => {
+    const map = new Map<string, VocabAssignmentRow[]>();
+    for (const b of gardenStaff?.assignments ?? []) {
+      if (b.assignment.deadline < (gardenStaff?.today ?? '')) continue;
+      const list = map.get(b.assignment.topicId) ?? [];
+      list.push(b.assignment);
+      map.set(b.assignment.topicId, list);
+    }
+    return map;
+  }, [gardenStaff]);
 
   // The generate-topic action replies with the new topic, so land the teacher straight in it.
   const generated = fetcher.data as { topic?: { slug: string | null; id: string } } | undefined;
@@ -54,9 +88,15 @@ export function FlashcardTopicsScreen() {
   };
 
   const del = async (topic: FlashcardTopicRow) => {
+    // Assignments cascade away with their topic, so the classes that would lose homework are
+    // named in the confirm rather than discovered afterwards.
+    const assigned = openByTopic.get(topic.id) ?? [];
+    const classes = [...new Set(assigned.map((a) => a.className))].join(', ');
     const ok = await confirm({
       title: t('fc_delete_topic'),
-      message: t('fc_delete_topic_msg', { name: topic.name }),
+      message:
+        t('fc_delete_topic_msg', { name: topic.name }) +
+        (classes ? ' ' + t('garden_topic_assigned_warning', { classes }) : ''),
       confirmLabel: t('delete'),
       danger: true,
     });
@@ -64,6 +104,25 @@ export function FlashcardTopicsScreen() {
     const fd = new FormData();
     fd.set('intent', 'delete');
     fd.set('id', topic.id);
+    fetcher.submit(fd, { method: 'post' });
+  };
+
+  const submitAssign = (fd: FormData) => {
+    fetcher.submit(fd, { method: 'post' });
+    setAssigning(null);
+  };
+
+  const delAssignment = async (block: AssignmentBlock) => {
+    const ok = await confirm({
+      title: t('garden_delete_assignment'),
+      message: t('garden_delete_assignment_msg', { topic: block.assignment.topicName }),
+      confirmLabel: t('delete'),
+      danger: true,
+    });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'assign-delete');
+    fd.set('id', block.assignment.id);
     fetcher.submit(fd, { method: 'post' });
   };
 
@@ -95,6 +154,7 @@ export function FlashcardTopicsScreen() {
           )
         }
       />
+      {!isStaff && <GardenWidget data={garden} />}
       {topics.length ? (
         <div
           style={{
@@ -137,22 +197,50 @@ export function FlashcardTopicsScreen() {
                     {topic.name}
                   </div>
                   {isStaff && (
-                    <div className="lrow__actions" onClick={(e) => e.stopPropagation()}>
+                    // The card itself navigates on click, so every BUTTON here stops the event —
+                    // opening a dialog must not also leave the page. Deliberately per-button and
+                    // not on this container: with three icons the container's own dead space sits
+                    // right under the middle of the card, and swallowing clicks there turned "click
+                    // the card to open the topic" into a coin flip.
+                    <div className="lrow__actions">
+                      {gardenStaff && (
+                        <FIB
+                          label={t('garden_assign')}
+                          size="sm"
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            setAssigning({
+                              topic: { id: topic.id, name: topic.name },
+                              existing: null,
+                            });
+                          }}
+                        >
+                          <MIcon name="sprout" size={16} />
+                        </FIB>
+                      )}
                       <FIB
                         label={t('edit')}
                         size="sm"
-                        onClick={() =>
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
                           setModal({
                             id: topic.id,
                             name: topic.name,
                             description: topic.description ?? '',
                             color: topic.color,
-                          })
-                        }
+                          });
+                        }}
                       >
                         <MIcon name="edit" size={16} />
                       </FIB>
-                      <FIB label={t('delete')} size="sm" onClick={() => del(topic)}>
+                      <FIB
+                        label={t('delete')}
+                        size="sm"
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          del(topic);
+                        }}
+                      >
                         <MIcon name="trash" size={16} />
                       </FIB>
                     </div>
@@ -175,6 +263,15 @@ export function FlashcardTopicsScreen() {
                 <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
                   {t('fc_word_count', { n: topic.wordCount })}
                 </div>
+                {(openByTopic.get(topic.id) ?? []).length > 0 && (
+                  <span style={{ alignSelf: 'flex-start' }}>
+                    <Tag color="orange" dot={false}>
+                      {t('garden_assigned_tag', {
+                        date: formatDmy(openByTopic.get(topic.id)![0].deadline),
+                      })}
+                    </Tag>
+                  </span>
+                )}
               </FC>
             );
           })}
@@ -189,6 +286,20 @@ export function FlashcardTopicsScreen() {
         </FC>
       )}
 
+      {isStaff && gardenStaff && (
+        <AssignmentsPanel
+          data={gardenStaff}
+          onEdit={(block) =>
+            setAssigning({
+              topic: { id: block.assignment.topicId, name: block.assignment.topicName },
+              existing: block.assignment,
+            })
+          }
+          onTrack={setTracking}
+          onDelete={delAssignment}
+        />
+      )}
+
       {modal && (
         <TopicModal
           draft={modal}
@@ -198,8 +309,168 @@ export function FlashcardTopicsScreen() {
         />
       )}
       {generating && <GenerateTopicModal fetcher={fetcher} onClose={() => setGenerating(false)} />}
+      {assigning && gardenStaff && (
+        <AssignModal
+          topic={assigning.topic}
+          classes={gardenStaff.classes}
+          existing={assigning.existing}
+          today={gardenStaff.today}
+          onClose={() => setAssigning(null)}
+          onSubmit={submitAssign}
+        />
+      )}
+      {tracking && gardenStaff && (
+        <TrackModal block={tracking} today={gardenStaff.today} onClose={() => setTracking(null)} />
+      )}
       {confirmNode}
     </div>
+  );
+}
+
+// ---- Assignments (staff) ----
+
+function AssignmentsPanel({
+  data,
+  onEdit,
+  onTrack,
+  onDelete,
+}: {
+  data: StaffGardenData;
+  onEdit: (block: AssignmentBlock) => void;
+  onTrack: (block: AssignmentBlock) => void;
+  onDelete: (block: AssignmentBlock) => void;
+}) {
+  const { t } = useLang();
+  return (
+    <FC style={{ marginTop: 16 }}>
+      <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-md)' }}>
+        {t('garden_assignments')}
+      </div>
+      {data.assignments.length ? (
+        <div className="m-stack" style={{ gap: 8, marginTop: 10 }}>
+          {data.assignments.map((block) => {
+            const a = block.assignment;
+            const overdue = a.deadline < data.today;
+            const done = block.rows.filter((r) => r.done >= a.requiredCount).length;
+            return (
+              <div key={a.id} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="m-row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>
+                      {a.topicName}
+                    </span>
+                    <Tag color="blue" dot={false}>
+                      {a.className}
+                    </Tag>
+                  </div>
+                  <div
+                    className="m-row"
+                    style={{ gap: 12, flexWrap: 'wrap', fontSize: 'var(--text-sm)', marginTop: 2 }}
+                  >
+                    <span style={{ color: overdue ? DANGER.ink : 'var(--text-muted)' }}>
+                      {t('garden_deadline')}: {formatDmy(a.deadline)}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {t('garden_required')}: {a.requiredCount}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {done}/{block.rows.length}
+                    </span>
+                  </div>
+                </div>
+                <div className="lrow__actions">
+                  <FBtn variant="soft" size="sm" onClick={() => onTrack(block)}>
+                    {t('garden_track')}
+                  </FBtn>
+                  <FIB label={t('edit')} size="sm" onClick={() => onEdit(block)}>
+                    <MIcon name="edit" size={16} />
+                  </FIB>
+                  <FIB label={t('delete')} size="sm" onClick={() => onDelete(block)}>
+                    <MIcon name="trash" size={16} />
+                  </FIB>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Empty icon="clipboard" title={t('garden_no_assignments')} />
+      )}
+    </FC>
+  );
+}
+
+function TrackModal({
+  block,
+  today,
+  onClose,
+}: {
+  block: AssignmentBlock;
+  today: string;
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  const required = block.assignment.requiredCount;
+  const overdue = block.assignment.deadline < today;
+  // Behind first: this table is the accountability view, so the students who still owe rounds are
+  // the ones the teacher should not have to scroll for.
+  const rows = React.useMemo(
+    () =>
+      [...block.rows].sort(
+        (a, b) =>
+          (a.done >= required ? 1 : 0) - (b.done >= required ? 1 : 0) ||
+          a.done - b.done ||
+          a.name.localeCompare(b.name),
+      ),
+    [block.rows, required],
+  );
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={t('garden_track_title', { topic: block.assignment.topicName })}
+      subtitle={`${block.assignment.className} · ${t('garden_deadline')}: ${formatDmy(block.assignment.deadline)}`}
+      width={480}
+      footer={
+        <FBtn variant="secondary" onClick={onClose}>
+          {t('close')}
+        </FBtn>
+      }
+    >
+      {rows.length ? (
+        <div className="m-stack" style={{ gap: 6 }}>
+          {rows.map((r) => {
+            const done = r.done >= required;
+            return (
+              <div key={r.studentId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 999,
+                    background: colorOf(r.color).base,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ flex: 1, minWidth: 0, color: 'var(--text-strong)' }}>{r.name}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                  {r.done}/{required}
+                </span>
+                <Badge color={done ? 'success' : overdue ? 'danger' : 'neutral'}>
+                  {done
+                    ? t('garden_status_done')
+                    : overdue
+                      ? t('garden_status_late')
+                      : t('garden_status_pending')}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Empty icon="users" title={t('garden_no_assignments')} />
+      )}
+    </Modal>
   );
 }
 

@@ -668,3 +668,133 @@ export const tuitionStudentMonths = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.month, t.studentId] })],
 );
+
+/**
+ * Vườn cây từ vựng (vocabulary garden) — see migrations/0026_garden.sql.
+ *
+ * One plant per student, school-wide. Wilt and stage drops are DERIVED from elapsed time by
+ * `settlePlant` in shared/logic/garden.ts, fenced by `dropsTaken`. Readers settle in memory and
+ * never write, which is what keeps the student's own view, the class garden and the notification
+ * sweep from ever disagreeing.
+ */
+export const gardenPlants = sqliteTable('garden_plants', {
+  studentId: text('student_id')
+    .primaryKey()
+    .references(() => students.id, { onDelete: 'cascade' }),
+  plantName: text('plant_name'),
+  /** App palette key, same vocabulary as students.color. */
+  potColor: text('pot_color').notNull().default('orange'),
+  /** 0..5 — 0 empty/dead, 1 seed, 2 sprout, 3 young plant, 4 purple flower, 5 fruit. */
+  stage: integer('stage').notNull(),
+  isDead: integer('is_dead', { mode: 'boolean' }).notNull().default(false),
+  /** ICT day the wilt began, or null. Also set by a missed-deadline penalty. */
+  wiltedSince: text('wilted_since'),
+  /** ICT day of the last care event — the wilt/drop clock counts from here. */
+  lastCareDay: text('last_care_day').notNull(),
+  /** ICT day `growCount` refers to, so the daily cap resets at ICT midnight. */
+  growDay: text('grow_day'),
+  growCount: integer('grow_count').notNull().default(0),
+  /** Stages already lost to neglect since the last care event. The decay fence. */
+  dropsTaken: integer('drops_taken').notNull().default(0),
+  /** Lifetime harvested fruit; never decreases. Per-month counts come from harvest events. */
+  fruitsTotal: integer('fruits_total').notNull().default(0),
+  streakDays: integer('streak_days').notNull().default(0),
+  streakLastDay: text('streak_last_day'),
+  /** UTC ISO. Doubles as the optimistic-concurrency token. */
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * Append-only audit log, and the qualifying-play ledger: a `grow` row exists for EVERY qualifying
+ * play, with `stageAfter === stageBefore` when the daily cap was hit.
+ *
+ * `refId` is a natural idempotency key per type (result id / fruit ordinal / due ICT day /
+ * assignment id). A UNIQUE violation aborts the whole `db.batch`, which is how concurrent plays,
+ * double-tapped harvests and re-run deadline sweeps are all made harmless. The index is partial
+ * (`WHERE ref_id IS NOT NULL`) so plain watering, which has no natural key, can repeat — Drizzle
+ * cannot express that, so it lives in the migration only.
+ */
+export const gardenEvents = sqliteTable(
+  'garden_events',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** grow | revive | harvest | wilt | decay_drop | die | deadline_drop | water */
+    type: text('type').notNull(),
+    stageBefore: integer('stage_before').notNull(),
+    stageAfter: integer('stage_after').notNull(),
+    /** The ICT day the event is attributed to — for decay, the day the drop was due. */
+    vnDay: text('vn_day').notNull(),
+    refId: text('ref_id'),
+    actorStaffId: text('actor_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('idx_garden_events_student').on(t.studentId, t.createdAt),
+    index('idx_garden_events_day').on(t.vnDay, t.type),
+  ],
+);
+
+/**
+ * Teacher-assigned vocabulary: one topic, one class, one deadline. Progress is deliberately NOT
+ * stored — it is counted from `flashcardResults` at read time, so editing the threshold re-reads
+ * honestly instead of leaving a stale tally behind.
+ */
+export const vocabAssignments = sqliteTable(
+  'vocab_assignments',
+  {
+    id: text('id').primaryKey(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    topicId: text('topic_id')
+      .notNull()
+      .references(() => flashcardTopics.id, { onDelete: 'cascade' }),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    requiredCount: integer('required_count').notNull().default(3),
+    minScorePct: integer('min_score_pct').notNull().default(70),
+    /** ICT YYYY-MM-DD, inclusive. */
+    deadline: text('deadline').notNull(),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('idx_vocab_assignments_class').on(t.classId, t.deadline),
+    index('idx_vocab_assignments_topic').on(t.topicId),
+  ],
+);
+
+/**
+ * Cooperative class tree: +1 point per qualifying play by any member, counted even when that
+ * student's own plant was capped, already at fruit, or dead. Effort always counts for the class.
+ */
+export const classTrees = sqliteTable('class_trees', {
+  classId: text('class_id')
+    .primaryKey()
+    .references(() => classes.id, { onDelete: 'cascade' }),
+  points: integer('points').notNull().default(0),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * Month-end album. Names and plant state are denormalized into `data` because the album is a
+ * keepsake: it must survive students leaving, classes being renamed, and plants growing on.
+ */
+export const gardenSnapshots = sqliteTable(
+  'garden_snapshots',
+  {
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    /** YYYY-MM */
+    month: text('month').notNull(),
+    className: text('class_name').notNull(),
+    /** JSON — see shared/logic/garden.ts `GardenSnapshotData`. */
+    data: text('data').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.classId, t.month] })],
+);

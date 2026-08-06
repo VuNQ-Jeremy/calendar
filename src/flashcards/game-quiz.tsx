@@ -5,6 +5,7 @@ import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
 import { shuffle, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
+import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 
 const { Button: FBtn, IconButton: FIB } = DS;
@@ -21,7 +22,12 @@ function buildQuestions(words: FlashcardWordRow[]): Question[] {
     const answer = meaningOf(w);
     const distractors = shuffle(
       Array.from(
-        new Set(words.filter((o) => o.id !== w.id).map(meaningOf).filter((m) => m !== answer)),
+        new Set(
+          words
+            .filter((o) => o.id !== w.id)
+            .map(meaningOf)
+            .filter((m) => m !== answer),
+        ),
       ),
     ).slice(0, 3);
     return {
@@ -33,7 +39,7 @@ function buildQuestions(words: FlashcardWordRow[]): Question[] {
   });
 }
 
-export function QuizGame({ words, onExit, onFinish }: GameProps) {
+export function QuizGame({ words, onExit, onFinish, garden }: GameProps & GardenRoundProps) {
   const { t } = useLang();
   const [questions, setQuestions] = React.useState<Question[]>(() => buildQuestions(words));
   const [idx, setIdx] = React.useState(0);
@@ -73,10 +79,13 @@ export function QuizGame({ words, onExit, onFinish }: GameProps) {
   if (done) {
     return (
       <div style={endWrap}>
-        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800 }}>{t('fc_round_done')}</div>
+        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800 }}>
+          {t('fc_round_done')}
+        </div>
         <div style={{ fontSize: 'var(--text-lg, 22px)', color: 'var(--text-strong)' }}>
           {t('fc_score')}: {score}/{questions.length}
         </div>
+        <RoundGardenNote garden={garden} />
         <div className="m-row" style={{ gap: 10 }}>
           <FBtn variant="primary" onClick={replay}>
             {t('fc_play_again')}

@@ -6,6 +6,7 @@ import { iso, parseISO, toMin } from '../../shared/logic/dates';
 import { previewLine } from '../../shared/logic/preview';
 import * as classesSvc from './classes';
 import * as eventsSvc from './events';
+import * as gardenSvc from './garden';
 import { getNotifPrefs } from './notif-prefs';
 import * as previewSvc from './session-preview';
 import * as push from './push';
@@ -292,6 +293,74 @@ export async function runEveningPreview(db: Db, at: Date = new Date()): Promise<
   return messages.length;
 }
 
+/**
+ * Job D — the garden. Rides the 08:00 ICT slot with the daily digest.
+ *
+ * The sweep itself (missed deadlines, overdue decay, the month-end album) lives in
+ * `gardenSvc.runGardenSweep`; this only turns what it reports into pushes. That split matters: the
+ * plant's state is DERIVED from elapsed time on every read, so a notification can only ever
+ * announce something the student's own screen already shows. A skipped run therefore costs a
+ * message, never a wrong plant — which is also why the ledger keys below are date-scoped. A
+ * "wilting today" push two days late would be a lie, so it is simply never sent.
+ */
+export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<number> {
+  const nowIso = at.toISOString();
+  const sweep = await gardenSvc.runGardenSweep(db, nowIso);
+  const prefs = await getNotifPrefs(db);
+  if (!prefs.gardenAlerts) return 0;
+
+  const { dateIso } = ictNow(at);
+  const messages: ExpoPushMessage[] = [];
+  const doneKeys: string[] = [];
+
+  type Alert = { studentId: string; key: string; body: string };
+  const alerts: Alert[] = [
+    ...sweep.penalties.map((p) => ({
+      studentId: p.studentId,
+      key: `garden-penalty:${p.assignmentId}:${p.studentId}`,
+      body: `Bài "${p.topicName}" đã quá hạn — cây tụt 1 bậc 😢. Cố lên bài sau nhé!`,
+    })),
+    ...sweep.wiltingToday.map((w) => ({
+      studentId: w.studentId,
+      key: `garden-wilt:${w.studentId}:${dateIso}`,
+      body: 'Cây của em đang héo 🥀 Học 1 bài từ vựng để cứu cây nhé!',
+    })),
+    ...sweep.droppingTomorrow.map((d) => ({
+      studentId: d.studentId,
+      key: `garden-drop:${d.studentId}:${d.nextDropDate}`,
+      body: 'Mai cây sẽ tụt 1 bậc ⚠️ Học ngay 1 bài để giữ cây nào!',
+    })),
+  ];
+
+  const sent = await push.alreadySent(
+    db,
+    alerts.map((a) => a.key),
+  );
+
+  for (const alert of alerts) {
+    if (sent.has(alert.key)) continue;
+    // Marked done even when the student has no device registered: the occurrence HAS been
+    // processed, exactly as in the class sweep above.
+    doneKeys.push(alert.key);
+    const accountIds = await push.accountIdsForStudents(db, [alert.studentId]);
+    for (const to of await push.tokensForAccounts(db, accountIds)) {
+      messages.push({
+        to,
+        title: 'Vườn cây của em',
+        body: alert.body,
+        // `/flashcards`, not `/vocabulary`, for the same reason as the study nudge above: a phone
+        // running a pre-rename bundle would dead-end on the new path.
+        data: { url: '/flashcards', kind: 'garden' },
+        channelId: 'study',
+      });
+    }
+  }
+
+  await deliver(db, messages);
+  await push.markSent(db, doneKeys);
+  return messages.length;
+}
+
 /** For an occurrence nobody wrote a preview for. previewLine returns '' for it. */
 const EMPTY_PREVIEW = { focusText: '', vocabTopic: null, tests: [] };
 
@@ -309,11 +378,15 @@ async function deliver(db: Db, messages: ExpoPushMessage[]): Promise<void> {
 export async function runScheduled(cron: string, env: Env, at: Date = new Date()): Promise<void> {
   const db = createDb(env);
   const started = Date.now();
+  // 08:00 ICT carries two jobs: the study digest and the garden. The garden runs second and its
+  // own errors must not swallow the digest's result, so it is awaited separately.
   const sent =
     cron === '0 1 * * *'
       ? await runDailyDigest(db, at)
       : cron === '0 12 * * *'
         ? await runEveningPreview(db, at)
         : await runClassReminders(db, at);
-  console.log('[cron]', { cron, sent, ms: Date.now() - started });
+  let garden = 0;
+  if (cron === '0 1 * * *') garden = await runGardenAlerts(db, at);
+  console.log('[cron]', { cron, sent, garden, ms: Date.now() - started });
 }

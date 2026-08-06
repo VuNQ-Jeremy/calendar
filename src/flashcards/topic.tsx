@@ -13,6 +13,7 @@ import { orderWordsByMastery } from '../../shared/logic/flashcards';
 import { FlipGame } from './game-flip.jsx';
 import { QuizGame } from './game-quiz.jsx';
 import { MatchGame } from './game-match.jsx';
+import type { RoundGarden } from '../garden/garden-widget.jsx';
 import type {
   FlashcardWordRow,
   FlashcardResultRow,
@@ -50,7 +51,12 @@ export function FlashcardTopicScreen() {
   const navigate = useNavigate();
   const { t } = useLang();
   const fetcher = useFetcher();
-  const resultFetcher = useFetcher();
+  const resultFetcher = useFetcher<{ ok?: boolean; garden?: RoundGarden | null }>();
+  // The round result's reply carries what happened to the student's plant. It belongs to this
+  // submission and is only ever shown inside the game that produced it, so it is threaded down as
+  // a prop instead of being read back out of a loader. `pending` keeps the panel from showing the
+  // PREVIOUS round's verdict for the moment between "play again" finishing and its POST landing.
+  const [gardenPending, setGardenPending] = React.useState(false);
   const [tab, setTab] = React.useState('words');
   const [playing, setPlaying] = React.useState<GameMode | null>(null);
   const isStaff = kind === 'staff';
@@ -63,7 +69,15 @@ export function FlashcardTopicScreen() {
     [words, mastery, kind],
   );
 
+  React.useEffect(() => {
+    if (resultFetcher.state === 'idle' && resultFetcher.data) setGardenPending(false);
+  }, [resultFetcher.state, resultFetcher.data]);
+
+  const roundGarden =
+    gardenPending || resultFetcher.state !== 'idle' ? null : (resultFetcher.data?.garden ?? null);
+
   const finish = (r: GameResult) => {
+    setGardenPending(true);
     const fd = new FormData();
     fd.set('intent', 'record-result');
     fd.set('topicId', topic.id);
@@ -79,9 +93,15 @@ export function FlashcardTopicScreen() {
     const exit = () => setPlaying(null);
     return (
       <GameOverlay topicName={topic.name} onExit={exit}>
-        {playing === 'flip' && <FlipGame words={orderedWords} onExit={exit} onFinish={finish} />}
-        {playing === 'quiz' && <QuizGame words={words} onExit={exit} onFinish={finish} />}
-        {playing === 'match' && <MatchGame words={words} onExit={exit} onFinish={finish} />}
+        {playing === 'flip' && (
+          <FlipGame words={orderedWords} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
+        {playing === 'quiz' && (
+          <QuizGame words={words} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
+        {playing === 'match' && (
+          <MatchGame words={words} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
       </GameOverlay>
     );
   }
@@ -813,7 +833,9 @@ function ResultsTab({ results }: { results: FlashcardResultRow[] }) {
         <div className="m-stack" style={{ gap: 8 }}>
           {leaderboard.map((s, i) => (
             <div key={i} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
-              <span style={{ fontWeight: 700, color: 'var(--text-muted)', width: 20 }}>{i + 1}</span>
+              <span style={{ fontWeight: 700, color: 'var(--text-muted)', width: 20 }}>
+                {i + 1}
+              </span>
               <FAv name={s.name} color={s.color} size="sm" />
               <div style={{ flex: 1, fontWeight: 600, color: 'var(--text-strong)' }}>{s.name}</div>
               <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{s.pct}%</span>

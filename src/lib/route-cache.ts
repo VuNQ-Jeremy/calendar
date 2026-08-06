@@ -39,6 +39,7 @@ export const K = {
   myTests: 'route:my-tests',
   tuition: 'route:tuition',
   rankings: 'route:rankings',
+  garden: 'route:garden',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -55,6 +56,11 @@ export const tuitionMonthKey = (month: string) => `route:tuition:${month}`;
 
 /** And again for the leaderboard: K.rankings stales every cached month in one go. */
 export const rankingsMonthKey = (month: string) => `route:rankings:${month}`;
+
+/** One more: K.garden stales every class's garden and every album month at once. */
+export const gardenClassKey = (classId: string) => `route:garden:${classId}`;
+export const gardenAlbumKey = (classId: string, month: string) =>
+  `route:garden:${classId}:${month}`;
 
 /**
  * Stale-while-revalidate loader for route clientLoaders.
@@ -124,11 +130,11 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   calendar: { hard: [K.calendar], stale: [K.dashboard] },
   classes: {
     hard: [K.classes],
-    stale: [K.dashboard, K.calendar, K.people, K.materials, K.assessments, K.rankings],
+    stale: [K.dashboard, K.calendar, K.people, K.materials, K.assessments, K.rankings, K.garden],
   },
   people: {
     hard: [K.people],
-    stale: [K.dashboard, K.calendar, K.classes, K.assessments, K.rankings],
+    stale: [K.dashboard, K.calendar, K.classes, K.assessments, K.rankings, K.garden],
   },
   // routes/materials patches its own cache in its clientAction; 'evmat:' rows
   // (event-material joins shown in the calendar event modal) must be hard.
@@ -139,7 +145,9 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   assessments: { hard: [K.assessments], stale: [K.tests, K.rankings] },
   // 'route:flashcards' is a prefix of every 'route:flashcards:<slug>' key, so
   // topic CRUD also drops all cached topic pages (slug may have changed).
-  flashcards: { hard: [K.flashcards], stale: [K.people] },
+  // K.garden goes stale too, and not only for topic edits: finishing a round is a
+  // 'flashcards' mutation, and a round is exactly what grows the plant.
+  flashcards: { hard: [K.flashcards], stale: [K.people, K.garden] },
   // Editing a question changes what the test builder lists, so /tests goes stale.
   questions: { hard: [K.questions], stale: [K.tests] },
   // A test writes score_records when graded, is scoped to a class, appears on the
@@ -176,6 +184,10 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // marked, and deleting it would blank the textarea mid-edit. Nothing else
   // caches previews; the student schedule screens skip the cache entirely.
   previews: { hard: [], stale: ['prev:'] },
+  // K.garden is a prefix of every 'route:garden:<classId>' and album key, so watering one
+  // student, assigning vocabulary or writing an album drops them all. K.flashcards goes with
+  // it because the student's own plant is rendered at the top of /vocabulary.
+  garden: { hard: [K.garden], stale: [K.flashcards] },
 };
 
 /**
@@ -245,6 +257,11 @@ export function cacheKeyForPath(pathname: string): string | null {
   // month lives in the path: a `?month=` would give every month the same cache entry.
   const rm = pathname.match(/^\/rankings\/(\d{4}-\d{2})\/?$/);
   if (rm) return rankingsMonthKey(rm[1]);
+  // Album first: it is the longer path, and gardenClassKey is a prefix of it.
+  const ga = pathname.match(/^\/garden\/([^/]+)\/album\/(\d{4}-\d{2})\/?$/);
+  if (ga) return gardenAlbumKey(decodeURIComponent(ga[1]), ga[2]);
+  const gc = pathname.match(/^\/garden\/([^/]+)\/?$/);
+  if (gc) return gardenClassKey(decodeURIComponent(gc[1]));
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   const map: Record<string, string> = {
     '/dashboard': K.dashboard,
@@ -261,6 +278,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/my-tests': K.myTests,
     '/tuition': K.tuition,
     '/rankings': K.rankings,
+    '/garden': K.garden,
   };
   return map[clean] ?? null;
 }

@@ -21,6 +21,7 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   classLeadMinutes: 30,
   studyNudges: false,
   previewEvening: true,
+  gardenAlerts: true,
 };
 
 const KEY = 'notif-prefs';

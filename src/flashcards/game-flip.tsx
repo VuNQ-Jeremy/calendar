@@ -5,6 +5,7 @@ import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
 import { shuffle, meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
+import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import {
   COMMIT_RATIO,
   DRAG_SLOP_PX,
@@ -106,7 +107,7 @@ function GhostCard({
   );
 }
 
-export function FlipGame({ words, onExit, onFinish }: GameProps) {
+export function FlipGame({ words, onExit, onFinish, garden }: GameProps & GardenRoundProps) {
   const { t } = useLang();
   const [order, setOrder] = React.useState(() => words);
   const [idx, setIdx] = React.useState(0);
@@ -339,6 +340,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
         <div style={{ fontSize: 'var(--text-lg, 22px)', color: 'var(--text-strong)' }}>
           {t('fc_score')}: {known}/{order.length}
         </div>
+        <RoundGardenNote garden={garden} />
         {unknown.length > 0 && (
           <div style={{ width: '100%', maxWidth: 420 }}>
             <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text-strong)' }}>

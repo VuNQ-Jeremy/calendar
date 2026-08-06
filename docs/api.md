@@ -152,6 +152,14 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET PATCH | `/api/settings/ui-prefs` | GET user, PATCH **admin** | `UiPrefsInput` — school-wide, so every client reads it but only an admin writes it. `scrollbar` is web-only, `mobileTabBar` phone-only |
 | POST | `/api/push/register` | user | `{ expoToken, platform }` — upserts, moving the token between accounts |
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
+| GET PATCH | `/api/garden/plant` | **user** | The caller's own plant, settled to today; staff may read anyone's with `?studentId=`. PATCH takes `PlantPatchInput` (`plantName`, `potColor`) and is students-only, on their own plant |
+| POST | `/api/garden/harvest` | **user** (student) | Banks a fruit and replants a seed. 409 `not_ripe` / `dead` when the plant is not at the fruit stage — including on a double tap |
+| GET | `/api/garden/class/:id` | **user** | One class's garden plus its cooperative tree. A student may only read classes they are in (403 otherwise) |
+| POST | `/api/garden/water` | staff | `WaterInput` (`studentId`, `note?`) — one stage, wilt cleared, daily cap bypassed. Logged against the staff member |
+| GET POST PATCH DELETE | `/api/garden/assignments/:id?` | staff | `VocabAssignmentInput`. GET takes `?classId=` |
+| GET | `/api/garden/progress/:id` | staff | Who has finished one assignment. NOT under `/assignments`, whose `:id?` would swallow the segment |
+| GET | `/api/garden/snapshots?classId=` | **user** | Saved album months; add `&month=` for one frozen garden. Same membership rule as the class garden |
+| GET PUT | `/api/settings/garden` | admin | `GardenSettingsInput` — school-wide, and it re-times every plant |
 
 Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view`,
 `/materials/:id/download`, `/enrich-vocab`, `/generate-vocab`.
@@ -201,7 +209,42 @@ increments would inflate the student's stats even if the result were deduped.
 
 **Staff vs student plays:** exactly one of `student_id` / `staff_id` is set. Staff plays produce
 a result row but **no** `flashcard_mastery` row — a teacher testing a topic must not pollute
-student stats.
+student stats. For the same reason they do not grow a garden plant.
+
+---
+
+## The garden (vườn cây từ vựng)
+
+Each student has ONE plant, school-wide. A qualifying round grows it a stage (at most
+`dailyGrowthCap` a day); after `wiltAfterDays` of silence it wilts, then loses a stage every
+`dropAfterDays`, then dies. At the fruit stage the student harvests: the fruit is banked forever
+and a new seed goes in the pot.
+
+**A student round also returns what it did to the plant.** The web action for a finished round
+replies with a `garden` field, and the same `GardenOutcome` is available to any client:
+
+```json
+{ "qualified": true, "grew": true, "stage": 3, "harvestReady": false,
+  "streak": 4, "thresholdPct": 70 }
+```
+
+`qualified` is false when the round missed `thresholdPct`; `grew` is false when it qualified but
+the day's growth was already spent. Either way the round is recorded — only the plant is unmoved.
+
+**Everything time-based is derived, not stored.** `GET /api/garden/plant` and
+`GET /api/garden/class/:id` settle the plant in memory and write nothing, so a wilt or a stage
+drop takes effect at ICT midnight for every caller simultaneously, whether or not the daily cron
+has run. A client must therefore not cache a plant across a day boundary, and must not try to
+compute decay itself — read it.
+
+**The garden never breaks a score.** The plant is written in a second batch after the result row
+has committed, keyed on the result id. A garden failure loses at most one stage of growth, which
+the next round earns back.
+
+`POST /api/push/run?job=garden` (admin) runs the daily sweep on demand: it charges missed
+assignment deadlines, writes down overdue decay, saves the previous month's album, and sends the
+wilt/stage-drop pushes. It is idempotent — deadlines are charged at most once per student per
+assignment, and the push ledger dedupes the messages.
 
 ## File upload
 

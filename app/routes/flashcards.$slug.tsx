@@ -140,8 +140,15 @@ async function actionImpl({ request, params, context }: ActionFunctionArgs) {
     if (parsed.data.topicId !== topicId) {
       return Response.json({ error: 'topic mismatch' }, { status: 400 });
     }
-    await flashcardsSvc.recordResult(db, { kind: su.kind, id: su.user.id }, parsed.data);
-    return { ok: true };
+    // The garden outcome rides back with the result so the end-of-round panel can say what
+    // happened to the plant without a second round trip. It is null for a staff preview and for a
+    // round that was already recorded (an offline flush), and the games then say nothing.
+    const { garden } = await flashcardsSvc.recordResultWithGarden(
+      db,
+      { kind: su.kind, id: su.user.id },
+      parsed.data,
+    );
+    return { ok: true, garden };
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });

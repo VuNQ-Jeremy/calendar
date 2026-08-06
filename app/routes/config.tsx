@@ -14,9 +14,11 @@ import * as levelsSvc from '../../server/services/grade-levels';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import * as tuitionSvc from '../../server/services/tuition';
 import * as rankingsSvc from '../../server/services/rankings';
+import * as gardenSvc from '../../server/services/garden';
 import {
   AssessmentTypeInput,
   AssessmentTypeReorder,
+  GardenSettingsInput,
   GradeLevelInput,
   GradeLevelReorder,
   RankingWeightsInput,
@@ -33,16 +35,32 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
-  const [types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings, rankingWeights] =
-    await Promise.all([
-      typesSvc.list(db),
-      criteriaSvc.list(db),
-      levelsSvc.list(db),
-      uiPrefsSvc.getUiPrefs(db),
-      tuitionSvc.getTuitionSettings(db),
-      rankingsSvc.getRankingWeights(db),
-    ]);
-  return { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings, rankingWeights };
+  const [
+    types,
+    remarkCriteria,
+    gradeLevels,
+    uiPrefs,
+    tuitionSettings,
+    rankingWeights,
+    gardenSettings,
+  ] = await Promise.all([
+    typesSvc.list(db),
+    criteriaSvc.list(db),
+    levelsSvc.list(db),
+    uiPrefsSvc.getUiPrefs(db),
+    tuitionSvc.getTuitionSettings(db),
+    rankingsSvc.getRankingWeights(db),
+    gardenSvc.getGardenSettings(db),
+  ]);
+  return {
+    types,
+    remarkCriteria,
+    gradeLevels,
+    uiPrefs,
+    tuitionSettings,
+    rankingWeights,
+    gardenSettings,
+  };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -210,6 +228,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       const rankingWeights = await rankingsSvc.setRankingWeights(db, parsed.data);
       return { ok: true, rankingWeights };
+    }
+
+    if (intent === 'garden-settings') {
+      const parsed = GardenSettingsInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const gardenSettings = await gardenSvc.setGardenSettings(db, parsed.data);
+      return { ok: true, gardenSettings };
     }
 
     if (intent === 'ui-prefs') {

@@ -3,6 +3,7 @@ import {
   runClassReminders,
   runDailyDigest,
   runEveningPreview,
+  runGardenAlerts,
 } from '../../server/services/notify';
 
 /**
@@ -23,16 +24,25 @@ import {
  *   POST /api/push/run?job=class    — the class-starting-soon sweep
  *   POST /api/push/run?job=digest   — the daily digest
  *   POST /api/push/run?job=preview  — the evening "tomorrow's sessions" preview
+ *   POST /api/push/run?job=garden   — the garden sweep: missed deadlines, decay, album, alerts
+ *
+ * `garden` does more than send: it also charges missed assignment deadlines and writes the
+ * month-end album. That is deliberately on this endpoint too, because the e2e environment has its
+ * crons disabled — this is the only way to exercise the sweep there.
  */
 export const action = withAuth('admin', async ({ request, db }) => {
   const job = new URL(request.url).searchParams.get('job');
-  if (job !== 'class' && job !== 'digest' && job !== 'preview') throw fail('bad_job', 400);
+  if (job !== 'class' && job !== 'digest' && job !== 'preview' && job !== 'garden') {
+    throw fail('bad_job', 400);
+  }
 
   const sent =
     job === 'digest'
       ? await runDailyDigest(db)
       : job === 'preview'
         ? await runEveningPreview(db)
-        : await runClassReminders(db);
+        : job === 'garden'
+          ? await runGardenAlerts(db)
+          : await runClassReminders(db);
   return { job, sent };
 });
