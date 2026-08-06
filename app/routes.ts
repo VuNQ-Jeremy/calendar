@@ -88,6 +88,8 @@ export default [
     route('my-schedule', 'routes/my-schedule.tsx'),
     route('questions', 'routes/questions.tsx'),
     route('assessments', 'routes/assessments.tsx'),
+    // Month in the PATH for the same cache reason as tuition below.
+    route('rankings/:month?', 'routes/rankings.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),
     route('vocabulary/:slug', 'routes/flashcards.$slug.tsx'),
     // The month sits in the PATH, not a query string: cacheKeyForPath only sees pathnames, so a

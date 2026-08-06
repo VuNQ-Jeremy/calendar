@@ -1238,6 +1238,74 @@ body {
     overflow-y: visible;
   }
 }
+
+/* rankings (bảng xếp hạng): a plain .lrow list, with the rank number carrying the only
+   ornament — a medal fill for the top three. */
+.rank-num {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  color: var(--text-muted);
+}
+/* literal hexes: the palette has no medal colours, and gold/silver/bronze are the point */
+.rank-num--1 {
+  background: #f6c445;
+  color: #5c4300;
+}
+.rank-num--2 {
+  background: #d9dce1;
+  color: #4a4f57;
+}
+.rank-num--3 {
+  background: #e8b27d;
+  color: #5c3a10;
+}
+.rank-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+}
+.rank-chip__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.rank-total {
+  font-weight: 800;
+  font-size: var(--text-lg);
+  min-width: 52px;
+  text-align: right;
+}
+.rank-breakdown {
+  flex-wrap: wrap;
+}
+.rank-section-head {
+  margin-top: var(--space-4);
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.rank-weights-note {
+  margin-left: auto;
+  align-self: center;
+  font-size: var(--text-sm);
+}
+/* narrow: the three numbers are the ranking, the prose breakdown is not */
+@media (max-width: 720px) {
+  .rank-chip {
+    min-width: 48px;
+  }
+  .rank-breakdown {
+    display: none;
+  }
+}
+
 @keyframes mfade {
   from {
     opacity: 0;

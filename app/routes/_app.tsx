@@ -65,6 +65,7 @@ const NAV = [
         icon: 'chart',
         staffOnly: true,
       },
+      { id: 'rankings', path: '/rankings', tk: 'nav_rankings', icon: 'grad', staffOnly: true },
       { id: 'vocabulary', path: '/vocabulary', tk: 'nav_flashcards', icon: 'cards' },
       // Students only — staff manage tests from /tests instead.
       {

@@ -18,6 +18,7 @@ omission is built.
 | `/materials` | `(app)/materials/` | Phase 5. `.docx` via the platform viewer, not `docx-preview` |
 | `/homework` | `(app)/homework/` | Phase 4 |
 | `/assessments` | `(app)/assessments.tsx` | Phase 5. Tables → cards; same charts |
+| `/rankings/:month?` | **Not built** | Added 2026-08, web-only for now — see below |
 | `/flashcards` | `(app)/flashcards/` | Phase 3 |
 | `/flashcards/:slug` | `(app)/flashcards/[slug]/` | Phase 3, plus offline study and the games |
 | `/config` | `(app)/config.tsx` | Phase 5. Scrollbar pref dropped — see below |
@@ -38,6 +39,13 @@ never built), `(app)/language.tsx`, and `(app)/notifications.tsx` (phase 6).
 | 260px sidebar / 64px icon rail | **Omitted by design.** A phone gets bottom tabs plus More |
 
 ## Deliberate omissions, with reasons
+
+**Student rankings** (web `/rankings/:month?`, added 2026-08).
+Not an omission on principle — just not built yet. Everything that would be hard to port already
+lives in the right place: the scoring is pure functions in `shared/logic/rankings.ts` (no React, no
+`server/` imports, unit-tested in `test/rankings.test.ts`), and the configurable weights are a plain
+`settings` row under `ranking-weights`. A mobile version is one screen plus an `/api/rankings`
+endpoint, with no logic to reimplement.
 
 **Scrollbar style preference** (`uiPrefs.scrollbar`, web `/config`).
 Android has no styleable scrollbar. The setting cannot do anything on a phone. The stored value is

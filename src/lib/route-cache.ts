@@ -38,6 +38,7 @@ export const K = {
   tests: 'route:tests',
   myTests: 'route:my-tests',
   tuition: 'route:tuition',
+  rankings: 'route:rankings',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -51,6 +52,9 @@ export const testDetailKey = (id: string) => `route:tests:${id}`;
 
 /** Same prefix trick again: K.tuition drops every cached month at once. */
 export const tuitionMonthKey = (month: string) => `route:tuition:${month}`;
+
+/** And again for the leaderboard: K.rankings stales every cached month in one go. */
+export const rankingsMonthKey = (month: string) => `route:rankings:${month}`;
 
 /**
  * Stale-while-revalidate loader for route clientLoaders.
@@ -120,16 +124,19 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   calendar: { hard: [K.calendar], stale: [K.dashboard] },
   classes: {
     hard: [K.classes],
-    stale: [K.dashboard, K.calendar, K.people, K.materials, K.assessments],
+    stale: [K.dashboard, K.calendar, K.people, K.materials, K.assessments, K.rankings],
   },
   people: {
     hard: [K.people],
-    stale: [K.dashboard, K.calendar, K.classes, K.assessments],
+    stale: [K.dashboard, K.calendar, K.classes, K.assessments, K.rankings],
   },
   // routes/materials patches its own cache in its clientAction; 'evmat:' rows
   // (event-material joins shown in the calendar event modal) must be hard.
   materials: { hard: ['evmat:'], stale: [K.dashboard, K.calendar, K.classes] },
-  assessments: { hard: [K.assessments], stale: [K.tests] },
+  // K.rankings ('route:rankings') is a prefix of every 'route:rankings:<month>' key, so one
+  // stale-mark covers every month the leaderboard has cached. Scores, behaviour records and
+  // monthly remarks are all ý thức or điểm inputs.
+  assessments: { hard: [K.assessments], stale: [K.tests, K.rankings] },
   // 'route:flashcards' is a prefix of every 'route:flashcards:<slug>' key, so
   // topic CRUD also drops all cached topic pages (slug may have changed).
   flashcards: { hard: [K.flashcards], stale: [K.people] },
@@ -138,11 +145,17 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // A test writes score_records when graded, is scoped to a class, appears on the
   // student's own list, and feeds the dashboard's open-tests card and needs-grading
   // stat — all four surfaces must refresh.
-  tests: { hard: [K.tests], stale: [K.assessments, K.classes, K.myTests, K.dashboard] },
+  tests: {
+    hard: [K.tests],
+    stale: [K.assessments, K.classes, K.myTests, K.dashboard, K.rankings],
+  },
   // Grade-level and assessment-type edits surface on the question bank and the
   // test pages as well as on assessments; the billable-status setting changes
   // every open month's fee amounts.
-  config: { hard: [K.config], stale: [K.assessments, K.questions, K.tests, K.tuition] },
+  config: {
+    hard: [K.config],
+    stale: [K.assessments, K.questions, K.tests, K.tuition, K.rankings],
+  },
   feedback: { hard: [K.feedback], stale: [] },
   // profile edits change name/color which surface in many lists; profile has
   // no cache of its own, so mark everything stale (still served instantly).
@@ -152,7 +165,7 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // rather than hard: the modal is usually open on the very key being marked,
   // and deleting it would blank the roster mid-edit. K.tuition goes with it —
   // an open month's fee is computed from exactly these rows.
-  attendance: { hard: [], stale: ['att:', K.tuition] },
+  attendance: { hard: [], stale: ['att:', K.tuition, K.rankings] },
   // K.tuition is a prefix of every 'route:tuition:<month>' key, so any fee
   // mutation drops all cached months (closing one changes what the others can
   // show, and a payment is recorded from the month page itself).
@@ -228,6 +241,10 @@ export function cacheKeyForPath(pathname: string): string | null {
   // Months only, so `/tuition/:month/:studentId/print` (a document, uncached) does not match.
   const tm = pathname.match(/^\/tuition\/(\d{4}-\d{2})\/?$/);
   if (tm) return tuitionMonthKey(tm[1]);
+  // Months only again. This function only ever sees a pathname, which is why the leaderboard's
+  // month lives in the path: a `?month=` would give every month the same cache entry.
+  const rm = pathname.match(/^\/rankings\/(\d{4}-\d{2})\/?$/);
+  if (rm) return rankingsMonthKey(rm[1]);
   const clean = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   const map: Record<string, string> = {
     '/dashboard': K.dashboard,
@@ -243,6 +260,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/tests': K.tests,
     '/my-tests': K.myTests,
     '/tuition': K.tuition,
+    '/rankings': K.rankings,
   };
   return map[clean] ?? null;
 }

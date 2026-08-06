@@ -733,6 +733,21 @@ export const TuitionSettingsInput = z.object({
 });
 export type TuitionSettingsInput = z.infer<typeof TuitionSettingsInput>;
 
+/**
+ * Rankings: how much ý thức counts against the test average on the leaderboard. Integer percents
+ * that must sum to 100 — the config form enforces the same rule before it lets you save, so a
+ * failure here means the request did not come from that form.
+ */
+export const RankingWeightsInput = z
+  .object({
+    attitude: z.coerce.number().int().min(0).max(100),
+    score: z.coerce.number().int().min(0).max(100),
+  })
+  .refine((w) => w.attitude + w.score === 100, {
+    message: 'Weights must add up to 100',
+  });
+export type RankingWeightsInput = z.infer<typeof RankingWeightsInput>;
+
 export const TuitionPaymentInput = z.object({
   paidVnd: VndAmount,
   /**

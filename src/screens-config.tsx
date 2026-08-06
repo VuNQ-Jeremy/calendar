@@ -3,6 +3,7 @@ import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PageHeader, Empty, Modal, useConfirm } from './ui.jsx';
+import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { ATTENDANCE_STATUSES, ATTENDANCE_META } from '../shared/logic/assess.js';
 import type { AttendanceStatusId } from '../shared/logic/assess.js';
@@ -10,6 +11,7 @@ import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
 import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 import type { TuitionSettings } from '../server/services/tuition.js';
+import type { RankingWeights } from '../shared/logic/rankings.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
 
@@ -21,6 +23,7 @@ interface ConfigLoaderData {
   gradeLevels: GradeLevelRow[];
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
   tuitionSettings: TuitionSettings;
+  rankingWeights: RankingWeights;
 }
 
 // Mock colors are hardcoded hex (same values as the DS tokens) so each card
@@ -93,6 +96,100 @@ function TuitionSettingsSection({ settings }: { settings: TuitionSettings }) {
       </div>
       <p className="m-muted" style={{ margin: '10px 0 0', fontSize: 'var(--text-sm)' }}>
         {t('cfg_tuition_hint')}
+      </p>
+    </Card>
+  );
+}
+
+/**
+ * How much ý thức counts against the test average on /rankings. Unlike the tuition card above
+ * this one does not save on every keystroke: a pair only means anything once it adds up to 100,
+ * so the edits are held in a draft until Save.
+ */
+function RankingWeightsSection({ weights }: { weights: RankingWeights }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [draft, setDraft] = React.useState<{ attitude: string; score: string } | null>(null);
+
+  const current = draft ?? { attitude: String(weights.attitude), score: String(weights.score) };
+  const attitude = Number(current.attitude);
+  const score = Number(current.score);
+  const valid =
+    current.attitude !== '' &&
+    current.score !== '' &&
+    Number.isInteger(attitude) &&
+    Number.isInteger(score) &&
+    attitude >= 0 &&
+    score >= 0 &&
+    attitude + score === 100;
+
+  /** Typing in one box moves the other, so the pair stays saveable without extra arithmetic. */
+  const edit = (field: 'attitude' | 'score', value: string) => {
+    const n = Number(value);
+    const other = value !== '' && Number.isFinite(n) && n >= 0 && n <= 100 ? String(100 - n) : '';
+    setDraft(
+      field === 'attitude'
+        ? { attitude: value, score: other }
+        : { attitude: other, score: value },
+    );
+  };
+
+  const save = () => {
+    if (!valid) return;
+    const fd = new FormData();
+    fd.set('intent', 'ranking-weights');
+    fd.set('attitude', String(attitude));
+    fd.set('score', String(score));
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+    setDraft(null);
+  };
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_rank_title')}</h2>
+        <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('cfg_rank_sub')}
+        </p>
+      </div>
+      <div className="m-row" style={{ gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="mochi-field" style={{ marginBottom: 0 }}>
+          <label className="mochi-field__label">{t('cfg_rank_attitude')}</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={5}
+            className="mochi-input"
+            value={current.attitude}
+            onChange={(e) => edit('attitude', e.target.value)}
+          />
+        </div>
+        <div className="mochi-field" style={{ marginBottom: 0 }}>
+          <label className="mochi-field__label">{t('cfg_rank_score')}</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={5}
+            className="mochi-input"
+            value={current.score}
+            onChange={(e) => edit('score', e.target.value)}
+          />
+        </div>
+        <Button onClick={save} disabled={!valid || !draft}>
+          {t('save')}
+        </Button>
+      </div>
+      <p
+        className="m-muted"
+        style={{
+          margin: '10px 0 0',
+          fontSize: 'var(--text-sm)',
+          color: valid ? undefined : colorOf('rose').ink,
+        }}
+      >
+        {t('cfg_rank_hint')}
       </p>
     </Card>
   );
@@ -502,7 +599,7 @@ function RemarkCriteriaSection({ criteria }: { criteria: RemarkCriterionRow[] })
 }
 
 function SystemConfigScreen() {
-  const { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings } =
+  const { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings, rankingWeights } =
     useLoaderData() as ConfigLoaderData;
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
@@ -691,6 +788,8 @@ function SystemConfigScreen() {
       <GradeLevelsSection levels={gradeLevels} />
 
       <TuitionSettingsSection settings={tuitionSettings} />
+
+      <RankingWeightsSection weights={rankingWeights} />
 
       <Card style={{ padding: 18, marginTop: 16 }}>
         <div style={{ marginBottom: 12 }}>

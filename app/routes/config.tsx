@@ -13,11 +13,13 @@ import * as criteriaSvc from '../../server/services/remark-criteria';
 import * as levelsSvc from '../../server/services/grade-levels';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import * as tuitionSvc from '../../server/services/tuition';
+import * as rankingsSvc from '../../server/services/rankings';
 import {
   AssessmentTypeInput,
   AssessmentTypeReorder,
   GradeLevelInput,
   GradeLevelReorder,
+  RankingWeightsInput,
   RemarkCriterionInput,
   RemarkCriteriaReorder,
   TuitionSettingsInput,
@@ -31,14 +33,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireAdmin(request, env);
   const db = createDb(env);
-  const [types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings] = await Promise.all([
-    typesSvc.list(db),
-    criteriaSvc.list(db),
-    levelsSvc.list(db),
-    uiPrefsSvc.getUiPrefs(db),
-    tuitionSvc.getTuitionSettings(db),
-  ]);
-  return { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings };
+  const [types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings, rankingWeights] =
+    await Promise.all([
+      typesSvc.list(db),
+      criteriaSvc.list(db),
+      levelsSvc.list(db),
+      uiPrefsSvc.getUiPrefs(db),
+      tuitionSvc.getTuitionSettings(db),
+      rankingsSvc.getRankingWeights(db),
+    ]);
+  return { types, remarkCriteria, gradeLevels, uiPrefs, tuitionSettings, rankingWeights };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -197,6 +201,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       const tuitionSettings = await tuitionSvc.setTuitionSettings(db, parsed.data);
       return { ok: true, tuitionSettings };
+    }
+
+    if (intent === 'ranking-weights') {
+      const parsed = RankingWeightsInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const rankingWeights = await rankingsSvc.setRankingWeights(db, parsed.data);
+      return { ok: true, rankingWeights };
     }
 
     if (intent === 'ui-prefs') {
