@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0104 — 2026-08-06
+Assessments scores tab: chart and test list side by side, list scrolls in place so the tab fits one screen. ProgressLineChart takes a viewBox width and no longer clips its end date labels.
+
 ## v0.0103 — 2026-08-06
 Fix CI: exclude the Remotion video/ workspace from the root typecheck — it had been failing every push (blocking deploys and D1 migrations) since the video catalog landed
 

@@ -15,6 +15,7 @@ export function ProgressLineChart({
   points,
   yMin = 0,
   yMax = 10,
+  width = W,
   height = 220,
   color = 'var(--brand)',
   colorFor,
@@ -25,6 +26,13 @@ export function ProgressLineChart({
   points: ChartPoint[];
   yMin?: number;
   yMax?: number;
+  /**
+   * viewBox width. The SVG always fills its container, so this is really a text-size dial:
+   * the whole drawing scales by containerWidth / width, and the 11-unit labels with it. Pass
+   * something smaller than the default when the chart sits in a narrow column, or the labels
+   * shrink with it.
+   */
+  width?: number;
   height?: number;
   color?: string;
   /** Per-value colour (e.g. the score bands). Applies to the dots and to each line segment. */
@@ -40,7 +48,7 @@ export function ProgressLineChart({
       </div>
     );
   }
-  const innerW = W - PAD.left - PAD.right;
+  const innerW = width - PAD.left - PAD.right;
   const innerH = height - PAD.top - PAD.bottom;
   // Even index spacing (ordinal x): test dates are irregular; equal spacing reads better.
   const px = (i: number) =>
@@ -54,13 +62,21 @@ export function ProgressLineChart({
   // A segment takes the colour of the point it arrives at — the reading is "where this got to",
   // so a climb into the green band turns green as it lands there.
   const dotColor = (i: number) => (colorFor ? colorFor(points[i].y) : color);
-  // At most ~6 x labels: always first and last.
-  const step = Math.max(1, Math.ceil(points.length / 6));
+  // ~one x label per 150 viewBox units (6 at the default width): always first and last.
+  const maxLabels = Math.max(3, Math.round(width / 150));
+  const step = Math.max(1, Math.ceil(points.length / maxLabels));
   const showX = (i: number) => i === 0 || i === points.length - 1 || i % step === 0;
+  // The end points sit on the plot edges, where a centred label would run half its width
+  // outside the viewBox and get clipped — tuck those two inwards. A lone point is centred.
+  const anchorX = (i: number) => {
+    if (points.length === 1) return 'middle';
+    if (i === 0) return 'start';
+    return i === points.length - 1 ? 'end' : 'middle';
+  };
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${height}`}
+      viewBox={`0 0 ${width} ${height}`}
       style={{ width: '100%', height: 'auto', display: 'block' }}
       role="img"
       aria-label={ariaLabel}
@@ -69,7 +85,7 @@ export function ProgressLineChart({
         <g key={v}>
           <line
             x1={PAD.left}
-            x2={W - PAD.right}
+            x2={width - PAD.right}
             y1={py(v)}
             y2={py(v)}
             stroke="var(--line, #ECE0CF)"
@@ -145,7 +161,7 @@ export function ProgressLineChart({
             key={`x${i}`}
             x={px(i)}
             y={height - 8}
-            textAnchor="middle"
+            textAnchor={anchorX(i)}
             fontSize={11}
             fill="var(--text-muted)"
           >

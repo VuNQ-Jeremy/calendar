@@ -1089,6 +1089,51 @@ body {
 .assess-month-row .mochi-field {
   margin-bottom: 0;
 }
+
+/* assessments scores tab: chart and test list share one row, and the list — the only
+   unbounded part of the page — is what scrolls, so the tab always fits the viewport.
+   Requires `.content--fill` on the page, which is what bounds this row's height. */
+.assess-split {
+  display: flex;
+  gap: var(--space-5);
+  flex: 1;
+  min-height: 0;
+}
+.assess-split__chart {
+  flex: 1;
+  min-width: 0;
+  /* natural height, pinned to the top — without this the card stretches to the row */
+  align-self: flex-start;
+}
+.assess-split__list {
+  width: 400px;
+  flex: none;
+  min-height: 0;
+  overflow-y: auto;
+  /* the hover shadow on .lrow would otherwise be clipped by the scroll box */
+  padding: 2px 4px;
+}
+/* the rows are built for full page width; at 400px they need to wrap rather than squeeze */
+.assess-split__list .lrow {
+  padding: var(--space-3);
+  gap: var(--space-2);
+}
+.assess-split__list .lrow .m-row {
+  flex-wrap: wrap;
+}
+@media (max-width: 1100px) {
+  .assess-split {
+    flex-direction: column;
+  }
+  .assess-split__chart {
+    flex: none;
+    align-self: stretch;
+  }
+  .assess-split__list {
+    width: auto;
+    flex: 1;
+  }
+}
 @keyframes mfade {
   from {
     opacity: 0;

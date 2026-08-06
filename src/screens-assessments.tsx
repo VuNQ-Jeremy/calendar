@@ -416,7 +416,9 @@ function AssessmentsScreen() {
     : t('assess_incidents_chart', { n: INCIDENT_WEEKS });
 
   return (
-    <div className="content">
+    /* The scores tab is a fixed-height split: chart on the left, test list scrolling on the
+       right, both inside one viewport. The other tabs keep the ordinary page scroll. */
+    <div className={tab === 'scores' ? 'content content--fill' : 'content'}>
       <PageHeader
         title={t('assess_title')}
         subtitle={t('assess_sub')}
@@ -488,8 +490,8 @@ function AssessmentsScreen() {
       </Card>
 
       {tab === 'scores' ? (
-        <>
-          <Card style={{ padding: 18 }}>
+        <div className="assess-split">
+          <Card className="assess-split__chart" style={{ padding: 18 }}>
             <div className="m-spread" style={{ marginBottom: 12 }}>
               <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>
                 {t('assess_progress_chart')}
@@ -513,11 +515,15 @@ function AssessmentsScreen() {
               }))}
               colorFor={(y) => colorOf(scoreColorId(y)).base}
               formatX={fmtShort}
+              // Narrower viewBox than the default 900: the chart now occupies part of a row,
+              // and at 900 its labels would render at roughly half size.
+              width={620}
+              height={300}
               ariaLabel={t('assess_progress_chart')}
               emptyLabel={t('assess_no_scores')}
             />
           </Card>
-          <div className="m-stack">
+          <div className="m-stack assess-split__list">
             {studentScores.length ? (
               studentScores.toReversed().map((r) => (
                 <div key={r.id} className="lrow">
@@ -583,7 +589,7 @@ function AssessmentsScreen() {
               </Card>
             )}
           </div>
-        </>
+        </div>
       ) : tab === 'behavior' ? (
         <>
           <div className="m-grid cols-4">
