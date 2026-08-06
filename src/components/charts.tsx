@@ -66,8 +66,17 @@ export function ProgressLineChart({
   }, [fit, boxEl]);
 
   if (!points.length) {
+    // In `fit` mode the card is already as tall as the row, so the placeholder takes the same
+    // space the chart would have and centres in it rather than clinging to the top.
     return (
-      <div className="m-muted" style={{ padding: '32px 0', textAlign: 'center' }}>
+      <div
+        className="m-muted"
+        style={
+          fit
+            ? { flex: 1, minHeight: height, display: 'grid', placeItems: 'center' }
+            : { padding: '32px 0', textAlign: 'center' }
+        }
+      >
         {emptyLabel}
       </div>
     );

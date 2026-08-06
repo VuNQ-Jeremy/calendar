@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0106 — 2026-08-06
+Assessments: filter controls on one row, monthly report tab split into a stats rail beside the remark form, and empty states fill their column instead of sitting as stubs.
+
 ## v0.0105 — 2026-08-06
 Score progress chart sizes to its card instead of to an aspect ratio, so a wide window no longer makes it overflow the card and eat the page's bottom gutter.
 

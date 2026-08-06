@@ -1084,10 +1084,23 @@ body {
 .qi-bulkbar .mochi-field {
   margin-bottom: 0;
 }
-/* assessments month row: "All time" sits beside the labelled month select,
-   same wrapper-vs-control bottom-alignment trap as the bulk bar above */
-.assess-month-row .mochi-field {
+/* assessments filter bar: class / student / month / "All time" on one line. The fields
+   share the width evenly and wrap in pairs once they get too cramped. */
+.assess-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  /* bottom-aligned on the controls, not the wrappers — a labelled field is taller than a
+     bare button, so the form-field bottom margin has to go or the button floats */
+  align-items: flex-end;
+}
+.assess-filters .mochi-field {
   margin-bottom: 0;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.assess-filters > .mochi-btn {
+  flex: 0 0 auto;
 }
 
 /* assessments scores tab: chart and test list share one row, and the list — the only
@@ -1124,8 +1137,69 @@ body {
 .assess-split__list .lrow .m-row {
   flex-wrap: wrap;
 }
+/* "no scores yet" is the column's only child — give it the whole column instead of a stub
+   card stranded above a tall blank, and centre the message in the space it now owns */
+.assess-split__list > .mochi-card:only-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.assess-split__list > .mochi-card:only-child .m-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* assessments report tab: the month summary is a rail beside the remark form, so writing a
+   report never scrolls the numbers you are writing about off the screen. */
+.assess-report {
+  display: flex;
+  gap: var(--space-5);
+  flex: 1;
+  min-height: 0;
+}
+.assess-report__stats {
+  width: 380px;
+  flex: none;
+  align-self: flex-start;
+}
+/* four tiles cannot share a 380px rail, and the page-level cols-4 breakpoints key off the
+   viewport — on a wide screen they would keep all four on one line inside this column */
+.assess-report__stats .m-grid.cols-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.assess-report__form {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* criteria sit at their natural height and only scroll once there are more than fit */
+.assess-report__form .assess-remark__body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* the slack goes to the comment box — a monthly remark is mostly prose, and pooling the
+   space above it instead would just leave a gap in the middle of the card */
+.assess-report__form > .mochi-field {
+  flex: 1;
+  min-height: 92px;
+}
+.assess-report__form > .mochi-field textarea {
+  flex: 1;
+}
+/* title row and Save keep their size whatever else gives ground */
+.assess-report__form > .m-spread,
+.assess-report__form > .m-row {
+  flex: none;
+}
+
 @media (max-width: 1100px) {
-  .assess-split {
+  .assess-split,
+  .assess-report {
     flex-direction: column;
   }
   /* stacked: the card takes its content height, so the chart falls back to its floor */
@@ -1135,6 +1209,23 @@ body {
   .assess-split__list {
     width: auto;
     flex: 1;
+  }
+  /* stacked, the two cards' fixed parts alone outgrow a short viewport, so the column itself
+     scrolls and each card keeps its natural height rather than being squeezed */
+  .assess-report {
+    overflow-y: auto;
+  }
+  .assess-report__stats {
+    width: auto;
+    align-self: stretch;
+  }
+  .assess-report__form {
+    flex: none;
+  }
+  .assess-report__form .assess-remark__body,
+  .assess-report__form > .mochi-field {
+    flex: none;
+    overflow-y: visible;
   }
 }
 @keyframes mfade {

@@ -134,6 +134,7 @@ function RemarkForm({
   printHref,
   onSave,
   onDelete,
+  className,
 }: {
   /** Active criteria, in sort order — what the form shows and what "complete" means. */
   criteria: RemarkCriterionRow[];
@@ -141,6 +142,7 @@ function RemarkForm({
   printHref: string;
   onSave: (d: RemarkDraft) => void;
   onDelete: () => void;
+  className?: string;
 }) {
   const { t } = useLang();
   const [draft, setDraft] = React.useState<RemarkDraft>({
@@ -152,7 +154,7 @@ function RemarkForm({
   const complete = criteria.length > 0 && criteria.every((c) => (draft.ratings[c.id] ?? 0) >= 1);
 
   return (
-    <Card style={{ padding: 18 }}>
+    <Card className={className} style={{ padding: 18 }}>
       <div className="m-spread" style={{ marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('remark_title')}</h2>
         {existing && (
@@ -167,7 +169,9 @@ function RemarkForm({
         )}
       </div>
 
-      <div className="m-stack" style={{ gap: 8 }}>
+      {/* The criteria rows are the one part that grows with configuration, so in the split
+          layout they are what scrolls — the comment box and Save stay put. */}
+      <div className="m-stack assess-remark__body" style={{ gap: 8 }}>
         {criteria.length ? (
           criteria.map((c) => (
             <div key={c.id} className="m-spread">
@@ -416,9 +420,9 @@ function AssessmentsScreen() {
     : t('assess_incidents_chart', { n: INCIDENT_WEEKS });
 
   return (
-    /* The scores tab is a fixed-height split: chart on the left, test list scrolling on the
-       right, both inside one viewport. The other tabs keep the ordinary page scroll. */
-    <div className={tab === 'scores' ? 'content content--fill' : 'content'}>
+    /* Scores and report are fixed-height splits — chart beside test list, month stats beside
+       the remark form — so neither needs the page to scroll. Behavior keeps the page scroll. */
+    <div className={tab === 'behavior' ? 'content' : 'content content--fill'}>
       <PageHeader
         title={t('assess_title')}
         subtitle={t('assess_sub')}
@@ -443,8 +447,10 @@ function AssessmentsScreen() {
           { id: 'report', label: t('assess_tab_report') },
         ]}
       />
-      <Card style={{ padding: 18 }}>
-        <div className="m-grid cols-2" style={{ gap: 14 }}>
+      {/* One row, not three stacked ones: the filters are a header for the data below, and every
+          extra row here comes straight out of the chart and list on the scores tab. */}
+      <Card style={{ padding: 14 }}>
+        <div className="assess-filters">
           <MSelect
             label={t('assess_class')}
             value={classFilter}
@@ -460,24 +466,17 @@ function AssessmentsScreen() {
             onChange={setStudentId}
             options={visibleStudents.map((s) => ({ value: s.id, label: s.name }))}
           />
-        </div>
-        {/* The month picker and its reset are two separate controls: the dropdown only ever names
-            a real month, and "All time" is the one button that clears the filter. */}
-        <div
-          className="m-row assess-month-row"
-          style={{ gap: 10, marginTop: 14, alignItems: 'flex-end' }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <MSelect
-              label={t('assess_month')}
-              value={monthFilter ?? ''}
-              // '' is the no-month-picked slot, shown as a dash so the field is never a blank
-              // box. It must normalise back to null — `'' ?? currentMonth` is `''`, which would
-              // leave the report tab with no month at all.
-              onChange={(v) => setMonthFilter(v || null)}
-              options={[{ value: '', label: '—' }, ...monthOptions]}
-            />
-          </div>
+          {/* The month picker and its reset are two separate controls: the dropdown only ever
+              names a real month, and "All time" is the one button that clears the filter. */}
+          <MSelect
+            label={t('assess_month')}
+            value={monthFilter ?? ''}
+            // '' is the no-month-picked slot, shown as a dash so the field is never a blank
+            // box. It must normalise back to null — `'' ?? currentMonth` is `''`, which would
+            // leave the report tab with no month at all.
+            onChange={(v) => setMonthFilter(v || null)}
+            options={[{ value: '', label: '—' }, ...monthOptions]}
+          />
           <Button
             variant={monthFilter ? 'secondary' : 'primary'}
             disabled={!monthFilter}
@@ -717,8 +716,8 @@ function AssessmentsScreen() {
           </div>
         </>
       ) : (
-        <>
-          <Card style={{ padding: 18 }}>
+        <div className="assess-report">
+          <Card className="assess-report__stats" style={{ padding: 18 }}>
             <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
               {t('remark_stats_title')} · {monthLabel(reportMonth, lang)}
             </h2>
@@ -746,13 +745,14 @@ function AssessmentsScreen() {
           </Card>
           <RemarkForm
             key={`${activeStudentId}:${reportMonth}`}
+            className="assess-report__form"
             criteria={criteria.filter((c) => c.active)}
             existing={existingRemark}
             printHref={`/assessments/${reportMonth}/${activeStudentId}/report`}
             onSave={saveRemark}
             onDelete={() => void removeRemarkRec()}
           />
-        </>
+        </div>
       )}
 
       {scoreModal && (
