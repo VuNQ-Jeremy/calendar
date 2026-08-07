@@ -151,10 +151,15 @@ const config: ExpoConfig = {
   updates: {
     url: 'https://u.expo.dev/83251f6c-1fa9-4724-ba61-39a9eb806aab',
     /**
-     * 0, not a timeout: never block the splash screen waiting on the network. The app launches
-     * from the cached bundle immediately, fetches any update in the background, and applies it
-     * on the NEXT launch. A student on a slow connection at the start of class must not stare at
-     * a splash screen while we poll a CDN.
+     * 0, not a timeout: the NATIVE layer never blocks on the network. A student on a slow
+     * connection at the start of class must not stare at a splash screen while Android polls a
+     * CDN with no time limit it can explain.
+     *
+     * The update is still applied on the first launch — `lib/updates.ts` does it in JS, inside the
+     * splash the root layout already holds, with its own bounded budgets. That is deliberate rather
+     * than raising this number: this value is baked into AndroidManifest at build time
+     * (`EXPO_UPDATES_LAUNCH_WAIT_MS`), so tuning it needs a new APK, while the JS version ships over
+     * OTA like everything else.
      */
     fallbackToCacheTimeout: 0,
   },

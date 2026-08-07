@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0126 — 2026-08-07
+Cap nhat ung dung dien thoai xong ngay trong lan mo dau tien: khong con phai mo app, tat di roi mo lai moi thay ban moi.
+
 ## v0.0125 — 2026-08-07
 Vườn cây từ vựng trên điện thoại: học sinh xem cây của mình ngay trên trang từ vựng, biết ngay mỗi lượt học có làm cây lớn hay không, thu hoạch quả, đặt tên và chọn màu chậu, xem vườn lớp cùng cây tập thể và album các tháng đã lưu. Giáo viên vẫn chăm vườn trên web.
 

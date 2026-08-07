@@ -387,9 +387,19 @@ Phase 0 adds a version stamp to both apps, so this is a two-second check rather 
 Compare against `git rev-list --count HEAD` and the top entry of `CHANGELOG.md`. The SHA is the
 authoritative identifier — the counter can drift by a commit or two if a push carried several.
 
-**The OTA gotcha:** Expo's default is `checkAutomatically: ON_LOAD` — it downloads the new
-bundle in the background and applies it on the **next** launch. So: `eas update` → force-close →
-open (*still old*, downloading) → force-close → open (**now** new). Open-twice is normal.
+**Updates now apply on the first launch.** `lib/updates.ts` checks, downloads and reloads inside the
+splash screen the root layout already holds, so: `eas update` → force-close → open → **new**. The
+open-twice ritual is gone.
+
+It is bounded — a 3s check budget and a 12s download budget. On a connection too slow for either, the
+app launches from cache and the download continues in the background, which lands the update on the
+next launch: the old behaviour, as a fallback rather than as the rule. So if a phone still seems a
+version behind, suspect the network before suspecting the publish, and check the stamp on the More
+screen.
+
+**It does not reload a running app.** An update published while someone has the app open waits for
+their next cold start. That is deliberate: `reloadAsync()` mid-round would discard a game the student
+had not finished, because an unfinished round has not reached the outbox yet.
 
 `eas update:list --branch preview` shows what's published server-side.
 

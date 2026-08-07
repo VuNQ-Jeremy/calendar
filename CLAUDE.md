@@ -43,8 +43,10 @@
   pre-frame and was silently rolled back — see `mobile/lib/api.ts`).
 - **Delivery is verifiable without a device.** The served update for this app is:
   `curl -s -D - -o /dev/null -H "expo-platform: android" -H "expo-runtime-version: 2" -H "expo-channel-name: preview" -H "expo-protocol-version: 1" -H "accept: multipart/mixed" https://u.expo.dev/83251f6c-1fa9-4724-ba61-39a9eb806aab`
-  — the `expo-update-id` header is what phones get. Phones apply it on the second
-  launch after publish (download on the first, apply on the next).
+  — the `expo-update-id` header is what phones get. Phones apply it on the **first**
+  launch after publish: `mobile/lib/updates.ts` checks, downloads and reloads inside
+  the splash screen. If the connection is too slow for its budgets it falls back to
+  applying on the next launch instead.
 - **Known wart:** workflow-published bundles stamp `v0.0000` in the in-app version
   row (EAS's checkout has no git history for the commit count). The `gitSha` in the
   stamp is still correct; trust the sha, not the number.

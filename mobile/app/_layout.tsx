@@ -17,12 +17,19 @@ import { DMMono_400Regular } from '@expo-google-fonts/dm-mono';
 import { persister, queryClient, wireAppStateToQueries } from '~/lib/query';
 import { AuthProvider, useAuth } from '~/lib/auth';
 import { LanguageProvider, useLang } from '~/lib/i18n';
+import { useUpdateGate } from '~/lib/updates';
 import { theme, ThemeProvider } from '~/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /**
- * Holds the native splash until BOTH the session and the language preference are resolved.
+ * Holds the native splash until the session, the language preference AND the OTA update check are
+ * all resolved.
+ *
+ * The update check shares this wait on purpose: applying a pending bundle here means one launch is
+ * enough, instead of the open / force-close / open-again ritual that `fallbackToCacheTimeout: 0`
+ * otherwise forces. It is bounded and it degrades to the old behaviour on a bad connection — see
+ * lib/updates.ts. All three reads run in parallel, so on the common path it adds nothing.
  *
  * Every component in this app — this one included — is declared at MODULE scope. Defining a
  * component inline in a parent's render (or in a navigator's `options`) creates a fresh
@@ -32,7 +39,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Gate() {
   const { status } = useAuth();
   const { ready } = useLang();
-  const settled = status !== 'loading' && ready;
+  const updating = useUpdateGate();
+  const settled = status !== 'loading' && ready && !updating;
 
   React.useEffect(() => {
     if (settled) SplashScreen.hideAsync().catch(() => {});
