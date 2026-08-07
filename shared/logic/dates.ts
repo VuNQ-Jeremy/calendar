@@ -8,6 +8,18 @@
  * No React, no DOM.
  */
 
+/**
+ * 'YYYY-MM-DD' -> '04/05/2026'. What the paper receipts write, and unambiguous in Vietnam.
+ *
+ * Pure string surgery, so it is safe on the bare ICT day strings the garden compares — it never
+ * constructs a `Date` and therefore cannot shift a day. Lives here rather than in ./tuition (where
+ * it started) so both clients can reach it: ./tuition type-imports from `server/`.
+ */
+export function formatDmy(date: string): string {
+  const [y, m, d] = date.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : date;
+}
+
 /** `Date` -> `YYYY-MM-DD`, in local time. */
 export function iso(d: Date | string | number): string {
   const x = new Date(d);

@@ -4,8 +4,12 @@ What is left to build, ranked. One file so new work has somewhere to land — be
 open items were scattered across `README.md`, `REFACTOR_PLAN.md`, `docs/mobile-parity.md` and an
 audit's unchecked boxes, and the garden feature shipped web-only without anyone recording it.
 
+The garden was the first item here and shipped on 2026-08-07 (student half). Its staff half is
+deliberately not coming to the phone — that decision, and why, is in `docs/mobile-parity.md` under
+"Deliberate omissions", which is where reasons live rather than here.
+
 Scope note: **`video/BACKLOG.md` stays where it is.** It is a full production plan for the video
-catalog (seven guides, shorts, pipeline work) and is too detailed to inline here. Item 2 below is
+catalog (seven guides, shorts, pipeline work) and is too detailed to inline here. Item 1 below is
 its one-line summary.
 
 Rules for this file: items are ordered by value, not by area. When an item ships, delete it and let
@@ -15,27 +19,7 @@ belong here — put the reason in `docs/mobile-parity.md` or the relevant doc, w
 
 ---
 
-## 1. The garden is web-only
-
-`shared/logic/garden.ts` and eight `/api/garden/*` endpoints are complete and documented
-(`docs/api.md`, "The garden"), but there is **no garden anywhere under `mobile/`** — no screen, no
-tab, nothing. It shipped 2026-08-06, after `docs/mobile-parity.md` was written, so that document
-still claims full parity and is currently wrong.
-
-This ranks first because the garden is the one student-facing feature in the app, and students are
-the ones holding phones. A vocabulary reward loop that only appears on a laptop mostly does not
-appear.
-
-*Needs:* no backend work — the API and the pure logic are done and unit-tested. The real work is
-`src/garden/plant-art.tsx`, which is DOM SVG and has to be re-rendered for React Native, plus
-screens for the personal plant, the class garden with its cooperative tree, harvest, and the album.
-Watch the settle-on-read contract: plants are derived, never stored, so a mobile client must not
-cache a plant across a day boundary (`docs/api.md`).
-
-**~1–2 days.** Add the parity entry to `docs/mobile-parity.md` first; that is five minutes and stops
-the doc lying.
-
-## 2. The video catalog past guide #1
+## 1. The video catalog past guide #1
 
 `guide-calendar-basics` is built and proves the pipeline end to end. Guides 2–7, the shorts and the
 changelog videos are all planned and none are started — see **`video/BACKLOG.md`** for the
@@ -45,7 +29,7 @@ interaction) and the two open blockers.
 **~half a day per guide.** Best starting points: Học phí (#4) for marketing value, Điểm danh (#2)
 for being the shortest.
 
-## 3. Student rankings on mobile
+## 2. Student rankings on mobile
 
 Web-only since 2026-08. Already recorded as "just not built yet" in `docs/mobile-parity.md`, and
 genuinely cheap: the scoring is pure functions in `shared/logic/rankings.ts` with unit tests, and
@@ -54,7 +38,7 @@ endpoint, no logic to reimplement.
 
 **~2–3 hours.**
 
-## 4. Parent login
+## 3. Parent login
 
 `userFromToken` returns `null` for any account carrying a `parentId`
 (`server/services/auth.ts:118`, "parent accounts remain unsupported"). A parent invite code
@@ -67,7 +51,7 @@ item in `README.md` and `REFACTOR_PLAN.md`. When it ships, delete the restrictio
 
 **~1 day** for login itself; the portal is its own project.
 
-## 5. Smaller, unranked
+## 4. Smaller, unranked
 
 Ordered by how much they annoy, not by value.
 

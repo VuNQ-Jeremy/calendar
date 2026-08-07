@@ -130,6 +130,24 @@ export interface PlantView {
   titleId: FruitTitleId | null;
 }
 
+/**
+ * What one finished round did to the plant — the end screen's whole story.
+ *
+ * Lives here rather than beside `onStudentResult` in `server/services/garden.ts` because both
+ * clients render it: the web reads it off its route action, and the mobile app off the batch
+ * results reply. The server re-exports it so its own import graph is unchanged.
+ */
+export interface GardenOutcome {
+  qualified: boolean;
+  /** The plant gained a stage (false when the daily cap was already spent). */
+  grew: boolean;
+  stage: number;
+  harvestReady: boolean;
+  streak: number;
+  /** The bar this round had to clear, so the end screen can explain a near miss. */
+  thresholdPct: number;
+}
+
 // ---- ICT day arithmetic ----
 //
 // Bare 'YYYY-MM-DD' strings, compared lexically and stepped through UTC epoch days. Deliberately

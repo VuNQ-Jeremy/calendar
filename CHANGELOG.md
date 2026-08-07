@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0125 — 2026-08-07
+Vườn cây từ vựng trên điện thoại: học sinh xem cây của mình ngay trên trang từ vựng, biết ngay mỗi lượt học có làm cây lớn hay không, thu hoạch quả, đặt tên và chọn màu chậu, xem vườn lớp cùng cây tập thể và album các tháng đã lưu. Giáo viên vẫn chăm vườn trên web.
+
 ## v0.0124 — 2026-08-07
 Add a root BACKLOG.md: one ranked list of what is left to build, replacing open items scattered across four unrelated docs. Records the garden as web-only, which no doc had captured.
 

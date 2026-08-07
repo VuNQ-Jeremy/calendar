@@ -147,9 +147,69 @@ describe('recordResult idempotency', () => {
     const a = mk();
     const b = mk();
 
-    expect(await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b])).toBe(2);
+    expect(
+      (await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b])).recorded,
+    ).toBe(2);
     // Replaying the batch, plus one genuinely new result.
-    expect(await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b, mk()])).toBe(1);
+    expect(
+      (await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b, mk()]))
+        .recorded,
+    ).toBe(1);
+  });
+
+  /**
+   * The phone shows its end-of-round garden note from these outcomes, matched on the clientId it
+   * generated. Every result must come back, in a form that says "nothing to report" rather than
+   * lying, or a replayed round claims the plant grew twice.
+   */
+  it('recordResults echoes one outcome per result, keyed on clientId', async () => {
+    const d = db();
+    const { topic, word } = await seedTopicWithWord(d);
+    const student = await seedStudent(d);
+    const mk = () => ({
+      clientId: crypto.randomUUID(),
+      topicId: topic.id,
+      mode: 'flip',
+      score: 1,
+      total: 1,
+      answers: [{ wordId: word.id, correct: true }],
+    });
+    const a = mk();
+    const b = mk();
+
+    const first = await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b]);
+    expect(first.outcomes.map((o) => o.clientId)).toEqual([a.clientId, b.clientId]);
+    expect(first.outcomes.every((o) => o.recorded)).toBe(true);
+    // A perfect round clears any threshold, so the first one grew the plant from nothing.
+    expect(first.outcomes[0].garden).toMatchObject({ qualified: true, grew: true });
+    expect(first.outcomes[0].garden.thresholdPct).toBeGreaterThan(0);
+
+    // Replay: still one outcome each, but the garden says nothing rather than growing again.
+    const replay = await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b]);
+    expect(replay.recorded).toBe(0);
+    expect(replay.outcomes).toHaveLength(2);
+    expect(replay.outcomes.every((o) => o.recorded === false && o.garden === null)).toBe(true);
+  });
+
+  it('a staff batch records results with no garden outcome', async () => {
+    // A teacher testing a topic has no plant, exactly as they have no mastery.
+    const d = db();
+    const { topic, word } = await seedTopicWithWord(d);
+    const teacher = await seedStaff(d);
+    const payload = {
+      clientId: crypto.randomUUID(),
+      topicId: topic.id,
+      mode: 'flip',
+      score: 1,
+      total: 1,
+      answers: [{ wordId: word.id, correct: true }],
+    };
+
+    const res = await flashcardsSvc.recordResults(d, { kind: 'staff', id: teacher.id }, [payload]);
+    expect(res.recorded).toBe(1);
+    expect(res.outcomes).toEqual([
+      { clientId: payload.clientId, recorded: true, garden: null },
+    ]);
   });
 });
 

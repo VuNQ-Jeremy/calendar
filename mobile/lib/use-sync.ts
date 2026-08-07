@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as outbox from './outbox';
 import * as store from './offline-topics';
+import { invalidateGarden } from './query';
 
 /**
  * Background sync. Mounted once, by the signed-in layout.
@@ -28,7 +29,11 @@ export function useSync(enabled: boolean): void {
       if (running.current) return;
       running.current = true;
       try {
-        await outbox.flush(new Date());
+        const flushed = await outbox.flush(new Date());
+        // Rounds played offline grew the plant on arrival, but nothing was on screen to say so —
+        // and a replayed result reports no outcome by design. Re-read the plant instead of trying
+        // to reconstruct a celebration for a round the student finished hours ago.
+        if (flushed.recorded > 0) void invalidateGarden();
         if (refreshContent) await store.refreshDownloaded(new Date());
       } catch {
         /* retried on the next trigger */

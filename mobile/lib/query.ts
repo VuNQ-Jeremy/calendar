@@ -67,6 +67,24 @@ export const qk = {
    * route cache because the list is computed against the server clock.
    */
   mySessions: ['mySessions'] as const,
+
+  /**
+   * The garden — web `route:garden` and `garden:{classId}`.
+   *
+   * The ICT day is part of the key, and that is load-bearing rather than decorative. A plant is
+   * DERIVED on read: it wilts and drops stages at ICT midnight whether or not anything ran. But
+   * this cache is written through to AsyncStorage (see `persister`), so without the day in the key
+   * a phone opened the next morning would restore yesterday's healthy plant from disk and show it
+   * as fact. With it, yesterday's entry sits under a key nothing reads again and `gcTime` reaps it.
+   *
+   * The album is exempt: a frozen month is frozen.
+   */
+  gardenPlant: (ictDay: string) => ['garden', 'plant', ictDay] as const,
+  gardenClass: (classId: string, ictDay: string) =>
+    ['garden', 'class', classId, ictDay] as const,
+  gardenSnapshots: (classId: string) => ['garden', 'album', classId] as const,
+  gardenSnapshot: (classId: string, month: string) =>
+    ['garden', 'album', classId, month] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -95,6 +113,14 @@ export function invalidateAll() {
 
 export function invalidateFlashcards() {
   return queryClient.invalidateQueries({ queryKey: ['flashcards'] });
+}
+
+/**
+ * Every garden read shares the `['garden', …]` prefix — the plant, the class garden and the album —
+ * so one call covers a harvest, a rename, and a round that grew something.
+ */
+export function invalidateGarden() {
+  return queryClient.invalidateQueries({ queryKey: ['garden'] });
 }
 
 /**

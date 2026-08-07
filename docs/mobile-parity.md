@@ -19,8 +19,10 @@ omission is built.
 | `/homework` | `(app)/homework/` | Phase 4 |
 | `/assessments` | `(app)/assessments.tsx` | Phase 5. Tables → cards; same charts |
 | `/rankings/:month?` | **Not built** | Added 2026-08, web-only for now — see below |
-| `/flashcards` | `(app)/flashcards/` | Phase 3 |
-| `/flashcards/:slug` | `(app)/flashcards/[slug]/` | Phase 3, plus offline study and the games |
+| `/flashcards` | `(app)/vocabulary/` | Phase 3. The plant widget sits at the top for students, as on the web |
+| `/garden/:classId?` | `(app)/vocabulary/garden/[classId]/` | Added 2026-08. Student view only — see below |
+| `/garden/:classId/album/:month` | `(app)/vocabulary/garden/[classId]/album/[month].tsx` | Added 2026-08 |
+| `/flashcards/:slug` | `(app)/vocabulary/[slug]/` | Phase 3, plus offline study and the games |
 | `/config` | `(app)/config.tsx` | Phase 5. Scrollbar pref dropped — see below |
 | `/feedback` | `(app)/feedback.tsx` | Phase 5. Inbox and submit in one screen |
 | `/profile` | `(app)/profile.tsx` | Phase 2 |
@@ -46,6 +48,34 @@ lives in the right place: the scoring is pure functions in `shared/logic/ranking
 `server/` imports, unit-tested in `test/rankings.test.ts`), and the configurable weights are a plain
 `settings` row under `ranking-weights`. A mobile version is one screen plus an `/api/rankings`
 endpoint, with no logic to reimplement.
+
+**The garden's staff half** (web: watering, assignment CRUD, the event history, admin dev tools,
+"Save this month", the share card).
+
+The garden shipped web-only on 2026-08-06 and the student half was ported on 2026-08-07: the plant
+widget, the post-round note, harvest, rename/repaint, the class garden and the album. What stayed
+behind is everything a *teacher* does with it. That is a scope decision, not a capability gap —
+`/api/garden/water` and `/api/garden/assignments` exist and are staff-gated; nothing on the phone is
+blocked from calling them. Two of the staff actions have no JSON endpoint at all (`snapshot-month`,
+`dev-set`/`dev-reset` are route-action intents on `app/routes/garden.tsx`), so a future staff port
+would add those first.
+
+Reasoning: a teacher marking a class's plants sits at a laptop with the class list open; a student
+studying vocabulary has a phone in their hand. The one thing the phone gains by having the staff
+tools is the ability to water from the corridor, which is not worth a second implementation of the
+history modal.
+
+**The share card** (web `/garden/:classId/share`, a PNG for the class Zalo group) is a separate
+reason: it is rasterized in the browser with `html-to-image`, which is DOM-only. The React Native
+equivalent (`react-native-view-shot`) is a NEW native module, and adding one forces an APK rebuild
+plus a `runtimeVersion` bump — every installed phone would have to update the APK before receiving
+any further OTA update. The whole garden port was pure JS for exactly this reason. It can ride along
+whenever the next APK build happens for another reason.
+
+**Garden settings** (`freeMinScorePct`, `wiltAfterDays`, `dropAfterDays`, `dailyGrowthCap`, web
+`/config`). `GET`/`PUT /api/settings/garden` exists and is admin-gated, so this is portable at any
+time. It is left on the web because saving a half-typed field re-times every plant in the school —
+a change worth making deliberately, at a desk, next to the other school-wide settings.
 
 **Scrollbar style preference** (`uiPrefs.scrollbar`, web `/config`).
 Android has no styleable scrollbar. The setting cannot do anything on a phone. The stored value is

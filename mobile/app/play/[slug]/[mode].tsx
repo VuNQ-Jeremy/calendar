@@ -5,9 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import { X } from 'lucide-react-native';
 import { orderWordsByMastery } from '@mochi/shared/logic/flashcards';
 import type { GameMode } from '@mochi/shared/logic/flashcards';
+import type { GardenOutcome } from '@mochi/shared/logic/garden';
+import { RoundGardenNote } from '~/components/garden/RoundGardenNote';
+import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import { useTopic } from '~/lib/use-topics';
 import * as outbox from '~/lib/outbox';
+import { invalidateGarden } from '~/lib/query';
 import { useTheme } from '~/theme';
 import { Body, Button, Muted, Screen } from '~/ui';
 import { OfflineBanner } from '~/ui/OfflineBanner';
@@ -30,6 +34,7 @@ export default function PlayScreen() {
   const { t } = useLang();
   const { slug, mode } = useLocalSearchParams<{ slug: string; mode: string }>();
   const { bundle, loading, unavailableOffline } = useTopic(slug);
+  const { user } = useAuth();
 
   const gameMode = (MODES.includes(mode as GameMode) ? mode : 'flip') as GameMode;
   const exit = React.useCallback(() => router.back(), []);
@@ -46,19 +51,32 @@ export default function PlayScreen() {
   }, [bundle, gameMode]);
 
   /**
+   * What this round did to the plant, once the flush comes back. Null until then, and null forever
+   * if the flush failed — the note simply does not appear, which is the honest outcome for a round
+   * the server has not seen yet.
+   */
+  const [garden, setGarden] = React.useState<GardenOutcome | null>(null);
+
+  /**
    * Round finished.
    *
    * The result goes to the local outbox FIRST, then a flush is attempted. That order is the whole
    * offline design in two lines: the student's work is durable before any network call happens, so
    * a dead connection, a crash, or the app being killed mid-flush cannot lose it. The flush is
    * best-effort — `useSync` retries with backoff, and the server dedupes by `clientId`.
+   *
+   * The flush's reply carries a garden outcome per `clientId`. We keep the one `enqueue` generated
+   * and pick ours out of it: a flush sends whatever is due, so this round may not be the only — or
+   * the first — result in the batch.
    */
   const onFinish = React.useCallback(
     (result: GameResult) => {
       if (!bundle) return;
+      // A replay must never inherit the previous round's verdict.
+      setGarden(null);
       void (async () => {
         try {
-          await outbox.enqueue(
+          const clientId = await outbox.enqueue(
             {
               topicId: bundle.topic.id,
               mode: result.mode,
@@ -69,7 +87,10 @@ export default function PlayScreen() {
             },
             new Date(),
           );
-          await outbox.flush(new Date());
+          const flushed = await outbox.flush(new Date());
+          setGarden(flushed.outcomes?.find((o) => o.clientId === clientId)?.garden ?? null);
+          // The plant on the vocabulary screen is now behind — it grew while this panel was open.
+          if (flushed.recorded > 0) void invalidateGarden();
         } catch {
           // Enqueue failing means SQLite is unavailable, which we cannot fix from here. The score
           // is still on screen; swallowing this is better than a crash on the results panel.
@@ -78,6 +99,11 @@ export default function PlayScreen() {
     },
     [bundle],
   );
+
+  // Staff plays never grow a plant, so there is never a note for them — the server returns null and
+  // this keeps the node out of the tree entirely rather than relying on that.
+  const endNote =
+    user?.kind === 'student' ? <RoundGardenNote garden={garden} /> : undefined;
 
   if (unavailableOffline) {
     return (
@@ -145,11 +171,11 @@ export default function PlayScreen() {
       <OfflineBanner />
 
       {gameMode === 'flip' ? (
-        <FlipGame words={words} onExit={exit} onFinish={onFinish} />
+        <FlipGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       ) : gameMode === 'quiz' ? (
-        <QuizGame words={words} onExit={exit} onFinish={onFinish} />
+        <QuizGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       ) : (
-        <MatchGame words={words} onExit={exit} onFinish={onFinish} />
+        <MatchGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       )}
     </Screen>
   );

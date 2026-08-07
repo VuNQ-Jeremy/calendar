@@ -152,7 +152,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET PATCH | `/api/settings/ui-prefs` | GET user, PATCH **admin** | `UiPrefsInput` — school-wide, so every client reads it but only an admin writes it. `scrollbar` is web-only, `mobileTabBar` phone-only |
 | POST | `/api/push/register` | user | `{ expoToken, platform }` — upserts, moving the token between accounts |
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
-| GET PATCH | `/api/garden/plant` | **user** | The caller's own plant, settled to today; staff may read anyone's with `?studentId=`. PATCH takes `PlantPatchInput` (`plantName`, `potColor`) and is students-only, on their own plant |
+| GET PATCH | `/api/garden/plant` | **user** | The caller's own plant, settled to today; staff may read anyone's with `?studentId=`. PATCH takes `PlantPatchInput` (`plantName`, `potColor`) and is students-only, on their own plant. Also returns `today` (the server's ICT day — compare every deadline against it, never the device clock), `hasPlant`, and `fruitMonth` |
 | POST | `/api/garden/harvest` | **user** (student) | Banks a fruit and replants a seed. 409 `not_ripe` / `dead` when the plant is not at the fruit stage — including on a double tap |
 | GET | `/api/garden/class/:id` | **user** | One class's garden plus its cooperative tree. A student may only read classes they are in (403 otherwise) |
 | POST | `/api/garden/water` | staff | `WaterInput` (`studentId`, `note?`) — one stage, wilt cleared, daily cap bypassed. Logged against the staff member |
@@ -194,8 +194,16 @@ once:
 Response:
 
 ```json
-{ "data": { "received": 3, "recorded": 2, "duplicates": 1 } }
+{ "data": { "received": 3, "recorded": 2, "duplicates": 1,
+  "outcomes": [ { "clientId": "uuid", "garden": { "qualified": true, "grew": true, "stage": 3,
+                  "harvestReady": false, "streak": 4, "thresholdPct": 70 } } ] } }
 ```
+
+**`outcomes` says what each round did to the plant**, so a client can show the same end-of-round
+note the web gets from its route action. One entry per submitted result, matched by the
+`clientId` the device generated — never by position, since a flush sends whatever is due and the
+round the student just finished may not be first. `garden` is `null` for a staff play, for a
+replayed `clientId`, and when the garden write was skipped; all three mean "say nothing".
 
 **`clientId` makes replay safe.** A flush that succeeds server-side but drops on the way back —
 routine on mobile networks — gets retried. Without the key the student's score would be counted

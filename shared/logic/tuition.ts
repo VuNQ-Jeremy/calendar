@@ -31,11 +31,15 @@ export function monthNumeric(month: string): string {
   return `${Number(monthNo)}/${year}`;
 }
 
-/** 'YYYY-MM-DD' -> '04/05/2026'. What the paper receipts write, and unambiguous in Vietnam. */
-export function formatDmy(date: string): string {
-  const [y, m, d] = date.split('-');
-  return d && m && y ? `${d}/${m}/${y}` : date;
-}
+/**
+ * Re-exported, not defined here.
+ *
+ * `formatDmy` moved to ./dates when the mobile garden needed it: this module type-imports from
+ * `server/services/tuition`, and although the import is types-only it still drags the Workers
+ * globals into whatever graph reaches it — which the React Native tsconfig has no `Env` for. The
+ * re-export keeps the eight web call sites and the tuition tests importing it from here.
+ */
+export { formatDmy } from './dates';
 
 const VI_DIGITS = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'] as const;
 /** Group scale words, ascending: units, thousands, millions, billions. */

@@ -88,7 +88,7 @@ function shouldCommitWorklet(dx: number, vx: number, cardWidth: number): boolean
  */
 type Ghost = { word: FlashcardWordRow; flipped: boolean };
 
-export function FlipGame({ words, onExit, onFinish }: GameProps) {
+export function FlipGame({ words, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
   const play = useWordAudio();
@@ -476,6 +476,7 @@ export function FlipGame({ words, onExit, onFinish }: GameProps) {
         onReplay={replay}
         onExit={onExit}
       >
+        {endNote}
         {unknown.length > 0 ? (
           <View style={{ width: '100%', maxWidth: 420, gap: th.spacing[2] }}>
             <Body style={{ fontFamily: th.font.bodyBold }}>{t('fc_review_unknown')}</Body>

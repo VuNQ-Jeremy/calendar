@@ -18,4 +18,10 @@ export interface GameProps {
    * does NOT wait for the network, so this fires the same whether the phone is online or not.
    */
   onFinish: (result: GameResult) => void;
+  /**
+   * Extra content for the round-complete panel, between the score and the buttons. The play route
+   * uses it for the garden verdict, which arrives after `onFinish` — hence a node the host owns
+   * rather than a field on `GameResult`.
+   */
+  endNote?: React.ReactNode;
 }

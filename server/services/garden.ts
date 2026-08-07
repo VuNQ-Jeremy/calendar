@@ -36,6 +36,7 @@ import {
   settlePlant,
   titleForFruit,
   type GardenEventDraft,
+  type GardenOutcome,
   type GardenSettings,
   type GardenSnapshotData,
   type GardenSnapshotMember,
@@ -480,16 +481,9 @@ export async function studentAssignments(
 
 // ---- The play hook ----
 
-export interface GardenOutcome {
-  qualified: boolean;
-  /** The plant gained a stage (false when the daily cap was already spent). */
-  grew: boolean;
-  stage: number;
-  harvestReady: boolean;
-  streak: number;
-  /** The bar this round had to clear, so the end screen can explain a near miss. */
-  thresholdPct: number;
-}
+// `GardenOutcome` moved to shared/logic/garden.ts so the mobile client can import it too (it may
+// only reach `@mochi/shared/*`). Re-exported here because that is where every caller looks for it.
+export type { GardenOutcome };
 
 /**
  * A student finished a round: grow the plant if it qualified, and credit their classes' trees.

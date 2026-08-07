@@ -3,6 +3,7 @@ import { getDb } from './db';
 import * as api from './endpoints';
 import { ApiError } from './api';
 import type { FlashcardResultInput } from '@mochi/shared/schemas';
+import type { GardenOutcome } from '@mochi/shared/logic/garden';
 
 /**
  * The write path: finished games queued locally, then pushed to the server.
@@ -84,6 +85,15 @@ export interface FlushOutcome {
   duplicates: number;
   /** Rows left in the queue afterwards — either not due yet, or they failed. */
   remaining: number;
+  /**
+   * What each flushed round did to the garden, keyed on the clientId `enqueue` returned. Present
+   * only on a successful flush against a server new enough to report it — a caller that finds its
+   * own round missing shows no note, which is the honest answer.
+   *
+   * Deliberately NOT correlated by position: a flush batches whatever is due, so the round the
+   * student just finished may be third in the list.
+   */
+  outcomes?: { clientId: string; garden: GardenOutcome | null }[];
   error?: string;
 }
 
@@ -134,6 +144,9 @@ export async function flush(now: Date): Promise<FlushOutcome> {
       recorded: res.recorded,
       duplicates: res.duplicates,
       remaining: await pendingCount(),
+      outcomes: (res.outcomes ?? []).filter(
+        (o): o is { clientId: string; garden: GardenOutcome | null } => o.clientId !== null,
+      ),
     };
   } catch (err) {
     // 422 means the server will never accept this payload — a client bug or a stale schema.

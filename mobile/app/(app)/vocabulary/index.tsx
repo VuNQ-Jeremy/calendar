@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from '
 import { router } from 'expo-router';
 import { Check, CloudDownload, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react-native';
 import { useMutation } from '@tanstack/react-query';
+import { GardenWidget } from '~/components/garden/GardenWidget';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import { agoLabel } from '~/lib/format';
@@ -60,6 +61,10 @@ export default function FlashcardTopics() {
           <Title>{t('fc_title')}</Title>
           <Muted>{t('fc_subtitle')}</Muted>
         </View>
+
+        {/* The student's plant, where the web puts it: above the topics, because it is the reason
+            to open one. Staff have no plant — they tend the garden from the web. */}
+        {isStaff ? null : <GardenWidget />}
 
         {isStaff ? (
           <View style={{ gap: th.spacing[2] }}>

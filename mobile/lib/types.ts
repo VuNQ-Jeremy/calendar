@@ -19,6 +19,11 @@ import type {
   ThemeInput,
   UiPrefsInput,
 } from '@mochi/shared/schemas';
+import type {
+  GardenSettings,
+  GardenSnapshotData,
+  PlantView,
+} from '@mochi/shared/logic/garden';
 import type { z } from 'zod';
 
 /**
@@ -258,4 +263,70 @@ export interface DashboardResponse {
 export interface ProfileRow extends AuthUser {
   /** The account email, which may differ from the person record's contact email. */
   email: string | null;
+}
+
+// ---- The garden ----
+//
+// `PlantView`, `GardenSettings`, `GardenOutcome` and the snapshot shapes all come from
+// `@mochi/shared/logic/garden` — they are the same objects the server derives, so there is nothing
+// to mirror. Only the response envelopes are declared here.
+
+/** One open vocabulary assignment as the student sees it, from `/api/garden/plant`. */
+export interface StudentAssignmentChip {
+  id: string;
+  topicId: string;
+  topicName: string;
+  /** Null for a topic with no slug yet; the deep link falls back to the id. */
+  topicSlug: string | null;
+  className: string;
+  deadline: string;
+  requiredCount: number;
+  minScorePct: number;
+  done: number;
+}
+
+/**
+ * `GET`/`PATCH /api/garden/plant` — the student's own plant, already settled by the server.
+ *
+ * `today` is the server's ICT day. Every date comparison this app renders (deadline urgency, the
+ * drop warning) measures against it, never against the device clock.
+ */
+export interface GardenPlantResponse extends PlantView {
+  studentId: string;
+  today: string;
+  /** False when nothing has been planted yet — the rename editor has no row to land on. */
+  hasPlant: boolean;
+  plantName: string | null;
+  potColor: string;
+  /** Harvests in the current ICT month, derived from the event log. */
+  fruitMonth: number;
+  assignments: StudentAssignmentChip[];
+  classes: { id: string; name: string }[];
+  settings: GardenSettings;
+}
+
+/** One classmate's plant in the shared garden. */
+export interface GardenMemberRow extends PlantView {
+  studentId: string;
+  name: string;
+  color: string;
+  plantName: string | null;
+  potColor: string;
+  fruitMonth: number;
+}
+
+/** `GET /api/garden/class/:id` — the class's plants plus the tree they grew together. */
+export interface ClassGardenResponse {
+  classId: string;
+  className: string;
+  /** Ordered by name by the server. Never re-sort: this is a garden, not a leaderboard. */
+  members: GardenMemberRow[];
+  tree: { points: number; level: number };
+}
+
+/** `GET /api/garden/snapshots?classId=&month=` — one frozen month of the album. */
+export interface GardenSnapshotResponse {
+  className: string;
+  month: string;
+  data: GardenSnapshotData;
 }

@@ -2,7 +2,7 @@ import { fail, withAuth } from '../../server/api/handler';
 import { parsePatchBody } from '../../server/api/handler';
 import * as svc from '../../server/services/garden';
 import { PlantPatchInput } from '../../shared/schemas';
-import { plantView } from '../../shared/logic/garden';
+import { monthOfVn, plantView } from '../../shared/logic/garden';
 import { ictDateOf } from '../../shared/logic/tests';
 
 /**
@@ -13,6 +13,11 @@ import { ictDateOf } from '../../shared/logic/tests';
  *
  * The plant is DERIVED on read (`plantView`): a wilt or a stage drop lands at ICT midnight for
  * every caller at once, and this endpoint writes nothing.
+ *
+ * `today` is the server's ICT day, and it is here so a client never has to ask its own clock: every
+ * deadline chip and drop warning is a comparison against it. A phone set to Sydney must not see a
+ * deadline a day early. `hasPlant` and `fruitMonth` complete the set the web's own loader assembles
+ * (app/routes/flashcards.tsx), so the widget renders identically on either client.
  */
 async function loadPlant(db: Parameters<typeof svc.getPlant>[0], studentId: string) {
   const vnToday = ictDateOf(new Date().toISOString());
@@ -22,11 +27,22 @@ async function loadPlant(db: Parameters<typeof svc.getPlant>[0], studentId: stri
     svc.studentAssignments(db, studentId, vnToday),
     svc.studentClasses(db, studentId),
   ]);
+  const view = plantView(plant?.state ?? null, settings, vnToday);
+  // Fruit-this-month comes from the event log rather than a column, and a plant that has never
+  // fruited cannot have fruited this month — so the read is skipped entirely.
+  const fruitMonth = view.fruitsTotal
+    ? (await svc.plantHistory(db, studentId, 200)).filter(
+        (e) => e.type === 'harvest' && e.vnDay.startsWith(monthOfVn(vnToday)),
+      ).length
+    : 0;
   return {
     studentId,
+    today: vnToday,
+    hasPlant: plant !== null,
     plantName: plant?.plantName ?? null,
     potColor: plant?.potColor ?? 'orange',
-    ...plantView(plant?.state ?? null, settings, vnToday),
+    ...view,
+    fruitMonth,
     assignments,
     classes,
     settings,

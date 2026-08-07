@@ -42,7 +42,7 @@ function buildQuestions(words: FlashcardWordRow[]): Question[] {
   });
 }
 
-export function QuizGame({ words, onExit, onFinish }: GameProps) {
+export function QuizGame({ words, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
   const play = useWordAudio();
@@ -94,7 +94,9 @@ export function QuizGame({ words, onExit, onFinish }: GameProps) {
         headline={`${t('fc_score')}: ${score}/${questions.length}`}
         onReplay={replay}
         onExit={onExit}
-      />
+      >
+        {endNote}
+      </GameEnd>
     );
   }
 

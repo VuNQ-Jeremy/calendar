@@ -408,20 +408,36 @@ export async function recordResult(
   return (await recordResultWithGarden(db, player, input)).recorded;
 }
 
+/** One entry per submitted result, correlated back to the device by its own `clientId`. */
+export interface BatchResultOutcome {
+  clientId: string | null;
+  recorded: boolean;
+  garden: GardenOutcome | null;
+}
+
 /**
  * Flush a batch of offline results. Each is independently idempotent, and each grows the garden on
- * its own — the count is all the phone asks for, so the return shape stays a number.
+ * its own.
+ *
+ * The per-result `garden` rides back out so the phone can show the same "your plant grew" note the
+ * web shows. It is `null` for a staff play, for a replayed `clientId`, and when the garden write
+ * failed — all three mean "say nothing", which is exactly what the note renders for null. A
+ * `clientId` is the only handle the caller has on its own round: results are not positionally
+ * addressable once the outbox batches several together.
  */
 export async function recordResults(
   db: Db,
   player: { kind: 'staff' | 'student'; id: string },
   inputs: FlashcardResultInput[],
-): Promise<number> {
+): Promise<{ recorded: number; outcomes: BatchResultOutcome[] }> {
+  const outcomes: BatchResultOutcome[] = [];
   let recorded = 0;
   for (const input of inputs) {
-    if (await recordResult(db, player, input)) recorded++;
+    const r = await recordResultWithGarden(db, player, input);
+    if (r.recorded) recorded++;
+    outcomes.push({ clientId: input.clientId ?? null, recorded: r.recorded, garden: r.garden });
   }
-  return recorded;
+  return { recorded, outcomes };
 }
 
 export async function listMasteryForStudent(

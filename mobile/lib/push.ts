@@ -183,7 +183,16 @@ export function useNotificationRouting(ready: boolean): void {
     if (!ready) return;
 
     const go = (data: unknown) => {
-      const url = (data as { url?: string } | undefined)?.url;
+      const payload = data as { url?: string; kind?: string } | undefined;
+      // Garden alerts are wilt and stage-drop nudges about the student's OWN plant, so they land on
+      // the vocabulary home, where the widget sits at the top — not on the class garden. Keyed on
+      // `kind` rather than on the url, so the web keeps its own `/flashcards` destination and this
+      // needs no server deploy (server/services/notify.ts sends `{url:'/flashcards', kind:'garden'}`).
+      if (payload?.kind === 'garden') {
+        router.push('/vocabulary' as Href);
+        return;
+      }
+      const url = payload?.url;
       if (typeof url !== 'string' || !url.startsWith('/')) return;
       // The vocabulary tab moved from /flashcards to /vocabulary. The server still sends the old
       // path so notification taps keep working on installs that predate the rename; remap it here

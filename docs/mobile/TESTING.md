@@ -344,6 +344,37 @@ before the phase closes.
 
 ---
 
+## The garden (student half, 2026-08)
+
+**Sign in as the student** (`vunq@mochi.edu`). Staff see no garden on the phone at all — that is
+correct, not a bug (`docs/mobile-parity.md`).
+
+The fastest way to see every visual state is the web's admin dev tools: open `/garden/<classId>` on
+the web as an Admin, use the settings icon on the student's card to dial a stage and an idle-day
+count, then pull-to-refresh on the phone. That backdates the plant's real last-care day, so what the
+phone draws is genuine decay rather than a fake.
+
+| Test | Look for |
+|---|---|
+| All six stages | Dev-set stage 0→5. Pot, soil and stem must be pixel-identical between stages — only the plant on top changes |
+| Wilt | Dial stage 4 + 4 idle days. The plant leans, the leaves droop, and **the whole drawing including the pot is desaturated**. It must NOT look grey-dead |
+| Death | Stage 2 + 40 idle days. A snapped stalk, one hanging leaf, one fallen leaf, grey-brown palette |
+| Reduced motion | Android Settings → Accessibility → Remove animations, then reopen. No sway, no pop, no confetti — but the wilt **colour** and the lean must still be there. They carry state |
+| Round → note | Play a one-word topic through Flip for 1/1. The end panel must read "Your plant grew!" with a small plant above it |
+| Capped | Play twice more the same day (the default cap is 2). The third round's note must say the day's growth is spent, not that it grew |
+| Missed the bar | Play a longer topic and deliberately score under the threshold. The note must name the percentage it needed |
+| Harvest | Dev-set stage 5 → the Harvest button appears → tap. Confetti falls, the plant drops out of frame, "Harvested!", back to Seed, "1 in total", and **the button is gone** |
+| Double tap | Tap Harvest twice fast. The second must show "not ready yet", not a crash and not a second fruit |
+| Rename | Pencil → a name and a pot colour → Save. The name shows on the widget, and on the student's card in the class garden |
+| Offline round | Airplane mode → play a round → **no note appears** (correct: the server has not seen it). Turn the radio back on, wait for the sync, and the widget's stage must go up on its own |
+| Day boundary | The one to actually do. Play a round, force-close, set the phone's clock forward past ICT midnight, reopen. The plant must be **re-fetched**, not restored from disk showing yesterday's health |
+| Class garden | The cooperative tree with its level and progress bar, then the members **ordered by name** — never by stage or streak. Your own card has a brand border and the second-person wilt note; nobody else's does |
+| Album | A saved month opens and shows the frozen garden. Streaks and fruit counts are the frozen ones, not today's |
+| Garden push | With the app closed, trigger the 08:00 sweep (`POST /api/push/run?job=garden` as an admin) on a wilting plant. Tapping the notification must land on the vocabulary screen with the widget on top |
+| Staff has none | Sign in as `dev@mochi.edu`: no widget, no garden link, and a round played as staff shows no note |
+
+---
+
 ## Quick reference
 
 ## Confirming an update landed

@@ -22,6 +22,7 @@ import type {
   NotifPrefsInput,
   ParentInput,
   ProfileInput,
+  PlantPatchInput,
   PushRegisterInput,
   RedeemInviteInput,
   RemarkCriterionInput,
@@ -34,14 +35,18 @@ import type {
   VocabEnrichItem,
   VocabGenerateInput,
 } from '@mochi/shared/schemas';
+import type { GardenOutcome } from '@mochi/shared/logic/garden';
 import type {
   AssessmentTypeRow,
   AttendanceRow,
   DashboardResponse,
   BehaviorRecordRow,
   Bootstrap,
+  ClassGardenResponse,
   ClassRow,
   EventRow,
+  GardenPlantResponse,
+  GardenSnapshotResponse,
   FeedbackRow,
   FlashcardTopicRow,
   FlashcardWordRow,
@@ -276,10 +281,19 @@ export const flashcards = {
    * instead of double-counting the student's score.
    */
   recordResults: (input: FlashcardResultBatch) =>
-    apiFetch<{ received: number; recorded: number; duplicates: number }>(
-      '/api/flashcards/results',
-      { method: 'POST', body: input },
-    ),
+    apiFetch<{
+      received: number;
+      recorded: number;
+      duplicates: number;
+      /**
+       * What each round did to the garden, matched back by the `clientId` the device generated.
+       *
+       * OPTIONAL on purpose: an OTA update can reach a phone minutes before the Worker deploy
+       * that added this field lands. Absent means "no note to show", never a crash. `garden` is
+       * null for a staff play, a replayed result, and a garden write that was skipped.
+       */
+      outcomes?: { clientId: string | null; garden: GardenOutcome | null }[];
+    }>('/api/flashcards/results', { method: 'POST', body: input }),
 
   /**
    * STAFF only. With `?topicId=` it returns that topic's results; without, per-student
@@ -323,6 +337,41 @@ export const enrichVocab = (items: VocabEnrichItem[]) =>
     body: { items },
     timeoutMs: 60_000,
   });
+
+// ---- The garden ----
+//
+// Student-facing only, deliberately. Watering, assignments, the event history and the admin dev
+// tools are all staff work and live on the web — see docs/mobile-parity.md. The endpoints exist
+// server-side either way; nothing here is a capability gap, it is a scope decision.
+
+export const garden = {
+  /**
+   * The caller's own plant, settled to today by the server.
+   *
+   * Never cache this across an ICT day boundary: the plant wilts and drops stages at midnight
+   * whether or not anything ran. `qk.gardenPlant` bakes the day into the key for exactly this.
+   */
+  plant: () => apiFetch<GardenPlantResponse>('/api/garden/plant'),
+  /** Rename the plant / repaint the pot. Students only — the server 403s staff. */
+  updatePlant: (patch: PlantPatchInput) =>
+    apiFetch<GardenPlantResponse>('/api/garden/plant', { method: 'PATCH', body: patch }),
+  /**
+   * Bank a fruit and replant a seed. Throws `ApiError` 409 (`not_ripe` / `dead`) when the plant is
+   * not at the fruit stage — including on a double tap, which is the point.
+   */
+  harvest: () => apiFetch<{ ok: true; fruitsTotal: number }>('/api/garden/harvest', { method: 'POST' }),
+  /** One class's garden plus its cooperative tree. 403 for a class the student is not in. */
+  classGarden: (classId: string) =>
+    apiFetch<ClassGardenResponse>(`/api/garden/class/${encodeURIComponent(classId)}`),
+  /** Which months the album has. */
+  listSnapshots: (classId: string) =>
+    apiFetch<{ month: string; createdAt: string }[]>('/api/garden/snapshots', {
+      query: { classId },
+    }),
+  /** One frozen month. A month that was never saved is a 404, not an empty garden. */
+  getSnapshot: (classId: string, month: string) =>
+    apiFetch<GardenSnapshotResponse>('/api/garden/snapshots', { query: { classId, month } }),
+};
 
 // ---- Profile and settings ----
 

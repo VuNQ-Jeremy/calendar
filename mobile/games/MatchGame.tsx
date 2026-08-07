@@ -29,7 +29,7 @@ function buildTiles(words: GameProps['words']) {
   return { pairs, tiles: shuffle(tiles) };
 }
 
-export function MatchGame({ words, onExit, onFinish }: GameProps) {
+export function MatchGame({ words, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
 
@@ -118,7 +118,9 @@ export function MatchGame({ words, onExit, onFinish }: GameProps) {
         sub={`${t('fc_pairs_matched')}: ${perfect}/${pairs.length}`}
         onReplay={replay}
         onExit={onExit}
-      />
+      >
+        {endNote}
+      </GameEnd>
     );
   }
 
