@@ -324,26 +324,37 @@ body {
     transform var(--dur-fast) var(--ease-out);
 }
 /* Section headers are collapse toggles, so .sb__section is a <button> — hence
-   the resets alongside the caps typography. */
+   the resets. Sections default to collapsed, which makes these five headers the
+   sidebar's primary surface rather than quiet labels above the real rows: they
+   are sized and weighted like .sb__item, one step stronger. */
 .sb__section {
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
-  color: var(--text-disabled);
+  font-size: var(--text-sm);
   font-weight: 800;
-  padding: var(--space-4) var(--space-3) var(--space-2);
+  color: var(--text-strong);
+  padding: 10px var(--space-3);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   width: 100%;
   border: none;
   background: transparent;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 .sb__section:hover {
-  color: var(--text-muted);
+  background: var(--cream-200);
+}
+/* Breathing room above each heading, so the five read as separate blocks —
+   except the first, which sits directly under the brand. */
+.sb__group + .sb__group .sb__section {
+  margin-top: var(--space-3);
+}
+.sb__section-icon {
+  flex-shrink: 0;
+  color: var(--brand);
 }
 .sb__section-label {
   flex: 1;
@@ -351,17 +362,23 @@ body {
 }
 .sb__section-chevron {
   flex-shrink: 0;
+  color: var(--text-disabled);
   transition: transform var(--dur-fast) var(--ease-out);
 }
 .sb__group.is-collapsed .sb__section-chevron {
   transform: rotate(-90deg);
 }
-/* The rows carry .sb's own 2px rhythm, which they lost when the group wrapper
+/* An expanded section's rows are its children — indent them under the heading
+   and hang a rule beside them so the grouping survives being open. The flex
+   column restores .sb's own 2px rhythm, which the rows lost when this wrapper
    made them stop being direct flex children of .sb. */
 .sb__group-items {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin-left: var(--space-4);
+  padding-left: var(--space-2);
+  border-left: var(--border-width) solid var(--border-subtle);
 }
 .sb__group.is-collapsed .sb__group-items {
   display: none;
@@ -558,9 +575,16 @@ body {
   }
   /* No headers here, so there is nothing to expand from: the rail ignores
      collapse and always shows every icon (the roll-up badge lives inside the
-     hidden header, so nothing double-counts). */
+     hidden header, so nothing double-counts). The heading indent and its rule
+     go too — with no heading to sit under, they would just push the 64px column
+     of icons off-centre. */
   .sb__group.is-collapsed .sb__group-items {
     display: flex;
+  }
+  .sb__group-items {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
   }
   .sb__item {
     position: relative;
@@ -2434,6 +2458,29 @@ html[data-scrollbar='ghost'] *:hover::-webkit-scrollbar-thumb:active {
   background: var(--taupe-500);
 }
 
+/* --- the sidebar keeps a hairline, whatever preset is selected ---
+   A 2px thumb reads as a position hint rather than a control: the rail is
+   narrow and its own scrollbar competing with the content area's was noise.
+   `html` prefix so this outweighs the html[data-scrollbar='…'] presets above. */
+html .sb::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+html .sb::-webkit-scrollbar-track {
+  background: transparent;
+}
+html .sb::-webkit-scrollbar-thumb {
+  background: var(--taupe-400);
+  border: none;
+  background-clip: border-box;
+  border-radius: 999px;
+}
+html .sb:hover::-webkit-scrollbar-thumb,
+html .sb::-webkit-scrollbar-thumb:hover,
+html .sb::-webkit-scrollbar-thumb:active {
+  background: var(--taupe-500);
+}
+
 /* Firefox (no ::-webkit-scrollbar support): standard properties. */
 @supports not selector(::-webkit-scrollbar) {
   * {
@@ -2449,6 +2496,12 @@ html[data-scrollbar='ghost'] *:hover::-webkit-scrollbar-thumb:active {
   }
   /* ghost: hover-reveal isn't possible with standard properties;
      Firefox falls back to the slim style (already covered by the base rule). */
+  /* `thin` is as narrow as Firefox goes — there is no 2px equivalent. */
+  html .sb,
+  html[data-scrollbar='inset'] .sb {
+    scrollbar-width: thin;
+    scrollbar-color: var(--taupe-400) transparent;
+  }
 }
 
 /* ============================================================ GARDEN (vocabulary plants) ============================================================ */

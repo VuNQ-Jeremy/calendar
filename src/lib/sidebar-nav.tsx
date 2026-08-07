@@ -22,6 +22,8 @@ export interface NavItem {
 export interface NavSection {
   id: string;
   tk: string;
+  /** Distinct from every item icon inside the section, so it reads as a heading. */
+  icon: IconName;
   items: NavItem[];
 }
 
@@ -34,6 +36,7 @@ export const NAV: NavSection[] = [
   {
     id: 'overview',
     tk: 'nav_overview',
+    icon: 'grid',
     items: [
       { id: 'dashboard', path: '/dashboard', tk: 'nav_dashboard', icon: 'home', staffOnly: true },
       { id: 'calendar', path: '/calendar', tk: 'nav_calendar', icon: 'calendar', staffOnly: true },
@@ -42,6 +45,7 @@ export const NAV: NavSection[] = [
   {
     id: 'teaching',
     tk: 'nav_teaching',
+    icon: 'star',
     items: [
       { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book', staffOnly: true },
       { id: 'people', path: '/people', tk: 'nav_people', icon: 'users', staffOnly: true },
@@ -51,6 +55,7 @@ export const NAV: NavSection[] = [
   {
     id: 'grading',
     tk: 'nav_grading',
+    icon: 'check',
     items: [
       { id: 'tests', path: '/tests', tk: 'nav_tests', icon: 'clipboard', staffOnly: true },
       { id: 'questions', path: '/questions', tk: 'nav_questions', icon: 'edit', staffOnly: true },
@@ -67,6 +72,7 @@ export const NAV: NavSection[] = [
   {
     id: 'learning',
     tk: 'nav_learning',
+    icon: 'sparkle',
     items: [
       { id: 'vocabulary', path: '/vocabulary', tk: 'nav_flashcards', icon: 'cards' },
       // Both roles: the class garden is the shared surface, not a staff report.
@@ -92,6 +98,7 @@ export const NAV: NavSection[] = [
   {
     id: 'admin',
     tk: 'nav_admin',
+    icon: 'key',
     items: [
       {
         id: 'tuition',
@@ -151,14 +158,23 @@ function write(ids: ReadonlySet<string>) {
   }
 }
 
+/** Every section, collapsed — the state a fresh load starts from. */
+function allCollapsed(): Set<string> {
+  return new Set(NAV.map((sec) => sec.id));
+}
+
 /**
- * Per-device collapse state. Server and first client render both show every
- * section expanded and the stored set is applied after mount — the same
- * SSR-safe shape LanguageProvider uses (src/lib/i18n.tsx), so there is no
- * hydration mismatch.
+ * Per-device collapse state. Sections start collapsed, so the sidebar opens as
+ * five headings and the user expands what they need.
+ *
+ * Server and first client render agree on all-collapsed, then the stored set is
+ * applied after mount — the same SSR-safe shape LanguageProvider uses
+ * (src/lib/i18n.tsx), so there is no hydration mismatch. Collapsed-by-default is
+ * also what makes that read invisible: the sections a user had open expand into
+ * place, rather than the whole list appearing and then snapping shut.
  */
 export function useCollapsedSections(activeSectionId: string | null) {
-  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set<string>());
+  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(allCollapsed);
   // The mount read below runs once, so it needs the active id without taking it
   // as a dependency.
   const activeRef = React.useRef(activeSectionId);
@@ -167,6 +183,7 @@ export function useCollapsedSections(activeSectionId: string | null) {
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(SB_COLLAPSED_KEY);
+      // No stored preference — stay as loaded, i.e. everything collapsed.
       if (!raw) return;
       const parsed: unknown = JSON.parse(raw);
       if (!Array.isArray(parsed)) return;

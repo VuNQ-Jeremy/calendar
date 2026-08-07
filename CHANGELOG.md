@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0119 — 2026-08-07
+Sidebar sections are now prominent headings with their own icons, default to collapsed, and the sidebar keeps a 2px hairline scrollbar.
+
 ## v0.0118 — 2026-08-07
 Sidebar nav regrouped from one 12-item Manage list into five collapsible sections (Overview / Teaching / Grading / Learning / Admin), with per-device collapse state, badge roll-up onto collapsed headers, and auto-expand of the active section.
 

@@ -27,6 +27,11 @@ const STUDENT_PASSWORD = process.env.MOCHI_STUDENT_PASSWORD ?? PASSWORD;
 const HAVE_CREDS = Boolean(EMAIL && PASSWORD);
 
 async function signIn(page: Page, email: string, password: string) {
+  // Sidebar sections default to collapsed, which would hide the /calendar row
+  // clicked below and the /feedback badge this spec polls (innerText on a
+  // hidden node returns ''). Seed "nothing collapsed" before first paint —
+  // collapse behaviour itself is e2e/sidebar-collapse.spec.ts's business.
+  await page.addInitScript(() => localStorage.setItem('mochi_sb_collapsed_v1', '[]'));
   await page.goto('/login');
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);

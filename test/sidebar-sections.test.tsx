@@ -46,6 +46,15 @@ describe('sidebar nav sections', () => {
     expect(activeSectionFor('/login')).toBeNull();
   });
 
+  it('gives every section an icon no item inside it also uses', () => {
+    for (const sec of NAV) {
+      expect(sec.icon).toBeTruthy();
+      expect(sec.items.map((n) => n.icon)).not.toContain(sec.icon);
+    }
+    // And the five headings are distinguishable from each other.
+    expect(new Set(NAV.map((s) => s.icon)).size).toBe(NAV.length);
+  });
+
   it('sums only the counts of the items it is given', () => {
     const grading = NAV.find((s) => s.id === 'grading')!;
     expect(rollupCount(grading.items, { tests: 3, people: 9 })).toBe(3);
@@ -74,41 +83,55 @@ describe('sidebar nav sections', () => {
     ).toEqual(['feedback']);
   });
 
+  it('starts every section collapsed with nothing stored', async () => {
+    await act(async () => {
+      render(<Harness activeSectionId={null} />);
+    });
+    for (const sec of NAV) expect(expanded(sec.id)).toBe('false');
+    // Nothing was written: an untouched sidebar leaves no preference behind.
+    expect(stored()).toBeNull();
+  });
+
   it('persists a toggled section', async () => {
     await act(async () => {
       render(<Harness activeSectionId={null} />);
     });
+
+    // Expanding writes the set MINUS that section (collapsed ids are stored).
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('h-grading'));
+    });
     expect(expanded('grading')).toBe('true');
+    expect(JSON.parse(stored()!)).not.toContain('grading');
+    expect(JSON.parse(stored()!)).toContain('admin');
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('h-grading'));
     });
     expect(expanded('grading')).toBe('false');
-    expect(stored()).toBe('["grading"]');
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('h-grading'));
-    });
-    expect(expanded('grading')).toBe('true');
-    expect(stored()).toBe('[]');
+    expect(JSON.parse(stored()!)).toContain('grading');
   });
 
-  it('applies stored collapse on mount but never to the landing section', async () => {
-    localStorage.setItem(SB_COLLAPSED_KEY, '["grading","admin"]');
+  it('applies stored expansion on mount, and never collapses the landing section', async () => {
+    // Only overview and admin were left collapsed, so the other three are open.
+    localStorage.setItem(SB_COLLAPSED_KEY, '["overview","admin","grading"]');
     await act(async () => {
       render(<Harness activeSectionId="grading" />);
     });
-    await waitFor(() => expect(expanded('admin')).toBe('false'));
+    await waitFor(() => expect(expanded('teaching')).toBe('true'));
+    expect(expanded('learning')).toBe('true');
+    expect(expanded('overview')).toBe('false');
     // The user landed on a grading page, so that section opens regardless...
     expect(expanded('grading')).toBe('true');
-    // ...and the write records it, while admin keeps the user's choice.
-    expect(stored()).toBe('["admin"]');
+    // ...and the write records it, while the others keep the user's choice.
+    expect(stored()).toBe('["overview","admin"]');
   });
 
   it('expands the section entered by a later navigation, leaving the rest alone', async () => {
     localStorage.setItem(SB_COLLAPSED_KEY, '["grading","admin"]');
     const view = render(<Harness activeSectionId={null} />);
-    await waitFor(() => expect(expanded('grading')).toBe('false'));
+    await waitFor(() => expect(expanded('teaching')).toBe('true'));
+    expect(expanded('grading')).toBe('false');
     expect(expanded('admin')).toBe('false');
 
     await act(async () => {
@@ -116,6 +139,7 @@ describe('sidebar nav sections', () => {
     });
     expect(expanded('grading')).toBe('true');
     expect(expanded('admin')).toBe('false');
+    expect(expanded('teaching')).toBe('true');
     expect(stored()).toBe('["admin"]');
   });
 
@@ -124,6 +148,7 @@ describe('sidebar nav sections', () => {
     await act(async () => {
       render(<Harness activeSectionId={null} />);
     });
-    expect(expanded('grading')).toBe('true');
+    // Falls back to the as-loaded default rather than throwing.
+    expect(expanded('grading')).toBe('false');
   });
 });

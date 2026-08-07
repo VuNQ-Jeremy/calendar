@@ -23,55 +23,103 @@ test.describe('sidebar: collapsible sections', () => {
 
   test('collapse, roll up badges, auto-expand on navigation, persist', async ({ page }) => {
     await signInStaff(page);
+    // A retry reuses the browser profile, so drop any collapse state an earlier
+    // attempt persisted — this test asserts on the no-preference default. A
+    // one-shot clear plus reload, NOT addInitScript: that would re-run on every
+    // navigation below and wipe the very state the persistence checks assert on.
+    await page.evaluate(() => localStorage.removeItem('mochi_sb_collapsed_v1'));
+    await page.reload();
 
-    // All five sections, expanded on first load (nothing stored yet).
+    // Sections default to collapsed, so the sidebar opens as five headings —
+    // except Overview, which owns the /dashboard the sign-in lands on.
     for (const name of SECTIONS) {
-      await expect(header(page, name)).toHaveAttribute('aria-expanded', 'true');
+      await expect(header(page, name)).toBeVisible();
+      await expect(header(page, name)).toHaveAttribute(
+        'aria-expanded',
+        name === 'Overview' ? 'true' : 'false',
+      );
+    }
+    // Each heading carries its own icon.
+    for (const name of SECTIONS) {
+      await expect(header(page, name).locator('.sb__section-icon')).toHaveCount(1);
     }
 
-    // The Tests row's badge, if the seed has anything awaiting grading.
+    // --- a collapsed section hides its rows but keeps them mounted (the icon
+    // rail needs them)
     const testsRow = page.locator('.sb__item[href="/tests"]');
-    await expect(testsRow).toBeVisible();
-    const badge = testsRow.locator('.count');
-    const gradingCount = (await badge.count()) > 0 ? (await badge.innerText()).trim() : null;
-
-    // --- collapse hides the rows but keeps them mounted (the icon rail needs them)
-    await header(page, 'Grading').click();
-    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'false');
-    await expect(group(page, 'grading')).toBeHidden();
-    await expect(testsRow).toBeHidden();
     await expect(testsRow).toHaveCount(1);
-    // Other sections are unaffected.
-    await expect(group(page, 'teaching')).toBeVisible();
-    expect(await storedCollapsed(page)).toBe('["grading"]');
+    await expect(testsRow).toBeHidden();
+    await expect(group(page, 'grading')).toBeHidden();
 
     // --- the hidden rows' badge counts roll up onto the header
-    if (gradingCount) {
-      await expect(header(page, 'Grading').locator('.count')).toHaveText(gradingCount);
-    }
+    const rollup = header(page, 'Grading').locator('.count');
+    const gradingCount = (await rollup.count()) > 0 ? (await rollup.innerText()).trim() : null;
 
-    // --- navigating into a collapsed section force-expands it
+    // --- expanding reveals the rows and moves the badge back onto its own row
+    await header(page, 'Grading').click();
+    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'true');
+    await expect(testsRow).toBeVisible();
+    await expect(rollup).toHaveCount(0);
+    if (gradingCount) {
+      await expect(testsRow.locator('.count')).toHaveText(gradingCount);
+    }
+    // Collapsed ids are what gets stored, so an expanded grading drops out.
+    const afterExpand = JSON.parse((await storedCollapsed(page))!);
+    expect(afterExpand).not.toContain('grading');
+    expect(afterExpand).toContain('admin');
+
+    // --- expansion survives a reload (post-mount read, so poll)
+    await page.reload();
+    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'true');
+    await expect(header(page, 'Admin')).toHaveAttribute('aria-expanded', 'false');
+
+    // --- collapsing again persists too
+    await header(page, 'Grading').click();
+    await expect(group(page, 'grading')).toBeHidden();
+    await page.reload();
+    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'false');
+
+    // --- navigating into a collapsed section force-expands it, and the
+    // auto-expand is written back so storage matches the screen
     await page.goto('/tests');
     await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'true');
     await expect(testsRow).toBeVisible();
-    await expect(header(page, 'Grading').locator('.count')).toHaveCount(0);
-    // The auto-expand is written back, so storage matches the screen.
-    expect(await storedCollapsed(page)).toBe('[]');
-
-    // --- collapse survives a reload; the landing section stays open
-    await header(page, 'Teaching').click();
-    await expect(group(page, 'teaching')).toBeHidden();
-    await page.reload();
-    // Applied by a post-mount localStorage read, so poll rather than assert once.
-    await expect(header(page, 'Teaching')).toHaveAttribute('aria-expanded', 'false');
-    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'true');
-    expect(await storedCollapsed(page)).toBe('["teaching"]');
+    expect(JSON.parse((await storedCollapsed(page))!)).not.toContain('grading');
 
     // --- a stored collapse never hides the page the user landed on
     await page.goto('/people'); // a Teaching row
     await expect(header(page, 'Teaching')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.sb__item[href="/people"]')).toBeVisible();
-    expect(await storedCollapsed(page)).toBe('[]');
+    expect(JSON.parse((await storedCollapsed(page))!)).not.toContain('teaching');
+  });
+
+  test('the sidebar keeps a hairline scrollbar whatever the preset', async ({ page }) => {
+    await signInStaff(page);
+    // Force the rail to overflow so a gutter actually exists to measure.
+    await page.setViewportSize({ width: 1400, height: 300 });
+    const gutter = async () =>
+      page.evaluate(() => {
+        const sb = document.querySelector('.sb') as HTMLElement;
+        // offsetWidth includes the scrollbar gutter, clientWidth does not.
+        return {
+          gutter: sb.offsetWidth - sb.clientWidth,
+          overflowing: sb.scrollHeight > sb.clientHeight,
+        };
+      });
+    expect((await gutter()).overflowing, 'the rail must overflow for this to mean anything').toBe(
+      true,
+    );
+
+    // The .sb rule must outweigh every html[data-scrollbar='…'] preset — 'inset'
+    // is the one that would otherwise render a 12px bar.
+    for (const preset of ['slim', 'inset', 'brand', 'ghost']) {
+      await page.evaluate(
+        (p) => document.documentElement.setAttribute('data-scrollbar', p),
+        preset,
+      );
+      const { gutter: w } = await gutter();
+      expect(w, `preset ${preset}`).toBeLessThanOrEqual(2);
+    }
   });
 
   test('students see only their own section', async ({ page }) => {
@@ -80,7 +128,9 @@ test.describe('sidebar: collapsible sections', () => {
     for (const name of ['Overview', 'Teaching', 'Grading', 'Admin']) {
       await expect(header(page, name)).toHaveCount(0);
     }
-    // Still collapsible for them.
+    // Students land on /vocabulary, which Learning owns, so it starts expanded
+    // and stays collapsible.
+    await expect(header(page, 'Learning')).toHaveAttribute('aria-expanded', 'true');
     await header(page, 'Learning').click();
     await expect(group(page, 'learning')).toBeHidden();
   });

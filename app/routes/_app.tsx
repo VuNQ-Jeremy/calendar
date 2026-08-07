@@ -154,6 +154,7 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
               aria-controls={`sb-group-${sec.id}`}
               onClick={() => toggle(sec.id)}
             >
+              <MIcon name={sec.icon} size={18} className="sb__section-icon" />
               <span className="sb__section-label">{t(sec.tk)}</span>
               {rollup > 0 && (
                 <span className="count">

@@ -71,6 +71,12 @@ test.describe('navigation latency', () => {
   test.skip(!HAVE_CREDS, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 
   test.beforeEach(async ({ page }) => {
+    // Sidebar sections default to collapsed, and the assertions below click and
+    // hover rows across several of them (/people, /questions, /calendar). Seed
+    // "nothing collapsed" before first paint so those rows are visible — these
+    // tests are about latency, not about collapse state, which
+    // e2e/sidebar-collapse.spec.ts covers.
+    await page.addInitScript(() => localStorage.setItem('mochi_sb_collapsed_v1', '[]'));
     await page.goto('/login');
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
