@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0124 — 2026-08-07
+Add a root BACKLOG.md: one ranked list of what is left to build, replacing open items scattered across four unrelated docs. Records the garden as web-only, which no doc had captured.
+
 ## v0.0123 — 2026-08-07
 Fix a shebang in the question-csv skill validator that made vitest drop 24 tests at import and blocked the worker suite behind it. The staging e2e suite is now manual-trigger only.
 
