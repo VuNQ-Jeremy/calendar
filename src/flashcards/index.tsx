@@ -196,56 +196,64 @@ export function FlashcardTopicsScreen() {
                   >
                     {topic.name}
                   </div>
-                  {isStaff && (
-                    // The card itself navigates on click, so every BUTTON here stops the event —
-                    // opening a dialog must not also leave the page. Deliberately per-button and
-                    // not on this container: with three icons the container's own dead space sits
-                    // right under the middle of the card, and swallowing clicks there turned "click
-                    // the card to open the topic" into a coin flip.
-                    <div className="lrow__actions">
-                      {gardenStaff && (
-                        <FIB
-                          label={t('garden_assign')}
-                          size="sm"
-                          onClick={(e: React.MouseEvent) => {
-                            e.stopPropagation();
-                            setAssigning({
-                              topic: { id: topic.id, name: topic.name },
-                              existing: null,
-                            });
-                          }}
-                        >
-                          <MIcon name="sprout" size={16} />
-                        </FIB>
-                      )}
+                </div>
+                {isStaff && (
+                  // Own row below the name: the icons crowded the title into an ellipsis at the
+                  // card's 240px minimum.
+                  //
+                  // The card itself navigates on click, so every BUTTON here stops the event —
+                  // opening a dialog must not also leave the page. Deliberately per-button and
+                  // not on this container: with three icons the container's own dead space sits
+                  // right under the middle of the card, and swallowing clicks there turned "click
+                  // the card to open the topic" into a coin flip.
+                  <div
+                    className="lrow__actions"
+                    // -6 against the card's 10px column gap: the buttons should read as belonging
+                    // to the title above them, not float equidistant between title and description.
+                    style={{ alignSelf: 'flex-start', marginTop: -6 }}
+                  >
+                    {gardenStaff && (
                       <FIB
-                        label={t('edit')}
+                        label={t('garden_assign')}
                         size="sm"
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
-                          setModal({
-                            id: topic.id,
-                            name: topic.name,
-                            description: topic.description ?? '',
-                            color: topic.color,
+                          setAssigning({
+                            topic: { id: topic.id, name: topic.name },
+                            existing: null,
                           });
                         }}
                       >
-                        <MIcon name="edit" size={16} />
+                        <MIcon name="sprout" size={16} />
                       </FIB>
-                      <FIB
-                        label={t('delete')}
-                        size="sm"
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          del(topic);
-                        }}
-                      >
-                        <MIcon name="trash" size={16} />
-                      </FIB>
-                    </div>
-                  )}
-                </div>
+                    )}
+                    <FIB
+                      label={t('edit')}
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setModal({
+                          id: topic.id,
+                          name: topic.name,
+                          description: topic.description ?? '',
+                          color: topic.color,
+                        });
+                      }}
+                    >
+                      <MIcon name="edit" size={16} />
+                    </FIB>
+                    <FIB
+                      label={t('delete')}
+                      size="sm"
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        del(topic);
+                      }}
+                    >
+                      <MIcon name="trash" size={16} />
+                    </FIB>
+                  </div>
+                )}
                 {topic.description && (
                   <div
                     style={{

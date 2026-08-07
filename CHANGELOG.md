@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0120 — 2026-08-07
+Vocabulary topic cards: move the staff action buttons onto their own row below the topic name, so short names no longer truncate at the 240px card minimum. Fix three e2e specs that navigated by center-clicking the card, which after the reflow landed on the Assign button.
+
 ## v0.0119 — 2026-08-07
 Sidebar sections are now prominent headings with their own icons, default to collapsed, and the sidebar keeps a 2px hairline scrollbar.
 

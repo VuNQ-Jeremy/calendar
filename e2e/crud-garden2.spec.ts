@@ -34,7 +34,9 @@ test.describe('CRUD: the garden plant lifecycle', () => {
     let post = k.posted('/vocabulary');
     await k.submit().click();
     await post;
-    await page.locator('.mochi-card', { hasText: topic }).click();
+    // The title, not the card: a bare .click() hits the card's center, where the staff action
+    // buttons live — and they stopPropagation() to open dialogs instead of navigating.
+    await page.locator('.mochi-card', { hasText: topic }).getByText(topic).click();
     await page.waitForURL(/\/vocabulary\/.+/);
     const topicPath = new URL(page.url()).pathname;
 

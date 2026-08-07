@@ -52,7 +52,10 @@ test.describe('CRUD: vocabulary', () => {
     let post = k.posted('/vocabulary');
     await k.submit().click();
     await post;
-    await page.locator('.mochi-card', { hasText: topic }).click(); // card navigates
+    // Click the TITLE, not the card. The whole card navigates, but a bare .click() lands on its
+    // center — which the staff action buttons can occupy, and those stopPropagation() to open
+    // their own dialogs. Targeting the title is immune to the card's internal layout.
+    await page.locator('.mochi-card', { hasText: topic }).getByText(topic).click();
     await page.waitForURL(/\/vocabulary\/.+/);
     const topicPath = new URL(page.url()).pathname;
 

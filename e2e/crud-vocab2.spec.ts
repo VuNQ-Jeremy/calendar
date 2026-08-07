@@ -18,7 +18,9 @@ test.describe('CRUD: vocabulary imports and game results', () => {
     const post = k.posted('/vocabulary');
     await k.submit().click();
     await post;
-    await page.locator('.mochi-card', { hasText: name }).click();
+    // The title, not the card: a bare .click() hits the card's center, where the staff action
+    // buttons live — and they stopPropagation() to open dialogs instead of navigating.
+    await page.locator('.mochi-card', { hasText: name }).getByText(name).click();
     await page.waitForURL(/\/vocabulary\/.+/);
     return new URL(page.url()).pathname;
   }
