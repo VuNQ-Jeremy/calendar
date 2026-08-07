@@ -1248,10 +1248,12 @@ body {
   width: 380px;
   flex: none;
   min-height: 0;
+  /* A safety valve, not the plan: the two cards are sized (below) to fit a 900px-tall window
+     without it. Below roughly 875px of viewport they no longer fit and this scrolls. */
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: 12px;
 }
 .assess-report__stats {
   flex: none;
@@ -1280,10 +1282,40 @@ body {
 .assess-report__stats .statcard {
   height: 100%;
 }
+/* Compact tiles, rail only. Ten tiles at the page's default size need ~900px of column and the
+   rail has ~560px, which is what made it scroll. The page-wide .statcard keeps its size; this is
+   the only place ten of them stack in one 380px column. Measured: this brings the rail's content
+   to 537px with both conditional rows present (incident badges, streak line), so it fits a
+   900px-tall window with ~25px to spare. */
+.assess-report__rail .statcard {
+  gap: var(--space-3);
+  padding: 6px 10px;
+}
+.assess-report__rail .statcard__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+}
+.assess-report__rail .statcard__num {
+  font-size: var(--text-lg);
+}
+.assess-report__rail .statcard__label {
+  font-size: var(--text-xs);
+  margin-top: 1px;
+  line-height: 1.2;
+}
+.assess-report__rail .m-grid {
+  gap: 10px;
+}
 .assess-report__form {
   flex: 1;
   min-width: 0;
   min-height: 0;
+  /* Content height, not row height: the remark is four star rows and a comment box, and stretching
+     it to a 900px-tall row just grew the textarea into empty space. Capped at the row so a long
+     criteria list scrolls inside the card (below) rather than pushing the page. */
+  align-self: flex-start;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -1333,6 +1365,9 @@ body {
   }
   .assess-report__form {
     flex: none;
+    /* stacked, the column is full width and its own scroller, so neither cap applies */
+    align-self: stretch;
+    max-height: none;
   }
   .assess-report__form .assess-remark__body,
   .assess-report__form > .mochi-field {

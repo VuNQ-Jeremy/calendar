@@ -249,9 +249,9 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
   const quiet = g != null && g.playDays === 0 && g.fruits === 0 && g.setbacks === 0;
 
   return (
-    <Card className="assess-report__garden" style={{ padding: 18 }}>
-      <div className="m-spread" style={{ marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>
+    <Card className="assess-report__garden" style={{ padding: 14 }}>
+      <div className="m-spread" style={{ marginBottom: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-base)' }}>
           <span className="m-row" style={{ gap: 8, alignItems: 'center' }}>
             <MIcon name="sprout" size={18} />
             {t('remark_garden_title')}
@@ -832,8 +832,8 @@ function AssessmentsScreen() {
               its natural height and the garden block follows it, rather than the two of them
               fighting over the row's height. */}
           <div className="assess-report__rail">
-            <Card className="assess-report__stats" style={{ padding: 18 }}>
-              <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
+            <Card className="assess-report__stats" style={{ padding: 14 }}>
+              <h2 style={{ margin: '0 0 10px', fontSize: 'var(--text-base)' }}>
                 {t('remark_stats_title')} · {monthLabel(reportMonth, lang)}
               </h2>
               <div className="m-grid cols-4">

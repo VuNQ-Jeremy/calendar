@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0133 — 2026-08-07
+Monthly report fits without scrolling: compact rail tiles, and the remark card sizes to its content instead of stretching to the row.
+
 ## v0.0132 — 2026-08-07
 Record the garden-card 401 and its fix in the handoff plan; note the browser verification is now done.
 
