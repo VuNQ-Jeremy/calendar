@@ -1357,11 +1357,24 @@ body {
     display: contents;
   }
   /* the remark's content-height cap is for the stacked rail below this breakpoint; here it is a
-     column of its own and matches its neighbours. Tiles keep their size rather than stretching —
-     four of them sharing 562px reads as four empty boxes, not as a fuller card. */
+     column of its own and matches its neighbours. */
   .assess-report__form {
     align-self: stretch;
     max-height: none;
+  }
+  /* the tile grids take the column's slack, so the cards fill their full height rather than
+     ending in dead space. The conditional rows (incident badges, streak line, the quiet note)
+     ride below the grid and end up pinned to the card's bottom edge. */
+  .assess-report__garden {
+    display: flex;
+    flex-direction: column;
+  }
+  .assess-report__stats .m-grid,
+  .assess-report__garden .m-grid {
+    flex: 1;
+  }
+  .assess-report__rail .statcard {
+    height: 100%;
   }
 }
 
