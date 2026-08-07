@@ -1340,6 +1340,23 @@ body {
   flex: none;
 }
 
+/* Three columns once there is room for all of them: the remark, then the two rail cards side by
+   side rather than stacked. The remark keeps a 340px floor — below that its criteria rows (label
+   plus five stars) start wrapping — and the rail columns give up their slack to it first, which
+   is what keeps 1366px laptops on three columns instead of a crushed one. Under the floor the
+   flex rail below takes over. `display: contents` promotes the rail's two cards to columns of
+   this grid without a second wrapper. */
+@media (min-width: 1360px) {
+  .assess-report {
+    display: grid;
+    grid-template-columns: minmax(340px, 1fr) minmax(290px, 340px) minmax(290px, 340px);
+    align-items: start;
+  }
+  .assess-report__rail {
+    display: contents;
+  }
+}
+
 @media (max-width: 1100px) {
   .assess-split,
   .assess-report {
