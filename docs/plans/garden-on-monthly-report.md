@@ -73,9 +73,17 @@ Three layers, in dependency order:
    Every requested student gets an entry, so a student who never played reads as zeros rather than a
    missing key. `studentGardenMonth(db, studentId, …)` delegates to it — one definition of what the
    numbers mean, and no N+1.
-3. **`GET /api/garden/month/:id?month=YYYY-MM`** —
-   [`app/routes/api.garden.month.$id.tsx`](../../app/routes/api.garden.month.%24id.tsx), staff-only,
-   registered in [`app/routes.ts`](../../app/routes.ts) beside `api/garden/progress/:id`.
+3. **Two staff-only endpoints over that one view**, because the web and the phone authenticate
+   differently:
+   - `GET /garden-month?student=<id>&month=YYYY-MM` —
+     [`app/routes/garden-month.tsx`](../../app/routes/garden-month.tsx), cookie auth
+     (`requireStaff`). **This is the one the report card uses.**
+   - `GET /api/garden/month/:id?month=YYYY-MM` —
+     [`app/routes/api.garden.month.$id.tsx`](../../app/routes/api.garden.month.%24id.tsx), bearer
+     auth, for the mobile parity work below.
+
+   Both return `{ data: GardenMonthSummary }` and both call `studentGardenMonth`. See "the 401" in
+   Traps — the card originally had only the `/api` one and was dead in production because of it.
 
 ### Two decisions worth not re-litigating
 
@@ -101,8 +109,9 @@ page column already scrolls there, and a nested one would trap the wheel.
 |---|---|
 | `shared/logic/garden.ts` | `tallyGardenMonth`, `emptyMonthTally`, `GardenMonthTally`, `SETBACK_TYPES` |
 | `server/services/garden.ts` | `GardenMonthSummary`, `studentGardenMonth`, `gardenMonthByStudent` |
-| `app/routes/api.garden.month.$id.tsx` | **New.** The staff-only month endpoint |
-| `app/routes.ts` | Registers `api/garden/month/:id` |
+| `app/routes/garden-month.tsx` | **New** (`02eee1d`). The cookie-authed endpoint the card uses |
+| `app/routes/api.garden.month.$id.tsx` | **New.** The bearer-authed twin, for mobile |
+| `app/routes.ts` | Registers `garden-month` and `api/garden/month/:id` |
 | `app/routes/assessments.$month.$studentId.report.tsx` | Slip loader: garden, `.catch(() => null)` |
 | `src/assessments/report-slip.tsx` | `<Sprout />`, two garden tiles, `.rslip__stat--garden` |
 | `src/screens-assessments.tsx` | `GardenMonthCard`, the `.assess-report__rail` wrapper |
@@ -142,9 +151,17 @@ Not run, honestly outstanding:
 - **OTA publish unverified.** `npx eas-cli workflow:runs` failed with "An Expo user account is
   required" — not authenticated in that session. This commit touches no `mobile/` file, so no bundle
   behaviour changed, but the `CLAUDE.md` post-push check is genuinely unperformed.
-- **Nothing was viewed in a browser.** Per `memory/local-run-and-deploy-loop`, `workerd` is broken
-  on this machine, so the layout claims above are construction, not observation. The rail's
-  two-card scroll behaviour in particular deserves one look on a real screen.
+- ~~**Nothing was viewed in a browser.**~~ **Done 2026-08-07** — driven with Playwright against
+  production as `dev@mochi.edu`, read-only. That check is what found the 401 below. Post-fix
+  (`02eee1d`, `v0.0131`) the observed state is: card renders, `/garden-month.data` returns 200,
+  six tiles read real numbers, `remark_garden_quiet` shows, the student dropdown refetches under
+  the new id, the rail is 380px with `overflow-y: auto` at 1400px and `visible` at 1000px, and the
+  page never scrolls horizontally. Two cosmetic notes, both unaddressed: with two cards the rail
+  scrolls, so the garden card sits mostly below the fold at 1400×900; and the heading wraps to two
+  lines inside 380px.
+- **The slip's garden tiles have still never been seen with real data.** They are hidden unless
+  `activeDays > 0 || fruits > 0`, and no student in production has garden activity in any month, so
+  the observed slip correctly shows none. The loader path itself is exercised; the two tiles are not.
 
 ### About the e2e spec's fixtures
 
@@ -195,6 +212,23 @@ than one student.
 ## Traps this work actually hit
 
 Recorded so the next session does not pay for them twice.
+
+- **`/api/*` is bearer-only — a browser fetcher gets a 401 there.** This shipped broken and stayed
+  broken until someone opened a browser. `withAuth` (server/api/handler.ts) resolves the caller
+  through `requireApiStaff`, which reads `Authorization: Bearer` and **nothing else**
+  (server/api/auth.ts) — the session cookie is not consulted. `GardenMonthCard` pointed
+  `useFetcher().load` at `/api/garden/month/:id`, every call came back 401, and the card's
+  degrade-to-null branch removed it silently. Typecheck, lint and the unit tests were all green
+  over a feature that never rendered.
+
+  It was the only `fetcher.load` in the web client aimed at `/api/*`; every other one talks to a
+  cookie-authed route. The fix (`02eee1d`) is the `garden-month` twin, the same shape as
+  `event-previews`/`event-materials` — which exist for exactly this reason.
+
+  Two lessons worth more than the fix: a graceful-degradation branch will hide a total failure just
+  as quietly as a partial one, so a card that can vanish needs its network call asserted somewhere;
+  and the e2e spec written alongside this feature asserted `r.ok()` and would have caught it on the
+  first run.
 
 - **ICT, not UTC.** Every date here is an ICT `YYYY-MM-DD` string. The Worker clock is UTC and the
   school is UTC+7, so between 17:00 and 24:00 UTC the two disagree about the day. Use

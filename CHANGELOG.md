@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0132 — 2026-08-07
+Record the garden-card 401 and its fix in the handoff plan; note the browser verification is now done.
+
 ## v0.0131 — 2026-08-07
 Fix the monthly-report garden card: it fetched a bearer-only /api route from the browser and 401'd on every call, so it never rendered. Added a cookie-authed /garden-month twin.
 
