@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0130 — 2026-08-07
+Document the garden-on-monthly-report session as a handoff plan in docs/plans, and record the mobile report tab as a known parity gap.
+
 ## v0.0129 — 2026-08-07
 Add the vocabulary-garden month summary to the assessments monthly report: a six-tile rail card (days practised, rounds passed, stages grown, fruit, all-time fruit, stages lost) plus the plant as it stands, and two parent-facing garden tiles on the printed slip.
 

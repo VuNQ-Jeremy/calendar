@@ -115,6 +115,14 @@ native date/time picker — buildable, and better than a 40dp drag target.
 Replaced by per-student cards, filterable by class, date and assessment type. A five-column table at
 360dp either scrolls sideways or is unreadable, and a page that scrolls sideways is a bug.
 
+**Garden progress on the monthly report** (web `/assessments` → Monthly report, added 2026-08).
+Not an omission on principle — scoped to the web surface and not built yet. The mobile report tab
+(`app/(app)/assessments.tsx`, the `remark_stats_title` card) still shows the four academic tiles
+only. Nothing hard is left: the fold is a pure function in `shared/logic/garden.ts`
+(`tallyGardenMonth`, unit-tested), the read is `GET /api/garden/month/:id?month=YYYY-MM`, and the
+i18n keys are in the shared `strings.ts` both clients read. A mobile version is one endpoint entry
+plus six existing `CountTile`s. Step-by-step in `docs/plans/garden-on-monthly-report.md`.
+
 **`docx-preview` rendering.**
 DOM-only. Materials open in a `WebView` when the platform can render them inline (images, text,
 SVG) and are handed to Android's document viewers otherwise — including PDFs, which Android's
