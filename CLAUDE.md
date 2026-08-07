@@ -64,8 +64,15 @@
   env: `npm run test:env:setup` (needs the ngqv0712 wrangler login; the env is
   selected at BUILD time via `CLOUDFLARE_ENV=test` — never `wrangler deploy
   --env test`, which silently ships prod config).
-- **A feature isn't done until the full suite is green** against calendar-test:
-  `npm run test:env:setup` to deploy your change there, then the staging run.
+- **The staging suite is manual-trigger only — never run it on your own.** `npm
+  run test:e2e:staging` (and the `npm run test:env:setup` deploy it depends on)
+  runs ONLY when I explicitly ask for it in that session. It is not a
+  definition-of-done gate, not part of the commit/push routine, and not
+  something to run "to be safe" before reporting a task finished. It costs ~4
+  min and redeploys calendar-test, so an unasked-for run is a real cost, not a
+  free precaution. Write and commit the specs as required above; leave running
+  them to me. When a change plausibly affects behaviour the suite covers, say so
+  in one line and let me decide — don't run it and don't wait on an answer.
 - **Use the helper kit in `e2e/crud-helpers.ts`** — it encodes the app's UI
   contract: no `<form>`/`name=` attributes (locate inputs structurally by their
   `.mochi-field` label), combobox/date menus portalled to `document.body` (locate
