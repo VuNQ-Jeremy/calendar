@@ -1373,8 +1373,25 @@ body {
   .assess-report__garden .m-grid {
     flex: 1;
   }
+  /* tall cells get the dashboard tile layout — icon above a centered number — instead of the
+     compact horizontal row, which floated small in all that height */
   .assess-report__rail .statcard {
     height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+  }
+  .assess-report__rail .statcard__icon {
+    width: 40px;
+    height: 40px;
+  }
+  .assess-report__rail .statcard__num {
+    font-size: var(--text-2xl);
+  }
+  .assess-report__rail .statcard__label {
+    font-size: var(--text-sm);
   }
 }
 
