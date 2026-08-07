@@ -17,7 +17,13 @@ import { cacheKeyForPath } from '../../src/lib/route-cache.js';
 import { startLive, isLiveLayoutRefreshPending } from '../../src/lib/live.js';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
-import type { IconName } from '../../src/icons.jsx';
+import {
+  NAV,
+  visibleItems,
+  activeSectionFor,
+  rollupCount,
+  useCollapsedSections,
+} from '../../src/lib/sidebar-nav.jsx';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { DevInspector } from '../../src/dev-inspector.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
@@ -41,70 +47,6 @@ const TWEAKS = {
   rounding: 'soft',
   density: 'regular',
 };
-
-const NAV = [
-  {
-    tk: 'nav_overview',
-    items: [
-      { id: 'dashboard', path: '/dashboard', tk: 'nav_dashboard', icon: 'home', staffOnly: true },
-      { id: 'calendar', path: '/calendar', tk: 'nav_calendar', icon: 'calendar', staffOnly: true },
-    ],
-  },
-  {
-    tk: 'nav_manage',
-    items: [
-      { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book', staffOnly: true },
-      { id: 'people', path: '/people', tk: 'nav_people', icon: 'users', staffOnly: true },
-      { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder', staffOnly: true },
-      { id: 'tests', path: '/tests', tk: 'nav_tests', icon: 'clipboard', staffOnly: true },
-      { id: 'questions', path: '/questions', tk: 'nav_questions', icon: 'edit', staffOnly: true },
-      {
-        id: 'assessments',
-        path: '/assessments',
-        tk: 'nav_assessments',
-        icon: 'chart',
-        staffOnly: true,
-      },
-      { id: 'rankings', path: '/rankings', tk: 'nav_rankings', icon: 'grad', staffOnly: true },
-      { id: 'vocabulary', path: '/vocabulary', tk: 'nav_flashcards', icon: 'cards' },
-      // Both roles: the class garden is the shared surface, not a staff report.
-      { id: 'garden', path: '/garden', tk: 'nav_garden', icon: 'sprout' },
-      // Students only — staff manage tests from /tests instead.
-      {
-        id: 'my-tests',
-        path: '/my-tests',
-        tk: 'nav_my_tests',
-        icon: 'clipboard',
-        studentOnly: true,
-      },
-      // Students only — staff see the same sessions on /calendar.
-      {
-        id: 'my-schedule',
-        path: '/my-schedule',
-        tk: 'nav_my_schedule',
-        icon: 'calendar',
-        studentOnly: true,
-      },
-      {
-        id: 'tuition',
-        path: '/tuition',
-        tk: 'nav_tuition',
-        icon: 'banknote',
-        adminOnly: true,
-        staffOnly: true,
-      },
-      {
-        id: 'config',
-        path: '/config',
-        tk: 'nav_config',
-        icon: 'settings',
-        adminOnly: true,
-        staffOnly: true,
-      },
-      { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message', staffOnly: true },
-    ],
-  },
-];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -179,6 +121,8 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
     feedback: unresolvedFeedbackCount,
     tests: needsGradingCount,
   };
+  const { pathname } = useLocation();
+  const { collapsed, toggle } = useCollapsedSections(activeSectionFor(pathname));
 
   return (
     <aside className="sb">
@@ -195,34 +139,49 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
         Mochi
       </Link>
       {NAV.map((sec) => {
-        const items = sec.items.filter(
-          (n) =>
-            (!('staffOnly' in n) || !n.staffOnly || user.kind === 'staff') &&
-            (!('studentOnly' in n) || !n.studentOnly || user.kind === 'student') &&
-            (!('adminOnly' in n) || !n.adminOnly || user.role === 'Admin'),
-        );
+        const items = visibleItems(sec, user);
         if (items.length === 0) return null;
+        const open = !collapsed.has(sec.id);
+        // Collapsed rows still render — the ≤720px icon rail shows every item and
+        // ignores collapse, so they are hidden with CSS rather than unmounted.
+        const rollup = open ? 0 : rollupCount(items, counts);
         return (
-          <div key={sec.tk}>
-            <div className="sb__section">{t(sec.tk)}</div>
-            {items.map((n) => (
-              <NavLink
-                key={n.id}
-                to={n.path}
-                prefetch="intent"
-                className={({ isActive, isPending }) =>
-                  'sb__item' + (isActive ? ' is-active' : '') + (isPending ? ' is-pending' : '')
-                }
-              >
-                <MIcon name={n.icon as IconName} size={20} />
-                <span>{t(n.tk)}</span>
-                {counts[n.id] > 0 && (
-                  <span className="count">
-                    <ShBadge color="brand">{counts[n.id]}</ShBadge>
-                  </span>
-                )}
-              </NavLink>
-            ))}
+          <div key={sec.id} className={'sb__group' + (open ? '' : ' is-collapsed')}>
+            <button
+              type="button"
+              className="sb__section"
+              aria-expanded={open}
+              aria-controls={`sb-group-${sec.id}`}
+              onClick={() => toggle(sec.id)}
+            >
+              <span className="sb__section-label">{t(sec.tk)}</span>
+              {rollup > 0 && (
+                <span className="count">
+                  <ShBadge color="brand">{rollup}</ShBadge>
+                </span>
+              )}
+              <MIcon name="chevronDown" size={14} className="sb__section-chevron" />
+            </button>
+            <div id={`sb-group-${sec.id}`} className="sb__group-items">
+              {items.map((n) => (
+                <NavLink
+                  key={n.id}
+                  to={n.path}
+                  prefetch="intent"
+                  className={({ isActive, isPending }) =>
+                    'sb__item' + (isActive ? ' is-active' : '') + (isPending ? ' is-pending' : '')
+                  }
+                >
+                  <MIcon name={n.icon} size={20} />
+                  <span>{t(n.tk)}</span>
+                  {counts[n.id] > 0 && (
+                    <span className="count">
+                      <ShBadge color="brand">{counts[n.id]}</ShBadge>
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
           </div>
         );
       })}

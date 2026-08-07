@@ -15,6 +15,12 @@ ways no static scan can see:
 Pruning deserves its own pass: verify each key by hand, one family at a time, and delete from
 **both** locales together.
 
+Since captured: `nav_manage` was hand-verified and deleted (2026-08-07) when the sidebar's one
+"Manage" section became five collapsible ones. Its replacements — `nav_teaching`, `nav_grading`,
+`nav_learning`, `nav_admin` — will show up as false positives in the next scan for the same reason
+`nav_overview` does: section labels are referenced as `tk:` values in the NAV table, not as literal
+`t('…')` calls.
+
 83 keys as of 2026-07-29:
 
 ```

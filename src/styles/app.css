@@ -323,6 +323,8 @@ body {
     filter var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
 }
+/* Section headers are collapse toggles, so .sb__section is a <button> — hence
+   the resets alongside the caps typography. */
 .sb__section {
   font-size: var(--text-2xs);
   text-transform: uppercase;
@@ -330,6 +332,39 @@ body {
   color: var(--text-disabled);
   font-weight: 800;
   padding: var(--space-4) var(--space-3) var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sb__section:hover {
+  color: var(--text-muted);
+}
+.sb__section-label {
+  flex: 1;
+  min-width: 0;
+}
+.sb__section-chevron {
+  flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.sb__group.is-collapsed .sb__section-chevron {
+  transform: rotate(-90deg);
+}
+/* The rows carry .sb's own 2px rhythm, which they lost when the group wrapper
+   made them stop being direct flex children of .sb. */
+.sb__group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb__group.is-collapsed .sb__group-items {
+  display: none;
 }
 .sb__item {
   display: flex;
@@ -520,6 +555,12 @@ body {
   }
   .sb__section {
     display: none;
+  }
+  /* No headers here, so there is nothing to expand from: the rail ignores
+     collapse and always shows every icon (the roll-up badge lives inside the
+     hidden header, so nothing double-counts). */
+  .sb__group.is-collapsed .sb__group-items {
+    display: flex;
   }
   .sb__item {
     position: relative;
