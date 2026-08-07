@@ -1,5 +1,31 @@
 import { defineConfig } from 'vitest/config';
+
+/**
+ * `.claude/skills/question-csv/validate.mjs` is dual-use: a CLI a model runs as
+ * `./validate.mjs foo.csv` (hence the `#!/usr/bin/env node`) AND a module
+ * test/skill-validator.test.ts imports to check the skill against the app's own
+ * parser. Node strips a shebang before parsing; Vite's dependency transform does
+ * not, so `#` reaches the parser and the whole test file dies at import with a
+ * bare `SyntaxError: Invalid or unexpected token` and no line number.
+ *
+ * Blanking the line here — rather than deleting it from the file — keeps the
+ * skill folder shipping exactly as it executes. Replaced with `//` plus padding
+ * so byte offsets, and therefore stack traces, still line up.
+ */
+const stripShebang = {
+  name: 'strip-shebang',
+  enforce: 'pre',
+  transform(code, id) {
+    if (!id.endsWith('.mjs') || !code.startsWith('#!')) return null;
+    return {
+      code: code.replace(/^#![^\n]*/, (m) => '//' + ' '.repeat(m.length - 2)),
+      map: null,
+    };
+  },
+};
+
 export default defineConfig({
+  plugins: [stripShebang],
   // Mirrors the `define` block in vite.config.ts. Tests don't load that config, so without
   // this anything importing src/lib/build-id.ts throws "__APP_VERSION__ is not defined".
   // Fixed values, so tests never depend on git state.
