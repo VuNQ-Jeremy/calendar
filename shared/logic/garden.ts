@@ -216,6 +216,60 @@ export function titleForFruit(fruitsTotal: number): FruitTitleId | null {
   return FRUIT_TITLES.find((t) => fruitsTotal >= t.at)?.id ?? null;
 }
 
+// ---- Month rollup ----
+
+/** Event types that cost the plant a stage — the "stages lost" line on the monthly report. */
+const SETBACK_TYPES = new Set(['decay_drop', 'deadline_drop', 'die']);
+
+/** The month's activity, folded out of `garden_events`. No plant state, no dates. */
+export interface GardenMonthTally {
+  /** Qualifying rounds played — every `grow` event, capped ones included. */
+  playDays: number;
+  /** Distinct ICT days with a qualifying round. The habit number, not the volume one. */
+  activeDays: number;
+  /** Stages actually gained (a capped play contributes 0). */
+  stagesGained: number;
+  fruits: number;
+  /** Stages lost to neglect or a missed deadline. */
+  setbacks: number;
+}
+
+export function emptyMonthTally(): GardenMonthTally {
+  return { playDays: 0, activeDays: 0, stagesGained: 0, fruits: 0, setbacks: 0 };
+}
+
+/**
+ * Fold one student's month of garden events into the numbers the monthly report shows.
+ *
+ * Counted from events, never from the plant row: the row only knows today's stage, while a report
+ * may describe a month that ended weeks ago. Because a `grow` row exists for EVERY qualifying play
+ * — with `stageAfter === stageBefore` when the daily cap was already spent — `playDays` and
+ * `stagesGained` can honestly differ, which is what makes "practised 14 rounds, grew 9 stages"
+ * tellable instead of implied.
+ *
+ * Pure, and caller-filtered: it folds exactly the events it is handed, so the month scope lives in
+ * the query. Events outside the month would be counted as if they were inside it.
+ */
+export function tallyGardenMonth(
+  events: { type: string; stageBefore: number; stageAfter: number; vnDay: string }[],
+): GardenMonthTally {
+  const out = emptyMonthTally();
+  const days = new Set<string>();
+  for (const e of events) {
+    if (e.type === 'grow') {
+      out.playDays += 1;
+      days.add(e.vnDay);
+      out.stagesGained += Math.max(0, e.stageAfter - e.stageBefore);
+    } else if (e.type === 'harvest') {
+      out.fruits += 1;
+    } else if (SETBACK_TYPES.has(e.type)) {
+      out.setbacks += Math.max(0, e.stageBefore - e.stageAfter);
+    }
+  }
+  out.activeDays = days.size;
+  return out;
+}
+
 // ---- Class tree ----
 
 /**

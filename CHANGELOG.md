@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0129 — 2026-08-07
+Add the vocabulary-garden month summary to the assessments monthly report: a six-tile rail card (days practised, rounds passed, stages grown, fruit, all-time fruit, stages lost) plus the plant as it stands, and two parent-facing garden tiles on the printed slip.
+
 ## v0.0128 — 2026-08-07
 Sidebar categories no longer restore their cached expansion: every page load starts all-collapsed and expands only the section owning the current route.
 

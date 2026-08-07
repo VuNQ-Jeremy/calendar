@@ -7,8 +7,10 @@ import * as assessSvc from '../../server/services/assessments';
 import * as criteriaSvc from '../../server/services/remark-criteria';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
+import * as gardenSvc from '../../server/services/garden';
 import { TuitionMonth } from '../../shared/schemas';
 import { NEGATIVE_TYPES, scoreStats } from '../../shared/logic/assess';
+import { ictDateOf } from '../../shared/logic/tests';
 
 /**
  * Monthly report (phiếu nhận xét) for one student and one month.
@@ -34,13 +36,18 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const month = parsedMonth.data;
   const studentId = params.studentId!;
 
-  const [students, classes, remark, scores, behavior, criteria] = await Promise.all([
+  const [students, classes, remark, scores, behavior, criteria, garden] = await Promise.all([
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
     assessSvc.getRemark(db, studentId, month),
     assessSvc.listScores(db),
     assessSvc.listBehavior(db),
     criteriaSvc.list(db),
+    // The slip is a keepsake, so a garden hiccup must not 500 the whole document — it drops the
+    // garden line and prints everything else.
+    gardenSvc
+      .studentGardenMonth(db, studentId, month, ictDateOf(new Date().toISOString()))
+      .catch(() => null),
   ]);
 
   const student = students.find((s) => s.id === studentId);
@@ -73,6 +80,12 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       incidents,
       praiseCount: monthBehavior.filter((r) => r.type === 'praise').length,
     },
+    // Only the two numbers a parent can act on. The teacher-facing rail shows all six; a slip that
+    // listed "stages lost" would turn a keepsake into a scolding.
+    garden:
+      garden && (garden.activeDays > 0 || garden.fruits > 0)
+        ? { activeDays: garden.activeDays, fruits: garden.fruits }
+        : null,
   };
 }
 

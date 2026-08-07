@@ -17,6 +17,10 @@ import {
   type BehaviorTypeId,
 } from './lib/assess.js';
 import { monthLabel } from '../shared/logic/month.js';
+import { PlantSvg, stageKey } from './garden/plant-art.jsx';
+import { MAX_STAGE } from '../shared/logic/garden.js';
+import type { PlantStage } from '../shared/logic/garden.js';
+import type { GardenMonthSummary } from '../server/services/garden.js';
 import type { ScoreRow, BehaviorRow, RemarkRow } from '../server/services/assessments.js';
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
@@ -206,6 +210,99 @@ function RemarkForm({
           {t('remark_save')}
         </Button>
       </div>
+    </Card>
+  );
+}
+
+/**
+ * The month's vocabulary-garden progress, on the monthly report.
+ *
+ * Fetched per (student, month) rather than carried in the route loader: both of those are client
+ * state on this screen, so folding them into the SWR-cached loader would mean loading every
+ * student's every month to show one pair. `useFetcher().load` re-runs whenever the pair changes.
+ *
+ * While a fetch is in flight the previous numbers stay on screen — swapping to a spinner on every
+ * student change made the rail flicker on each arrow-key press through the student dropdown.
+ */
+function GardenMonthCard({ studentId, month }: { studentId: string; month: string }) {
+  const { t } = useLang();
+  const fetcher = useFetcher<{ data?: GardenMonthSummary; error?: string }>();
+
+  // One load per pair. `fetcher.load` is stable, and the key guard means a re-render caused by
+  // anything else (a remark save re-rendering the screen) does not refetch.
+  const key = `${studentId}:${month}`;
+  const loaded = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!studentId || loaded.current === key) return;
+    loaded.current = key;
+    fetcher.load(`/api/garden/month/${studentId}?month=${month}`);
+  }, [key, studentId, month, fetcher]);
+
+  const g = fetcher.data?.data;
+  // The garden degrades to null for the first minutes after a deploy, the same as on /vocabulary.
+  // A report is still a report without it, so the card simply isn't there.
+  if (fetcher.data?.error) return null;
+
+  const plant = g?.plant ?? null;
+  const quiet = g != null && g.playDays === 0 && g.fruits === 0 && g.setbacks === 0;
+
+  return (
+    <Card className="assess-report__garden" style={{ padding: 18 }}>
+      <div className="m-spread" style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>
+          <span className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+            <MIcon name="sprout" size={18} />
+            {t('remark_garden_title')}
+          </span>
+        </h2>
+        {plant && (
+          <span className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+            <PlantSvg
+              stage={Math.max(0, Math.min(MAX_STAGE, plant.stage)) as PlantStage}
+              wilted={plant.wilted}
+              dead={plant.dead}
+              potColor={g!.potColor}
+              size={44}
+            />
+            <span style={{ fontSize: 'var(--text-sm)' }}>
+              <span style={{ color: 'var(--text-muted)' }}>{t('remark_garden_now')}: </span>
+              <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
+                {t(stageKey(plant.stage, plant.dead))}
+              </span>
+            </span>
+          </span>
+        )}
+      </div>
+
+      {/* Six numbers, so a 3-up grid — the same tile vocabulary as the stats card above it. */}
+      <div className="m-grid cols-3">
+        <Stat num={g?.activeDays ?? '—'} label={t('remark_garden_active_days')} color="green" />
+        <Stat num={g?.playDays ?? '—'} label={t('remark_garden_plays')} color="blue" />
+        <Stat num={g?.stagesGained ?? '—'} label={t('remark_garden_stages')} color="violet" />
+        <Stat num={g?.fruits ?? '—'} label={t('remark_garden_fruit')} color="orange" />
+        <Stat num={g?.fruitsTotal ?? '—'} label={t('garden_fruit_total_short')} color="brand" />
+        <Stat num={g?.setbacks ?? '—'} label={t('remark_garden_setbacks')} color="rose" />
+      </div>
+
+      {g && !plant && (
+        <p className="m-muted" style={{ margin: '12px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('remark_garden_never')}
+        </p>
+      )}
+      {quiet && plant && (
+        <p className="m-muted" style={{ margin: '12px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('remark_garden_quiet')}
+        </p>
+      )}
+      {plant && plant.streak > 0 && (
+        <div
+          className="m-row"
+          style={{ gap: 6, alignItems: 'center', marginTop: 12, color: 'var(--text-body)' }}
+        >
+          <MIcon name="flame" size={16} />
+          {t('garden_streak', { n: plant.streak })}
+        </div>
+      )}
     </Card>
   );
 }
@@ -729,32 +826,38 @@ function AssessmentsScreen() {
             onSave={saveRemark}
             onDelete={() => void removeRemarkRec()}
           />
-          <Card className="assess-report__stats" style={{ padding: 18 }}>
-            <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
-              {t('remark_stats_title')} · {monthLabel(reportMonth, lang)}
-            </h2>
-            <div className="m-grid cols-4">
-              <Stat
-                num={reportStats.average ?? '—'}
-                label={t('assess_avg')}
-                color={reportStats.average == null ? 'blue' : scoreColorId(reportStats.average)}
-              />
-              <Stat num={reportScores.length} label={t('remark_stat_tests')} color="violet" />
-              <Stat num={reportIncidentTotal} label={t('remark_stat_incidents')} color="rose" />
-              <Stat num={reportPraise} label={t('assess_praise_count')} color="green" />
-            </div>
-            {reportIncidentTotal > 0 && (
-              <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-                {Object.entries(reportIncidents).map(([ty, n]) => (
-                  <TypeBadge
-                    key={ty}
-                    type={ty as BehaviorTypeId}
-                    label={`${t(BEHAVIOR_META[ty as BehaviorTypeId].tk)} · ${n}`}
-                  />
-                ))}
+          {/* The rail holds two cards now, so it is a scrolling column: the academic summary keeps
+              its natural height and the garden block follows it, rather than the two of them
+              fighting over the row's height. */}
+          <div className="assess-report__rail">
+            <Card className="assess-report__stats" style={{ padding: 18 }}>
+              <h2 style={{ margin: '0 0 12px', fontSize: 'var(--text-xl)' }}>
+                {t('remark_stats_title')} · {monthLabel(reportMonth, lang)}
+              </h2>
+              <div className="m-grid cols-4">
+                <Stat
+                  num={reportStats.average ?? '—'}
+                  label={t('assess_avg')}
+                  color={reportStats.average == null ? 'blue' : scoreColorId(reportStats.average)}
+                />
+                <Stat num={reportScores.length} label={t('remark_stat_tests')} color="violet" />
+                <Stat num={reportIncidentTotal} label={t('remark_stat_incidents')} color="rose" />
+                <Stat num={reportPraise} label={t('assess_praise_count')} color="green" />
               </div>
-            )}
-          </Card>
+              {reportIncidentTotal > 0 && (
+                <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+                  {Object.entries(reportIncidents).map(([ty, n]) => (
+                    <TypeBadge
+                      key={ty}
+                      type={ty as BehaviorTypeId}
+                      label={`${t(BEHAVIOR_META[ty as BehaviorTypeId].tk)} · ${n}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </Card>
+            <GardenMonthCard studentId={activeStudentId} month={reportMonth} />
+          </div>
         </div>
       )}
 

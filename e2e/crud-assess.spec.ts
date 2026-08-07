@@ -112,4 +112,57 @@ test.describe('CRUD: assessments', () => {
     await post;
     await expect(card.locator('a', { hasText: 'Print report' })).toHaveCount(0);
   });
+
+  /**
+   * The garden block on the monthly report. Read-only — it has no write path of its own — so
+   * what is worth pinning down is that it fetches the pair actually on screen and refetches when
+   * either half of that pair changes. Both are the kind of thing a stale-key bug breaks silently.
+   */
+  test('garden progress: loads for the shown student and month, and refetches on change', async ({
+    page,
+  }) => {
+    const k = ui(page);
+    /** Resolves on the GET for one student's month summary. */
+    const monthLoad = (studentId?: string) =>
+      page.waitForResponse((r) => {
+        const u = new URL(r.url());
+        return (
+          r.request().method() === 'GET' &&
+          u.pathname.startsWith('/api/garden/month/') &&
+          (!studentId || u.pathname.endsWith(`/${studentId}`)) &&
+          r.ok()
+        );
+      });
+
+    const thisMonth = new Date().toISOString().slice(0, 7);
+
+    // The screen opens on the first seeded student, so the first fetch must be Leo's.
+    let load = monthLoad('s1');
+    await page.getByRole('tab', { name: 'Monthly report' }).click();
+    // The month it asked for is the one the report is showing — the current month by default,
+    // since the Month filter starts cleared.
+    expect(new URL((await load).url()).searchParams.get('month')).toBe(thisMonth);
+
+    const card = page.locator('.mochi-card', {
+      has: page.getByRole('heading', { name: 'Vocabulary garden' }),
+    });
+    await expect(card).toBeVisible();
+    // Six tiles, and every one carries a number rather than the em-dash placeholder that shows
+    // while the fetch is still in flight.
+    const tiles = card.locator('.statcard__num');
+    await expect(tiles).toHaveCount(6);
+    for (const n of await tiles.allTextContents()) expect(n).toMatch(/^\d+$/);
+
+    // A different student is a different summary: switching to Mia refetches under her id.
+    load = monthLoad('s2');
+    await k.on(page).pickSel('Student', 'Mia Chen');
+    expect(new URL((await load).url()).searchParams.get('month')).toBe(thisMonth);
+    await expect(tiles).toHaveCount(6);
+
+    // So is a different month. Seed scores live in May/June 2026, so that month is in the picker.
+    load = monthLoad('s2');
+    await k.on(page).pickSel('Month', 'June 2026');
+    expect(new URL((await load).url()).searchParams.get('month')).toBe('2026-06');
+    await expect(tiles).toHaveCount(6);
+  });
 });

@@ -12,12 +12,14 @@ import {
   classTreeNext,
   daysBetweenVn,
   effectiveStreak,
+  emptyMonthTally,
   growthThresholdPct,
   isQualifying,
   newSeedState,
   plantView,
   scorePct,
   settlePlant,
+  tallyGardenMonth,
   titleForFruit,
   type GardenEventDraft,
   type GardenSettings,
@@ -489,5 +491,93 @@ describe('invariants', () => {
       state = t.state;
     }
     expect(grown).toBe(S.dailyGrowthCap);
+  });
+});
+
+describe('tallyGardenMonth', () => {
+  /** One event row as the month rollup reads them. */
+  const ev = (
+    type: string,
+    vnDay: string,
+    stageBefore = 1,
+    stageAfter = 2,
+  ): { type: string; stageBefore: number; stageAfter: number; vnDay: string } => ({
+    type,
+    vnDay,
+    stageBefore,
+    stageAfter,
+  });
+
+  it('is all zeros for no events', () => {
+    expect(tallyGardenMonth([])).toEqual(emptyMonthTally());
+  });
+
+  it('counts every qualifying play but only real growth', () => {
+    // Three plays on one day under a cap of 2: the third is a `grow` row that gained nothing.
+    const tally = tallyGardenMonth([
+      ev('grow', '2026-08-03', 1, 2),
+      ev('grow', '2026-08-03', 2, 3),
+      ev('grow', '2026-08-03', 3, 3),
+    ]);
+    expect(tally.playDays).toBe(3);
+    expect(tally.stagesGained).toBe(2);
+    expect(tally.activeDays).toBe(1);
+  });
+
+  it('counts distinct ICT days as active days', () => {
+    const tally = tallyGardenMonth([
+      ev('grow', '2026-08-03'),
+      ev('grow', '2026-08-03'),
+      ev('grow', '2026-08-05'),
+      ev('grow', '2026-08-11'),
+    ]);
+    expect(tally.activeDays).toBe(3);
+    expect(tally.playDays).toBe(4);
+  });
+
+  it('counts harvests, and does not let a harvest reset look like growth', () => {
+    // A harvest drops the plant from MAX_STAGE back to SEED_STAGE.
+    const tally = tallyGardenMonth([ev('harvest', '2026-08-09', MAX_STAGE, SEED_STAGE)]);
+    expect(tally.fruits).toBe(1);
+    expect(tally.stagesGained).toBe(0);
+    expect(tally.setbacks).toBe(0);
+  });
+
+  it('sums stages lost to neglect, a missed deadline and death', () => {
+    const tally = tallyGardenMonth([
+      ev('decay_drop', '2026-08-12', 4, 3),
+      ev('deadline_drop', '2026-08-14', 3, 2),
+      ev('die', '2026-08-20', 2, 0),
+    ]);
+    expect(tally.setbacks).toBe(4);
+    expect(tally.playDays).toBe(0);
+  });
+
+  it('ignores event types that cost and gain nothing', () => {
+    // `water` and `wilt` are real event types that must not move any of the five numbers.
+    const tally = tallyGardenMonth([
+      ev('water', '2026-08-04', 2, 2),
+      ev('wilt', '2026-08-06', 2, 2),
+    ]);
+    expect(tally).toEqual(emptyMonthTally());
+  });
+
+  it('tells apart practice volume, habit and growth in one month', () => {
+    const tally = tallyGardenMonth([
+      ev('grow', '2026-08-01', 1, 2),
+      ev('grow', '2026-08-01', 2, 3),
+      ev('grow', '2026-08-01', 3, 3), // capped
+      ev('grow', '2026-08-02', 3, 4),
+      ev('grow', '2026-08-04', 4, 5),
+      ev('harvest', '2026-08-04', 5, 1),
+      ev('decay_drop', '2026-08-19', 1, 0),
+    ]);
+    expect(tally).toEqual({
+      playDays: 5,
+      activeDays: 3,
+      stagesGained: 4,
+      fruits: 1,
+      setbacks: 1,
+    });
   });
 });

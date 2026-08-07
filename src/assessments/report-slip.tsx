@@ -35,6 +35,8 @@ type ReportLoaderData = {
     incidents: Record<string, number>;
     praiseCount: number;
   };
+  /** The month's vocabulary garden, or null when there was no activity worth printing. */
+  garden: { activeDays: number; fruits: number } | null;
 };
 
 const SLIP_CSS = `
@@ -143,6 +145,7 @@ const SLIP_CSS = `
   font-size: 14px;
 }
 .rslip__stat b { font-size: 17px; }
+.rslip__stat--garden { background: #E4F1E7; color: #2F5C3A; }
 .rslip__section-title {
   margin: 16px 0 8px;
   font-size: 13px;
@@ -178,6 +181,34 @@ const SLIP_CSS = `
 
 type CopyState = { kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' };
 
+/** The garden mark on the practice tile. Inline, like every other glyph on the slip. */
+function Sprout() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={{ verticalAlign: '-2px', marginRight: 4 }}
+    >
+      <path
+        d="M12 21v-7"
+        stroke="#4B8B5B"
+        strokeWidth="2"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M12 14C12 10.5 9.5 8 6 8c0 3.5 2.5 6 6 6Zm0 0c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6Z"
+        fill="#7FB98A"
+        stroke="#4B8B5B"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Five stars, `value` of them filled. Inline SVG so nothing is fetched during rasterization. */
 function Stars({ value }: { value: number }) {
   return (
@@ -198,7 +229,7 @@ function Stars({ value }: { value: number }) {
 }
 
 export function ReportSlipView() {
-  const { month, student, classNames, remark, criteria, stats } =
+  const { month, student, classNames, remark, criteria, stats, garden } =
     useLoaderData() as ReportLoaderData;
   const { t, lang } = useLang();
   const stageRef = React.useRef<HTMLDivElement>(null);
@@ -301,6 +332,21 @@ export function ReportSlipView() {
                   <span className="rslip__stat">
                     {t('bh_praise')}: <b>{stats.praiseCount}</b>
                   </span>
+                )}
+                {/* Garden tiles carry their own green so the practice numbers read as the good news
+                    they are, next to the neutral academic ones. */}
+                {garden && (
+                  <>
+                    <span className="rslip__stat rslip__stat--garden">
+                      <Sprout />
+                      {t('rslip_garden_days')}: <b>{garden.activeDays}</b>
+                    </span>
+                    {garden.fruits > 0 && (
+                      <span className="rslip__stat rslip__stat--garden">
+                        {t('rslip_garden_fruit')}: <b>{garden.fruits}</b>
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
 

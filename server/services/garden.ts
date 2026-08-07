@@ -29,13 +29,16 @@ import {
   applyWatering,
   classTreeLevel,
   effectiveStreak,
+  emptyMonthTally,
   growthThresholdPct,
   isQualifying,
   monthOfVn,
   plantView,
   settlePlant,
+  tallyGardenMonth,
   titleForFruit,
   type GardenEventDraft,
+  type GardenMonthTally,
   type GardenOutcome,
   type GardenSettings,
   type GardenSnapshotData,
@@ -737,6 +740,115 @@ export async function plantHistory(
 }
 
 // ---- Views ----
+
+/** One student's garden month, for the monthly report. Null plant when nothing was ever planted. */
+export interface GardenMonthSummary extends GardenMonthTally {
+  /** ICT month 'YYYY-MM' this summarises. */
+  month: string;
+  /** The plant as it stands today, or null when the student has never planted. */
+  plant: PlantView | null;
+  plantName: string | null;
+  potColor: string;
+  /** Lifetime fruit, for context beside the month's own count. */
+  fruitsTotal: number;
+}
+
+/**
+ * One student's garden activity for one ICT month, plus their plant as it stands now.
+ *
+ * The month's numbers are folded by `tallyGardenMonth` (pure, in shared/logic); the plant is
+ * settled through `plantView` against `vnToday` like every other garden read — so a neglected
+ * plant reads as wilted here for the same reason it does on /vocabulary.
+ */
+export async function studentGardenMonth(
+  db: Db,
+  studentId: string,
+  month: string,
+  vnToday: string,
+  settings?: GardenSettings,
+): Promise<GardenMonthSummary> {
+  const byStudent = await gardenMonthByStudent(db, month, vnToday, {
+    studentIds: [studentId],
+    settings,
+  });
+  return byStudent[studentId] ?? emptyGardenMonth(month);
+}
+
+/** A student with no events and no plant — what the report shows before they ever play. */
+function emptyGardenMonth(month: string): GardenMonthSummary {
+  return {
+    month,
+    ...emptyMonthTally(),
+    plant: null,
+    plantName: null,
+    potColor: 'orange',
+    fruitsTotal: 0,
+  };
+}
+
+/**
+ * `studentGardenMonth` for many students at once, keyed by student id.
+ *
+ * Two queries regardless of roll size — one month-scoped events sweep, one plants read — since
+ * the assessments screen loads the whole school up front and switches student in the client. The
+ * per-student function above delegates here so there is exactly one definition of what these
+ * numbers mean.
+ *
+ * Every requested student gets an entry, so a student who has never touched the garden reads as
+ * zeros rather than a missing key the caller has to defend against.
+ */
+export async function gardenMonthByStudent(
+  db: Db,
+  month: string,
+  vnToday: string,
+  opts: { studentIds?: string[]; settings?: GardenSettings } = {},
+): Promise<Record<string, GardenMonthSummary>> {
+  const { studentIds } = opts;
+  if (studentIds && studentIds.length === 0) return {};
+  const cfg = opts.settings ?? (await getGardenSettings(db));
+
+  const scope = studentIds ? inArray(gardenEvents.studentId, studentIds) : undefined;
+  const [events, plants] = await Promise.all([
+    db
+      .select({
+        studentId: gardenEvents.studentId,
+        type: gardenEvents.type,
+        stageBefore: gardenEvents.stageBefore,
+        stageAfter: gardenEvents.stageAfter,
+        vnDay: gardenEvents.vnDay,
+      })
+      .from(gardenEvents)
+      .where(and(like(gardenEvents.vnDay, `${month}-%`), scope)),
+    studentIds
+      ? db.select().from(gardenPlants).where(inArray(gardenPlants.studentId, studentIds))
+      : db.select().from(gardenPlants),
+  ]);
+
+  // Group first, then fold each student's events with the shared pure function — one definition
+  // of what these numbers mean, for both this and the single-student path.
+  const byId = new Map<string, typeof events>();
+  for (const e of events) {
+    const list = byId.get(e.studentId);
+    if (list) list.push(e);
+    else byId.set(e.studentId, [e]);
+  }
+
+  const out: Record<string, GardenMonthSummary> = {};
+  const at = (id: string) => (out[id] ??= emptyGardenMonth(month));
+  for (const [id, list] of byId) Object.assign(at(id), tallyGardenMonth(list));
+
+  for (const row of plants) {
+    const s = at(row.studentId);
+    s.plant = plantView(rowToState(row), cfg, vnToday);
+    s.plantName = row.plantName;
+    s.potColor = row.potColor;
+    s.fruitsTotal = row.fruitsTotal;
+  }
+
+  // Requested-but-silent students still get an entry.
+  if (studentIds) for (const id of studentIds) at(id);
+  return out;
+}
 
 export interface GardenMember extends PlantView {
   studentId: string;

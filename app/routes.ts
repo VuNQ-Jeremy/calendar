@@ -69,6 +69,7 @@ export default [
   route('api/garden/water', 'routes/api.garden.water.tsx'),
   route('api/garden/assignments/:id?', 'routes/api.garden.assignments.$id.tsx'),
   route('api/garden/progress/:id', 'routes/api.garden.progress.$id.tsx'),
+  route('api/garden/month/:id', 'routes/api.garden.month.$id.tsx'),
   route('api/garden/snapshots', 'routes/api.garden.snapshots.tsx'),
   route('api/feedback/:id?', 'routes/api.feedback.tsx'),
   route('api/profile', 'routes/api.profile.tsx'),
