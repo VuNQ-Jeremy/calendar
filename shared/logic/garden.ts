@@ -36,8 +36,12 @@ export const SEED_STAGE = 1;
  */
 export type PlantStage = 0 | 1 | 2 | 3 | 4 | 5;
 
+/**
+ * `dev` is an admin test adjustment, not part of the game: it appears in a plant's history so the
+ * log never claims a student earned something an admin dialled in.
+ */
 export type GardenEventType =
-  'grow' | 'revive' | 'harvest' | 'wilt' | 'decay_drop' | 'die' | 'deadline_drop' | 'water';
+  'grow' | 'revive' | 'harvest' | 'wilt' | 'decay_drop' | 'die' | 'deadline_drop' | 'water' | 'dev';
 
 // ---- Settings ----
 

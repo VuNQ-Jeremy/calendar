@@ -799,6 +799,22 @@ export const WaterInput = z.object({
 });
 export type WaterInput = z.infer<typeof WaterInput>;
 
+/**
+ * Admin test tool: put a plant at any stage, and optionally pretend it has been ignored for a
+ * number of days.
+ *
+ * `idleDays` backdates the plant's last care rather than faking a wilted look, so the wilt, the
+ * stage drops and the death that follow are produced by the real decay maths. That is the whole
+ * value of the tool — waiting three days to see a plant droop is not a feedback loop.
+ */
+export const GardenDevInput = z.object({
+  studentId: z.string().min(1),
+  /** 0 is the dead pot; 1-5 are seed..fruit. */
+  stage: z.coerce.number().int().min(0).max(5),
+  idleDays: z.coerce.number().int().min(0).max(365).default(0),
+});
+export type GardenDevInput = z.infer<typeof GardenDevInput>;
+
 export const TuitionPaymentInput = z.object({
   paidVnd: VndAmount,
   /**

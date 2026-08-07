@@ -636,6 +636,77 @@ export async function water(
   return t.state;
 }
 
+/**
+ * Admin test tool — put a plant at a stage, and optionally backdate its last care.
+ *
+ * Deliberately NOT a shortcut around the lifecycle: it writes a legal `PlantState` and then lets
+ * `settlePlant` do the rest. Asking for stage 4 with 10 idle days therefore does not paint a
+ * wilted stage-4 plant; it plants a real stage-4 plant ten days ago and every reader derives the
+ * wilt, the stage drop and (given enough days) the death from that, exactly as a neglected plant
+ * would. Otherwise the tool would only ever prove that the tool works.
+ *
+ * Stage 0 means the dead pot, because a live row at stage 0 is not a state the game can produce.
+ * Every call appends a `dev` event, so a plant's history never claims a student earned this.
+ */
+export async function devSetPlant(
+  db: Db,
+  staffId: string,
+  input: { studentId: string; stage: number; idleDays: number },
+  nowIso: string = new Date().toISOString(),
+): Promise<PlantState> {
+  const vnToday = ictDateOf(nowIso);
+  const existing = await getPlant(db, input.studentId);
+  const settings = await getGardenSettings(db);
+  const before = plantView(existing?.state ?? null, settings, vnToday).stage;
+
+  const dead = input.stage <= 0;
+  const careDay = addDaysVn(vnToday, -input.idleDays);
+  const state: PlantState = {
+    stage: dead ? 0 : input.stage,
+    isDead: dead,
+    // Left null on purpose: if the backdated care day is old enough to wilt, `settlePlant` will
+    // set it on the next read, at the day it was really due.
+    wiltedSince: null,
+    lastCareDay: careDay,
+    growDay: careDay,
+    growCount: 0,
+    dropsTaken: 0,
+    fruitsTotal: existing?.state.fruitsTotal ?? 0,
+    streakDays: existing?.state.streakDays ?? 0,
+    streakLastDay: existing?.state.streakLastDay ?? null,
+  };
+
+  await writeTransition(
+    db,
+    input.studentId,
+    {
+      state,
+      events: [
+        {
+          type: 'dev',
+          stageBefore: before,
+          stageAfter: state.stage,
+          vnDay: vnToday,
+          actorStaffId: staffId,
+          note: `stage ${input.stage}, idle ${input.idleDays}d`,
+        },
+      ],
+    },
+    nowIso,
+  );
+  return state;
+}
+
+/** Admin test tool — back to an unplanted pot, history and all. */
+export async function devResetPlant(db: Db, studentId: string): Promise<void> {
+  // The events go too. Keeping them would leave a history whose first row starts mid-air, and the
+  // point of the reset is a student who has never planted anything.
+  await db.batch([
+    db.delete(gardenEvents).where(eq(gardenEvents.studentId, studentId)),
+    db.delete(gardenPlants).where(eq(gardenPlants.studentId, studentId)),
+  ]);
+}
+
 export type GardenEventRow = {
   id: string;
   type: string;

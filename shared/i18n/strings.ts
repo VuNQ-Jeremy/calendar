@@ -1169,6 +1169,16 @@ const en_strings = {
   garden_snapshot: 'Save this month',
   garden_snapshot_done: 'Saved to the album',
   garden_share: 'Share image',
+  garden_ev_dev: 'Adjusted for testing',
+  garden_dev: 'Test tools',
+  garden_dev_title: "Test tools · {name}'s plant",
+  garden_dev_msg:
+    'Admin only. Puts this plant wherever you need it so a state can be looked at now.',
+  garden_dev_stage: 'Stage',
+  garden_dev_idle: 'Days since last studied',
+  garden_dev_hint:
+    'The idle days are real: the plant is treated as last cared for that many days ago, so the wilting, the lost stages and the death that follow are the ordinary rules playing out — not a painted-on look.',
+  garden_dev_reset: 'Empty the pot',
   cfg_garden: 'Garden',
   cfg_garden_sub: 'How fast a plant grows, and how long it survives being ignored',
   cfg_garden_min_score: 'Minimum score for free study (%)',
@@ -2265,6 +2275,16 @@ export const STRINGS = {
     garden_snapshot: 'Lưu tháng này',
     garden_snapshot_done: 'Đã lưu vào album',
     garden_share: 'Xuất ảnh',
+    garden_ev_dev: 'Chỉnh tay để thử nghiệm',
+    garden_dev: 'Công cụ thử nghiệm',
+    garden_dev_title: 'Công cụ thử nghiệm · cây của {name}',
+    garden_dev_msg:
+      'Chỉ admin. Đặt cây này về đúng trạng thái bạn cần để xem ngay, không phải chờ ngày.',
+    garden_dev_stage: 'Giai đoạn',
+    garden_dev_idle: 'Số ngày không học',
+    garden_dev_hint:
+      'Số ngày không học là thật: cây được coi như lần cuối được chăm cách đây đúng số ngày đó, nên việc héo, tụt bậc rồi chết là luật thường chạy ra — không phải vẽ giả trạng thái.',
+    garden_dev_reset: 'Xoá sạch chậu',
     cfg_garden: 'Vườn cây',
     cfg_garden_sub: 'Cây lớn nhanh chậm, và bỏ bê bao lâu thì cây chịu không nổi',
     cfg_garden_min_score: 'Điểm tối thiểu khi tự học (%)',

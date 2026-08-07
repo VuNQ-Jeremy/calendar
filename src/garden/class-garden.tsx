@@ -56,6 +56,8 @@ type GardenData = {
   /** Staff only; `{}` for students. Keyed by studentId — see the note on the history modal. */
   history: Record<string, GardenEventRow[]>;
   viewerStudentId: string | null;
+  /** Draws the test tools. The action re-checks the role; this only decides the button. */
+  isAdmin: boolean;
 };
 
 type PickerData = { mode: 'picker'; kind: 'staff'; vnToday: string; classes: ClassOption[] };
@@ -129,6 +131,7 @@ function GardenView({ data }: { data: GardenData }) {
   const isStaff = kind === 'staff';
   const [watering, setWatering] = React.useState<GardenMember | null>(null);
   const [showing, setShowing] = React.useState<GardenMember | null>(null);
+  const [tweaking, setTweaking] = React.useState<GardenMember | null>(null);
   const [snapped, setSnapped] = React.useState(false);
 
   // The snapshot intent answers with the month it wrote, which is what turns the button into a
@@ -232,6 +235,11 @@ function GardenView({ data }: { data: GardenData }) {
                     <IconButton label={t('garden_history')} size="sm" onClick={() => setShowing(m)}>
                       <MIcon name="clock" size={16} />
                     </IconButton>
+                    {data.isAdmin && (
+                      <IconButton label={t('garden_dev')} size="sm" onClick={() => setTweaking(m)}>
+                        <MIcon name="settings" size={16} />
+                      </IconButton>
+                    )}
                   </>
                 )
               }
@@ -250,6 +258,9 @@ function GardenView({ data }: { data: GardenData }) {
 
       {watering && (
         <WaterModal member={watering} fetcher={fetcher} onClose={() => setWatering(null)} />
+      )}
+      {tweaking && (
+        <DevModal member={tweaking} fetcher={fetcher} onClose={() => setTweaking(null)} />
       )}
       {showing && (
         <HistoryModal
@@ -479,6 +490,95 @@ function WaterModal({
         value={note}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNote(e.target.value)}
       />
+    </Modal>
+  );
+}
+
+// ---- Admin-only: the test tools ----
+
+/**
+ * Dial a plant to any stage, and pretend it has been ignored for N days.
+ *
+ * Admin-only, and it exists because the interesting states are the slow ones: without it, seeing a
+ * wilted plant means not studying for three days and seeing a dead one means waiting a month.
+ * `idleDays` backdates the plant's last care rather than faking the look, so what appears is the
+ * real decay — which is also why this doubles as the only end-to-end coverage of the wilt and death
+ * visuals (see e2e/crud-garden3.spec.ts).
+ */
+function DevModal({
+  member,
+  fetcher,
+  onClose,
+}: {
+  member: GardenMember;
+  fetcher: ReturnType<typeof useFetcher>;
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  const [stage, setStage] = React.useState(String(Math.max(1, member.stage)));
+  const [idleDays, setIdleDays] = React.useState('0');
+
+  const send = (intent: 'dev-set' | 'dev-reset') => {
+    const fd = new FormData();
+    fd.set('intent', intent);
+    fd.set('studentId', member.studentId);
+    if (intent === 'dev-set') {
+      fd.set('stage', stage);
+      fd.set('idleDays', idleDays);
+    }
+    fetcher.submit(fd, { method: 'post' });
+    onClose();
+  };
+
+  // Stage 0 is offered as "dead" rather than as a number, because that is what it means.
+  const STAGES: PlantStage[] = [0, 1, 2, 3, 4, 5];
+
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={t('garden_dev_title', { name: member.name })}
+      width={460}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {t('cancel')}
+          </Button>
+          <Button variant="secondary" onClick={() => send('dev-reset')}>
+            {t('garden_dev_reset')}
+          </Button>
+          <Button variant="primary" onClick={() => send('dev-set')}>
+            {t('save')}
+          </Button>
+        </>
+      }
+    >
+      <p style={{ margin: '0 0 12px', color: 'var(--text-body)' }}>{t('garden_dev_msg')}</p>
+      <MSelect
+        label={t('garden_dev_stage')}
+        value={stage}
+        onChange={setStage}
+        options={STAGES.map((s) => ({
+          value: String(s),
+          label: `${s} · ${t(stageKey(s, s === 0))}`,
+        }))}
+      />
+      {/* Raw markup rather than DS.Input: that component has no `type`, and this needs a number
+          field. Same `.mochi-field` shape, so the e2e helper still finds it by its label. */}
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('garden_dev_idle')}</label>
+        <input
+          className="mochi-input"
+          type="number"
+          min={0}
+          max={365}
+          value={idleDays}
+          onChange={(e) => setIdleDays(e.target.value)}
+        />
+      </div>
+      <p style={{ margin: '10px 0 0', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+        {t('garden_dev_hint')}
+      </p>
     </Modal>
   );
 }

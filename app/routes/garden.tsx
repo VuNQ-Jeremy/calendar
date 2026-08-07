@@ -8,10 +8,10 @@ import type {
 import { ClassGardenScreen } from '../../src/garden/class-garden.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireStaff, requireUser } from '../../server/services/auth';
+import { requireAdmin, requireStaff, requireUser } from '../../server/services/auth';
 import * as gardenSvc from '../../server/services/garden';
 import * as classesSvc from '../../server/services/classes';
-import { WaterInput } from '../../shared/schemas';
+import { GardenDevInput, WaterInput } from '../../shared/schemas';
 import { ictDateOf } from '../../shared/logic/tests';
 import { K, gardenClassKey, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -97,6 +97,9 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     history,
     // Lets the viewer's own plant be highlighted in a grid that is otherwise deliberately flat.
     viewerStudentId: kind === 'student' ? user.id : null,
+    // Gates the test tools. Admin-only, and checked again in the action — this flag only decides
+    // whether the button is drawn.
+    isAdmin: isStaff && user.role === 'Admin',
   };
 }
 
@@ -135,6 +138,22 @@ async function actionImpl({ request, params, context }: ActionFunctionArgs) {
     if (!classId) return Response.json({ error: 'missing classId' }, { status: 400 });
     await gardenSvc.snapshotMonth(db, month, classId);
     return { ok: true, month };
+  }
+
+  // Admin test tools. Gated on requireAdmin rather than requireStaff: these dial a plant to any
+  // stage and can wipe its history, which is a debugging affordance, not a teaching one.
+  if (intent === 'dev-set' || intent === 'dev-reset') {
+    const admin = await requireAdmin(request, env);
+    if (intent === 'dev-reset') {
+      const studentId = formData.get('studentId') as string | null;
+      if (!studentId) return Response.json({ error: 'missing studentId' }, { status: 400 });
+      await gardenSvc.devResetPlant(db, studentId);
+      return { ok: true };
+    }
+    const parsed = GardenDevInput.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    await gardenSvc.devSetPlant(db, admin.user.id, parsed.data);
+    return { ok: true };
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });

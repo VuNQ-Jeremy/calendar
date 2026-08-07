@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0117 — 2026-08-07
+Cong cu thu nghiem vuon cay cho admin: dat cay ve bat ky giai doan nao va gia lap so ngay bo be, nen xem duoc ngay trang thai heo va chet ma khong phai cho vai ngay.
+
 ## v0.0116 — 2026-08-06
 Vườn cây từ vựng: giáo viên giao bài từ vựng theo lớp kèm hạn nộp; mỗi học sinh có một cây lớn theo lượt học đạt điểm, héo và tụt bậc khi bỏ bê, ra quả thì thu hoạch. Thêm vườn lớp dùng chung, cây tập thể của lớp, giáo viên tưới nước khen thưởng, album vườn theo tháng và ảnh chia sẻ Zalo.
 
