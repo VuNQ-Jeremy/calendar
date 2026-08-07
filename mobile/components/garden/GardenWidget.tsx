@@ -7,7 +7,18 @@ import { formatDmy } from '@mochi/shared/logic/dates';
 import { useLang } from '~/lib/i18n';
 import { useHarvest, usePlant, useUpdatePlant } from '~/lib/use-garden';
 import { useTheme } from '~/theme';
-import { Badge, Body, Button, Card, ColorPicker, Heading, IconButton, Input, Muted, ProgressBar } from '~/ui';
+import {
+  Badge,
+  Body,
+  Button,
+  Card,
+  ColorPicker,
+  Heading,
+  IconButton,
+  Input,
+  Muted,
+  ProgressBar,
+} from '~/ui';
 import { Confetti, PlantSvg, clampStage, stageKey } from './PlantArt';
 import type { ColorIdValue, StudentAssignmentChip } from '~/lib/types';
 
@@ -35,9 +46,10 @@ export function GardenWidget() {
   const harvest = useHarvest();
   const updatePlant = useUpdatePlant();
 
-  const [editing, setEditing] = React.useState<{ plantName: string; potColor: ColorIdValue } | null>(
-    null,
-  );
+  const [editing, setEditing] = React.useState<{
+    plantName: string;
+    potColor: ColorIdValue;
+  } | null>(null);
   const [flash, setFlash] = React.useState<'done' | 'failed' | null>(null);
   const [celebrating, setCelebrating] = React.useState(false);
   const [popping, setPopping] = React.useState(false);
@@ -146,9 +158,16 @@ export function GardenWidget() {
           </View>
 
           <View
-            style={{ flexDirection: 'row', gap: th.spacing[2], flexWrap: 'wrap', alignItems: 'center' }}
+            style={{
+              flexDirection: 'row',
+              gap: th.spacing[2],
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
           >
-            <Body style={{ fontFamily: th.font.bodyBold }}>{t(stageKey(data.stage, data.dead))}</Body>
+            <Body style={{ fontFamily: th.font.bodyBold }}>
+              {t(stageKey(data.stage, data.dead))}
+            </Body>
             <Muted>
               {data.growthLeftToday > 0
                 ? t('garden_growth_left', { n: data.growthLeftToday })
@@ -157,7 +176,12 @@ export function GardenWidget() {
           </View>
 
           <View
-            style={{ flexDirection: 'row', gap: th.spacing[2], flexWrap: 'wrap', alignItems: 'center' }}
+            style={{
+              flexDirection: 'row',
+              gap: th.spacing[2],
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
           >
             {data.streak > 0 ? (
               <View style={{ flexDirection: 'row', gap: th.spacing[1], alignItems: 'center' }}>

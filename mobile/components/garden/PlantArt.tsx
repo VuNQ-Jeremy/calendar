@@ -231,7 +231,16 @@ function Pot({ fill, line }: { fill: string; line: string }) {
         strokeWidth={4.2}
       />
       {/* rim, drawn over the body so the join needs no clipping */}
-      <Rect x={24} y={56} width={48} height={10} rx={5} fill={fill} stroke={line} strokeWidth={4.2} />
+      <Rect
+        x={24}
+        y={56}
+        width={48}
+        height={10}
+        rx={5}
+        fill={fill}
+        stroke={line}
+        strokeWidth={4.2}
+      />
     </>
   );
 }
@@ -254,7 +263,14 @@ function Soil({ fill }: { fill: string }) {
  * top stroke, so the hill needs no seam and the rim still passes behind it.
  */
 function Mound({ fill, line }: { fill: string; line: string }) {
-  return <Path d="M33 58 Q38 52.2 48 51.4 Q58 52.2 63 58 Z" fill={fill} stroke={line} strokeWidth={3.6} />;
+  return (
+    <Path
+      d="M33 58 Q38 52.2 48 51.4 Q58 52.2 63 58 Z"
+      fill={fill}
+      stroke={line}
+      strokeWidth={3.6}
+    />
+  );
 }
 
 /**
@@ -555,8 +571,22 @@ export function PlantSvg({
               strokeLinecap="round"
             />
             {/* frayed hairs at the break — the cartoon shorthand for "snapped" */}
-            <Path d="M41 30.6 L43.2 28.4" fill="none" stroke={p.stem} strokeWidth={1.9} opacity={0.75} strokeLinecap="round" />
-            <Path d="M37.6 34 L35 32.8" fill="none" stroke={p.stem} strokeWidth={1.9} opacity={0.75} strokeLinecap="round" />
+            <Path
+              d="M41 30.6 L43.2 28.4"
+              fill="none"
+              stroke={p.stem}
+              strokeWidth={1.9}
+              opacity={0.75}
+              strokeLinecap="round"
+            />
+            <Path
+              d="M37.6 34 L35 32.8"
+              fill="none"
+              stroke={p.stem}
+              strokeWidth={1.9}
+              opacity={0.75}
+              strokeLinecap="round"
+            />
             {/* one leaf still attached, hanging straight down */}
             <Leaf x={46.8} y={38} dir={-1} angle={74} scale={0.68} fill={p.leaf} line={p.leafInk} />
             {/* and one lying where it fell — the detail that sells "chết queo" */}
@@ -673,7 +703,10 @@ function ConfettiPiece({
     spin.value = withDelay(delay, withTiming(240, ease));
     opacity.value = withDelay(
       delay,
-      withSequence(withTiming(1, { duration: CONFETTI_MS * 0.12 }), withTiming(0, { duration: CONFETTI_MS * 0.88 })),
+      withSequence(
+        withTiming(1, { duration: CONFETTI_MS * 0.12 }),
+        withTiming(0, { duration: CONFETTI_MS * 0.88 }),
+      ),
     );
   }, [delay, fall, y, spin, opacity]);
 
@@ -711,9 +744,18 @@ export function Confetti({ height, color }: { height: number; color: string }) {
   const reduced = useReducedMotion();
   if (reduced) return null;
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}
+    >
       {CONFETTI.map((c) => (
-        <ConfettiPiece key={c.left} left={c.left} delay={c.delay} fall={height + 28} color={color} />
+        <ConfettiPiece
+          key={c.left}
+          left={c.left}
+          delay={c.delay}
+          fall={height + 28}
+          color={color}
+        />
       ))}
     </View>
   );
@@ -745,7 +787,13 @@ const BLOSSOMS = [
   { cx: 71, cy: 43 },
 ];
 
-export function ClassTreeSvg({ level, size = 128 }: { level: number; size?: number }): React.ReactElement {
+export function ClassTreeSvg({
+  level,
+  size = 128,
+}: {
+  level: number;
+  size?: number;
+}): React.ReactElement {
   const lv = Math.max(0, Math.min(10, Math.round(level || 0)));
   const clusters = lv === 0 ? 0 : Math.max(1, Math.round((lv / 10) * CANOPY.length));
   const blooms = lv >= 6 ? Math.min(BLOSSOMS.length, lv - 5) : 0;
@@ -754,17 +802,56 @@ export function ClassTreeSvg({ level, size = 128 }: { level: number; size?: numb
 
   return (
     <Svg width={size} height={size} viewBox="0 0 96 96" fill="none">
-      <Path d="M20 85 Q48 89.5 76 85" fill="none" stroke={SOIL} strokeWidth={4.2} opacity={0.9} strokeLinecap="round" />
-      <Path d="M48.5 86 C47.6 76 48 66 48 54" fill="none" stroke={SOIL_INK} strokeWidth={6.5} strokeLinecap="round" />
-      <Path d="M48 63 C43.5 59 38.5 55 33.5 52.5" fill="none" stroke={SOIL_INK} strokeWidth={4.6} strokeLinecap="round" />
-      <Path d="M48 58 C53 54.5 58.5 50.5 63.5 48.5" fill="none" stroke={SOIL_INK} strokeWidth={4.6} strokeLinecap="round" />
-      <Path d="M48 54 C47 49 47.6 44 48 40" fill="none" stroke={SOIL_INK} strokeWidth={4.6} strokeLinecap="round" />
+      <Path
+        d="M20 85 Q48 89.5 76 85"
+        fill="none"
+        stroke={SOIL}
+        strokeWidth={4.2}
+        opacity={0.9}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M48.5 86 C47.6 76 48 66 48 54"
+        fill="none"
+        stroke={SOIL_INK}
+        strokeWidth={6.5}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M48 63 C43.5 59 38.5 55 33.5 52.5"
+        fill="none"
+        stroke={SOIL_INK}
+        strokeWidth={4.6}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M48 58 C53 54.5 58.5 50.5 63.5 48.5"
+        fill="none"
+        stroke={SOIL_INK}
+        strokeWidth={4.6}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M48 54 C47 49 47.6 44 48 40"
+        fill="none"
+        stroke={SOIL_INK}
+        strokeWidth={4.6}
+        strokeLinecap="round"
+      />
 
       {/* Outlines first, fills on top: each stroke survives only where it sticks out past its
           neighbours, so the clusters read as one canopy with a clean silhouette instead of a
           pile of circles with lines through it. */}
       {CANOPY.slice(0, clusters).map((c) => (
-        <Circle key={`s${c.cx}-${c.cy}`} cx={c.cx} cy={c.cy} r={c.r} fill="none" stroke={leafInk} strokeWidth={3.6} />
+        <Circle
+          key={`s${c.cx}-${c.cy}`}
+          cx={c.cx}
+          cy={c.cy}
+          r={c.r}
+          fill="none"
+          stroke={leafInk}
+          strokeWidth={3.6}
+        />
       ))}
       {CANOPY.slice(0, clusters).map((c) => (
         <Circle key={`f${c.cx}-${c.cy}`} cx={c.cx} cy={c.cy} r={c.r} fill={leaf} />

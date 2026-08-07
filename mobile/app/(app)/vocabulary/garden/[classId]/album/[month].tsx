@@ -37,14 +37,20 @@ export default function GardenAlbumScreen() {
       <ScreenHeader
         title={t('garden_album_title', { month: month ?? '' })}
         subtitle={
-          createdAt ? t('garden_album_frozen', { date: formatDmy(createdAt.slice(0, 10)) }) : data?.className
+          createdAt
+            ? t('garden_album_frozen', { date: formatDmy(createdAt.slice(0, 10)) })
+            : data?.className
         }
       />
 
       <ScrollView
         contentContainerStyle={{ padding: th.spacing[4], gap: th.spacing[4] }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={th.color.brand} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={th.color.brand}
+          />
         }
       >
         {isLoading && !data ? (

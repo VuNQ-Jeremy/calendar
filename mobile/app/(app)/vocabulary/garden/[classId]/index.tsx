@@ -48,7 +48,11 @@ export default function ClassGardenScreen() {
       <ScrollView
         contentContainerStyle={{ padding: th.spacing[4], gap: th.spacing[4] }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={th.color.brand} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={th.color.brand}
+          />
         }
       >
         {isLoading && !data ? (
@@ -75,9 +79,7 @@ export default function ClassGardenScreen() {
             {/* The cooperative tree: one shared level for the whole class, fed by everyone's rounds
                 — including rounds that grew nobody's plant, because it counts effort. */}
             <Card>
-              <View
-                style={{ flexDirection: 'row', gap: th.spacing[4], alignItems: 'center' }}
-              >
+              <View style={{ flexDirection: 'row', gap: th.spacing[4], alignItems: 'center' }}>
                 <ClassTreeSvg level={data.tree.level} size={96} />
                 <View style={{ flex: 1, gap: th.spacing[2] }}>
                   <Heading>{t('garden_tree')}</Heading>

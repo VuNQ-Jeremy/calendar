@@ -31,6 +31,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          # Two separate npm projects sharing one repo (docs/mobile/README.md) — the mobile
+          # lockfile has to be named or its install is never cached.
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -40,6 +45,23 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Until 2026-08-07 neither workflow mentioned `mobile/`, so NOTHING typechecked the phone
+      # app on a push — the one place it could have been caught was a local `npm run typecheck`
+      # that had been red for a week for an unrelated reason (a stale generated route-types file,
+      # see docs/mobile/README.md), so nobody read it.
+      #
+      # Note what this step does NOT verify: expo-router's typed routes. `.expo/types/router.d.ts`
+      # is written only by the dev server and is absent on a fresh checkout, which makes `Href`
+      # permissive rather than an error. Route STRINGS are therefore checked only on a developer's
+      # machine; everything else about the mobile app is checked here.
+      - name: Install mobile dependencies
+        run: npm ci
+        working-directory: mobile
+
+      - name: Typecheck mobile
+        run: npm run typecheck
+        working-directory: mobile
 
       # Prints the CI token's account + permission scopes into the log.
       # The migrations step below needs the "Account -> D1 -> Edit" scope.

@@ -229,13 +229,38 @@ not the repo path). Where that happens:
    prefer the library's current official docs over the snippet here, but keep the spec's
    *intent* and acceptance criteria. Note the deviation in the commit message.
 8. **Don't build for parent accounts.** They are explicitly unsupported.
+9. **A route that exists but "is not assignable to type" means the route types are stale, not that
+   you made a mistake.** Run `npx expo start` once (the file rewrites within a few seconds, then you
+   can kill it) and re-run typecheck.
+
+   `.expo/types/router.d.ts` is expo-router's generated union of every real route, and it is written
+   **only by the dev server** — not by `npm run bundle`, not by `npm ci`, and there is no standalone
+   typegen command in SDK 57 (`npx expo typegen` is parsed as a project path). It is also gitignored,
+   so it has no history to tell you it went stale.
+
+   Three states, and only one is harmful:
+
+   | `.expo/types/router.d.ts` | `tsc` behaviour |
+   |---|---|
+   | Absent (fresh clone, CI) | Passes — `Href` falls back to a permissive type |
+   | Fresh | Passes, and route strings are genuinely checked |
+   | **Stale** | **Every navigation to a route added since it was written fails** |
+
+   This bit hard once. The file was last written 2026-07-30; the `/flashcards` → `/vocabulary`
+   rename landed 2026-07-31; for the following week `npm run typecheck` in `mobile/` reported 18
+   errors against routes that all existed. A permanently-red typecheck is worse than no typecheck,
+   because a real error hides in the noise — which is exactly what happened, and why nothing caught
+   that CI had never typechecked this app at all.
 
 ---
 
 ## Definition of done (every phase)
 
 - All acceptance criteria in the phase file pass.
-- `npm run lint`, `npm run typecheck`, `npm run test` all green.
+- `npm run lint`, `npm run typecheck`, `npm run test` all green at the root, **and
+  `npm run typecheck` green inside `mobile/`** — a separate npm project, so the root command does
+  not cover it. Both now run in CI (`.github/workflows/main.yml`); see rule 9 if the only failures
+  name routes that plainly exist.
 - Deployed to `https://calendar.ngqv0712.workers.dev` and manually clicked through (rule 3)
   with no regression.
 - From Phase 2 on: the change is verified **on a physical Android device**, not just a

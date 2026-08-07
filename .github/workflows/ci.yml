@@ -9,10 +9,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
-        with: { node-version: 22, cache: npm }
+        with:
+          node-version: 22
+          cache: npm
+          # Two separate npm projects sharing one repo (docs/mobile/README.md) — the mobile
+          # lockfile has to be named or its install is never cached.
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+      # The mobile app was typechecked by nothing until 2026-08-07 — see the note in main.yml.
+      - name: Install mobile dependencies
+        run: npm ci
+        working-directory: mobile
+      - name: Typecheck mobile
+        run: npm run typecheck
+        working-directory: mobile

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0127 — 2026-08-07
+CI now typechecks the phone app on every push (it never did), and the stale-route-types trap that made mobile typecheck permanently red is written down.
+
 ## v0.0126 — 2026-08-07
 Cap nhat ung dung dien thoai xong ngay trong lan mo dau tien: khong con phai mo app, tat di roi mo lai moi thay ban moi.
 
