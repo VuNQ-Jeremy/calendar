@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0135 — 2026-08-07
+Monthly report's three columns run full height so their bottoms line up.
+
 ## v0.0134 — 2026-08-07
 Monthly report is three columns on a wide screen: the remark narrows and the two summary cards sit side by side.
 

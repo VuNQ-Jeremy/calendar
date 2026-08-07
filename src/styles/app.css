@@ -1350,10 +1350,18 @@ body {
   .assess-report {
     display: grid;
     grid-template-columns: minmax(340px, 1fr) minmax(290px, 340px) minmax(290px, 340px);
-    align-items: start;
+    /* all three columns run the full height of the row, so their bottoms line up */
+    align-items: stretch;
   }
   .assess-report__rail {
     display: contents;
+  }
+  /* the remark's content-height cap is for the stacked rail below this breakpoint; here it is a
+     column of its own and matches its neighbours. Tiles keep their size rather than stretching —
+     four of them sharing 562px reads as four empty boxes, not as a fuller card. */
+  .assess-report__form {
+    align-self: stretch;
+    max-height: none;
   }
 }
 
