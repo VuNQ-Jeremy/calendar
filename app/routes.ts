@@ -8,6 +8,9 @@ export default [
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
   route('event-previews', 'routes/event-previews.tsx'),
+  // Cookie-authed twin of api/garden/month/:id for the assessments report card. /api/* is
+  // bearer-only, so a browser fetcher there gets a 401 — see routes/garden-month.tsx.
+  route('garden-month', 'routes/garden-month.tsx'),
   // Printable test document — outside the _app layout on purpose: no app shell, no nav chrome.
   route('tests/:id/print', 'routes/tests.$id.print.tsx'),
   // Printable tuition slip (phiếu thu), same reasoning.

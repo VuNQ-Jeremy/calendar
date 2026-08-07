@@ -235,7 +235,9 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
   React.useEffect(() => {
     if (!studentId || loaded.current === key) return;
     loaded.current = key;
-    fetcher.load(`/api/garden/month/${studentId}?month=${month}`);
+    // `/garden-month`, not `/api/garden/month/:id`: everything under /api/* is bearer-only, so
+    // from a browser (cookie, no Authorization header) it 401s and the card silently vanishes.
+    fetcher.load(`/garden-month?student=${encodeURIComponent(studentId)}&month=${month}`);
   }, [key, studentId, month, fetcher]);
 
   const g = fetcher.data?.data;

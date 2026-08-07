@@ -122,14 +122,21 @@ test.describe('CRUD: assessments', () => {
     page,
   }) => {
     const k = ui(page);
-    /** Resolves on the GET for one student's month summary. */
+    /**
+     * Resolves on the GET for one student's month summary.
+     *
+     * `/garden-month`, not `/api/garden/month/:id` — /api/* is bearer-only and 401s a browser.
+     * Single-fetch appends `.data` to the path a `useFetcher().load` asks for. The `r.ok()` here
+     * is the whole point of the assertion: the first version of this card pointed at /api/* and
+     * every call came back 401, which the card's degrade-to-null branch hid completely.
+     */
     const monthLoad = (studentId?: string) =>
       page.waitForResponse((r) => {
         const u = new URL(r.url());
         return (
           r.request().method() === 'GET' &&
-          u.pathname.startsWith('/api/garden/month/') &&
-          (!studentId || u.pathname.endsWith(`/${studentId}`)) &&
+          u.pathname.startsWith('/garden-month') &&
+          (!studentId || u.searchParams.get('student') === studentId) &&
           r.ok()
         );
       });
