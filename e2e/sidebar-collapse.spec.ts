@@ -21,14 +21,8 @@ const storedCollapsed = (page: Page) =>
 test.describe('sidebar: collapsible sections', () => {
   crudGuard();
 
-  test('collapse, roll up badges, auto-expand on navigation, persist', async ({ page }) => {
+  test('collapse, roll up badges, auto-expand on navigation, reset per load', async ({ page }) => {
     await signInStaff(page);
-    // A retry reuses the browser profile, so drop any collapse state an earlier
-    // attempt persisted — this test asserts on the no-preference default. A
-    // one-shot clear plus reload, NOT addInitScript: that would re-run on every
-    // navigation below and wipe the very state the persistence checks assert on.
-    await page.evaluate(() => localStorage.removeItem('mochi_sb_collapsed_v1'));
-    await page.reload();
 
     // Sections default to collapsed, so the sidebar opens as five headings —
     // except Overview, which owns the /dashboard the sign-in lands on.
@@ -68,16 +62,21 @@ test.describe('sidebar: collapsible sections', () => {
     expect(afterExpand).not.toContain('grading');
     expect(afterExpand).toContain('admin');
 
-    // --- expansion survives a reload (post-mount read, so poll)
+    // --- a reload resets to exactly one expanded section: the active one.
+    // Grading was expanded by hand above, but /dashboard is an Overview page,
+    // so the fresh load drops Grading and opens Overview instead.
     await page.reload();
-    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'true');
-    await expect(header(page, 'Admin')).toHaveAttribute('aria-expanded', 'false');
-
-    // --- collapsing again persists too
-    await header(page, 'Grading').click();
-    await expect(group(page, 'grading')).toBeHidden();
-    await page.reload();
-    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'false');
+    await expect(header(page, 'Overview')).toHaveAttribute('aria-expanded', 'true');
+    for (const name of ['Teaching', 'Grading', 'Learning', 'Admin']) {
+      await expect(header(page, name)).toHaveAttribute('aria-expanded', 'false');
+    }
+    // Storage was rewritten to match, rather than left holding the stale set.
+    expect(JSON.parse((await storedCollapsed(page))!).sort()).toEqual([
+      'admin',
+      'grading',
+      'learning',
+      'teaching',
+    ]);
 
     // --- navigating into a collapsed section force-expands it, and the
     // auto-expand is written back so storage matches the screen
@@ -86,11 +85,15 @@ test.describe('sidebar: collapsible sections', () => {
     await expect(testsRow).toBeVisible();
     expect(JSON.parse((await storedCollapsed(page))!)).not.toContain('grading');
 
-    // --- a stored collapse never hides the page the user landed on
+    // --- a stored collapse never hides the page the user landed on, and the
+    // section the previous load opened does not carry over: each load expands
+    // exactly one section, so the rail never accumulates open sections.
     await page.goto('/people'); // a Teaching row
     await expect(header(page, 'Teaching')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('.sb__item[href="/people"]')).toBeVisible();
     expect(JSON.parse((await storedCollapsed(page))!)).not.toContain('teaching');
+    await expect(header(page, 'Grading')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('.sb__section[aria-expanded="true"]')).toHaveCount(1);
   });
 
   test('the sidebar keeps a hairline scrollbar whatever the preset', async ({ page }) => {

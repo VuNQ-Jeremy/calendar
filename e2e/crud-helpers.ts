@@ -42,6 +42,26 @@ export async function signInStaff(page: Page) {
   await signIn(page, EMAIL!, PASSWORD!);
 }
 
+/**
+ * Expand every sidebar section, for specs that click or read rows across
+ * several of them.
+ *
+ * Each page load expands exactly one section — the one owning the current route
+ * — and discards any stored collapse state (src/lib/sidebar-nav.tsx), so seeding
+ * localStorage before first paint does NOT work. Click the headers instead, and
+ * re-run this after any full page load (`page.goto`/`reload`), which resets it.
+ */
+export async function expandAllNavSections(page: Page) {
+  const headers = page.locator('.sb__section[aria-expanded="false"]');
+  // Headers are stable; loop by index rather than re-querying a shrinking list.
+  for (let i = (await headers.count()) - 1; i >= 0; i--) {
+    const h = headers.nth(0);
+    if ((await h.count()) === 0) break;
+    await h.click();
+  }
+  await expect(page.locator('.sb__section[aria-expanded="false"]')).toHaveCount(0);
+}
+
 /** The seeded student account (vunq@mochi.edu = Leo Park, in Biology 9A). */
 export async function signInStudent(page: Page) {
   await signIn(

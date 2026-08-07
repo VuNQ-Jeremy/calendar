@@ -112,35 +112,48 @@ describe('sidebar nav sections', () => {
     expect(JSON.parse(stored()!)).toContain('grading');
   });
 
-  it('applies stored expansion on mount, and never collapses the landing section', async () => {
-    // Only overview and admin were left collapsed, so the other three are open.
+  it('ignores stored expansion on mount, expanding only the landing section', async () => {
+    // A previous load left three sections open. A fresh mount must not restore
+    // them — otherwise the rail accumulates open sections over a user's life.
     localStorage.setItem(SB_COLLAPSED_KEY, '["overview","admin","grading"]');
     await act(async () => {
       render(<Harness activeSectionId="grading" />);
     });
-    await waitFor(() => expect(expanded('teaching')).toBe('true'));
-    expect(expanded('learning')).toBe('true');
-    expect(expanded('overview')).toBe('false');
-    // The user landed on a grading page, so that section opens regardless...
-    expect(expanded('grading')).toBe('true');
-    // ...and the write records it, while the others keep the user's choice.
-    expect(stored()).toBe('["overview","admin"]');
+    // The user landed on a grading page, so that section — and only it — opens.
+    await waitFor(() => expect(expanded('grading')).toBe('true'));
+    for (const id of ['overview', 'teaching', 'learning', 'admin']) {
+      expect(expanded(id), id).toBe('false');
+    }
+    // Storage is rewritten to match the screen, not left holding the stale set.
+    expect(JSON.parse(stored()!).sort()).toEqual(['admin', 'learning', 'overview', 'teaching']);
+  });
+
+  it('expands nothing on a mount with no active section', async () => {
+    localStorage.setItem(SB_COLLAPSED_KEY, '["grading","admin"]');
+    await act(async () => {
+      render(<Harness activeSectionId={null} />);
+    });
+    for (const id of ['overview', 'teaching', 'grading', 'learning', 'admin']) {
+      expect(expanded(id), id).toBe('false');
+    }
   });
 
   it('expands the section entered by a later navigation, leaving the rest alone', async () => {
-    localStorage.setItem(SB_COLLAPSED_KEY, '["grading","admin"]');
     const view = render(<Harness activeSectionId={null} />);
-    await waitFor(() => expect(expanded('teaching')).toBe('true'));
-    expect(expanded('grading')).toBe('false');
-    expect(expanded('admin')).toBe('false');
+    // Within one load the user opens teaching by hand; it must survive the
+    // navigation below — only a fresh mount resets.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('h-teaching'));
+    });
+    expect(expanded('teaching')).toBe('true');
 
     await act(async () => {
       view.rerender(<Harness activeSectionId="grading" />);
     });
     expect(expanded('grading')).toBe('true');
-    expect(expanded('admin')).toBe('false');
     expect(expanded('teaching')).toBe('true');
-    expect(stored()).toBe('["admin"]');
+    expect(expanded('admin')).toBe('false');
+    expect(JSON.parse(stored()!).sort()).toEqual(['admin', 'learning', 'overview']);
   });
 
   it('survives corrupt stored state', async () => {

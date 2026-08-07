@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
+import { expandAllNavSections } from './crud-helpers';
 
 /**
  * Verifies the navigation-latency work (docs/navigation-latency-plan.md) in a
@@ -71,12 +72,6 @@ test.describe('navigation latency', () => {
   test.skip(!HAVE_CREDS, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 
   test.beforeEach(async ({ page }) => {
-    // Sidebar sections default to collapsed, and the assertions below click and
-    // hover rows across several of them (/people, /questions, /calendar). Seed
-    // "nothing collapsed" before first paint so those rows are visible — these
-    // tests are about latency, not about collapse state, which
-    // e2e/sidebar-collapse.spec.ts covers.
-    await page.addInitScript(() => localStorage.setItem('mochi_sb_collapsed_v1', '[]'));
     await page.goto('/login');
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
@@ -89,6 +84,13 @@ test.describe('navigation latency', () => {
     test.skip(!isStaff, 'MOCHI_EMAIL must be a staff account');
     if (!page.url().includes('/dashboard')) await clickNav(page, '/dashboard');
     await page.waitForLoadState('networkidle');
+    // A load expands only the section owning the current route, and the
+    // assertions below click and hover rows across several of them (/people,
+    // /questions, /calendar). Open them all by clicking the headers — these
+    // tests are about latency, not collapse state, which
+    // e2e/sidebar-collapse.spec.ts covers. Must come after the goto above,
+    // since a full load resets the sections.
+    await expandAllNavSections(page);
   });
 
   // Control: proves the recorder actually observes .data traffic, so the

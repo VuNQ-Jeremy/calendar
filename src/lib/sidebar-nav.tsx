@@ -164,38 +164,36 @@ function allCollapsed(): Set<string> {
 }
 
 /**
- * Per-device collapse state. Sections start collapsed, so the sidebar opens as
- * five headings and the user expands what they need.
+ * Per-device collapse state, reset on every page load.
  *
- * Server and first client render agree on all-collapsed, then the stored set is
- * applied after mount — the same SSR-safe shape LanguageProvider uses
+ * A load always starts from all-collapsed and expands exactly one section: the
+ * one owning the current route. Expanding sections is deliberately *not*
+ * persisted across loads — a user who opens three sections over a session would
+ * otherwise come back to a sidebar with three open, and the rail creeps back to
+ * the unscannable flat column that sections exist to avoid. Within a load,
+ * toggles still stick as you navigate (see the write() calls below), so storage
+ * keeps the in-session state and only the initial render ignores it.
+ *
+ * Server and first client render agree on all-collapsed, then the active
+ * section expands after mount — the same SSR-safe shape LanguageProvider uses
  * (src/lib/i18n.tsx), so there is no hydration mismatch. Collapsed-by-default is
- * also what makes that read invisible: the sections a user had open expand into
- * place, rather than the whole list appearing and then snapping shut.
+ * also what makes that invisible: one section expands into place, rather than
+ * the whole list appearing and then snapping shut.
  */
 export function useCollapsedSections(activeSectionId: string | null) {
   const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(allCollapsed);
-  // The mount read below runs once, so it needs the active id without taking it
-  // as a dependency.
-  const activeRef = React.useRef(activeSectionId);
-  activeRef.current = activeSectionId;
 
+  // Discard whatever a previous load stored, so this load starts from
+  // all-collapsed regardless of how many sections were open when the user left.
+  // The auto-expand effect below then opens the active one and writes the
+  // corrected set back, so storage matches the screen. Clearing rather than
+  // writing all-collapsed keeps an untouched sidebar leaving no preference
+  // behind at all.
   React.useEffect(() => {
     try {
-      const raw = localStorage.getItem(SB_COLLAPSED_KEY);
-      // No stored preference — stay as loaded, i.e. everything collapsed.
-      if (!raw) return;
-      const parsed: unknown = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
-      const ids = new Set(parsed.filter((x): x is string => typeof x === 'string'));
-      // Drop the active section here too: the effect below won't fire again
-      // after this read (its dep is activeSectionId, not collapsed), so a
-      // stored collapse would otherwise hide the page the user landed on.
-      // Write the removal back so storage matches what is on screen.
-      if (activeRef.current && ids.delete(activeRef.current)) write(ids);
-      setCollapsed(ids);
+      localStorage.removeItem(SB_COLLAPSED_KEY);
     } catch {
-      /* unavailable or corrupt */
+      /* storage unavailable */
     }
   }, []);
 
