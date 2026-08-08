@@ -252,6 +252,29 @@ describe('pairing codes', () => {
   });
 });
 
+describe('the bot token', () => {
+  /**
+   * Regression, found in production. `wrangler secret put` fed from a pipe keeps the trailing
+   * newline, and the token goes into the URL PATH — so one invisible character turned every
+   * send into `Not Found` 404, which looks exactly like a routing bug. Zalo answers a genuinely
+   * wrong token with 401 instead; that is the only way to tell them apart from the outside.
+   */
+  it('survives a token stored with surrounding whitespace', async () => {
+    const messy = { ZALO_BOT_TOKEN: '  123:abc\n' };
+    expect(zalo.isEnabled(messy)).toBe(true);
+
+    await zalo.sendText(messy, 'chat-1', 'hello');
+    const url = String(fetch.mock.calls[0][0]);
+    expect(url).toBe('https://bot-api.zaloplatforms.com/bot123:abc/sendMessage');
+    expect(url).not.toMatch(/\s/);
+  });
+
+  it('treats a whitespace-only token as no token at all', () => {
+    expect(zalo.isEnabled({ ZALO_BOT_TOKEN: '   \n' })).toBe(false);
+    expect(zalo.isEnabled({})).toBe(false);
+  });
+});
+
 describe('share-card media', () => {
   /**
    * The images are served from a capability URL — unguessable, but permanent unless something

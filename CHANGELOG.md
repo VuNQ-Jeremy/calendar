@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0139 — 2026-08-08
+Zalo: a bot token stored with stray whitespace made every send 404 — trimmed at the seam.
+
 ## v0.0137 — 2026-08-07
 Monthly report tiles: icon-above-number dashboard layout in the wide three-column view.
 

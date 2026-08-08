@@ -29,7 +29,10 @@ function secretMatches(a: string, b: string): boolean {
 }
 
 export const action = withPublic(async ({ request, db, env }) => {
-  const expected = env.ZALO_WEBHOOK_SECRET;
+  // Trimmed for the same reason as the bot token: `wrangler secret put` fed from a pipe stores
+  // the trailing newline, and Zalo echoes back exactly the secret `setWebhook` was given — clean.
+  // Comparing against the trimmed value is strictly more forgiving, never less.
+  const expected = env.ZALO_WEBHOOK_SECRET?.trim();
   if (!expected) throw fail('zalo_webhook_unconfigured', 503);
 
   const got = request.headers.get(HEADER) ?? '';

@@ -55,9 +55,23 @@ export type ZaloTarget = {
 
 // ---- Transport ----
 
+/**
+ * The configured token, with surrounding whitespace removed.
+ *
+ * The trim is not decoration. The token goes into the URL PATH, so a single trailing newline —
+ * which is what `echo "$TOKEN" | wrangler secret put` stores, and what a copy-paste out of a Zalo
+ * message tends to carry — makes every request 404 with `Not Found`. That is indistinguishable
+ * at a glance from a routing problem, and nothing logs the token to compare, so it costs an hour
+ * to find. Zalo answers a genuinely wrong token with `Unauthorized` 401 instead, which is the
+ * only way to tell the two apart.
+ */
+function botToken(env: Env): string {
+  return (env.ZALO_BOT_TOKEN ?? '').trim();
+}
+
 /** The channel is off unless a token is configured. Callers check this before doing any work. */
 export function isEnabled(env: Env): boolean {
-  return Boolean(env.ZALO_BOT_TOKEN);
+  return Boolean(botToken(env));
 }
 
 interface BotResult {
@@ -76,9 +90,10 @@ interface BotResult {
  * Never throws: a delivery failure is not worth failing a cron run for, exactly as in push.ts.
  */
 export async function callBot(env: Env, method: string, payload: unknown): Promise<BotResult> {
-  if (!env.ZALO_BOT_TOKEN) return { ok: false, description: 'disabled' };
+  const token = botToken(env);
+  if (!token) return { ok: false, description: 'disabled' };
   try {
-    const res = await fetch(`${API_BASE}/bot${env.ZALO_BOT_TOKEN}/${method}`, {
+    const res = await fetch(`${API_BASE}/bot${token}/${method}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload ?? {}),
