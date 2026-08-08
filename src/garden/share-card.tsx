@@ -50,7 +50,7 @@ const ERR_INK = '#B3261E';
 
 const FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 
-type CopyState = 'idle' | 'busy' | 'copied' | 'downloaded' | 'error';
+type CopyState = 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' | 'sent' | 'not_linked';
 
 export function ClassShareCard() {
   const { garden, vnToday } = useLoaderData() as ShareLoaderData;
@@ -98,6 +98,32 @@ export function ClassShareCard() {
     try {
       download(await render(), fileName);
       setCopy('downloaded');
+    } catch {
+      setCopy('error');
+    }
+  };
+
+  /**
+   * Post straight into the class's Zalo group, replacing copy-open-paste with one click.
+   *
+   * The rasterizing has to happen here rather than on the server: the card is live DOM and a
+   * Worker has no DOM. So the browser makes the PNG exactly as it does for the clipboard, and
+   * uploads it — see app/routes/api.zalo.send-card.tsx.
+   *
+   * The copy button stays. A 409 means this class has no group linked yet, which is a normal
+   * state and not an error worth shouting about; the manual route still works, and the fix lives
+   * on /config.
+   */
+  const sendToZalo = async () => {
+    if (!stageRef.current) return;
+    setCopy('busy');
+    try {
+      const body = new FormData();
+      body.set('file', await render(), fileName);
+      body.set('target', `class:${garden.classId}`);
+      body.set('caption', `${garden.className} · ${formatDmy(vnToday)}`);
+      const res = await fetch('/api/zalo/send-card', { method: 'POST', body });
+      setCopy(res.ok ? 'sent' : res.status === 409 ? 'not_linked' : 'error');
     } catch {
       setCopy('error');
     }
@@ -162,6 +188,23 @@ export function ClassShareCard() {
             opacity: copy === 'busy' ? 0.6 : 1,
           }}
           disabled={copy === 'busy'}
+          onClick={() => void sendToZalo()}
+        >
+          {t('zalo_send')}
+        </button>
+        <button
+          type="button"
+          style={{
+            font: 'inherit',
+            padding: '6px 12px',
+            border: `1px solid ${BAR_BORDER}`,
+            borderRadius: 7,
+            background: PAPER,
+            color: '#3B3226',
+            cursor: 'pointer',
+            opacity: copy === 'busy' ? 0.6 : 1,
+          }}
+          disabled={copy === 'busy'}
           onClick={() => void saveImage()}
         >
           {t('mat_download')}
@@ -169,6 +212,14 @@ export function ClassShareCard() {
         {copy === 'copied' && <span style={{ color: OK_INK, fontWeight: 600 }}>{t('copied')}</span>}
         {copy === 'downloaded' && (
           <span style={{ color: OK_INK, fontWeight: 600 }}>{t('slip_downloaded')}</span>
+        )}
+        {copy === 'sent' && (
+          <span style={{ color: OK_INK, fontWeight: 600 }}>{t('zalo_sent')}</span>
+        )}
+        {/* Not an error: the class simply has no group linked yet, and /config is where that is
+            fixed. Saying so beats a red failure for a state that is normal on day one. */}
+        {copy === 'not_linked' && (
+          <span style={{ color: MUTED, fontWeight: 600 }}>{t('zalo_not_linked')}</span>
         )}
         {copy === 'error' && (
           <span style={{ color: ERR_INK, fontWeight: 600 }}>{t('slip_copy_failed')}</span>

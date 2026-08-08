@@ -10,6 +10,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as tuitionSvc from '../../server/services/tuition';
 import * as classesSvc from '../../server/services/classes';
+import * as notifySvc from '../../server/services/notify';
 import * as peopleSvc from '../../server/services/people';
 import {
   ClassPriceInput,
@@ -107,6 +108,16 @@ async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   if (intent === 'reopen-month') {
     await tuitionSvc.reopenMonth(db, month);
     return { ok: true };
+  }
+
+  // Announce the month to the students' phones. Deliberately NOT folded into `close-month`:
+  // closing is an accounting step an admin may repeat while fixing a price, and each repeat would
+  // otherwise pop an amount onto every family's phone. See notify.notifyTuitionMonth.
+  if (intent === 'notify-students') {
+    const { status } = await tuitionSvc.getMonthStatus(db, month);
+    if (status !== 'closed') return Response.json({ error: 'month_open' }, { status: 400 });
+    const result = await notifySvc.notifyTuitionMonth(db, month);
+    return { ok: true, ...result };
   }
 
   return Response.json({ error: 'unknown intent' }, { status: 400 });

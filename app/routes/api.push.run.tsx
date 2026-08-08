@@ -30,19 +30,21 @@ import {
  * month-end album. That is deliberately on this endpoint too, because the e2e environment has its
  * crons disabled — this is the only way to exercise the sweep there.
  */
-export const action = withAuth('admin', async ({ request, db }) => {
+export const action = withAuth('admin', async ({ request, db, env }) => {
   const job = new URL(request.url).searchParams.get('job');
   if (job !== 'class' && job !== 'digest' && job !== 'preview' && job !== 'garden') {
     throw fail('bad_job', 400);
   }
 
+  // `env` is what carries the Zalo credentials, so passing it is also what makes this endpoint
+  // the way to test a real Zalo delivery without waiting for 19:00 ICT.
   const sent =
     job === 'digest'
-      ? await runDailyDigest(db)
+      ? await runDailyDigest(db, new Date(), env)
       : job === 'preview'
-        ? await runEveningPreview(db)
+        ? await runEveningPreview(db, new Date(), env)
         : job === 'garden'
           ? await runGardenAlerts(db)
-          : await runClassReminders(db);
+          : await runClassReminders(db, new Date(), env);
   return { job, sent };
 });

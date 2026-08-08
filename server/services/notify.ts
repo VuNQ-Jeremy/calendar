@@ -11,6 +11,10 @@ import { getNotifPrefs } from './notif-prefs';
 import * as previewSvc from './session-preview';
 import * as push from './push';
 import type { ExpoPushMessage } from './push';
+import * as tuitionSvc from './tuition';
+import * as zalo from './zalo';
+import { translate } from '../../shared/i18n/strings';
+import { formatVnd, monthNumeric } from '../../shared/logic/fees';
 
 /**
  * The scheduled notification jobs. Called from `scheduled()` in workers/app.ts, and from the
@@ -20,6 +24,17 @@ import type { ExpoPushMessage } from './push';
  * hardcoded below rather than carried in a column. It is the right trade for one school in one
  * city — and it is the first thing to change if the school opens a second location, which is why
  * it is a single named constant and not seven scattered `+ 7`s.
+ *
+ * **Two channels, one sweep.** Each job decides WHAT to say once, then hands it to Expo push and
+ * to Zalo (server/services/zalo.ts) separately. They reach different people — push reaches
+ * students and staff who installed the app, Zalo reaches parents, who have no account and never
+ * will — so neither is a fallback for the other. Each keeps its OWN idempotency keys (Zalo's
+ * carry a `zalo-` prefix): sharing them would mean the day Zalo is switched on, every occurrence
+ * push already handled is silently marked done and no parent ever hears about it. The Zalo pass
+ * always runs after the push pass and never throws, so a Zalo outage cannot cost a push.
+ *
+ * `env` is optional throughout: without it — or without ZALO_BOT_TOKEN in it — the Zalo pass is
+ * skipped entirely and these jobs behave exactly as they did before the channel existed.
  */
 
 /** Indochina Time. UTC+7, no daylight saving. */
@@ -49,7 +64,11 @@ function addDaysIso(dateIso: string, days: number): string {
  * mobile agenda use. If this job and the calendar disagreed about when a class runs, users would
  * be notified for classes that are not happening, which is worse than not being notified at all.
  */
-export async function runClassReminders(db: Db, at: Date = new Date()): Promise<number> {
+export async function runClassReminders(
+  db: Db,
+  at: Date = new Date(),
+  env?: Env,
+): Promise<number> {
   const prefs = await getNotifPrefs(db);
   if (!prefs.classReminders) return 0;
 
@@ -79,14 +98,15 @@ export async function runClassReminders(db: Db, at: Date = new Date()): Promise<
   const keys = upcoming.map((e) => `class:${e.id}:${e.date}`);
   const sent = await push.alreadySent(db, keys);
   const todo = upcoming.filter((e) => !sent.has(`class:${e.id}:${e.date}`));
-  if (!todo.length) return 0;
 
   const classes = await classesSvc.list(db);
   // What the teacher said this occurrence covers, so the reminder is about the lesson and not just
-  // the clock. Composed in one bulk call for the whole sweep.
+  // the clock. Composed in one bulk call for the whole sweep — over `upcoming`, not `todo`,
+  // because the Zalo pass below keeps its own ledger and may still owe a message for an
+  // occurrence push has already handled.
   const previews = await previewSvc.composeMany(
     db,
-    todo
+    upcoming
       .filter((e) => e.classId)
       .map((e) => ({ id: e.id, classId: e.classId as string, date: e.date })),
   );
@@ -126,11 +146,35 @@ export async function runClassReminders(db: Db, at: Date = new Date()): Promise<
 
   await deliver(db, messages);
   await push.markSent(db, doneKeys);
+
+  // ---- Zalo: the same reminder, to the parents of the students in each class ----
+  //
+  // Longer than the push body on purpose. A push is a glanceable nudge for someone who is
+  // already going; this is the message a parent reads to decide whether their child is ready.
+  await zaloDeliver(
+    db,
+    env,
+    upcoming.flatMap((ev) => {
+      const cls = classes.find((c) => c.id === ev.classId);
+      if (!cls) return [];
+      const focus = previews.get(previewSvc.previewKey(ev.id, ev.date))?.focusText.trim();
+      return [
+        {
+          key: `zalo-class:${ev.id}:${ev.date}`,
+          chatIds: () => zalo.chatsForParentsOfStudents(db, cls.studentIds),
+          text:
+            `🔔 ${cls.name} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}` +
+            (focus ? `\n${focus.slice(0, 300)}` : ''),
+        },
+      ];
+    }),
+  );
+
   return messages.length;
 }
 
 /** Job B — the daily digest. 01:00 UTC = 08:00 ICT, the `study` channel. */
-export async function runDailyDigest(db: Db, at: Date = new Date()): Promise<number> {
+export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
   const prefs = await getNotifPrefs(db);
   const { dateIso } = ictNow(at);
   const messages: ExpoPushMessage[] = [];
@@ -184,6 +228,10 @@ export async function runDailyDigest(db: Db, at: Date = new Date()): Promise<num
   await push.markSent(db, doneKeys);
   // Housekeeping rides along with the daily job rather than needing a cron of its own.
   await push.pruneLedger(db);
+  // Spent and expired Zalo pairing codes, and the share-card images whose capability URLs should
+  // stop working. Same slot, same reasoning.
+  await zalo.pruneCodes(db);
+  if (env?.FILES) await zalo.pruneMedia(env.FILES);
   return messages.length;
 }
 
@@ -195,7 +243,11 @@ export async function runDailyDigest(db: Db, at: Date = new Date()): Promise<num
  * find the book. Students get one message per class they are in; staff get one summary of the
  * whole day, because the thing a teacher needs is the list, not five separate pings.
  */
-export async function runEveningPreview(db: Db, at: Date = new Date()): Promise<number> {
+export async function runEveningPreview(
+  db: Db,
+  at: Date = new Date(),
+  env?: Env,
+): Promise<number> {
   const prefs = await getNotifPrefs(db);
   if (!prefs.previewEvening) return 0;
 
@@ -290,6 +342,51 @@ export async function runEveningPreview(db: Db, at: Date = new Date()): Promise<
 
   await deliver(db, messages);
   await push.markSent(db, doneKeys);
+
+  // ---- Zalo ----
+  //
+  // Two audiences, and the split is the point of the evening slot. Each class's parents get that
+  // class's own preview — in the class group chat if one is linked, otherwise privately to each
+  // parent, never both, or a parent with a child in the group gets it twice. Staff get the same
+  // whole-day summary they get on push.
+  const staffSummary = () =>
+    occs
+      .map((ev) => {
+        const cls = classes.find((c) => c.id === ev.classId);
+        const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW, 60);
+        return `${ev.start ?? '--:--'} ${cls?.name ?? ev.title}${line ? ` — ${line}` : ''}`;
+      })
+      .join('\n');
+
+  const zaloJobs: ZaloJob[] = [];
+  for (const ev of occs) {
+    const cls = classes.find((c) => c.id === ev.classId);
+    if (!cls) continue;
+    const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW);
+    const groupChat = await zalo.chatForClass(db, cls.id);
+    zaloJobs.push({
+      key: `zalo-preview:${ev.id}:${ev.date}`,
+      chatIds: async () =>
+        groupChat ? [groupChat] : zalo.chatsForParentsOfStudents(db, cls.studentIds),
+      text:
+        `📚 Ngày mai: ${cls.name}${ev.start ? ` · ${ev.start}` : ''}\n` +
+        (line || 'Chuẩn bị cho buổi học ngày mai nhé!'),
+    });
+  }
+  zaloJobs.push({
+    key: `zalo-preview-staff:${tomorrow}`,
+    chatIds: async () =>
+      zalo.chatsForAccounts(
+        db,
+        await zalo.accountIdsForStaff(
+          db,
+          (await db.select({ id: staff.id }).from(staff)).map((r) => r.id),
+        ),
+      ),
+    text: `Ngày mai có ${occs.length} buổi dạy\n${staffSummary().slice(0, 1500)}`,
+  });
+  await zaloDeliver(db, env, zaloJobs);
+
   return messages.length;
 }
 
@@ -364,6 +461,50 @@ export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<nu
 /** For an occurrence nobody wrote a preview for. previewLine returns '' for it. */
 const EMPTY_PREVIEW = { focusText: '', vocabTopic: null, tests: [] };
 
+/**
+ * One Zalo message, to whoever `chatIds` resolves to, once per `key` ever.
+ *
+ * `chatIds` is a thunk so the lookup is skipped entirely for keys already sent — which, on a
+ * 15-minute sweep over a 30-minute window, is most of them.
+ */
+type ZaloJob = { key: string; chatIds: () => Promise<string[]>; text: string };
+
+/**
+ * The Zalo half of a job. Never throws.
+ *
+ * Keys are marked done even when nobody is linked, for the same reason the push passes do: the
+ * occurrence HAS been processed, and re-processing it next tick would just re-find nobody.
+ *
+ * The whole pass is wrapped in a try/catch rather than relying on the service's own error
+ * swallowing. If this threw, it would take the enclosing job's return value with it — and Zalo
+ * being down is not a reason for the class-reminder cron to report failure.
+ */
+async function zaloDeliver(db: Db, env: Env | undefined, jobs: ZaloJob[]): Promise<number> {
+  if (!env || !zalo.isEnabled(env) || !jobs.length) return 0;
+  try {
+    const already = await push.alreadySent(
+      db,
+      jobs.map((j) => j.key),
+    );
+    const todo = jobs.filter((j) => !already.has(j.key));
+    if (!todo.length) return 0;
+
+    let sent = 0;
+    for (const job of todo) {
+      const chatIds = await job.chatIds();
+      if (chatIds.length) sent += await zalo.broadcastText(env, chatIds, job.text);
+    }
+    await push.markSent(
+      db,
+      todo.map((j) => j.key),
+    );
+    return sent;
+  } catch (err) {
+    console.error('[zalo] pass failed', { err: String(err) });
+    return 0;
+  }
+}
+
 /** Send, then delete whatever Expo said is gone. */
 async function deliver(db: Db, messages: ExpoPushMessage[]): Promise<void> {
   if (!messages.length) return;
@@ -374,6 +515,75 @@ async function deliver(db: Db, messages: ExpoPushMessage[]): Promise<void> {
   }
 }
 
+/**
+ * "Học phí tháng N đã có" — sent when an admin presses the button on /tuition, never on a schedule.
+ *
+ * Manual on purpose. Closing a month is an accounting step an admin may repeat while correcting a
+ * price or a stray attendance mark, and each of those closes would otherwise pop a fee amount onto
+ * every family's phone. Announcing is a separate decision from finalising, so it is a separate act.
+ *
+ * The ledger key carries the amount — `tuition:{month}:{student}:{dueVnd}`. Pressing the button
+ * twice reaches nobody the second time; pressing it after a reopen that actually changed someone's
+ * fee reaches exactly the students whose number moved. Note that `pruneLedger` drops rows after 30
+ * days, so this is a guard against a double-press, not a permanent record — acceptable only because
+ * a human is choosing to send each time.
+ *
+ * Push only. Parents hear about fees over Zalo from the slip image, which is a different message
+ * with a different audience; wiring this to `zaloDeliver` would send parents a bare number.
+ */
+export async function notifyTuitionMonth(
+  db: Db,
+  month: string,
+): Promise<{ sent: number; skipped: number; noDevice: number }> {
+  const fees = await tuitionSvc.closedMonthFees(db, month);
+  // Nothing owed is not news. It also keeps a student who was billed nothing out of the count the
+  // confirmation dialog shows.
+  const billed = fees.filter((f) => f.dueVnd > 0);
+  if (!billed.length) return { sent: 0, skipped: 0, noDevice: 0 };
+
+  const keyFor = (f: (typeof billed)[number]) =>
+    `tuition:${month}:${f.studentId}:${f.dueVnd}`;
+  const already = await push.alreadySent(db, billed.map(keyFor));
+  const todo = billed.filter((f) => !already.has(keyFor(f)));
+
+  const messages: ExpoPushMessage[] = [];
+  const doneKeys: string[] = [];
+  let noDevice = 0;
+
+  for (const fee of todo) {
+    const accountIds = await push.accountIdsForStudents(db, [fee.studentId]);
+    const tokens = await push.tokensForAccounts(db, accountIds);
+    // Marked done either way: the student HAS been processed, and a later press should not keep
+    // re-finding the same person without a phone.
+    doneKeys.push(keyFor(fee));
+    if (!tokens.length) {
+      noDevice++;
+      continue;
+    }
+    for (const to of tokens) {
+      messages.push({
+        to,
+        title: translate('vi', 'tuition_notify_push_title', { month: monthNumeric(month) }),
+        body: `${translate('vi', 'tuition_total_due')}: ${formatVnd(fee.dueVnd)}`,
+        // `url` is the fallback for installed bundles that predate the tuition screen: they route
+        // on `url` and /profile exists in every student build, one tap from the fee list. Updated
+        // bundles match `kind` first and go straight to /tuition. Same trick as the garden.
+        data: { url: '/profile', kind: 'tuition' },
+        channelId: 'reminders',
+      });
+    }
+  }
+
+  await deliver(db, messages);
+  await push.markSent(db, doneKeys);
+
+  return {
+    sent: messages.length,
+    skipped: billed.length - todo.length,
+    noDevice,
+  };
+}
+
 /** Cron entry point. Branches on the schedule that fired. */
 export async function runScheduled(cron: string, env: Env, at: Date = new Date()): Promise<void> {
   const db = createDb(env);
@@ -382,10 +592,10 @@ export async function runScheduled(cron: string, env: Env, at: Date = new Date()
   // own errors must not swallow the digest's result, so it is awaited separately.
   const sent =
     cron === '0 1 * * *'
-      ? await runDailyDigest(db, at)
+      ? await runDailyDigest(db, at, env)
       : cron === '0 12 * * *'
-        ? await runEveningPreview(db, at)
-        : await runClassReminders(db, at);
+        ? await runEveningPreview(db, at, env)
+        : await runClassReminders(db, at, env);
   let garden = 0;
   if (cron === '0 1 * * *') garden = await runGardenAlerts(db, at);
   console.log('[cron]', { cron, sent, garden, ms: Date.now() - started });

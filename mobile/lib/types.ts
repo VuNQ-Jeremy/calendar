@@ -24,6 +24,7 @@ import type {
   GardenSnapshotData,
   PlantView,
 } from '@mochi/shared/logic/garden';
+import type { PaymentStatus, StudentFee } from '@mochi/shared/logic/fees';
 import type { z } from 'zod';
 
 /**
@@ -329,4 +330,39 @@ export interface GardenSnapshotResponse {
   className: string;
   month: string;
   data: GardenSnapshotData;
+}
+
+/* ---- Tuition (student self-view) ---- */
+
+/** `GET /api/tuition/me` â€” one closed month in the list. */
+export interface MyTuitionMonth {
+  month: string;
+  closedAt: string | null;
+  billedVnd: number;
+  adjustmentVnd: number;
+  dueVnd: number;
+  paidVnd: number;
+  outstandingVnd: number;
+  status: PaymentStatus;
+}
+
+/**
+ * `GET /api/tuition/me/:month`.
+ *
+ * `paymentInfo` is null until an admin fills the form on the web /config screen; `vietQrUrl` is
+ * additionally null once nothing is outstanding.
+ */
+export interface MyTuitionDetail {
+  month: string;
+  closedAt: string | null;
+  fee: StudentFee;
+  paymentInfo: {
+    bankName: string | null;
+    bankCode: string | null;
+    accountNumber: string | null;
+    accountHolder: string | null;
+    memoTemplate: string | null;
+    memo: string | null;
+    vietQrUrl: string | null;
+  } | null;
 }

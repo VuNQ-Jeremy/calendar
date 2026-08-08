@@ -80,9 +80,22 @@ export default [
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
   route('api/settings/notifications', 'routes/api.settings.notifications.tsx'),
   route('api/settings/garden', 'routes/api.settings.garden.tsx'),
+  // Tuition, student self-view. All-literal prefixes under `me`, so no `:id?` can swallow them.
+  route('api/tuition/me', 'routes/api.tuition.me.tsx'),
+  route('api/tuition/me/:month', 'routes/api.tuition.me.$month.tsx'),
+  route('api/tuition/me/:month/slip', 'routes/api.tuition.me.$month.slip.tsx'),
   route('api/push/register', 'routes/api.push.register.tsx'),
   route('api/push/unregister', 'routes/api.push.unregister.tsx'),
   route('api/push/run', 'routes/api.push.run.tsx'),
+  // Zalo bot channel. The webhook is the only public /api route besides auth — it is gated on
+  // the X-Bot-Api-Secret-Token header instead of a session, because Zalo's servers have neither.
+  route('api/zalo/webhook', 'routes/api.zalo.webhook.tsx'),
+  route('api/zalo/pair', 'routes/api.zalo.pair.tsx'),
+  route('api/zalo/admin', 'routes/api.zalo.admin.tsx'),
+  route('api/zalo/send-card', 'routes/api.zalo.send-card.tsx'),
+  // Share-card images, fetched by Zalo's own servers — the only unauthenticated R2 route in the
+  // app, and it can only reach the `zalo/` prefix. See the file for why that is unavoidable.
+  route('zalo-media/:key', 'routes/zalo-media.$key.tsx'),
 
   // The vocabulary pages used to live at /flashcards. Keep the old URLs working — bookmarks,
   // and push notifications sent before the rename that still carry `url: '/flashcards'`.

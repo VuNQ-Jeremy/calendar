@@ -328,6 +328,26 @@ export const PushRegisterInput = z.object({
 });
 export type PushRegisterInput = z.infer<typeof PushRegisterInput>;
 
+/**
+ * Ask for a Zalo pairing code. `self` needs no id — it is the caller's own account; the other
+ * two name somebody who cannot ask for themselves, which is the whole reason this is staff-only.
+ */
+export const ZaloPairInput = z
+  .object({
+    target: z.enum(['self', 'parent', 'class']),
+    parentId: z.string().min(1).optional(),
+    classId: z.string().min(1).optional(),
+  })
+  .refine((v) => v.target !== 'parent' || !!v.parentId, {
+    message: 'parentId is required when target is parent',
+    path: ['parentId'],
+  })
+  .refine((v) => v.target !== 'class' || !!v.classId, {
+    message: 'classId is required when target is class',
+    path: ['classId'],
+  });
+export type ZaloPairInput = z.infer<typeof ZaloPairInput>;
+
 export const LoginInput = z.object({
   email: z.string().min(1).max(320),
   password: z.string().min(1).max(200),
@@ -837,6 +857,31 @@ export const TuitionAdjustmentInput = z.object({
   adjustmentNote: z.string().max(500).nullish(),
 });
 export type TuitionAdjustmentInput = z.infer<typeof TuitionAdjustmentInput>;
+
+/** An empty form field arrives as '', not as a missing key — treat it as "not set". */
+const OptionalSetting = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullish()
+    .or(z.literal('').transform(() => null));
+
+/**
+ * How a family pays: the centre's bank account, shown (with a VietQR image) on the student's
+ * mobile "Học phí" screen. One school-wide settings row, admin-edited on /config. Every field is
+ * optional so a half-filled form still saves; the QR only renders once bankCode + accountNumber
+ * exist. `bankCode` is the VietQR bank id ('VCB', 'TCB', … or the six-digit BIN); `memoTemplate`
+ * supports `{month}` and `{name}` (see shared/logic/fees.ts `resolveMemo`).
+ */
+export const TuitionPaymentInfoInput = z.object({
+  bankName: OptionalSetting(100),
+  bankCode: OptionalSetting(20),
+  accountNumber: OptionalSetting(30),
+  accountHolder: OptionalSetting(100),
+  memoTemplate: OptionalSetting(200),
+});
+export type TuitionPaymentInfoInput = z.infer<typeof TuitionPaymentInfoInput>;
 
 /* ── Monthly remark (nhận xét tháng): one report per (student, month) ───────────────────── */
 

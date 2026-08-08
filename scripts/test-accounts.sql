@@ -41,6 +41,11 @@ DELETE FROM tuition_lines;
 DELETE FROM tuition_student_months;
 DELETE FROM tuition_months;
 DELETE FROM class_prices;
+-- Zalo links and pairing codes. Chats cascade off accounts/parents/classes, but the e2e spec
+-- pairs a synthetic chat id that belongs to none of them, and a leaked one would make the next
+-- run's "no links yet" assertion fail. Codes never cascade at all — they outlive their target.
+DELETE FROM zalo_chats;
+DELETE FROM zalo_pair_codes;
 
 INSERT INTO accounts (id, email, password_hash, staff_id, created_at) VALUES
   ('acc-e2e-staff-0001', 'dev@mochi.edu',

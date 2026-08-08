@@ -399,9 +399,57 @@ export const pushTokens = sqliteTable(
 );
 
 /**
+ * Zalo Bot channel — see migrations/0027_zalo.sql.
+ *
+ * One row per paired Zalo conversation, keyed on Zalo's own `chat_id`. Exactly one of
+ * accountId / parentId / classId is set; the invariant lives in server/services/zalo.ts because
+ * SQLite cannot state it. `parentId` points at `parents` rather than `accounts` on purpose:
+ * parent accounts cannot log in, so a parent has no session to pair from and reaches the bot
+ * through a staff-issued code instead.
+ */
+export const zaloChats = sqliteTable(
+  'zalo_chats',
+  {
+    id: text('id').primaryKey(),
+    chatId: text('chat_id').notNull().unique(),
+    /** 'user' | 'group' — the webhook's chat.chat_type, normalised. */
+    kind: text('kind').notNull().default('user'),
+    accountId: text('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
+    parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
+    classId: text('class_id').references(() => classes.id, { onDelete: 'cascade' }),
+    displayName: text('display_name'),
+    createdAt: text('created_at').notNull(),
+    lastSeenAt: text('last_seen_at'),
+  },
+  (t) => [
+    index('idx_zalo_chats_account').on(t.accountId),
+    index('idx_zalo_chats_parent').on(t.parentId),
+    index('idx_zalo_chats_class').on(t.classId),
+  ],
+);
+
+/** Single-use, expiring pairing codes. The code is the credential — see the migration. */
+export const zaloPairCodes = sqliteTable(
+  'zalo_pair_codes',
+  {
+    code: text('code').primaryKey(),
+    accountId: text('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
+    parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
+    classId: text('class_id').references(() => classes.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by').references(() => staff.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    usedAt: text('used_at'),
+  },
+  (t) => [index('idx_zalo_pair_codes_expires').on(t.expiresAt)],
+);
+
+/**
  * What has already been pushed, so a repeating cron sweep does not repeat itself.
  *
- * Key: `{kind}:{subjectId}:{occurrenceDate}` — see migrations/0015_notifications.sql.
+ * Key: `{kind}:{subjectId}:{occurrenceDate}` — see migrations/0015_notifications.sql. Shared by
+ * both delivery channels: Zalo keys carry a `zalo-` prefix so enabling the second channel does
+ * not find every occurrence already marked done by the first.
  */
 export const sentNotifications = sqliteTable(
   'sent_notifications',

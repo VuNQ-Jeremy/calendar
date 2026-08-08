@@ -15,6 +15,9 @@ import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import * as tuitionSvc from '../../server/services/tuition';
 import * as rankingsSvc from '../../server/services/rankings';
 import * as gardenSvc from '../../server/services/garden';
+import * as zaloSvc from '../../server/services/zalo';
+import * as peopleSvc from '../../server/services/people';
+import * as classesSvc from '../../server/services/classes';
 import {
   AssessmentTypeInput,
   AssessmentTypeReorder,
@@ -24,6 +27,7 @@ import {
   RankingWeightsInput,
   RemarkCriterionInput,
   RemarkCriteriaReorder,
+  TuitionPaymentInfoInput,
   TuitionSettingsInput,
   UiPrefsInput,
   parsePatch,
@@ -43,6 +47,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     tuitionSettings,
     rankingWeights,
     gardenSettings,
+    paymentInfo,
+    zaloLinks,
+    zaloCodes,
+    parents,
+    classList,
   ] = await Promise.all([
     typesSvc.list(db),
     criteriaSvc.list(db),
@@ -51,6 +60,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     tuitionSvc.getTuitionSettings(db),
     rankingsSvc.getRankingWeights(db),
     gardenSvc.getGardenSettings(db),
+    tuitionSvc.getPaymentInfo(db),
+    zaloSvc.listLinks(db),
+    zaloSvc.pendingCodes(db),
+    peopleSvc.listParents(db),
+    classesSvc.list(db),
   ]);
   return {
     types,
@@ -60,6 +74,18 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     tuitionSettings,
     rankingWeights,
     gardenSettings,
+    paymentInfo,
+    // The Zalo card needs names, not ids: a chat_id and a parent id next to each other tell an
+    // admin nothing about who is actually connected.
+    zalo: {
+      links: zaloLinks,
+      codes: zaloCodes,
+      parents: parents.map((p) => ({ id: p.id, name: p.name })),
+      classes: classList.map((c) => ({ id: c.id, name: c.name })),
+      // Whether the channel can actually deliver. Without it the card would offer to generate
+      // codes for a bot that does not exist.
+      enabled: zaloSvc.isEnabled(env),
+    },
   };
 }
 
@@ -86,6 +112,30 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   const raw = preprocessRaw(Object.fromEntries(formData) as Record<string, unknown>);
 
   try {
+    // ---- Zalo ----
+    //
+    // Codes are generated here rather than through /api/zalo/pair because this page is a
+    // cookie-authed web form and that route is bearer-only, the same split as everywhere else.
+    if (intent === 'zalo-code') {
+      const kind = formData.get('kind') as string | null;
+      const target =
+        kind === 'parent'
+          ? { parentId: (formData.get('parentId') as string) || '' }
+          : kind === 'class'
+            ? { classId: (formData.get('classId') as string) || '' }
+            : null;
+      const value = target && (target.parentId || target.classId);
+      if (!target || !value) return Response.json({ error: 'missing target' }, { status: 400 });
+      const code = await zaloSvc.createPairCode(db, target);
+      return { ok: true, code: code.code };
+    }
+
+    if (intent === 'zalo-unlink') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      await zaloSvc.unlink(db, id);
+      return { ok: true };
+    }
+
     if (intent === 'create-type') {
       const parsed = AssessmentTypeInput.safeParse(raw);
       if (!parsed.success) {
@@ -219,6 +269,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       const tuitionSettings = await tuitionSvc.setTuitionSettings(db, parsed.data);
       return { ok: true, tuitionSettings };
+    }
+
+    if (intent === 'payment-info') {
+      const parsed = TuitionPaymentInfoInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const paymentInfo = await tuitionSvc.setPaymentInfo(db, parsed.data);
+      return { ok: true, paymentInfo };
     }
 
     if (intent === 'ranking-weights') {

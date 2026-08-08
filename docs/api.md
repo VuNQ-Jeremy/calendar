@@ -152,6 +152,11 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET PATCH | `/api/settings/ui-prefs` | GET user, PATCH **admin** | `UiPrefsInput` — school-wide, so every client reads it but only an admin writes it. `scrollbar` is web-only, `mobileTabBar` phone-only |
 | POST | `/api/push/register` | user | `{ expoToken, platform }` — upserts, moving the token between accounts |
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
+| POST | `/api/zalo/webhook` | **none** | Zalo's own delivery endpoint. Gated on the `X-Bot-Api-Secret-Token` header, not a session — Zalo's servers have neither cookie nor bearer. Always 200 on a verified update; 401 on a bad secret, 503 when `ZALO_WEBHOOK_SECRET` is unset |
+| GET POST DELETE | `/api/zalo/pair` | staff | GET lists linked chats and outstanding codes. POST `ZaloPairInput` (`target: self\|parent\|class`) issues a single-use 6-character code, valid 24h. DELETE `?id=` unlinks |
+| GET POST | `/api/zalo/admin` | **admin** | `?op=me\|webhook-info` (GET), `?op=set-webhook\|delete-webhook` (POST). `set-webhook` derives its URL from the request origin, so each deployment registers itself |
+| POST | `/api/zalo/send-card` | staff | **multipart**: `file` (PNG, 5 MB cap), `target=class:<id>\|student:<id>`, `caption?`. 409 `not_linked` when the target has no chat. Returns per-chat results |
+| GET | `/zalo-media/:key` | **none** | The uploaded card, fetched by Zalo's servers. A capability URL — unguessable UUID key, `zalo/` prefix only, pruned after 7 days |
 | GET PATCH | `/api/garden/plant` | **user** | The caller's own plant, settled to today; staff may read anyone's with `?studentId=`. PATCH takes `PlantPatchInput` (`plantName`, `potColor`) and is students-only, on their own plant. Also returns `today` (the server's ICT day — compare every deadline against it, never the device clock), `hasPlant`, and `fruitMonth` |
 | POST | `/api/garden/harvest` | **user** (student) | Banks a fruit and replants a seed. 409 `not_ripe` / `dead` when the plant is not at the fruit stage — including on a double tap |
 | GET | `/api/garden/class/:id` | **user** | One class's garden plus its cooperative tree. A student may only read classes they are in (403 otherwise) |
@@ -160,6 +165,41 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/garden/progress/:id` | staff | Who has finished one assignment. NOT under `/assignments`, whose `:id?` would swallow the segment |
 | GET | `/api/garden/snapshots?classId=` | **user** | Saved album months; add `&month=` for one frozen garden. Same membership rule as the class garden |
 | GET PUT | `/api/settings/garden` | admin | `GardenSettingsInput` — school-wide, and it re-times every plant |
+
+### Tuition, student self-view
+
+| Method | Path | Level | Notes |
+|---|---|---|---|
+| GET | `/api/tuition/me` | **user** | `{ months: [...] }`, newest first. Students only — 403 for staff |
+| GET | `/api/tuition/me/:month` | **user** | One month: frozen `fee` plus `paymentInfo` |
+| GET | `/api/tuition/me/:month/slip` | **user** | `image/png`, not the envelope. `?theme=cute-pastel\|minimal\|classic`, default `minimal` |
+
+Self-scoped by construction: the student id comes from the session, never from the request.
+Staff get 403 (they have the admin `/tuition` screen, which answers a different question); parent
+accounts cannot sign in at all yet.
+
+**Closed months only.** An open month is a live estimate that moves with every attendance mark —
+quoting it to a family would mean the number they wrote down on Tuesday is not the one they are
+asked for on Friday. An open month, a month that does not exist, and a month this student has
+nothing in all answer the same **404**, so the response cannot be used to discover which months
+the centre is working on.
+
+Payments are *not* part of the snapshot, so `paidVnd`, `outstandingVnd` and `status`
+(`unpaid | partial | paid`) can still change after the close — that is how a month stops saying
+"chưa đóng". Clients should refetch on focus rather than treat a closed month as immutable.
+
+`paymentInfo` is `null` until an admin fills the form on `/config`. When set it carries the bank
+fields, a `memo` already resolved for this student and month, and `vietQrUrl` — an img.vietqr.io
+image with the amount and memo prefilled. The QR is omitted (`null`) once nothing is outstanding.
+
+The slip PNG is rendered in the Worker by satori + resvg (`server/slip/`), because the web's
+rasterizer (`html-to-image`) needs a DOM that neither the Worker nor React Native has. All three
+web themes are reproduced; see `server/slip/themes.tsx` for what each one gives up.
+
+Announcing a month is a **manual** admin action, not a cron: the `notify-students` intent on the
+web `/tuition` action. Closing is an accounting step an admin may repeat while correcting a price,
+so it deliberately sends nothing on its own. Idempotency key `tuition:{month}:{student}:{dueVnd}`
+— pressing twice reaches nobody, and a re-close reaches only students whose amount actually moved.
 
 Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view`,
 `/materials/:id/download`, `/enrich-vocab`, `/generate-vocab`.
@@ -253,6 +293,56 @@ the next round earns back.
 assignment deadlines, writes down overdue decay, saves the previous month's album, and sends the
 wilt/stage-drop pushes. It is idempotent — deadlines are charged at most once per student per
 assignment, and the push ledger dedupes the messages.
+
+## Zalo
+
+A second notification channel next to Expo push, using the **Zalo Bot Platform**
+(`bot.zaloplatforms.com`) — not an Official Account and not ZNS, both of which need a verified
+business. A bot is created from a personal Zalo account and may message any conversation that has
+paired with it, unprompted, which is what makes cron delivery possible at all.
+
+It exists because it reaches people push cannot: **parents**, who have no account and no app, and
+who cannot be given one — `userFromToken` refuses any account with a `parentId`.
+
+**Pairing is always two-sided.** Staff generate a code (`/api/zalo/pair`, or the Zalo card on
+/config); the person messages that code to the bot from their own Zalo. Nothing can link a chat
+from this side alone — Zalo does not reveal who anybody is until they talk to the bot. A code is
+single-use and expires in 24 hours, and its kind must match the chat: a personal code sent in a
+group is refused, and so is a class code sent privately. Both would be silent privacy failures.
+A group is linked by adding the bot and sending `@Bot Mochi /link <code>` there — the **@mention
+is mandatory**, since Zalo delivers no group message without one, and it stays in the text, so
+commands are matched anywhere in a message rather than at its start. In a group only an explicit
+`/link` or `/unlink` does anything; a bare code is ignored, because a class group is full of
+ordinary conversation. In a private chat a bare code is enough.
+
+**Delivery.** `runClassReminders` messages the parents of each class's students;
+`runEveningPreview` messages the class group if one is linked and otherwise each parent
+individually — never both, or a parent in the group is told twice. Staff get the same whole-day
+summary they get on push. Zalo keeps its **own** ledger keys (`zalo-` prefixed): sharing push's
+keys would mean that the day the channel is switched on, every occurrence push had already
+handled is marked done and no parent ever hears anything.
+
+**Configuration.** `ZALO_BOT_TOKEN` and `ZALO_WEBHOOK_SECRET`, both declared in `globals.d.ts`
+and set with `wrangler secret put`. Each fails safe alone: no token and every send quietly
+no-ops; no secret and the webhook rejects everything. Register the webhook once per deployment
+with `POST /api/zalo/admin?op=set-webhook`. Webhook and long-polling are mutually exclusive on
+one bot, so development wants a **second** bot rather than borrowing production's.
+
+**Share cards.** `/api/zalo/send-card` posts a rendered card into a class group (or privately to
+a student's parents), replacing the copy-open-paste routine. The PNG is uploaded by the browser
+rather than rendered server-side, because every share card is drawn from live DOM by
+`html-to-image` and a Worker has no DOM — which is also why the cron jobs only ever post **text**
+to groups. The image lands in R2 under `zalo/` and is served by `/zalo-media/:key`, the one
+unauthenticated R2 route in the app: `sendPhoto` takes a URL that Zalo fetches itself, with no
+credential it could ever present. The copy button stays everywhere alongside it, as the fallback
+for an unlinked group or a Zalo outage.
+
+**Developing against it.** `node scripts/zalo-poll.mjs` prints everything the bot receives, and
+`--forward` replays it into a local dev server — Zalo cannot reach localhost, so this is the only
+way to exercise the webhook there. It is also how you find a group's `chat_id`. Note that
+`getUpdates` has no `offset`: it is a live long-poll with no cursor, so a message sent while
+nothing is listening is gone, and **bots do not receive plain group messages at all — only ones
+that @mention them.** Both facts cost an afternoon to rediscover.
 
 ## File upload
 

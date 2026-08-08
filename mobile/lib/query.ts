@@ -69,6 +69,17 @@ export const qk = {
   mySessions: ['mySessions'] as const,
 
   /**
+   * The student's own tuition — web `route:tuition` / `tuition:{month}`, self-scoped.
+   *
+   * A closed month's fee lines are frozen, but the payment against it is not: the office records a
+   * transfer days later and the same month goes from "chưa đóng" to "đã đóng". So the detail is
+   * cacheable but never permanently — both keys refetch on focus rather than being treated as
+   * immutable the way a garden album month is.
+   */
+  myTuition: ['tuition', 'me'] as const,
+  myTuitionMonth: (month: string) => ['tuition', 'me', month] as const,
+
+  /**
    * The garden — web `route:garden` and `garden:{classId}`.
    *
    * The ICT day is part of the key, and that is load-bearing rather than decorative. A plant is

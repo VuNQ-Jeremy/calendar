@@ -23,6 +23,9 @@ video/out/
 video/public/recordings/**/*.webm
 video/public/music/*.mp3
 
+# Incremental typecheck cache, written by `tsc` even under --noEmit.
+tsconfig.tsbuildinfo
+
 # Playwright e2e (nav-latency suite runs against a real deployment)
 test-results/
 playwright-report/

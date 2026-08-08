@@ -14,8 +14,10 @@ import type {
   AttendanceStatus,
   ClassPriceInput,
   TuitionAdjustmentInput,
+  TuitionPaymentInfoInput,
   TuitionPaymentInput,
 } from '../../shared/schemas';
+import { resolveMemo, studentFees, vietQrUrl, type StudentFee } from '../../shared/logic/fees';
 
 /**
  * Tuition (học phí): turn attendance into a monthly fee.
@@ -66,6 +68,58 @@ export async function setTuitionSettings(
   await db
     .insert(settings)
     .values({ key: SETTINGS_KEY, value: JSON.stringify(next) })
+    .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  return next;
+}
+
+/* ── Payment details (bank transfer + VietQR) ───────────────────────────────────────────── */
+
+export type TuitionPaymentInfo = {
+  bankName: string | null;
+  bankCode: string | null;
+  accountNumber: string | null;
+  accountHolder: string | null;
+  memoTemplate: string | null;
+};
+
+const EMPTY_PAYMENT_INFO: TuitionPaymentInfo = {
+  bankName: null,
+  bankCode: null,
+  accountNumber: null,
+  accountHolder: null,
+  memoTemplate: null,
+};
+
+const PAYMENT_INFO_KEY = 'tuition-payment-info';
+
+/** The centre's bank account. Unset until an admin fills the /config form — every field nullable. */
+export async function getPaymentInfo(db: Db): Promise<TuitionPaymentInfo> {
+  const rows = await db.select().from(settings).where(eq(settings.key, PAYMENT_INFO_KEY));
+  const row = rows[0];
+  if (!row) return { ...EMPTY_PAYMENT_INFO };
+  try {
+    const parsed = JSON.parse(row.value) as Partial<TuitionPaymentInfo>;
+    return { ...EMPTY_PAYMENT_INFO, ...parsed };
+  } catch {
+    return { ...EMPTY_PAYMENT_INFO };
+  }
+}
+
+export async function setPaymentInfo(
+  db: Db,
+  patch: TuitionPaymentInfoInput,
+): Promise<TuitionPaymentInfo> {
+  const current = await getPaymentInfo(db);
+  const next: TuitionPaymentInfo = {
+    bankName: patch.bankName ?? current.bankName,
+    bankCode: patch.bankCode ?? current.bankCode,
+    accountNumber: patch.accountNumber ?? current.accountNumber,
+    accountHolder: patch.accountHolder ?? current.accountHolder,
+    memoTemplate: patch.memoTemplate ?? current.memoTemplate,
+  };
+  await db
+    .insert(settings)
+    .values({ key: PAYMENT_INFO_KEY, value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
   return next;
 }
@@ -467,4 +521,189 @@ export async function saveStudentMonth(
       and(eq(tuitionStudentMonths.month, month), eq(tuitionStudentMonths.studentId, studentId)),
     );
   return mapStudentMonth(rows[0]);
+}
+
+/* ── Student self-view ──────────────────────────────────────────────────────────────────── */
+
+/**
+ * What a student is allowed to see about their own fees.
+ *
+ * Closed months only, and read from the snapshot — never `computeMonthLines`. An open month is a
+ * running estimate that changes with every attendance mark; showing it to a family would mean the
+ * amount they were quoted on Tuesday is not the one they are asked for on Friday. The admin screen
+ * is the place where an open month is legible, because the person reading it knows why it moves.
+ *
+ * Payments live outside the snapshot, so `paidVnd` and the status can still change after the close.
+ * That is intended: it is how a paid month stops saying "chưa đóng".
+ */
+async function studentFeeFor(
+  db: Db,
+  studentId: string,
+  month: string,
+): Promise<StudentFee | null> {
+  const [lineRows, paymentRows] = await Promise.all([
+    db
+      .select()
+      .from(tuitionLines)
+      .where(and(eq(tuitionLines.month, month), eq(tuitionLines.studentId, studentId)))
+      .orderBy(asc(tuitionLines.className)),
+    db
+      .select()
+      .from(tuitionStudentMonths)
+      .where(
+        and(eq(tuitionStudentMonths.month, month), eq(tuitionStudentMonths.studentId, studentId)),
+      ),
+  ]);
+
+  const lines = lineRows.map((r) => ({
+    studentId: r.studentId,
+    classId: r.classId,
+    className: r.className,
+    sessions: r.sessions,
+    dates: parseJson<string[]>(r.dates, []),
+    statusCounts: parseJson<Record<string, number>>(r.statusCounts, {}),
+    unitPriceVnd: r.unitPriceVnd,
+    amountVnd: r.amountVnd,
+  }));
+  // studentFees applies the same "a payment row with no lines still counts" rule the admin report
+  // uses, so a month that was reopened and re-billed to nothing still shows money already collected.
+  return studentFees(lines, paymentRows.map(mapStudentMonth))[0] ?? null;
+}
+
+export type StudentMonthSummary = {
+  month: string;
+  closedAt: string | null;
+  billedVnd: number;
+  adjustmentVnd: number;
+  dueVnd: number;
+  paidVnd: number;
+  outstandingVnd: number;
+  status: StudentFee['status'];
+};
+
+/** Every closed month this student has fee lines or money in, newest first. */
+export async function listClosedMonthsForStudent(
+  db: Db,
+  studentId: string,
+): Promise<StudentMonthSummary[]> {
+  // Two sources, because a reopened-and-re-billed month can leave a payment row with no lines.
+  const [lineMonths, paymentMonths, closedRows] = await Promise.all([
+    db
+      .selectDistinct({ month: tuitionLines.month })
+      .from(tuitionLines)
+      .where(eq(tuitionLines.studentId, studentId)),
+    db
+      .select({
+        month: tuitionStudentMonths.month,
+        paidVnd: tuitionStudentMonths.paidVnd,
+        adjustmentVnd: tuitionStudentMonths.adjustmentVnd,
+      })
+      .from(tuitionStudentMonths)
+      .where(eq(tuitionStudentMonths.studentId, studentId)),
+    db
+      .select({ month: tuitionMonths.month, closedAt: tuitionMonths.closedAt })
+      .from(tuitionMonths)
+      .where(eq(tuitionMonths.status, 'closed')),
+  ]);
+
+  const closedAtByMonth = new Map(closedRows.map((r) => [r.month, r.closedAt ?? null]));
+  const candidates = new Set<string>();
+  for (const r of lineMonths) candidates.add(r.month);
+  // An all-zero payment row says nothing — same rule as studentFees.
+  for (const r of paymentMonths) {
+    if (r.paidVnd !== 0 || r.adjustmentVnd !== 0) candidates.add(r.month);
+  }
+
+  const months = [...candidates].filter((m) => closedAtByMonth.has(m)).sort().reverse();
+
+  const out: StudentMonthSummary[] = [];
+  for (const month of months) {
+    const fee = await studentFeeFor(db, studentId, month);
+    if (!fee) continue;
+    out.push({
+      month,
+      closedAt: closedAtByMonth.get(month) ?? null,
+      billedVnd: fee.billedVnd,
+      adjustmentVnd: fee.adjustmentVnd,
+      dueVnd: fee.dueVnd,
+      paidVnd: fee.paidVnd,
+      outstandingVnd: fee.outstandingVnd,
+      status: fee.status,
+    });
+  }
+  return out;
+}
+
+export type StudentMonthDetail = {
+  month: string;
+  closedAt: string | null;
+  fee: StudentFee;
+};
+
+/**
+ * One closed month for one student, or null.
+ *
+ * Null covers "the month is still open", "there is no such month" and "this student has nothing in
+ * it" alike. The route turns all three into the same 404 on purpose — a distinct response for the
+ * open case would tell a student which months exist before the centre has announced them.
+ */
+export async function getStudentMonthDetail(
+  db: Db,
+  studentId: string,
+  month: string,
+): Promise<StudentMonthDetail | null> {
+  const { status, closedAt } = await getMonthStatus(db, month);
+  if (status !== 'closed') return null;
+  const fee = await studentFeeFor(db, studentId, month);
+  if (!fee) return null;
+  return { month, closedAt, fee };
+}
+
+/**
+ * The bank details a student sees for one month, with the memo filled in and a VietQR image URL.
+ *
+ * The QR is omitted once nothing is outstanding: a code that would transfer 0 ₫ is not something to
+ * put in front of someone who has already paid.
+ */
+export type ResolvedPaymentInfo = TuitionPaymentInfo & {
+  memo: string | null;
+  vietQrUrl: string | null;
+};
+
+export function resolvePaymentInfo(
+  info: TuitionPaymentInfo,
+  ctx: { month: string; studentName: string; outstandingVnd: number },
+): ResolvedPaymentInfo {
+  const memo = info.memoTemplate
+    ? resolveMemo(info.memoTemplate, { month: ctx.month, name: ctx.studentName })
+    : null;
+  const canQr = Boolean(info.bankCode && info.accountNumber) && ctx.outstandingVnd > 0;
+  return {
+    ...info,
+    memo,
+    vietQrUrl: canQr
+      ? vietQrUrl({
+          bankCode: info.bankCode as string,
+          accountNumber: info.accountNumber as string,
+          accountHolder: info.accountHolder ?? '',
+          amountVnd: ctx.outstandingVnd,
+          memo: memo ?? '',
+        })
+      : null,
+  };
+}
+
+/**
+ * Every student's frozen fee for a closed month — what the manual "notify students" action sends
+ * from. Returns an empty list for an open month rather than computing one, so the button can never
+ * announce an amount that is still moving.
+ */
+export async function closedMonthFees(db: Db, month: string): Promise<StudentFee[]> {
+  const { status } = await getMonthStatus(db, month);
+  if (status !== 'closed') return [];
+  const [lines, studentMonths] = await Promise.all([
+    listSnapshotLines(db, month),
+    listStudentMonths(db, month),
+  ]);
+  return studentFees(lines, studentMonths);
 }

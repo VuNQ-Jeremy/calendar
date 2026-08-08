@@ -10,7 +10,7 @@ import type { AttendanceStatusId } from '../shared/logic/assess.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
 import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
-import type { TuitionSettings } from '../server/services/tuition.js';
+import type { TuitionPaymentInfo, TuitionSettings } from '../server/services/tuition.js';
 import type { RankingWeights } from '../shared/logic/rankings.js';
 import type { GardenSettings } from '../shared/logic/garden.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
@@ -26,6 +26,24 @@ interface ConfigLoaderData {
   tuitionSettings: TuitionSettings;
   rankingWeights: RankingWeights;
   gardenSettings: GardenSettings;
+  paymentInfo: TuitionPaymentInfo;
+  zalo: ZaloConfig;
+}
+
+interface ZaloConfig {
+  links: {
+    id: string;
+    chatId: string;
+    kind: string;
+    accountId: string | null;
+    parentId: string | null;
+    classId: string | null;
+    displayName: string | null;
+  }[];
+  codes: { code: string; parentId: string | null; classId: string | null; expiresAt: string }[];
+  parents: { id: string; name: string }[];
+  classes: { id: string; name: string }[];
+  enabled: boolean;
 }
 
 // Mock colors are hardcoded hex (same values as the DS tokens) so each card
@@ -99,6 +117,71 @@ function TuitionSettingsSection({ settings }: { settings: TuitionSettings }) {
       <p className="m-muted" style={{ margin: '10px 0 0', fontSize: 'var(--text-sm)' }}>
         {t('cfg_tuition_hint')}
       </p>
+    </Card>
+  );
+}
+
+/**
+ * The centre's bank account, shown to students on the phone with a VietQR code.
+ *
+ * Held in a draft until Save: a half-typed account number rendered into a QR is worse than no QR
+ * at all. Every field is optional so a partly-filled form still saves, and the phone shows only
+ * what is set — the fields are what a Vietnamese banking app needs to prefill a transfer.
+ */
+function PaymentInfoSection({ info }: { info: TuitionPaymentInfo }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [draft, setDraft] = React.useState<Record<string, string> | null>(null);
+
+  const FIELDS: { key: keyof TuitionPaymentInfo; tk: string; hint?: string }[] = [
+    { key: 'bankName', tk: 'cfg_payment_bank_name' },
+    { key: 'bankCode', tk: 'cfg_payment_bank_code', hint: 'cfg_payment_bank_code_hint' },
+    { key: 'accountNumber', tk: 'cfg_payment_account' },
+    { key: 'accountHolder', tk: 'cfg_payment_holder' },
+    { key: 'memoTemplate', tk: 'cfg_payment_memo', hint: 'cfg_payment_memo_hint' },
+  ];
+
+  const saved = Object.fromEntries(FIELDS.map((f) => [f.key, info[f.key] ?? '']));
+  const current = draft ?? saved;
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('intent', 'payment-info');
+    for (const f of FIELDS) fd.set(f.key, current[f.key] ?? '');
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+    setDraft(null);
+  };
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('cfg_payment_title')}</h2>
+        <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('cfg_payment_sub')}
+        </p>
+      </div>
+      <div className="m-row" style={{ gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        {FIELDS.map((f) => (
+          <div key={f.key} className="mochi-field" style={{ marginBottom: 0, minWidth: 200 }}>
+            <label className="mochi-field__label">{t(f.tk)}</label>
+            <input
+              className="mochi-input"
+              value={current[f.key] ?? ''}
+              onChange={(e) => setDraft({ ...current, [f.key]: e.target.value })}
+            />
+            {f.hint ? (
+              <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+                {t(f.hint)}
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <Button onClick={save} disabled={!draft}>
+          {t('save')}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -667,6 +750,148 @@ function RemarkCriteriaSection({ criteria }: { criteria: RemarkCriterionRow[] })
   );
 }
 
+/**
+ * Zalo connections.
+ *
+ * The one screen where the school's real communication channel becomes visible. Pairing is a
+ * two-step dance by necessity: generate a code here, and the person messages it to the bot from
+ * their own Zalo. It cannot be done from this side alone — Zalo will not tell us who anybody is
+ * until they talk to the bot first, and parents have no login to do it themselves.
+ *
+ * The code is shown once, large, with the sentence to forward alongside it, because what actually
+ * happens next is a teacher copying both into a chat.
+ */
+function ZaloSection({ zalo }: { zalo: ZaloConfig }) {
+  const fetcher = useFetcher<{ code?: string; error?: string }>();
+  const { t } = useLang();
+  const [kind, setKind] = React.useState<'parent' | 'class'>('parent');
+  const [targetId, setTargetId] = React.useState('');
+
+  const parentName = (id: string | null) =>
+    zalo.parents.find((p) => p.id === id)?.name ?? t('zalo_unknown');
+  const className = (id: string | null) =>
+    zalo.classes.find((c) => c.id === id)?.name ?? t('zalo_unknown');
+
+  const label = (l: ZaloConfig['links'][number]) =>
+    l.classId
+      ? `${t('zalo_group')} · ${className(l.classId)}`
+      : l.parentId
+        ? `${t('zalo_parent')} · ${parentName(l.parentId)}`
+        : `${t('zalo_staff')} · ${l.displayName ?? l.chatId}`;
+
+  const options = kind === 'parent' ? zalo.parents : zalo.classes;
+  const current = targetId || options[0]?.id || '';
+
+  const generate = () => {
+    if (!current) return;
+    const fd = new FormData();
+    fd.set('intent', 'zalo-code');
+    fd.set('kind', kind);
+    fd.set(kind === 'parent' ? 'parentId' : 'classId', current);
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+  };
+
+  const unlink = (id: string) => {
+    const fd = new FormData();
+    fd.set('intent', 'zalo-unlink');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+  };
+
+  const issued = fetcher.data?.code;
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('zalo_title')}</h2>
+        <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+          {t('zalo_sub')}
+        </p>
+      </div>
+
+      {!zalo.enabled ? (
+        <Badge color="orange">{t('zalo_disabled')}</Badge>
+      ) : (
+        <>
+          <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="mochi-field" style={{ marginBottom: 0, minWidth: 140 }}>
+              <label className="mochi-field__label">{t('zalo_target')}</label>
+              <select
+                className="mochi-input"
+                value={kind}
+                onChange={(e) => {
+                  setKind(e.target.value as 'parent' | 'class');
+                  setTargetId('');
+                }}
+              >
+                <option value="parent">{t('zalo_parent')}</option>
+                <option value="class">{t('zalo_group')}</option>
+              </select>
+            </div>
+            <div className="mochi-field" style={{ marginBottom: 0, minWidth: 200 }}>
+              <label className="mochi-field__label">
+                {kind === 'parent' ? t('zalo_parent') : t('zalo_class')}
+              </label>
+              <select
+                className="mochi-input"
+                value={current}
+                onChange={(e) => setTargetId(e.target.value)}
+              >
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button onClick={generate} disabled={!current}>
+              {t('zalo_generate')}
+            </Button>
+          </div>
+
+          {issued ? (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 14,
+                borderRadius: 12,
+                background: 'var(--surface-2, #F6EDDF)',
+              }}
+            >
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, letterSpacing: 4 }}>
+                {issued}
+              </div>
+              <p className="m-muted" style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)' }}>
+                {kind === 'parent' ? t('zalo_hint_parent') : t('zalo_hint_group')}
+              </p>
+            </div>
+          ) : null}
+
+          <div style={{ marginTop: 18 }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 'var(--text-lg)' }}>{t('zalo_linked')}</h3>
+            {zalo.links.length === 0 ? (
+              <Empty title={t('zalo_none')} />
+            ) : (
+              zalo.links.map((l) => (
+                <div
+                  key={l.id}
+                  className="m-row"
+                  style={{ justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}
+                >
+                  <span>{label(l)}</span>
+                  <IconButton label={t('delete')} title={t('delete')} onClick={() => unlink(l.id)}>
+                    <MIcon name="trash" />
+                  </IconButton>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 function SystemConfigScreen() {
   const {
     types,
@@ -676,6 +901,8 @@ function SystemConfigScreen() {
     tuitionSettings,
     rankingWeights,
     gardenSettings,
+    paymentInfo,
+    zalo,
   } = useLoaderData() as ConfigLoaderData;
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
@@ -865,9 +1092,13 @@ function SystemConfigScreen() {
 
       <TuitionSettingsSection settings={tuitionSettings} />
 
+      <PaymentInfoSection info={paymentInfo} />
+
       <RankingWeightsSection weights={rankingWeights} />
 
       <GardenSettingsSection settings={gardenSettings} />
+
+      <ZaloSection zalo={zalo} />
 
       <Card style={{ padding: 18, marginTop: 16 }}>
         <div style={{ marginBottom: 12 }}>
