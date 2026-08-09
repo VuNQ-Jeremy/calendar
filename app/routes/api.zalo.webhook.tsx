@@ -41,18 +41,24 @@ export const action = withPublic(async ({ request, db, env }) => {
     throw fail('unauthorized', 401);
   }
 
-  let payload: { result?: zalo.ZaloUpdate } | null = null;
+  let payload: unknown;
   try {
-    payload = (await request.json()) as { result?: zalo.ZaloUpdate };
+    payload = await request.json();
   } catch {
     // Not JSON. Nothing to retry into existence, so accept and drop it.
     return { ok: true };
   }
 
+  const update = zalo.unwrapUpdate(payload);
+  if (!update) {
+    // Shape we do not recognise. Logged rather than ignored, because the last time this happened
+    // it was silent for a day — see unwrap().
+    console.error('[zalo] webhook payload not understood', { keys: Object.keys(payload ?? {}) });
+    return { ok: true };
+  }
+
   try {
-    // The bot API wraps everything in `{ ok, result }`; long-polled updates from getUpdates have
-    // the identical shape, which is what lets scripts/zalo-poll.mjs replay them at this route.
-    if (payload?.result) await zalo.handleUpdate(db, env, payload.result);
+    await zalo.handleUpdate(db, env, update);
   } catch (err) {
     console.error('[zalo] webhook handler threw', { err: String(err) });
   }

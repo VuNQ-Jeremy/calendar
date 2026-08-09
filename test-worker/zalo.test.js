@@ -252,6 +252,80 @@ describe('pairing codes', () => {
   });
 });
 
+describe('the polling relay', () => {
+  /**
+   * Zalo's webhook cannot reach this app on *.workers.dev — Cloudflare answers its
+   * `Java/1.8.0_192` agent with error 1010 at the edge (see workers/zalo-poller.ts). The poller
+   * replaces it by pulling instead, so what matters is that a polled update travels the same
+   * road a webhook delivery would: through `handleUpdate`, into the database.
+   */
+  it('turns a polled update into a real pairing', async () => {
+    const d = db();
+    const parent = await mkParent(d, 'Mẹ Poll');
+    const { code } = await zalo.createPairCode(d, { parentId: parent.id });
+
+    // Exactly the shape getUpdates answers with: the `{ ok, result }` envelope, unlike the
+    // webhook's bare body — the difference that silently broke this once already.
+    const update = zalo.unwrapUpdate({
+      ok: true,
+      result: {
+        event_name: 'message.text.received',
+        message: {
+          text: code,
+          chat: { id: 'polled-chat', chat_type: 'PRIVATE' },
+          from: { id: 'polled-chat', is_bot: false, display_name: 'Mẹ Poll' },
+        },
+      },
+    });
+    await zalo.handleUpdate(d, ON, update);
+
+    const links = await zalo.listLinks(d);
+    expect(links).toHaveLength(1);
+    expect(links[0].chatId).toBe('polled-chat');
+    expect(links[0].parentId).toBe(parent.id);
+  });
+
+  /** A 408 is Zalo saying "nothing arrived in 25 seconds" — routine, never an error. */
+  it('treats an empty long-poll as normal', async () => {
+    const res = zalo.unwrapUpdate({ ok: false, description: 'Request timeout', error_code: 408 });
+    expect(res).toBeNull();
+  });
+});
+
+describe('the webhook envelope', () => {
+  /**
+   * Regression, found in production after a day of chasing it. Zalo's webhook POSTs the update
+   * BARE; only `getUpdates` wraps it in `{ ok, result }`. Parsing for `result` alone meant every
+   * real delivery was answered 200 and dropped — a silent success that looks exactly like Zalo
+   * never delivering, which is what made it so expensive to find.
+   */
+  it('reads the bare shape Zalo actually POSTs', () => {
+    const bare = {
+      event_name: 'message.text.received',
+      message: {
+        text: 'hi',
+        chat: { id: 'fcb337f675ba9ce4c5ab', chat_type: 'PRIVATE' },
+        from: { id: 'fcb337f675ba9ce4c5ab', is_bot: false, display_name: 'Vu' },
+      },
+    };
+    expect(zalo.unwrapUpdate(bare)?.message?.text).toBe('hi');
+  });
+
+  it('still reads the { ok, result } shape the poll script replays', () => {
+    const wrapped = {
+      ok: true,
+      result: { event_name: 'message.text.received', message: { text: 'hi', chat: { id: 'c' } } },
+    };
+    expect(zalo.unwrapUpdate(wrapped)?.message?.text).toBe('hi');
+  });
+
+  it('returns null for anything else rather than guessing', () => {
+    for (const junk of [null, undefined, 'string', 42, {}, { ok: true }]) {
+      expect(zalo.unwrapUpdate(junk)).toBeNull();
+    }
+  });
+});
+
 describe('the bot token', () => {
   /**
    * Regression, found in production. `wrangler secret put` fed from a pipe keeps the trailing

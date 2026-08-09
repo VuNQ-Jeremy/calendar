@@ -39,11 +39,13 @@
     "bindings": [
       { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },
       { "name": "LIVE_HUB", "class_name": "LiveHub" },
+      { "name": "ZALO_POLLER", "class_name": "ZaloPoller" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["TranslateProxy"] },
     { "tag": "v2", "new_sqlite_classes": ["LiveHub"] },
+    { "tag": "v3", "new_sqlite_classes": ["ZaloPoller"] },
   ],
   // Phase 6 push notifications — handled by `scheduled()` in workers/app.ts, which branches on
   // event.cron. Cron Triggers are available on the free Workers plan.
@@ -91,6 +93,10 @@
         "bindings": [
           { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },
           { "name": "LIVE_HUB", "class_name": "LiveHub" },
+          // Bound so the class resolves, but never started here: this env has no crons, and the
+          // test worker holds the DEV bot's token. A poller running here would consume the same
+          // update stream `scripts/zalo-poll.mjs` uses and steal messages from local development.
+          { "name": "ZALO_POLLER", "class_name": "ZaloPoller" },
         ],
       },
       // The notification crons must never fire from the test worker.

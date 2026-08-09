@@ -11,8 +11,15 @@ export { TranslateProxy } from './translate-proxy';
 // browser tab (see workers/live-hub.ts). Same registration requirement.
 export { LiveHub } from './live-hub';
 
+// Durable Object that long-polls Zalo for incoming messages, because Cloudflare's edge rejects
+// Zalo's webhook agent on *.workers.dev (see workers/zalo-poller.ts). Same registration
+// requirement as the two above.
+export { ZaloPoller } from './zalo-poller';
+
 import { handleLiveUpgrade } from './live-hub';
+import { pollerStub } from './zalo-poller';
 import { runScheduled } from '../server/services/notify';
+import { isEnabled as zaloEnabled } from '../server/services/zalo';
 
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
@@ -71,6 +78,19 @@ export default {
    * itself look like a timeout; the work still runs to completion.
    */
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Re-arm the Zalo poller on every tick. `/start` is idempotent — an already-running poller
+    // just keeps going — so this costs nothing and means a chain broken by an eviction, a deploy
+    // or an unexpected throw self-heals within fifteen minutes instead of staying dead until
+    // somebody notices that pairing stopped working.
+    if (zaloEnabled(env)) {
+      ctx.waitUntil(
+        pollerStub(env)
+          .fetch('https://zalo-poller/start', { method: 'POST' })
+          .then(() => undefined)
+          .catch((err) => console.error('[zalo-poll] re-arm failed', { err: String(err) })),
+      );
+    }
+
     ctx.waitUntil(
       runScheduled(event.cron, env, new Date(event.scheduledTime)).catch((err) => {
         // A throwing cron is retried by Cloudflare, which for a notification job means

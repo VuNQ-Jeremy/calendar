@@ -417,6 +417,32 @@ export type ZaloUpdate = {
   };
 };
 
+/**
+ * Pull an update out of whichever envelope it arrived in.
+ *
+ * **The webhook and `getUpdates` do NOT agree**, and finding that out cost a day. `getUpdates`
+ * answers with the API's usual `{ ok, result: <update> }` envelope; the webhook POSTs the update
+ * BARE:
+ *
+ *   webhook     {"event_name":"message.text.received","message":{...}}
+ *   getUpdates  {"ok":true,"result":{"event_name":"...","message":{...}}}
+ *
+ * Written against the polled shape alone, the route found no `result` key on every real
+ * delivery, answered 200, and did nothing. That is indistinguishable from Zalo not delivering at
+ * all — a webhook that silently succeeds leaves no trace on either side — and it sent the
+ * investigation looking at DNS, domains and Zalo's own reliability before the payload.
+ *
+ * Both shapes are accepted: bare is what Zalo sends, wrapped is what scripts/zalo-poll.mjs
+ * replays when developing against a local server.
+ */
+export function unwrapUpdate(payload: unknown): ZaloUpdate | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const body = payload as { result?: unknown; message?: unknown; event_name?: unknown };
+  if (body.message || body.event_name) return body as ZaloUpdate;
+  if (body.result && typeof body.result === 'object') return body.result as ZaloUpdate;
+  return null;
+}
+
 const REPLIES: Record<RedeemOutcome, string> = {
   ok: 'Đã kết nối với Mochi ✅ Từ giờ bạn sẽ nhận thông báo lớp học tại đây.',
   unknown: 'Mã không đúng. Bạn kiểm tra lại giúp mình nhé.',

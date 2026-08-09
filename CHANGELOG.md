@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0141 — 2026-08-09
+Zalo pairing works again: Cloudflare blocked Zalo's webhook agent, so a Durable Object long-polls instead.
+
 ## v0.0139 — 2026-08-08
 Zalo: a bot token stored with stray whitespace made every send 404 — trimmed at the seam.
 

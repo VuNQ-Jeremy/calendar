@@ -8,6 +8,10 @@ import { handleLiveUpgrade } from '../workers/live-hub';
 
 export { LiveHub } from '../workers/live-hub';
 
+// Same reason: test-worker/zalo.test.js exercises the poller's alarm loop, and
+// vitest-pool-workers can only instantiate a Durable Object the entry module exports.
+export { ZaloPoller } from '../workers/zalo-poller';
+
 export default {
   async fetch(request, env) {
     if (new URL(request.url).pathname === '/ws') return handleLiveUpgrade(request, env);
