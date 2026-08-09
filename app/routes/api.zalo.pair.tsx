@@ -37,7 +37,9 @@ export const action = withAuth('staff', async (ctx) => {
       ? { accountId: user.account.id }
       : input.target === 'parent'
         ? { parentId: input.parentId }
-        : { classId: input.classId };
+        : input.target === 'student'
+          ? { studentId: input.studentId }
+          : { classId: input.classId };
 
   // The schema guarantees the matching id is present for parent/class, so an empty target here
   // would be a programming error rather than bad input.

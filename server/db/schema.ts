@@ -416,6 +416,12 @@ export const zaloChats = sqliteTable(
     kind: text('kind').notNull().default('user'),
     accountId: text('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
     parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
+    /**
+     * A family reached through the student rather than a `parents` row — see 0028. Most students
+     * have no parent record, and requiring one first would be data entry in service of the
+     * schema. Unioned with the parent route when fanning out, never instead of it.
+     */
+    studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
     classId: text('class_id').references(() => classes.id, { onDelete: 'cascade' }),
     displayName: text('display_name'),
     createdAt: text('created_at').notNull(),
@@ -424,6 +430,7 @@ export const zaloChats = sqliteTable(
   (t) => [
     index('idx_zalo_chats_account').on(t.accountId),
     index('idx_zalo_chats_parent').on(t.parentId),
+    index('idx_zalo_chats_student').on(t.studentId),
     index('idx_zalo_chats_class').on(t.classId),
   ],
 );
@@ -435,6 +442,7 @@ export const zaloPairCodes = sqliteTable(
     code: text('code').primaryKey(),
     accountId: text('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
     parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
+    studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
     classId: text('class_id').references(() => classes.id, { onDelete: 'cascade' }),
     createdBy: text('created_by').references(() => staff.id, { onDelete: 'set null' }),
     createdAt: text('created_at').notNull(),

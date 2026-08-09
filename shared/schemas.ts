@@ -334,13 +334,23 @@ export type PushRegisterInput = z.infer<typeof PushRegisterInput>;
  */
 export const ZaloPairInput = z
   .object({
-    target: z.enum(['self', 'parent', 'class']),
+    /**
+     * `parent` and `student` are both a family, kept separate on purpose: a parent record can
+     * cover several children, while a student link needs no parent record — which is most of
+     * them. See migrations/0028.
+     */
+    target: z.enum(['self', 'parent', 'student', 'class']),
     parentId: z.string().min(1).optional(),
+    studentId: z.string().min(1).optional(),
     classId: z.string().min(1).optional(),
   })
   .refine((v) => v.target !== 'parent' || !!v.parentId, {
     message: 'parentId is required when target is parent',
     path: ['parentId'],
+  })
+  .refine((v) => v.target !== 'student' || !!v.studentId, {
+    message: 'studentId is required when target is student',
+    path: ['studentId'],
   })
   .refine((v) => v.target !== 'class' || !!v.classId, {
     message: 'classId is required when target is class',

@@ -40,16 +40,24 @@ export type ZaloChatRow = {
   kind: ZaloChatKind;
   accountId: string | null;
   parentId: string | null;
+  studentId: string | null;
   classId: string | null;
   displayName: string | null;
   createdAt: string;
   lastSeenAt: string | null;
 };
 
-/** Who a code (and the chat that redeems it) belongs to. Exactly one field is set. */
+/**
+ * Who a code (and the chat that redeems it) belongs to. Exactly one field is set.
+ *
+ * `parentId` and `studentId` are both ways of reaching a family, deliberately kept separate:
+ * a parent record can cover several children, while a student link needs no parent record at
+ * all — which matters because most students do not have one. See migrations/0028.
+ */
 export type ZaloTarget = {
   accountId?: string | null;
   parentId?: string | null;
+  studentId?: string | null;
   classId?: string | null;
 };
 
@@ -166,6 +174,7 @@ function map(r: typeof zaloChats.$inferSelect): ZaloChatRow {
     kind: r.kind === 'group' ? 'group' : 'user',
     accountId: r.accountId,
     parentId: r.parentId,
+    studentId: r.studentId,
     classId: r.classId,
     displayName: r.displayName,
     createdAt: r.createdAt,
@@ -198,19 +207,33 @@ export async function chatsForAccounts(db: Db, accountIds: string[]): Promise<st
 }
 
 /**
- * 1:1 chats of every parent linked to any of these students.
+ * Every family chat reachable for these students, by either route.
  *
  * This is the whole reason the channel exists: it reaches people who have no account and no app,
- * which is every parent. Deduped — siblings in one class share a parent.
+ * which is every parent.
+ *
+ * Two routes, unioned:
+ *   - a `parents` record linked to the student through parent_students
+ *   - a chat paired straight to the student (migrations/0028), for the majority who have no
+ *     parent record at all
+ *
+ * Deduped across both, so siblings in one class — and a family that happened to pair both ways —
+ * are messaged once rather than twice.
  */
 export async function chatsForParentsOfStudents(db: Db, studentIds: string[]): Promise<string[]> {
   if (!studentIds.length) return [];
-  const rows = await db
-    .select({ chatId: zaloChats.chatId })
-    .from(zaloChats)
-    .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
-    .where(inArray(parentStudents.studentId, studentIds));
-  return [...new Set(rows.map((r) => r.chatId))];
+  const [viaParent, viaStudent] = await Promise.all([
+    db
+      .select({ chatId: zaloChats.chatId })
+      .from(zaloChats)
+      .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
+      .where(inArray(parentStudents.studentId, studentIds)),
+    db
+      .select({ chatId: zaloChats.chatId })
+      .from(zaloChats)
+      .where(inArray(zaloChats.studentId, studentIds)),
+  ]);
+  return [...new Set([...viaParent, ...viaStudent].map((r) => r.chatId))];
 }
 
 /** The group chat linked to a class, if one has been. */
@@ -253,6 +276,7 @@ async function linkChat(
       kind: chat.kind,
       accountId: target.accountId ?? null,
       parentId: target.parentId ?? null,
+      studentId: target.studentId ?? null,
       classId: target.classId ?? null,
       displayName: chat.displayName ?? null,
       createdAt: now,
@@ -264,6 +288,7 @@ async function linkChat(
         kind: chat.kind,
         accountId: target.accountId ?? null,
         parentId: target.parentId ?? null,
+        studentId: target.studentId ?? null,
         classId: target.classId ?? null,
         displayName: chat.displayName ?? null,
         lastSeenAt: now,
@@ -303,6 +328,7 @@ export async function createPairCode(
     code,
     accountId: target.accountId ?? null,
     parentId: target.parentId ?? null,
+    studentId: target.studentId ?? null,
     classId: target.classId ?? null,
     createdBy: createdBy ?? null,
     createdAt: now.toISOString(),
@@ -317,6 +343,7 @@ export async function pendingCodes(db: Db): Promise<
     code: string;
     accountId: string | null;
     parentId: string | null;
+    studentId: string | null;
     classId: string | null;
     expiresAt: string;
   }>
@@ -327,6 +354,7 @@ export async function pendingCodes(db: Db): Promise<
       code: zaloPairCodes.code,
       accountId: zaloPairCodes.accountId,
       parentId: zaloPairCodes.parentId,
+      studentId: zaloPairCodes.studentId,
       classId: zaloPairCodes.classId,
       expiresAt: zaloPairCodes.expiresAt,
     })
@@ -363,6 +391,7 @@ export async function redeemCode(
   await linkChat(db, chat, {
     accountId: row.accountId,
     parentId: row.parentId,
+    studentId: row.studentId,
     classId: row.classId,
   });
   await db

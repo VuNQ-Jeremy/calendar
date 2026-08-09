@@ -395,6 +395,43 @@ describe('targeting', () => {
     expect(chats).toEqual(['chat-mum']);
   });
 
+  /**
+   * Most students have no `parents` row — those are typed in by hand — so a family paired
+   * straight to the student must reach the same fan-out. See migrations/0028.
+   */
+  it('reaches a family paired to the student, with no parent record at all', async () => {
+    const d = db();
+    const student = await mkStudent(d, 'Không có phụ huynh');
+    const { code } = await zalo.createPairCode(d, { studentId: student.id });
+    expect(await zalo.redeemCode(d, code, { chatId: 'chat-guardian', kind: 'user' })).toBe('ok');
+
+    expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['chat-guardian']);
+    expect((await zalo.listLinks(d))[0].studentId).toBe(student.id);
+  });
+
+  /** Both routes at once must not message the same family twice. */
+  it('dedupes a family paired by both routes', async () => {
+    const d = db();
+    const student = await mkStudent(d, 'Cả hai');
+    const parent = await mkParent(d, 'Mẹ Cả hai', [student.id]);
+
+    const viaParent = await zalo.createPairCode(d, { parentId: parent.id });
+    await zalo.redeemCode(d, viaParent.code, { chatId: 'same-chat', kind: 'user' });
+    const viaStudent = await zalo.createPairCode(d, { studentId: student.id });
+    await zalo.redeemCode(d, viaStudent.code, { chatId: 'same-chat', kind: 'user' });
+
+    expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['same-chat']);
+  });
+
+  /** A student code is a private-chat code, exactly like a parent one. */
+  it('refuses a student code sent in a group', async () => {
+    const d = db();
+    const student = await mkStudent(d, 'Nhóm sai');
+    const { code } = await zalo.createPairCode(d, { studentId: student.id });
+    expect(await zalo.redeemCode(d, code, { chatId: 'g-x', kind: 'group' })).toBe('wrong_context');
+    expect(await zalo.listLinks(d)).toHaveLength(0);
+  });
+
   it('finds the group chat linked to a class', async () => {
     const d = db();
     const cls = await mkClass(d, 'Lý 10');

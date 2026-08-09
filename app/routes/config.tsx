@@ -52,6 +52,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     zaloCodes,
     parents,
     classList,
+    studentList,
   ] = await Promise.all([
     typesSvc.list(db),
     criteriaSvc.list(db),
@@ -65,6 +66,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     zaloSvc.pendingCodes(db),
     peopleSvc.listParents(db),
     classesSvc.list(db),
+    peopleSvc.listStudents(db),
   ]);
   return {
     types,
@@ -81,6 +83,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       links: zaloLinks,
       codes: zaloCodes,
       parents: parents.map((p) => ({ id: p.id, name: p.name })),
+      // Every student, not only those with a parent record — the whole point of the student
+      // target is that most families have no `parents` row to pick.
+      students: studentList.map((s) => ({ id: s.id, name: s.name })),
       classes: classList.map((c) => ({ id: c.id, name: c.name })),
       // Whether the channel can actually deliver. Without it the card would offer to generate
       // codes for a bot that does not exist.
@@ -118,13 +123,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     // cookie-authed web form and that route is bearer-only, the same split as everywhere else.
     if (intent === 'zalo-code') {
       const kind = formData.get('kind') as string | null;
-      const target =
+      const target: zaloSvc.ZaloTarget | null =
         kind === 'parent'
           ? { parentId: (formData.get('parentId') as string) || '' }
-          : kind === 'class'
-            ? { classId: (formData.get('classId') as string) || '' }
-            : null;
-      const value = target && (target.parentId || target.classId);
+          : kind === 'student'
+            ? { studentId: (formData.get('studentId') as string) || '' }
+            : kind === 'class'
+              ? { classId: (formData.get('classId') as string) || '' }
+              : null;
+      const value = target && (target.parentId || target.studentId || target.classId);
       if (!target || !value) return Response.json({ error: 'missing target' }, { status: 400 });
       const code = await zaloSvc.createPairCode(db, target);
       return { ok: true, code: code.code };

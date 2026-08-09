@@ -31,6 +31,9 @@ interface ConfigLoaderData {
   zalo: ZaloConfig;
 }
 
+/** What a pairing code is issued for. Student and parent are separate routes to one family. */
+type ZaloKind = 'student' | 'parent' | 'class';
+
 interface ZaloConfig {
   links: {
     id: string;
@@ -38,11 +41,19 @@ interface ZaloConfig {
     kind: string;
     accountId: string | null;
     parentId: string | null;
+    studentId: string | null;
     classId: string | null;
     displayName: string | null;
   }[];
-  codes: { code: string; parentId: string | null; classId: string | null; expiresAt: string }[];
+  codes: {
+    code: string;
+    parentId: string | null;
+    studentId: string | null;
+    classId: string | null;
+    expiresAt: string;
+  }[];
   parents: { id: string; name: string }[];
+  students: { id: string; name: string }[];
   classes: { id: string; name: string }[];
   enabled: boolean;
 }
@@ -314,9 +325,7 @@ function RankingWeightsSection({ weights }: { weights: RankingWeights }) {
     const n = Number(value);
     const other = value !== '' && Number.isFinite(n) && n >= 0 && n <= 100 ? String(100 - n) : '';
     setDraft(
-      field === 'attitude'
-        ? { attitude: value, score: other }
-        : { attitude: other, score: value },
+      field === 'attitude' ? { attitude: value, score: other } : { attitude: other, score: value },
     );
   };
 
@@ -400,9 +409,7 @@ function GardenSettingsSection({ settings }: { settings: GardenSettings }) {
     { key: 'dailyGrowthCap', tk: 'cfg_garden_cap', min: 1, max: 5, step: 1 },
   ] as const;
 
-  const current =
-    draft ??
-    Object.fromEntries(FIELDS.map((f) => [f.key, String(settings[f.key])]));
+  const current = draft ?? Object.fromEntries(FIELDS.map((f) => [f.key, String(settings[f.key])]));
   const valid = FIELDS.every((f) => {
     const n = Number(current[f.key]);
     return current[f.key] !== '' && Number.isInteger(n) && n >= f.min && n <= f.max;
@@ -865,22 +872,25 @@ function RemarkCriteriaSection({ criteria }: { criteria: RemarkCriterionRow[] })
 function ZaloSection({ zalo }: { zalo: ZaloConfig }) {
   const fetcher = useFetcher<{ code?: string; error?: string }>();
   const { t } = useLang();
-  const [kind, setKind] = React.useState<'parent' | 'class'>('parent');
+  const [kind, setKind] = React.useState<ZaloKind>('student');
   const [targetId, setTargetId] = React.useState('');
 
-  const parentName = (id: string | null) =>
-    zalo.parents.find((p) => p.id === id)?.name ?? t('zalo_unknown');
-  const className = (id: string | null) =>
-    zalo.classes.find((c) => c.id === id)?.name ?? t('zalo_unknown');
+  const nameIn = (list: { id: string; name: string }[], id: string | null) =>
+    list.find((x) => x.id === id)?.name ?? t('zalo_unknown');
 
   const label = (l: ZaloConfig['links'][number]) =>
     l.classId
-      ? `${t('zalo_group')} · ${className(l.classId)}`
-      : l.parentId
-        ? `${t('zalo_parent')} · ${parentName(l.parentId)}`
-        : `${t('zalo_staff')} · ${l.displayName ?? l.chatId}`;
+      ? `${t('zalo_group')} · ${nameIn(zalo.classes, l.classId)}`
+      : l.studentId
+        ? `${t('zalo_student')} · ${nameIn(zalo.students, l.studentId)}`
+        : l.parentId
+          ? `${t('zalo_parent')} · ${nameIn(zalo.parents, l.parentId)}`
+          : `${t('zalo_staff')} · ${l.displayName ?? l.chatId}`;
 
-  const options = kind === 'parent' ? zalo.parents : zalo.classes;
+  // Student first, and the default: every student can be paired, whereas `parents` rows are
+  // entered by hand and most families have none.
+  const options =
+    kind === 'student' ? zalo.students : kind === 'parent' ? zalo.parents : zalo.classes;
   const current = targetId || options[0]?.id || '';
 
   const generate = () => {
@@ -888,7 +898,7 @@ function ZaloSection({ zalo }: { zalo: ZaloConfig }) {
     const fd = new FormData();
     fd.set('intent', 'zalo-code');
     fd.set('kind', kind);
-    fd.set(kind === 'parent' ? 'parentId' : 'classId', current);
+    fd.set(`${kind}Id`, current);
     fetcher.submit(fd, { action: '/config', method: 'post' });
   };
 
@@ -921,17 +931,22 @@ function ZaloSection({ zalo }: { zalo: ZaloConfig }) {
                 className="mochi-input"
                 value={kind}
                 onChange={(e) => {
-                  setKind(e.target.value as 'parent' | 'class');
+                  setKind(e.target.value as ZaloKind);
                   setTargetId('');
                 }}
               >
+                <option value="student">{t('zalo_student')}</option>
                 <option value="parent">{t('zalo_parent')}</option>
                 <option value="class">{t('zalo_group')}</option>
               </select>
             </div>
             <div className="mochi-field" style={{ marginBottom: 0, minWidth: 200 }}>
               <label className="mochi-field__label">
-                {kind === 'parent' ? t('zalo_parent') : t('zalo_class')}
+                {kind === 'student'
+                  ? t('zalo_student')
+                  : kind === 'parent'
+                    ? t('zalo_parent')
+                    : t('zalo_class')}
               </label>
               <select
                 className="mochi-input"
@@ -963,7 +978,7 @@ function ZaloSection({ zalo }: { zalo: ZaloConfig }) {
                 {issued}
               </div>
               <p className="m-muted" style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)' }}>
-                {kind === 'parent' ? t('zalo_hint_parent') : t('zalo_hint_group')}
+                {kind === 'class' ? t('zalo_hint_group') : t('zalo_hint_parent')}
               </p>
             </div>
           ) : null}
@@ -977,7 +992,11 @@ function ZaloSection({ zalo }: { zalo: ZaloConfig }) {
                 <div
                   key={l.id}
                   className="m-row"
-                  style={{ justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}
+                  style={{
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '6px 0',
+                  }}
                 >
                   <span>{label(l)}</span>
                   <IconButton label={t('delete')} title={t('delete')} onClick={() => unlink(l.id)}>
