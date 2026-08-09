@@ -391,6 +391,16 @@ const en_strings = {
   cfg_payment_holder: 'Account holder',
   cfg_payment_memo: 'Transfer note template',
   cfg_payment_memo_hint: '{month} becomes 7/2026 and {name} the student’s name.',
+  cfg_payment_test_title: 'Test the QR code',
+  cfg_payment_test_sub:
+    'Built from the fields above, saved or not. Scan it with your banking app: the account name and amount it shows are what a parent will see.',
+  cfg_payment_test_amount: 'Test amount',
+  cfg_payment_test_name: 'Student name',
+  cfg_payment_test_memo: 'Transfer note',
+  cfg_payment_test_missing: 'Fill in the bank code and account number to see the QR.',
+  cfg_payment_test_error:
+    'VietQR could not draw this code. The bank code is the usual cause — check it against the hint above.',
+  cfg_payment_test_unsaved: 'Previewing unsaved changes — press Save to send them to the phones.',
   zalo_title: 'Zalo connections',
   zalo_sub:
     'Send class reminders straight to parents and class groups on Zalo. Generate a code, and the person sends it to the bot to connect.',
@@ -1583,6 +1593,16 @@ export const STRINGS = {
     cfg_payment_holder: 'Chủ tài khoản',
     cfg_payment_memo: 'Mẫu nội dung chuyển khoản',
     cfg_payment_memo_hint: '{month} thành 7/2026 và {name} là tên học sinh.',
+    cfg_payment_test_title: 'Thử mã QR',
+    cfg_payment_test_sub:
+      'Tạo từ các ô ở trên, dù đã lưu hay chưa. Quét bằng app ngân hàng: tên tài khoản và số tiền hiện ra chính là những gì phụ huynh thấy.',
+    cfg_payment_test_amount: 'Số tiền thử',
+    cfg_payment_test_name: 'Tên học sinh',
+    cfg_payment_test_memo: 'Nội dung chuyển khoản',
+    cfg_payment_test_missing: 'Nhập mã ngân hàng và số tài khoản để xem mã QR.',
+    cfg_payment_test_error:
+      'VietQR không tạo được mã này. Thường là do mã ngân hàng — hãy kiểm tra lại theo gợi ý ở trên.',
+    cfg_payment_test_unsaved: 'Đang xem thay đổi chưa lưu — bấm Lưu để gửi xuống điện thoại.',
     zalo_title: 'Kết nối Zalo',
     zalo_sub:
       'Gửi nhắc lịch học thẳng tới phụ huynh và nhóm lớp trên Zalo. Tạo mã, người nhận nhắn mã đó cho bot để kết nối.',

@@ -6,6 +6,7 @@ import { PageHeader, Empty, Modal, useConfirm } from './ui.jsx';
 import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { ATTENDANCE_STATUSES, ATTENDANCE_META } from '../shared/logic/assess.js';
+import { resolveMemo, vietQrUrl } from '../shared/logic/fees.js';
 import type { AttendanceStatusId } from '../shared/logic/assess.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
@@ -124,14 +125,22 @@ function TuitionSettingsSection({ settings }: { settings: TuitionSettings }) {
 /**
  * The centre's bank account, shown to students on the phone with a VietQR code.
  *
- * Held in a draft until Save: a half-typed account number rendered into a QR is worse than no QR
- * at all. Every field is optional so a partly-filled form still saves, and the phone shows only
- * what is set — the fields are what a Vietnamese banking app needs to prefill a transfer.
+ * Edits are held in a draft until Save, so a half-typed account number never reaches a phone. The
+ * QR tester below deliberately reads that draft rather than the saved row: the point of it is to
+ * scan a code before committing the details, and a preview of the values you just replaced would
+ * be worse than none. Every field is optional so a partly-filled form still saves, and the phone
+ * shows only what is set — the fields are what a Vietnamese banking app needs to prefill a
+ * transfer.
  */
 function PaymentInfoSection({ info }: { info: TuitionPaymentInfo }) {
   const fetcher = useFetcher();
   const { t } = useLang();
   const [draft, setDraft] = React.useState<Record<string, string> | null>(null);
+  // The tester's own inputs. An amount and a name are needed to build a realistic code, and they
+  // are not part of the saved settings — a real one is composed per student-month on the server.
+  const [testAmount, setTestAmount] = React.useState('300000');
+  const [testName, setTestName] = React.useState('Nguyễn Văn A');
+  const [qrFailed, setQrFailed] = React.useState(false);
 
   const FIELDS: { key: keyof TuitionPaymentInfo; tk: string; hint?: string }[] = [
     { key: 'bankName', tk: 'cfg_payment_bank_name' },
@@ -151,6 +160,24 @@ function PaymentInfoSection({ info }: { info: TuitionPaymentInfo }) {
     fetcher.submit(fd, { action: '/config', method: 'post' });
     setDraft(null);
   };
+
+  // The same two helpers the API calls per student-month, given a test amount and name. Building
+  // the URL any other way here would test this form rather than what a parent actually receives.
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const testMemo = resolveMemo(current.memoTemplate || '', { month: thisMonth, name: testName });
+  const qrReady = Boolean(current.bankCode && current.accountNumber);
+  const qrUrl = qrReady
+    ? vietQrUrl({
+        bankCode: current.bankCode,
+        accountNumber: current.accountNumber,
+        accountHolder: current.accountHolder || '',
+        amountVnd: Number(testAmount) || 0,
+        memo: testMemo,
+      })
+    : '';
+
+  // A new URL is a new attempt; without this a code that failed once stays failed after a fix.
+  React.useEffect(() => setQrFailed(false), [qrUrl]);
 
   return (
     <Card style={{ padding: 18, marginTop: 16 }}>
@@ -181,6 +208,80 @@ function PaymentInfoSection({ info }: { info: TuitionPaymentInfo }) {
         <Button onClick={save} disabled={!draft}>
           {t('save')}
         </Button>
+      </div>
+
+      <div
+        style={{
+          marginTop: 18,
+          paddingTop: 18,
+          borderTop: '1px solid var(--border)',
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>{t('cfg_payment_test_title')}</h3>
+        <p className="m-muted" style={{ margin: '4px 0 12px', fontSize: 'var(--text-sm)' }}>
+          {t('cfg_payment_test_sub')}
+        </p>
+        <div className="m-row" style={{ gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 12, flex: '1 1 260px', minWidth: 240 }}>
+            <div className="mochi-field" style={{ marginBottom: 0 }}>
+              <label className="mochi-field__label">{t('cfg_payment_test_amount')}</label>
+              <input
+                className="mochi-input"
+                inputMode="numeric"
+                value={testAmount}
+                onChange={(e) => setTestAmount(e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+            <div className="mochi-field" style={{ marginBottom: 0 }}>
+              <label className="mochi-field__label">{t('cfg_payment_test_name')}</label>
+              <input
+                className="mochi-input"
+                value={testName}
+                onChange={(e) => setTestName(e.target.value)}
+              />
+            </div>
+            {qrReady ? (
+              <div>
+                <div className="mochi-field__label">{t('cfg_payment_test_memo')}</div>
+                <code style={{ fontSize: 'var(--text-sm)', wordBreak: 'break-word' }}>
+                  {testMemo}
+                </code>
+              </div>
+            ) : null}
+            {draft ? (
+              <p className="m-muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+                {t('cfg_payment_test_unsaved')}
+              </p>
+            ) : null}
+          </div>
+
+          <div style={{ flex: '0 0 auto', minWidth: 220 }}>
+            {!qrReady ? (
+              <p className="m-muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+                {t('cfg_payment_test_missing')}
+              </p>
+            ) : qrFailed ? (
+              <p className="m-muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+                {t('cfg_payment_test_error')}
+              </p>
+            ) : (
+              <img
+                // Keyed by the URL so React remounts on any field change: without it the error
+                // state from a bad bank code would stick to the next, valid, code.
+                key={qrUrl}
+                src={qrUrl}
+                alt={t('cfg_payment_test_title')}
+                width={220}
+                height={330}
+                // A wrong bank code does not come back as an HTTP error: img.vietqr.io answers
+                // 200 with the 13-byte body `invalid acqId` and no content-type. The decode
+                // fails, so `onError` is what catches it — a status check never would.
+                onError={() => setQrFailed(true)}
+                style={{ width: 220, height: 'auto', borderRadius: 12, display: 'block' }}
+              />
+            )}
+          </div>
+        </div>
       </div>
     </Card>
   );

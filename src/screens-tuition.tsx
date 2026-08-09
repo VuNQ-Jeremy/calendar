@@ -500,54 +500,68 @@ function TuitionScreen() {
             const student = studentById.get(row.studentId);
             const badge = STATUS_BADGE[row.status];
             const isOpen = expanded.has(row.studentId);
+            const canExpand = row.lines.length > 0;
             return (
               <div key={row.studentId} className="lrow" style={{ alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="m-row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                    <Avatar
-                      name={student?.name ?? row.studentId}
-                      color={student?.color}
-                      size="sm"
-                    />
-                    <span className="lrow__title">{student?.name ?? row.studentId}</span>
-                    <Badge color={badge.color}>{t(badge.tk)}</Badge>
-                  </div>
-                  <div className="lrow__meta">
-                    <span>
-                      {t('tuition_sessions')}:{' '}
-                      <strong>{row.lines.reduce((n, l) => n + l.sessions, 0)}</strong>
-                    </span>
-                    <span>
-                      {t('tuition_total_due')}: <strong>{formatVnd(row.dueVnd)}</strong>
-                    </span>
-                    {row.adjustmentVnd !== 0 && (
+                  {/* the name and meta block is the expander. A 16px chevron sitting beside two
+                      full-size buttons was the smallest target on the row and the least obvious;
+                      the summary is what the eye lands on anyway. The lines stay outside it so a
+                      click inside the breakdown doesn't collapse what you're reading. */}
+                  <div
+                    className={`tuition-row__summary${canExpand ? ' is-expandable' : ''}`}
+                    role={canExpand ? 'button' : undefined}
+                    tabIndex={canExpand ? 0 : undefined}
+                    aria-expanded={canExpand ? isOpen : undefined}
+                    onClick={canExpand ? () => toggle(row.studentId) : undefined}
+                    onKeyDown={
+                      canExpand
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggle(row.studentId);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    <div className="m-row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                      <Avatar
+                        name={student?.name ?? row.studentId}
+                        color={student?.color}
+                        size="sm"
+                      />
+                      <span className="lrow__title">{student?.name ?? row.studentId}</span>
+                      <Badge color={badge.color}>{t(badge.tk)}</Badge>
+                    </div>
+                    <div className="lrow__meta">
                       <span>
-                        {t('tuition_adjustment')}: {formatVnd(row.adjustmentVnd)}
-                        {row.adjustmentNote ? ` (${row.adjustmentNote})` : ''}
+                        {t('tuition_sessions')}:{' '}
+                        <strong>{row.lines.reduce((n, l) => n + l.sessions, 0)}</strong>
                       </span>
-                    )}
-                    <span>
-                      {t('tuition_paid_amount')}: <strong>{formatVnd(row.paidVnd)}</strong>
-                      {row.paidAt ? ` · ${row.paidAt}` : ''}
-                    </span>
-                    {row.outstandingVnd > 0 && (
-                      <span style={{ color: 'var(--danger)', fontWeight: 700 }}>
-                        {t('tuition_outstanding')}: {formatVnd(row.outstandingVnd)}
+                      <span>
+                        {t('tuition_total_due')}: <strong>{formatVnd(row.dueVnd)}</strong>
                       </span>
-                    )}
+                      {row.adjustmentVnd !== 0 && (
+                        <span>
+                          {t('tuition_adjustment')}: {formatVnd(row.adjustmentVnd)}
+                          {row.adjustmentNote ? ` (${row.adjustmentNote})` : ''}
+                        </span>
+                      )}
+                      <span>
+                        {t('tuition_paid_amount')}: <strong>{formatVnd(row.paidVnd)}</strong>
+                        {row.paidAt ? ` · ${row.paidAt}` : ''}
+                      </span>
+                      {row.outstandingVnd > 0 && (
+                        <span style={{ color: 'var(--danger)', fontWeight: 700 }}>
+                          {t('tuition_outstanding')}: {formatVnd(row.outstandingVnd)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {isOpen && row.lines.length > 0 && <LineRows lines={row.lines} />}
+                  {isOpen && canExpand && <LineRows lines={row.lines} />}
                 </div>
                 <div className="lrow__actions">
-                  {row.lines.length > 0 && (
-                    <IconButton
-                      label={student?.name ?? row.studentId}
-                      size="sm"
-                      onClick={() => toggle(row.studentId)}
-                    >
-                      <MIcon name={isOpen ? 'chevronDown' : 'chevronRight'} size={16} />
-                    </IconButton>
-                  )}
                   <Button
                     variant="secondary"
                     size="sm"

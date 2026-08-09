@@ -1363,8 +1363,8 @@ body {
     max-height: none;
   }
   /* the tile grids take the column's slack, so the cards fill their full height rather than
-     ending in dead space. The conditional rows (incident badges, streak line, the quiet note)
-     ride below the grid and end up pinned to the card's bottom edge. */
+     ending in dead space. The conditional rows (incident badges, streak line, the
+     never-planted note) ride below the grid and end up pinned to the card's bottom edge. */
   .assess-report__garden {
     display: flex;
     flex-direction: column;
@@ -1760,6 +1760,16 @@ body {
 }
 .lrow.is-dragging .lrow__grip {
   cursor: grabbing;
+}
+/* the tuition row expands from its whole summary block instead of a chevron button, so the
+   name and meta carry the affordance: pointer on hover, the DS focus ring when tabbed to. */
+.tuition-row__summary.is-expandable {
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+.tuition-row__summary.is-expandable:focus-visible {
+  box-shadow: var(--ring);
+  outline: none;
 }
 
 /* kanban board — one column per status, cards drag between them */

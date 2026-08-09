@@ -246,7 +246,6 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
   if (fetcher.data?.error) return null;
 
   const plant = g?.plant ?? null;
-  const quiet = g != null && g.playDays === 0 && g.fruits === 0 && g.setbacks === 0;
 
   return (
     <Card className="assess-report__garden" style={{ padding: 14 }}>
@@ -289,11 +288,6 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
       {g && !plant && (
         <p className="m-muted" style={{ margin: '12px 0 0', fontSize: 'var(--text-sm)' }}>
           {t('remark_garden_never')}
-        </p>
-      )}
-      {quiet && plant && (
-        <p className="m-muted" style={{ margin: '12px 0 0', fontSize: 'var(--text-sm)' }}>
-          {t('remark_garden_quiet')}
         </p>
       )}
       {plant && plant.streak > 0 && (
