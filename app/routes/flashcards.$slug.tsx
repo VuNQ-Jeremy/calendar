@@ -56,7 +56,9 @@ clientLoader.hydrate = true as const;
 
 function preprocessWord(raw: Record<string, unknown>) {
   const out = { ...raw };
-  for (const k of ['definitionEn', 'ipa', 'audioUrl'] as const) {
+  // A cleared field arrives as '' rather than as a missing key, which every one of these
+  // `.nullish()` schemas would reject — imageKey especially, since it is regex-checked.
+  for (const k of ['definitionEn', 'ipa', 'audioUrl', 'imageKey'] as const) {
     if (out[k] === '') out[k] = null;
   }
   delete out.intent;

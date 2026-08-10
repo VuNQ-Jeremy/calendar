@@ -23,6 +23,9 @@ const word = (id: string, text: string, ipa: string, en: string, vi: string) => 
   meaningVi: vi,
   definitionEn: '',
   audioUrl: '',
+  // No picture: these assertions are about which word is in the DOM when, and an image element
+  // would only add noise. The imageless card is also still the common case.
+  imageKey: null,
   createdAt: '2026-01-01T00:00:00Z',
 });
 

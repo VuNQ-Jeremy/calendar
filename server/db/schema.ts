@@ -401,6 +401,8 @@ export const flashcardWords = sqliteTable(
     definitionEn: text('definition_en'),
     ipa: text('ipa'),
     audioUrl: text('audio_url'),
+    /** R2 object key ("flashcards/<uuid>.<ext>"), not a URL — see 0033_flashcard_word_images.sql. */
+    imageKey: text('image_key'),
     createdAt: text('created_at'),
   },
   (t) => [index('idx_flashcard_words_topic').on(t.topicId)],

@@ -31,6 +31,20 @@ export function meaningOf(w: MeaningSource): string {
   return w.meaningVi || w.definitionEn || w.word;
 }
 
+/**
+ * Path that serves a word's stored picture, or null when it has none.
+ *
+ * Words hold an R2 object key (`flashcards/<uuid>.<ext>`), not a URL — see
+ * 0033_flashcard_word_images.sql. Only the filename travels in the path; the route re-adds the
+ * prefix, so no key can address another part of the bucket. Origin-relative, so the web app can
+ * use it directly and the mobile app prefixes its API base.
+ */
+export function flashcardImagePath(imageKey: string | null | undefined): string | null {
+  if (!imageKey) return null;
+  const file = imageKey.slice(imageKey.indexOf('/') + 1);
+  return file && !file.includes('/') ? `/flashcard-images/${file}` : null;
+}
+
 /** Fisher-Yates shuffle returning a new array (does not mutate the input). */
 export function shuffle<T>(arr: readonly T[]): T[] {
   const out = arr.slice();

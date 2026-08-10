@@ -249,6 +249,16 @@ export const FlashcardTopicInput = z.object({
 });
 export type FlashcardTopicInput = z.infer<typeof FlashcardTopicInput>;
 
+/**
+ * An R2 key for a stored flashcard image: `flashcards/<uuid v4>.<jpg|png|webp>`. Both the word
+ * input and the serving route validate against this shape — see 0033_flashcard_word_images.sql
+ * for why images are addressed by key rather than by URL.
+ */
+export const FlashcardImageKey = z
+  .string()
+  .regex(/^flashcards\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/);
+export type FlashcardImageKey = z.infer<typeof FlashcardImageKey>;
+
 export const FlashcardWordInput = z.object({
   word: z.string().trim().min(1).max(100),
   // Optional: the English definition auto-fills, so a manual Vietnamese meaning
@@ -257,6 +267,11 @@ export const FlashcardWordInput = z.object({
   definitionEn: z.string().max(1000).nullish(),
   ipa: z.string().max(200).nullish(),
   audioUrl: z.string().max(2000).nullish(),
+  // An R2 object key minted by /vocab-image-generate or /vocab-image-commit, never a
+  // client-chosen string. Shape-checking it here means a crafted value cannot address another
+  // prefix of the bucket (materials/, zalo/) even before the serving route's own guard, and a
+  // cleared picker — which arrives as '' from a form, not as a missing key — becomes null.
+  imageKey: FlashcardImageKey.nullish().or(z.literal('').transform(() => null)),
 });
 export type FlashcardWordInput = z.infer<typeof FlashcardWordInput>;
 
@@ -316,12 +331,58 @@ export type VocabGenerateInput = z.infer<typeof VocabGenerateInput>;
 /**
  * One generated row — a subset of FlashcardWordInput, so the review UI can hand rows straight
  * to the existing import pipeline. `audioUrl` is the one card field the model cannot supply.
+ *
+ * `imageQuery` is not a card field: it is stock-photo search keywords the model proposes so the
+ * review screen can pre-fetch a candidate picture per word. Null when the model omitted it or on
+ * rows from paths that don't generate one (enrich, manual entry) — callers fall back to the word.
  */
 export type GeneratedWord = {
   word: string;
   meaningVi: string;
   definitionEn: string | null;
   ipa: string | null;
+  imageQuery: string | null;
+};
+
+// ---- Vocabulary word images ----
+// Three staff-only routes: search proposes candidates, generate draws one with Workers AI, and
+// commit copies a chosen stock photo into R2. Only the latter two mint an `imageKey`.
+
+/**
+ * Where a stock candidate came from. Openverse is the default because it needs no API key and its
+ * CC0/public-domain slice needs no attribution; Pixabay is used when PIXABAY_API_KEY is set and
+ * its API answers (it sits behind a bot check that can reject server traffic).
+ */
+export const VocabImageProvider = z.enum(['openverse', 'pixabay']);
+export type VocabImageProvider = z.infer<typeof VocabImageProvider>;
+
+export const VocabImageSearchInput = z.object({
+  query: z.string().trim().min(1).max(200),
+});
+export type VocabImageSearchInput = z.infer<typeof VocabImageSearchInput>;
+
+export const VocabImageGenerateInput = z.object({
+  prompt: z.string().trim().min(1).max(300),
+});
+export type VocabImageGenerateInput = z.infer<typeof VocabImageGenerateInput>;
+
+/**
+ * Commit takes a provider + that provider's own id — never a URL. The server asks the provider
+ * for the image's location, so the address it fetches is chosen by the provider rather than by
+ * the caller, and there is no client-controlled fetch target to abuse.
+ */
+export const VocabImageCommitInput = z.object({
+  provider: VocabImageProvider,
+  id: z.string().trim().min(1).max(100),
+});
+export type VocabImageCommitInput = z.infer<typeof VocabImageCommitInput>;
+
+/** One stock candidate in the picker. `thumbUrl` is display-only; commit re-resolves by id. */
+export type VocabImageCandidate = {
+  provider: VocabImageProvider;
+  id: string;
+  thumbUrl: string;
+  credit: string;
 };
 
 export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);

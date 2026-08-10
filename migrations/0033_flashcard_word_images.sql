@@ -1,0 +1,14 @@
+-- Pictures on vocabulary flashcards. One nullable column, no backfill: a word without an image
+-- renders exactly as it does today, so this is safe to apply ahead of the code that reads it.
+--
+-- `image_key` holds an R2 OBJECT KEY ("flashcards/<uuid>.<ext>"), never a URL. That distinction is
+-- the whole lesson of audio_url (0016_wipe_flashcard_audio.sql): third-party URLs rotted, the
+-- column was wiped, and the feature was rebuilt on browser TTS instead. Here the bytes are copied
+-- into our own bucket at pick time, so the only thing that can break the image is us deleting it.
+--
+-- Objects live in the FILES bucket and are served by the /flashcard-images/:key capability route
+-- (unauthenticated by design — mobile students render them without a staff cookie; the v4 UUID in
+-- the key IS the capability). Keys that no word references for more than 24h are swept by the
+-- daily cron via pruneImages() in server/services/vocab-images.ts, which is what makes it safe to
+-- commit an image to R2 during a topic review the teacher may still cancel.
+ALTER TABLE flashcard_words ADD COLUMN image_key TEXT;

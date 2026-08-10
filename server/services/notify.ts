@@ -12,6 +12,7 @@ import * as previewSvc from './session-preview';
 import * as push from './push';
 import type { ExpoPushMessage } from './push';
 import * as zalo from './zalo';
+import * as vocabImages from './vocab-images';
 
 /**
  * The scheduled notification jobs. Called from `scheduled()` in workers/app.ts, and from the
@@ -226,6 +227,10 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
   // stop working. Same slot, same reasoning.
   await zalo.pruneCodes(db);
   if (env?.FILES) await zalo.pruneMedia(env.FILES);
+  // Vocabulary pictures nothing points at — a teacher who abandoned a generated topic after the
+  // images were stored. Only objects older than a day go, so a review in progress is never cut
+  // out from under itself. See server/services/vocab-images.ts.
+  if (env?.FILES) await vocabImages.pruneImages(db, env.FILES);
   return messages.length;
 }
 

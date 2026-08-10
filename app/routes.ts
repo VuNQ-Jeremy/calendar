@@ -26,6 +26,11 @@ export default [
   route('garden/:classId/share', 'routes/garden.$classId.share.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
+  // Pictures for vocabulary words. Search/generate/commit are staff-only and, like the two above,
+  // outside `_app` so using the picker never invalidates the vocabulary route cache.
+  route('vocab-image-search', 'routes/vocab-image-search.tsx'),
+  route('vocab-image-generate', 'routes/vocab-image-generate.tsx'),
+  route('vocab-image-commit', 'routes/vocab-image-commit.tsx'),
 
   // ---- JSON API (mobile app; see docs/api.md) ----
   // Resource routes only: none of these has a default export, and none is inside the
@@ -102,9 +107,13 @@ export default [
   // NOT under api/: that prefix is bearer-only, and every caller is a browser with a session
   // cookie. See the route file, and garden-month.tsx for the same trap.
   route('zalo-send-card', 'routes/zalo-send-card.tsx'),
-  // Share-card images, fetched by Zalo's own servers — the only unauthenticated R2 route in the
-  // app, and it can only reach the `zalo/` prefix. See the file for why that is unavoidable.
+  // Share-card images, fetched by Zalo's own servers — one of two unauthenticated R2 routes in
+  // the app, and it can only reach the `zalo/` prefix. See the file for why that is unavoidable.
   route('zalo-media/:key', 'routes/zalo-media.$key.tsx'),
+  // Vocabulary word pictures. The other unauthenticated R2 route, reaching only `flashcards/`:
+  // students render these from the mobile app, which has no cookie to send. Same capability-URL
+  // trust model as zalo-media above.
+  route('flashcard-images/:key', 'routes/flashcard-images.$key.tsx'),
 
   // The vocabulary pages used to live at /flashcards. Keep the old URLs working — bookmarks,
   // and push notifications sent before the rename that still carry `url: '/flashcards'`.

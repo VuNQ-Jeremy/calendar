@@ -3,22 +3,48 @@ import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
-import { shuffle, meaningOf } from './game-utils.js';
+import { shuffle, meaningOf, flashcardImagePath } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 
 const { Button: FBtn, IconButton: FIB } = DS;
 
+/**
+ * `text` and `audio` ask which meaning fits the word. `image` runs the other way round — the
+ * picture is the prompt and the options are English words — which is the whole point of putting a
+ * picture on a card: recognising the thing without translating first.
+ */
 type Question = {
   word: FlashcardWordRow;
-  prompt: 'text' | 'audio';
+  prompt: 'text' | 'audio' | 'image';
   options: string[];
   answer: string;
 };
 
+/** Roughly how often a word that has a picture is asked as a picture question. */
+const IMAGE_SHARE = 0.35;
+
 function buildQuestions(words: FlashcardWordRow[]): Question[] {
+  // A picture question needs three other spellings to choose between. Deck size already gates the
+  // mode at MIN_WORDS.quiz = 4, but a deck of near-duplicates can still come up short per word.
   return shuffle(words).map((w) => {
+    if (w.imageKey && Math.random() < IMAGE_SHARE) {
+      const wordDistractors = shuffle(
+        Array.from(new Set(words.filter((o) => o.id !== w.id).map((o) => o.word))).filter(
+          (o) => o !== w.word,
+        ),
+      ).slice(0, 3);
+      if (wordDistractors.length === 3) {
+        return {
+          word: w,
+          prompt: 'image' as const,
+          options: shuffle([w.word, ...wordDistractors]),
+          answer: w.word,
+        };
+      }
+      // Not enough distinct spellings — fall through to the meaning question below.
+    }
     const answer = meaningOf(w);
     const distractors = shuffle(
       Array.from(
@@ -32,7 +58,7 @@ function buildQuestions(words: FlashcardWordRow[]): Question[] {
     ).slice(0, 3);
     return {
       word: w,
-      prompt: Math.random() < 0.35 ? 'audio' : 'text',
+      prompt: Math.random() < 0.35 ? ('audio' as const) : ('text' as const),
       options: shuffle([answer, ...distractors]),
       answer,
     };
@@ -105,7 +131,25 @@ export function QuizGame({ words, onExit, onFinish, garden }: GameProps & Garden
         {t('fc_question_of', { i: idx + 1, n: questions.length })} · {t('fc_score')}: {score}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        {q.prompt === 'audio' ? (
+        {q.prompt === 'image' ? (
+          <>
+            {/* The word itself is deliberately not shown — it is one of the four options. */}
+            <img
+              src={flashcardImagePath(q.word.imageKey) ?? undefined}
+              alt=""
+              draggable={false}
+              style={{
+                width: 'min(70vw, 340px)',
+                aspectRatio: '3 / 2',
+                objectFit: 'cover',
+                borderRadius: 14,
+                border: '1px solid var(--line, #e7e0d6)',
+                userSelect: 'none',
+              }}
+            />
+            <div style={{ color: 'var(--text-muted)' }}>{t('fc_pick_word')}</div>
+          </>
+        ) : q.prompt === 'audio' ? (
           <>
             <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(q.word.word)}>
               <MIcon name="volume" size={32} />

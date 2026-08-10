@@ -9,7 +9,8 @@ import type { EnrichMap } from '../lib/enrich-client.js';
 import { playWord } from './audio.js';
 import { MIN_WORDS, fmtDuration, parseImportLines } from './game-utils.js';
 import type { GameMode, GameResult } from './game-utils.js';
-import { orderWordsByMastery } from '../../shared/logic/flashcards';
+import { orderWordsByMastery, flashcardImagePath } from '../../shared/logic/flashcards';
+import { ImagePicker, resolvePickedImageKey } from './image-picker.js';
 import { isDue } from '../../shared/logic/review';
 import { FlipGame } from './game-flip.jsx';
 import { QuizGame } from './game-quiz.jsx';
@@ -250,6 +251,8 @@ interface WordDraft {
   meaningVi: string;
   definitionEn: string;
   ipa: string;
+  /** Stored R2 key, or '' for no picture. Already committed by the time it lands here. */
+  imageKey: string;
 }
 
 function WordsTab({
@@ -291,6 +294,8 @@ function WordsTab({
     fd.set('meaningVi', f.meaningVi);
     fd.set('definitionEn', f.definitionEn);
     fd.set('ipa', f.ipa);
+    // '' clears the picture: preprocessWord in the route turns it into null.
+    fd.set('imageKey', f.imageKey);
     fetcher.submit(fd, { method: 'post' });
     setModal(null);
   };
@@ -302,7 +307,9 @@ function WordsTab({
           <FBtn
             variant="primary"
             iconLeft={<MIcon name="plus" size={18} />}
-            onClick={() => setModal({ word: '', meaningVi: '', definitionEn: '', ipa: '' })}
+            onClick={() =>
+              setModal({ word: '', meaningVi: '', definitionEn: '', ipa: '', imageKey: '' })
+            }
           >
             {t('fc_add_word')}
           </FBtn>
@@ -320,6 +327,21 @@ function WordsTab({
         <div className="m-stack">
           {words.map((w) => (
             <div key={w.id} className="lrow" style={{ alignItems: 'flex-start' }}>
+              {w.imageKey && (
+                <img
+                  src={flashcardImagePath(w.imageKey) ?? undefined}
+                  alt=""
+                  loading="lazy"
+                  style={{
+                    width: 44,
+                    height: 33,
+                    flex: 'none',
+                    objectFit: 'cover',
+                    borderRadius: 6,
+                    display: 'block',
+                  }}
+                />
+              )}
               <FIB label={t('fc_play_audio')} size="sm" onClick={() => playWord(w.word)}>
                 <MIcon name="volume" size={18} />
               </FIB>
@@ -369,6 +391,7 @@ function WordsTab({
                         meaningVi: w.meaningVi,
                         definitionEn: w.definitionEn ?? '',
                         ipa: w.ipa ?? '',
+                        imageKey: w.imageKey ?? '',
                       })
                     }
                   >
@@ -424,6 +447,8 @@ function WordModal({
 }) {
   const { t } = useLang();
   const [status, setStatus] = React.useState<'idle' | 'busy' | 'failed'>('idle');
+  const [picking, setPicking] = React.useState(false);
+  const [committing, setCommitting] = React.useState(false);
   const lastFilled = React.useRef<string>(draft.id ? draft.word.trim().toLowerCase() : '');
   // Latest draft, readable inside the async debounce without re-triggering the
   // effect — lets us leave fields alone that the user has already filled in.
@@ -562,6 +587,60 @@ function WordModal({
           onChange={(e) => set('definitionEn', e.target.value)}
         />
       </div>
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('fc_img_label')}</label>
+        <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
+          {draft.imageKey ? (
+            <img
+              src={flashcardImagePath(draft.imageKey) ?? undefined}
+              alt=""
+              style={{
+                width: 84,
+                height: 63,
+                flex: 'none',
+                objectFit: 'cover',
+                borderRadius: 8,
+                display: 'block',
+              }}
+            />
+          ) : (
+            <span className="mochi-field__hint" style={{ flex: 1 }}>
+              {t('fc_img_none')}
+            </span>
+          )}
+          <FBtn
+            variant="secondary"
+            disabled={!draft.word.trim() || committing}
+            onClick={() => setPicking(true)}
+          >
+            {committing
+              ? t('fc_img_saving')
+              : draft.imageKey
+                ? t('fc_img_change')
+                : t('fc_img_find')}
+          </FBtn>
+          {draft.imageKey && (
+            <FIB label={t('fc_img_remove')} size="md" onClick={() => set('imageKey', '')}>
+              <MIcon name="trash" size={16} />
+            </FIB>
+          )}
+        </div>
+      </div>
+      {picking && (
+        <ImagePicker
+          initialQuery={`${draft.word} ${draft.definitionEn}`.trim()}
+          onClose={() => setPicking(false)}
+          onPick={async (picked) => {
+            setPicking(false);
+            // Editing one word, so commit right away: the teacher sees the real stored picture
+            // rather than a provider thumbnail that might not survive the copy.
+            setCommitting(true);
+            const key = await resolvePickedImageKey(picked);
+            setCommitting(false);
+            if (key) set('imageKey', key);
+          }}
+        />
+      )}
     </Modal>
   );
 }

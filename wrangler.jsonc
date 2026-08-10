@@ -30,6 +30,11 @@
       "bucket_name": "mochi-files",
     },
   ],
+  // Workers AI — flux-1-schnell generates flashcard illustrations for vocabulary words that
+  // stock photo search cannot cover (abstract nouns, verbs). See server/services/vocab-images.ts.
+  "ai": {
+    "binding": "AI",
+  },
   // Durable Objects. Both are SQLite-backed classes so they work on the free
   // Workers plan (`new_sqlite_classes`, never `new_classes`).
   //   TRANSLATE_DO — region-pinned Anthropic egress (workers/translate-proxy.ts)
@@ -89,6 +94,9 @@
           "bucket_name": "mochi-files-test",
         },
       ],
+      "ai": {
+        "binding": "AI",
+      },
       "durable_objects": {
         "bindings": [
           { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },

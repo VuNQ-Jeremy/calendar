@@ -17,6 +17,11 @@ word return:
 - "ipa": the General American pronunciation as a broad IPA transcription in
   slashes, with primary stress marked — for example /ˈwɪskər/. Transcribe the
   headword exactly as spelled in "word".
+- "imageQuery": 2-4 concrete English keywords for a stock-photo search that would
+  return a picture a student instantly recognises as this word — for "whisker",
+  "cat whiskers closeup". For abstract words, describe a photographable scene
+  that shows it happening rather than the concept itself: for "generosity",
+  "person sharing food". Nouns and scenes only, no adjectives about mood or style.
 Rules:
 - Every word must be clearly relevant to the topic.
 - No duplicates, and never include a word from the exclude list nor a plural or
@@ -57,8 +62,9 @@ export async function generateVocabWords(
                   meaningVi: { type: 'string' },
                   definitionEn: { type: 'string' },
                   ipa: { type: 'string' },
+                  imageQuery: { type: 'string' },
                 },
-                required: ['word', 'meaningVi', 'definitionEn', 'ipa'],
+                required: ['word', 'meaningVi', 'definitionEn', 'ipa', 'imageQuery'],
                 additionalProperties: false,
               },
             },
@@ -112,11 +118,15 @@ export function sanitizeGeneratedWords(
     seen.add(key);
     const definitionEn = (row.definitionEn ?? '').trim().slice(0, 1000);
     const ipa = (row.ipa ?? '').trim().slice(0, 200);
+    const imageQuery = (row.imageQuery ?? '').trim().slice(0, 200);
     out.push({
       word,
       meaningVi: (row.meaningVi ?? '').trim().slice(0, 500),
       definitionEn: definitionEn || null,
       ipa: ipa || null,
+      // Not a card field — search keywords for the review screen's picture lookup. Null when the
+      // model skipped it; callers fall back to the word itself.
+      imageQuery: imageQuery || null,
     });
     if (out.length >= count) break;
   }

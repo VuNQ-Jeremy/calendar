@@ -2,6 +2,7 @@ import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 import {
   MIN_WORDS,
   fmtDuration,
+  flashcardImagePath,
   meaningOf,
   parseImportLines,
   shuffle,
@@ -16,7 +17,7 @@ import {
  * These re-exports keep this module's original surface intact; nothing that imports from here
  * had to change.
  */
-export { MIN_WORDS, fmtDuration, meaningOf, parseImportLines, shuffle };
+export { MIN_WORDS, fmtDuration, flashcardImagePath, meaningOf, parseImportLines, shuffle };
 export type { GameMode };
 
 export type GameResult = {

@@ -89,6 +89,8 @@ export type FlashcardWordRow = {
   definitionEn: string | null;
   ipa: string | null;
   audioUrl: string | null;
+  /** R2 object key for the word's picture, or null. Resolve with `flashcardImagePath`. */
+  imageKey: string | null;
   createdAt: string | null;
 };
 
@@ -133,6 +135,7 @@ function mapWord(r: typeof flashcardWords.$inferSelect): FlashcardWordRow {
     definitionEn: r.definitionEn,
     ipa: r.ipa,
     audioUrl: r.audioUrl,
+    imageKey: r.imageKey,
     createdAt: r.createdAt,
   };
 }
@@ -254,6 +257,7 @@ export async function createWord(
     definitionEn: input.definitionEn ?? null,
     ipa: input.ipa ?? null,
     audioUrl: input.audioUrl ?? null,
+    imageKey: input.imageKey ?? null,
     createdAt: new Date().toISOString(),
   });
 }
@@ -269,6 +273,7 @@ export async function updateWord(
   if (patch.definitionEn !== undefined) set.definitionEn = patch.definitionEn ?? null;
   if (patch.ipa !== undefined) set.ipa = patch.ipa ?? null;
   if (patch.audioUrl !== undefined) set.audioUrl = patch.audioUrl ?? null;
+  if (patch.imageKey !== undefined) set.imageKey = patch.imageKey ?? null;
   if (Object.keys(set).length) {
     await db.update(flashcardWords).set(set).where(eq(flashcardWords.id, id));
   }
@@ -293,6 +298,7 @@ export async function importWords(
       definitionEn: w.definitionEn ?? null,
       ipa: w.ipa ?? null,
       audioUrl: w.audioUrl ?? null,
+      imageKey: w.imageKey ?? null,
       createdAt: now,
     }),
   );

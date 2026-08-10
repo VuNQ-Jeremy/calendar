@@ -54,7 +54,8 @@ describe('sanitizeGeneratedWords', () => {
     meaningVi = 'nghĩa',
     definitionEn = 'a definition',
     ipa = '/wɜːd/',
-  ): GeneratedWord => ({ word, meaningVi, definitionEn, ipa });
+    imageQuery = 'a photo subject',
+  ): GeneratedWord => ({ word, meaningVi, definitionEn, ipa, imageQuery });
 
   it('drops words the deck already has, ignoring case', () => {
     const out = sanitizeGeneratedWords([w('Rain'), w('cloud')], ['rain'], 10);
@@ -67,10 +68,19 @@ describe('sanitizeGeneratedWords', () => {
   });
 
   it('clamps fields to the FlashcardWordInput limits and nulls blank optional fields', () => {
-    const out = sanitizeGeneratedWords([w('sky', 'x'.repeat(600), '', '')], [], 10);
+    const out = sanitizeGeneratedWords([w('sky', 'x'.repeat(600), '', '', '')], [], 10);
     expect(out[0].meaningVi).toHaveLength(500);
     expect(out[0].definitionEn).toBeNull();
     expect(out[0].ipa).toBeNull();
+    expect(out[0].imageQuery).toBeNull();
+  });
+
+  it('clamps a long imageQuery and keeps it off the card fields', () => {
+    const out = sanitizeGeneratedWords([w('sky', 'nghĩa', 'a definition', '/skaɪ/', 'y'.repeat(300))], [], 10);
+    expect(out[0].imageQuery).toHaveLength(200);
+    // The picture keywords are for the review screen's lookup, never shown on the card itself.
+    expect(out[0].word).toBe('sky');
+    expect(out[0].meaningVi).toBe('nghĩa');
   });
 
   it('keeps the IPA transcription the model returned', () => {

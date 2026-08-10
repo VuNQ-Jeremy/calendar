@@ -6,6 +6,10 @@ import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from '../u
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import { fetchGeneratedWords } from '../lib/generate-client.js';
+import { searchVocabImages, mapWithConcurrency } from '../lib/vocab-image-client.js';
+import { ImagePicker, resolvePickedImageKey } from './image-picker.js';
+import type { PickedImage } from './image-picker.js';
+import { flashcardImagePath } from '../../shared/logic/flashcards';
 import { VOCAB_TOPICS, vocabTopicLabel } from '../../shared/logic/vocab-topics';
 import { formatDmy } from '../../shared/logic/tuition.js';
 import { GardenWidget } from '../garden/garden-widget.jsx';
@@ -18,7 +22,15 @@ import type {
 import type { FlashcardTopicRow } from '../../server/services/flashcards.js';
 import type { VocabAssignmentRow } from '../../server/services/garden.js';
 
-const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput, Badge, Tag } = DS;
+const {
+  Card: FC,
+  Button: FBtn,
+  IconButton: FIB,
+  Input: FInput,
+  Checkbox: FCheck,
+  Badge,
+  Tag,
+} = DS;
 
 /** Overdue ink. A literal palette hex, so it reads the same in both themes. */
 const DANGER = colorOf('rose');
@@ -605,6 +617,14 @@ type GenRow = {
   definitionEn: string;
   ipa: string;
   include: boolean;
+  /** Stock-search keywords the model proposed; '' falls back to the word itself. */
+  imageQuery: string;
+  /**
+   * The row's picture. `'loading'` while the auto-attach lookup is in flight, `null` once we know
+   * there is none. A stock pick stays uncommitted until save, so abandoning the review copies
+   * nothing into the bucket; an AI illustration is already stored (see PickedImage).
+   */
+  image: PickedImage | null | 'loading';
 };
 
 const GEN_LEVELS = ['any', 'beginner', 'intermediate', 'advanced'] as const;
@@ -630,6 +650,9 @@ function GenerateTopicModal({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [rows, setRows] = React.useState<GenRow[]>([]);
+  const [saving, setSaving] = React.useState(false);
+  /** Index of the row whose picture is being re-chosen, or null. */
+  const [picking, setPicking] = React.useState<number | null>(null);
 
   // Picking from the catalog fills the name field rather than hiding a second value: the name is
   // both what the topic is called and what the model is asked for, and it stays editable.
@@ -659,16 +682,30 @@ function GenerateTopicModal({
       setError(t('fc_gen_empty'));
       return;
     }
-    setRows(
-      res.words.map((w) => ({
-        word: w.word,
-        meaningVi: w.meaningVi,
-        definitionEn: w.definitionEn ?? '',
-        ipa: w.ipa ?? '',
-        include: true,
-      })),
-    );
+    const next: GenRow[] = res.words.map((w) => ({
+      word: w.word,
+      meaningVi: w.meaningVi,
+      definitionEn: w.definitionEn ?? '',
+      ipa: w.ipa ?? '',
+      include: true,
+      imageQuery: w.imageQuery ?? '',
+      image: 'loading',
+    }));
+    setRows(next);
     setStep('review');
+    // Find a candidate picture per word in the background. The review is usable immediately —
+    // each row swaps its placeholder for a thumbnail as its lookup lands, and a word whose search
+    // finds nothing simply shows no picture. A small pool keeps ~50 lookups polite.
+    void mapWithConcurrency(next, 4, async (row, i) => {
+      const found = await searchVocabImages(row.imageQuery || row.word);
+      const top = found.ok ? found.candidates[0] : undefined;
+      setRow(
+        i,
+        top
+          ? { image: { kind: 'stock', provider: top.provider, id: top.id, thumbUrl: top.thumbUrl } }
+          : { image: null },
+      );
+    });
   };
 
   const setRow = (i: number, patch: Partial<GenRow>) =>
@@ -676,16 +713,23 @@ function GenerateTopicModal({
 
   const readyCount = rows.filter((r) => r.include && r.word.trim()).length;
 
-  const submit = () => {
-    const words = rows
-      .filter((r) => r.include && r.word.trim())
-      .map((r) => ({
-        word: r.word.trim(),
-        meaningVi: r.meaningVi.trim(),
-        ipa: r.ipa.trim() || null,
-        definitionEn: r.definitionEn.trim() || null,
-      }));
-    if (words.length === 0 || !name.trim()) return;
+  const submit = async () => {
+    const kept = rows.filter((r) => r.include && r.word.trim());
+    if (kept.length === 0 || !name.trim()) return;
+    setSaving(true);
+    // Only now do the chosen stock pictures get copied into our bucket — a review the teacher
+    // cancels leaves nothing behind. A copy that fails costs that word its picture and nothing
+    // more: the word itself is the point.
+    const imageKeys = await mapWithConcurrency(kept, 4, async (r) =>
+      r.image && r.image !== 'loading' ? await resolvePickedImageKey(r.image) : null,
+    );
+    const words = kept.map((r, i) => ({
+      word: r.word.trim(),
+      meaningVi: r.meaningVi.trim(),
+      ipa: r.ipa.trim() || null,
+      definitionEn: r.definitionEn.trim() || null,
+      imageKey: imageKeys[i],
+    }));
     const fd = new FormData();
     fd.set('intent', 'generate-topic');
     fd.set('name', name.trim());
@@ -693,6 +737,7 @@ function GenerateTopicModal({
     fd.set('color', color);
     fd.set('words', JSON.stringify(words));
     fetcher.submit(fd, { method: 'post' });
+    setSaving(false);
     onClose();
   };
 
@@ -722,8 +767,8 @@ function GenerateTopicModal({
             <FBtn variant="secondary" onClick={() => setStep('setup')}>
               {t('cancel')}
             </FBtn>
-            <FBtn variant="primary" disabled={readyCount === 0} onClick={submit}>
-              {t('fc_gen_new_save', { n: readyCount })}
+            <FBtn variant="primary" disabled={readyCount === 0 || saving} onClick={submit}>
+              {saving ? t('fc_img_saving') : t('fc_gen_new_save', { n: readyCount })}
             </FBtn>
           </>
         )
@@ -782,11 +827,48 @@ function GenerateTopicModal({
               className="lrow"
               style={{ alignItems: 'center', gap: 10, opacity: r.include ? 1 : 0.5 }}
             >
-              <input
-                type="checkbox"
+              <FCheck
                 checked={r.include}
                 onChange={(e) => setRow(i, { include: e.target.checked })}
               />
+              {/* The proposed picture, swappable before anything is saved. A stock thumbnail is
+                  still hotlinked from the provider at this point; an AI illustration is already in
+                  our bucket, so it resolves through flashcardImagePath. */}
+              <button
+                type="button"
+                title={t('fc_img_change')}
+                onClick={() => setPicking(i)}
+                style={{
+                  width: 56,
+                  height: 42,
+                  flex: 'none',
+                  padding: 0,
+                  overflow: 'hidden',
+                  borderRadius: 6,
+                  border: '1px solid var(--border-soft, rgba(0,0,0,0.12))',
+                  background: 'var(--surface-muted, rgba(0,0,0,0.04))',
+                  cursor: 'pointer',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                {r.image === 'loading' ? (
+                  <MIcon name="sparkle" size={14} />
+                ) : r.image ? (
+                  <img
+                    src={
+                      r.image.kind === 'ai'
+                        ? (flashcardImagePath(r.image.imageKey) ?? undefined)
+                        : r.image.thumbUrl
+                    }
+                    alt=""
+                    loading="lazy"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                ) : (
+                  <MIcon name="plus" size={14} />
+                )}
+              </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="m-row" style={{ gap: 8, alignItems: 'baseline' }}>
                   <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{r.word}</span>
@@ -815,9 +897,28 @@ function GenerateTopicModal({
                   onChange={(e) => setRow(i, { meaningVi: e.target.value })}
                 />
               </div>
+              {r.image && r.image !== 'loading' && (
+                <FIB
+                  label={t('fc_img_remove')}
+                  size="sm"
+                  onClick={() => setRow(i, { image: null })}
+                >
+                  <MIcon name="trash" size={14} />
+                </FIB>
+              )}
             </div>
           ))}
         </div>
+      )}
+      {picking !== null && rows[picking] && (
+        <ImagePicker
+          initialQuery={rows[picking].imageQuery || rows[picking].word}
+          onClose={() => setPicking(null)}
+          onPick={(picked) => {
+            setRow(picking, { image: picked });
+            setPicking(null);
+          }}
+        />
       )}
     </Modal>
   );

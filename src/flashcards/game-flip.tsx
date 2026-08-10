@@ -3,7 +3,7 @@ import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
-import { shuffle, meaningOf } from './game-utils.js';
+import { shuffle, meaningOf, flashcardImagePath } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import {
@@ -301,6 +301,25 @@ export function FlipGame({ words, onExit, onFinish, garden }: GameProps & Garden
       }}
     >
       <div style={cardFace}>
+        {word.imageKey && (
+          // `flex: '0 1 55%'` with `minHeight: 0` lets the picture give way rather than pushing the
+          // word, IPA and audio button off a short card. Pointer events stay off it so the drag and
+          // flip handlers on the card itself keep working.
+          <img
+            src={flashcardImagePath(word.imageKey) ?? undefined}
+            alt=""
+            draggable={false}
+            style={{
+              width: 'calc(100% - 32px)',
+              flex: '0 1 55%',
+              minHeight: 0,
+              objectFit: 'cover',
+              borderRadius: 12,
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          />
+        )}
         <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800 }}>{word.word}</div>
         {word.ipa && (
           <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
