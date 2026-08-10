@@ -58,6 +58,9 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   ]);
   return {
     month,
+    // The picker stops here. Sent from the server because the browser's clock is the user's, and
+    // a phone left on the wrong timezone would otherwise offer a month that has not started.
+    currentMonth: currentIctMonth(),
     attendance,
     scores,
     behavior,

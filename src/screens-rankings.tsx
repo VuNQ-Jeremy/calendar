@@ -35,6 +35,8 @@ const MONTH_WINDOW = 12;
 
 interface RankingsLoaderData {
   month: string;
+  /** The live ICT month, from the server clock — the newest month the picker offers. */
+  currentMonth: string;
   attendance: RankAttendanceRow[];
   scores: RankScoreRow[];
   behavior: RankBehaviorRow[];
@@ -92,6 +94,7 @@ function bucketByClass<T, V>(
 export function RankingsScreen() {
   const {
     month,
+    currentMonth,
     attendance,
     scores,
     behavior,
@@ -251,18 +254,22 @@ export function RankingsScreen() {
   }, [attendance, behavior, scores, remarks, students, weights, cohorts, cohortKeys, cohortLabel]);
 
   /**
-   * A rolling window centred on the month being viewed. The loader only ever fetches one month,
-   * so unlike the assessments picker there is no history here to enumerate the real options from;
-   * a window keeps every neighbouring month one click away and always contains the current value.
+   * A rolling window ending at the current month. The loader only ever fetches one month, so
+   * unlike the assessments picker there is no history here to enumerate the real options from.
+   *
+   * Nothing after the current month is offered: a future month can only ever be empty, and an
+   * empty board reads as "everyone lost their marks" rather than "this hasn't happened yet". A
+   * month reached by URL is kept even when it is in the future, so the select is never blank.
    */
   const monthOptions = React.useMemo(() => {
-    const set = new Set<string>();
-    for (let i = MONTH_WINDOW; i >= -MONTH_WINDOW; i--) set.add(shiftMonth(month, i));
+    const set = new Set<string>([month]);
+    for (let i = 0; i <= MONTH_WINDOW; i++) set.add(shiftMonth(currentMonth, -i));
     // Newest first: 'YYYY-MM' sorts lexicographically, so a descending compare is the whole job.
     return [...set]
+      .filter((m) => m <= currentMonth || m === month)
       .sort((a, b) => b.localeCompare(a))
       .map((m) => ({ value: m, label: monthLabel(m, lang) }));
-  }, [month, lang]);
+  }, [month, currentMonth, lang]);
 
   const breakdown = (s: StudentRanking) => {
     const parts: string[] = [];
