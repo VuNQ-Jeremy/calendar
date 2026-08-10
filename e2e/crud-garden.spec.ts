@@ -41,10 +41,13 @@ test.describe('CRUD: vocabulary assignments', () => {
     await f.textIn('Rounds required').fill('2');
     await f.textIn('Minimum score (%)').fill('50');
     // Restrict which game modes count. Unchecked (the default) means any mode, so the hint is
-    // showing before the first tick and disappears after it.
+    // showing before the first tick and disappears after it. The DS checkbox hides its native
+    // input behind a styled span, so ticking clicks the LABEL; asserting reads the input, which
+    // toBeChecked() accepts hidden.
     await expect(dlg.getByText('Any mode counts')).toBeVisible();
-    await dlg.getByRole('checkbox', { name: 'Unscramble' }).check();
-    await dlg.getByRole('checkbox', { name: 'Type it' }).check();
+    await dlg.locator('.mochi-check', { hasText: 'Unscramble' }).click();
+    await dlg.locator('.mochi-check', { hasText: 'Type it' }).click();
+    await expect(dlg.getByRole('checkbox', { name: 'Unscramble' })).toBeChecked();
     await expect(dlg.getByText('Any mode counts')).toHaveCount(0);
     post = k.posted('/vocabulary');
     await dlg.locator('.m-dialog__foot .mochi-btn.is-primary').click();
@@ -78,9 +81,10 @@ test.describe('CRUD: vocabulary assignments', () => {
     const edit = k.dlgOf('Edit assignment');
     await expect(edit.getByRole('checkbox', { name: 'Unscramble' })).toBeChecked();
     await expect(edit.getByRole('checkbox', { name: 'Type it' })).toBeChecked();
-    await expect(edit.getByRole('checkbox', { name: 'Quiz' })).not.toBeChecked();
-    await edit.getByRole('checkbox', { name: 'Unscramble' }).uncheck();
-    await edit.getByRole('checkbox', { name: 'Type it' }).uncheck();
+    await expect(edit.getByRole('checkbox', { name: 'Quiz', exact: true })).not.toBeChecked();
+    await edit.locator('.mochi-check', { hasText: 'Unscramble' }).click();
+    await edit.locator('.mochi-check', { hasText: 'Type it' }).click();
+    await expect(edit.getByRole('checkbox', { name: 'Unscramble' })).not.toBeChecked();
     await k.on(edit).textIn('Rounds required').fill('5');
     post = k.posted('/vocabulary');
     await edit.locator('.m-dialog__foot .mochi-btn.is-primary').click();
