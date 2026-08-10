@@ -99,9 +99,7 @@ export function behaviorComponent(types: string[]): number | null {
 }
 
 /** Mean of the teacher's 1–5 ratings, doubled onto the 0–10 scale the rest of the app uses. */
-export function remarkComponent(
-  ratings: Record<string, number> | null | undefined,
-): number | null {
+export function remarkComponent(ratings: Record<string, number> | null | undefined): number | null {
   if (!ratings) return null;
   const values = Object.values(ratings).filter((v) => typeof v === 'number' && !Number.isNaN(v));
   if (values.length === 0) return null;
@@ -163,6 +161,95 @@ export function computeMonthRankings(
     s.rank = s.total === prevTotal ? prevRank : i + 1;
     prevTotal = s.total;
     prevRank = s.rank;
+  });
+
+  return [...ranked, ...unranked];
+}
+
+/* ── Cohort competition (khối + trình độ) ────────────────────────────────────────────────────
+ *
+ * Classes compete only against classes sharing BOTH their grade level and their class level.
+ * That pair is a "cohort"; a class missing either half sits the competition out entirely rather
+ * than being lumped into a catch-all group.
+ *
+ * Scoping, which the screen relies on and nobody should "fix":
+ *   - A class's aggregate uses each rostered student's total computed under THAT class's filter
+ *     (attendance/behaviour/scores whose classId is the class; remarks are student-wide, as
+ *     everywhere else). It is exactly the number the per-class student board already shows.
+ *   - Students belong to classes many-to-many, so one student can contribute a total to several
+ *     classes, and appears on the student board of every cohort they have a class in.
+ */
+
+/** The cohort-relevant shape of a class. `ClassLite` from the classes service satisfies it. */
+export interface CohortClassRef {
+  id: string;
+  gradeLevelId: string | null;
+  classLevelId: string | null;
+}
+
+/** Stable cohort key, or null when the class is missing either half and cannot compete. */
+export function cohortKeyOf(c: CohortClassRef): string | null {
+  return c.gradeLevelId && c.classLevelId ? `${c.gradeLevelId}::${c.classLevelId}` : null;
+}
+
+/** Bucket competing classes by cohort key, preserving input order. Null-key classes are dropped. */
+export function groupByCohort<T extends CohortClassRef>(classes: T[]): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const c of classes) {
+    const key = cohortKeyOf(c);
+    if (!key) continue;
+    const bucket = map.get(key);
+    if (bucket) bucket.push(c);
+    else map.set(key, [c]);
+  }
+  return map;
+}
+
+export interface ClassRankingInput {
+  classId: string;
+  /** Each rostered student's monthly total. Nulls mean "no data this month" and are excluded. */
+  totals: (number | null)[];
+}
+
+export interface ClassRanking {
+  classId: string;
+  /** Mean of the non-null totals, 1 decimal; null when no student has data this month. */
+  average: number | null;
+  rankedCount: number;
+  /** Competition rank within the passed list; null while average is null. */
+  rank: number | null;
+}
+
+/**
+ * Rank classes against each other by the mean of their students' monthly totals.
+ *
+ * Students with no data are EXCLUDED from the mean rather than counted as zero — the same rule
+ * the attitude components use, and the reason a class does not get punished for enrolling a
+ * student mid-month. `rows` must arrive in the caller's tie-break order (the screen sorts by
+ * class name), and ranks are competition style over the rounded averages, so classes that
+ * DISPLAY the same score always share a rank.
+ */
+export function computeClassRankings(rows: ClassRankingInput[]): ClassRanking[] {
+  const computed: ClassRanking[] = rows.map((r) => {
+    const values = r.totals.filter((x): x is number => x != null);
+    return {
+      classId: r.classId,
+      average: values.length ? round1(mean(values)) : null,
+      rankedCount: values.length,
+      rank: null,
+    };
+  });
+
+  const ranked = computed.filter((c) => c.average != null);
+  const unranked = computed.filter((c) => c.average == null);
+  ranked.sort((a, b) => (b.average as number) - (a.average as number)); // stable: ties keep order
+
+  let prevAvg: number | null = null;
+  let prevRank = 0;
+  ranked.forEach((c, i) => {
+    c.rank = c.average === prevAvg ? prevRank : i + 1;
+    prevAvg = c.average;
+    prevRank = c.rank;
   });
 
   return [...ranked, ...unranked];

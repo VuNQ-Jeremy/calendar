@@ -5,6 +5,9 @@ import {
   remarkComponent,
   combineTotal,
   computeMonthRankings,
+  cohortKeyOf,
+  groupByCohort,
+  computeClassRankings,
   DEFAULT_RANKING_WEIGHTS,
   type RankRowInput,
 } from '../shared/logic/rankings.js';
@@ -167,5 +170,98 @@ describe('computeMonthRankings()', () => {
       { attitude: 100, score: 0 },
     );
     expect(s.total).toBe(10);
+  });
+});
+
+describe('cohortKeyOf()', () => {
+  it('keys on both halves', () => {
+    expect(cohortKeyOf({ id: 'c1', gradeLevelId: 'gl6', classLevelId: 'cl1' })).toBe('gl6::cl1');
+  });
+
+  it('is null when either half is missing', () => {
+    expect(cohortKeyOf({ id: 'c1', gradeLevelId: 'gl6', classLevelId: null })).toBeNull();
+    expect(cohortKeyOf({ id: 'c1', gradeLevelId: null, classLevelId: 'cl1' })).toBeNull();
+    expect(cohortKeyOf({ id: 'c1', gradeLevelId: null, classLevelId: null })).toBeNull();
+  });
+});
+
+describe('groupByCohort()', () => {
+  const cls = (id: string, g: string | null, l: string | null) => ({
+    id,
+    gradeLevelId: g,
+    classLevelId: l,
+  });
+
+  it('buckets classes sharing a grade and a level', () => {
+    const map = groupByCohort([
+      cls('a', 'gl6', 'cl1'),
+      cls('b', 'gl6', 'cl2'),
+      cls('c', 'gl6', 'cl1'),
+    ]);
+    expect([...map.keys()]).toEqual(['gl6::cl1', 'gl6::cl2']);
+    expect(map.get('gl6::cl1')!.map((c) => c.id)).toEqual(['a', 'c']);
+  });
+
+  it('drops classes that cannot compete', () => {
+    const map = groupByCohort([
+      cls('a', 'gl6', null),
+      cls('b', null, null),
+      cls('c', 'gl6', 'cl1'),
+    ]);
+    expect([...map.keys()]).toEqual(['gl6::cl1']);
+    expect(map.get('gl6::cl1')!.map((c) => c.id)).toEqual(['c']);
+  });
+});
+
+describe('computeClassRankings()', () => {
+  it('averages only the students who have data', () => {
+    const [c] = computeClassRankings([{ classId: 'a', totals: [8, null, 9] }]);
+    expect(c.average).toBe(8.5);
+    expect(c.rankedCount).toBe(2);
+  });
+
+  it('leaves a class with no ranked students unranked, listed last', () => {
+    const out = computeClassRankings([
+      { classId: 'empty', totals: [] },
+      { classId: 'blank', totals: [null, null] },
+      { classId: 'real', totals: [7] },
+    ]);
+    expect(out.map((c) => c.classId)).toEqual(['real', 'empty', 'blank']);
+    expect(out[0].rank).toBe(1);
+    expect(out[1].average).toBeNull();
+    expect(out[1].rank).toBeNull();
+    expect(out[2].rank).toBeNull();
+  });
+
+  it('shares a rank between classes with the same average, competition style', () => {
+    // a and b both average 8.5; c is behind, so it takes rank 3 rather than 2.
+    const out = computeClassRankings([
+      { classId: 'a', totals: [8, 9] },
+      { classId: 'b', totals: [9, 8] },
+      { classId: 'c', totals: [7] },
+    ]);
+    expect(out.map((c) => [c.classId, c.rank])).toEqual([
+      ['a', 1],
+      ['b', 1],
+      ['c', 3],
+    ]);
+  });
+
+  it('compares the rounded averages the user sees', () => {
+    // 8.25 → 8.3 and 8.3 display identically, so they must share a rank.
+    const out = computeClassRankings([
+      { classId: 'a', totals: [8.2, 8.3] },
+      { classId: 'b', totals: [8.3] },
+    ]);
+    expect(out.map((c) => c.average)).toEqual([8.3, 8.3]);
+    expect(out.map((c) => c.rank)).toEqual([1, 1]);
+  });
+
+  it('keeps the caller order on ties', () => {
+    const out = computeClassRankings([
+      { classId: 'zebra', totals: [8] },
+      { classId: 'alpha', totals: [8] },
+    ]);
+    expect(out.map((c) => c.classId)).toEqual(['zebra', 'alpha']);
   });
 });
