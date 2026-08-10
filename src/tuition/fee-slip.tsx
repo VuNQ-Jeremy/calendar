@@ -3,6 +3,7 @@ import { useLoaderData, useSearchParams } from 'react-router';
 import { useLang } from '../lib/i18n.jsx';
 import { DEFAULT_SLIP_THEME, SLIP_THEMES, SLIP_THEME_CSS, isSlipThemeId } from './slip-themes.jsx';
 import type { SlipData, SlipThemeId } from './slip-themes.jsx';
+import { monthNumeric } from '../../shared/logic/fees.js';
 
 /**
  * Fee-slip page: picks a theme, renders it, and copies it to the clipboard as a PNG.
@@ -71,7 +72,14 @@ const TOOLBAR_CSS = `
 .slip-stage { background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); }
 `;
 
-type CopyState = { kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' };
+/**
+ * `error` is the rasterizer — no image was made. `send_failed` is the opposite: the image was
+ * fine and the upload or the Zalo call was not. Reporting both as one state is what made the
+ * garden card's 401 look like a broken renderer; see app/routes/zalo-send-card.tsx.
+ */
+type CopyState = {
+  kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' | 'sent' | 'not_linked' | 'send_failed';
+};
 
 export function FeeSlipView() {
   const { month, student, fee } = useLoaderData() as SlipLoaderData;
@@ -145,6 +153,49 @@ export function FeeSlipView() {
     }
   };
 
+  /**
+   * Send the slip straight to the family's Zalo, replacing copy-open-paste.
+   *
+   * The target is the STUDENT, not a parent record: `/zalo-send-card` resolves that to every
+   * chat linked either directly to the student or through a `parents` row, deduped. Most
+   * families have no parent record, so addressing the parent would reach almost nobody.
+   *
+   * A 409 means this family has not paired yet — an ordinary state on day one, not a fault, and
+   * the copy button beside this one still works.
+   */
+  const sendToZalo = async () => {
+    const node = stageRef.current;
+    if (!node) return;
+    setCopy({ kind: 'busy' });
+
+    let blob: Blob | null;
+    try {
+      const { toBlob } = await import('html-to-image');
+      blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      if (!blob) throw new Error('rasterize failed');
+    } catch {
+      setCopy({ kind: 'error' });
+      return;
+    }
+
+    try {
+      const body = new FormData();
+      body.set('file', blob, fileName);
+      body.set('target', `student:${student.id}`);
+      body.set('caption', `${t('zalo_fee_caption')} ${monthNumeric(month)} · ${student.name}`);
+      // NOT /api/zalo/… — that prefix is bearer-only and this page carries a cookie.
+      const res = await fetch('/zalo-send-card', { method: 'POST', body });
+      if (res.ok) setCopy({ kind: 'sent' });
+      else if (res.status === 409) setCopy({ kind: 'not_linked' });
+      else {
+        console.error('[zalo] send-card failed', { status: res.status });
+        setCopy({ kind: 'send_failed' });
+      }
+    } catch {
+      setCopy({ kind: 'send_failed' });
+    }
+  };
+
   const ThemeComponent = theme.Component;
 
   return (
@@ -170,9 +221,20 @@ export function FeeSlipView() {
         >
           {t('slip_copy_image')}
         </button>
+        <button type="button" onClick={() => void sendToZalo()} disabled={copy.kind === 'busy'}>
+          {t('zalo_send')}
+        </button>
         {copy.kind === 'copied' && <span className="slip-bar__msg">{t('copied')}</span>}
         {copy.kind === 'downloaded' && (
           <span className="slip-bar__msg">{t('slip_downloaded')}</span>
+        )}
+        {copy.kind === 'sent' && <span className="slip-bar__msg">{t('zalo_sent_family')}</span>}
+        {/* Not an error: this family simply has not paired yet, and /config is where that is fixed. */}
+        {copy.kind === 'not_linked' && (
+          <span className="slip-bar__msg">{t('zalo_not_linked_family')}</span>
+        )}
+        {copy.kind === 'send_failed' && (
+          <span className="slip-bar__msg slip-bar__msg--err">{t('zalo_send_failed')}</span>
         )}
         {copy.kind === 'error' && (
           <span className="slip-bar__msg slip-bar__msg--err">{t('slip_copy_failed')}</span>

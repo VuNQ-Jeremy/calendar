@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0144 — 2026-08-10
+Fee slips send straight to the family's Zalo instead of copy-and-paste.
+
 ## v0.0143 — 2026-08-10
 Send to Zalo works from the share cards: the upload endpoint was bearer-only and a browser has a cookie.
 
