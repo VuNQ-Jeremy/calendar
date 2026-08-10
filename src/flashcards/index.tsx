@@ -22,15 +22,7 @@ import type {
 import type { FlashcardTopicRow } from '../../server/services/flashcards.js';
 import type { VocabAssignmentRow } from '../../server/services/garden.js';
 
-const {
-  Card: FC,
-  Button: FBtn,
-  IconButton: FIB,
-  Input: FInput,
-  Checkbox: FCheck,
-  Badge,
-  Tag,
-} = DS;
+const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput, Checkbox: FCheck, Badge, Tag } = DS;
 
 /** Overdue ink. A literal palette hex, so it reads the same in both themes. */
 const DANGER = colorOf('rose');
@@ -742,174 +734,184 @@ function GenerateTopicModal({
   };
 
   return (
-    <Modal
-      open={true}
-      onClose={onClose}
-      title={t('fc_gen_new_title')}
-      width={640}
-      footer={
-        step === 'setup' ? (
-          <>
-            <FBtn variant="secondary" onClick={onClose}>
-              {t('cancel')}
-            </FBtn>
-            <FBtn
-              variant="primary"
-              iconLeft={<MIcon name="sparkle" size={16} />}
-              disabled={!name.trim() || busy}
-              onClick={run}
-            >
-              {busy ? t('fc_gen_running') : t('fc_gen_run')}
-            </FBtn>
-          </>
-        ) : (
-          <>
-            <FBtn variant="secondary" onClick={() => setStep('setup')}>
-              {t('cancel')}
-            </FBtn>
-            <FBtn variant="primary" disabled={readyCount === 0 || saving} onClick={submit}>
-              {saving ? t('fc_img_saving') : t('fc_gen_new_save', { n: readyCount })}
-            </FBtn>
-          </>
-        )
-      }
-    >
-      {step === 'setup' ? (
-        <>
-          <MSelect
-            label={t('fc_gen_topic_pick')}
-            value={VOCAB_TOPICS.find((vt) => vt.en === name)?.id ?? (name ? 'custom' : '')}
-            onChange={pick}
-            options={[
-              { value: '', label: t('fc_gen_topic_pick') },
-              ...VOCAB_TOPICS.map((vt) => ({ value: vt.id, label: vocabTopicLabel(vt, lang) })),
-              { value: 'custom', label: t('fc_gen_topic_custom') },
-            ]}
-            hint={t('fc_gen_new_hint')}
-          />
-          <FInput
-            label={t('fc_topic_name')}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <div className="m-grid cols-2" style={{ gap: 14 }}>
-            <div className="mochi-field">
-              <label className="mochi-field__label">{t('fc_gen_count')}</label>
-              <input
-                className="mochi-input"
-                type="number"
-                min={1}
-                max={50}
-                value={count}
-                onChange={(e) => setCount(e.target.value)}
-              />
-            </div>
-            <MSelect
-              label={t('fc_gen_level')}
-              value={level}
-              onChange={(v) => setLevel(v as (typeof GEN_LEVELS)[number])}
-              options={GEN_LEVELS.map((l) => ({ value: l, label: t(`fc_gen_level_${l}`) }))}
-            />
-          </div>
-          <ColorPicker label={t('color')} value={color} onChange={setColor} />
-          {busy && <span className="mochi-field__hint">{t('fc_gen_wait')}</span>}
-          {error && (
-            <span className="mochi-field__hint" style={{ color: 'var(--red-600, #c0392b)' }}>
-              {error}
-            </span>
-          )}
-        </>
-      ) : (
-        <div className="m-stack" style={{ gap: 8 }}>
-          {rows.map((r, i) => (
-            <div
-              key={i}
-              className="lrow"
-              style={{ alignItems: 'center', gap: 10, opacity: r.include ? 1 : 0.5 }}
-            >
-              <FCheck
-                checked={r.include}
-                onChange={(e) => setRow(i, { include: e.target.checked })}
-              />
-              {/* The proposed picture, swappable before anything is saved. A stock thumbnail is
-                  still hotlinked from the provider at this point; an AI illustration is already in
-                  our bucket, so it resolves through flashcardImagePath. */}
-              <button
-                type="button"
-                title={t('fc_img_change')}
-                onClick={() => setPicking(i)}
-                style={{
-                  width: 56,
-                  height: 42,
-                  flex: 'none',
-                  padding: 0,
-                  overflow: 'hidden',
-                  borderRadius: 6,
-                  border: '1px solid var(--border-soft, rgba(0,0,0,0.12))',
-                  background: 'var(--surface-muted, rgba(0,0,0,0.04))',
-                  cursor: 'pointer',
-                  display: 'grid',
-                  placeItems: 'center',
-                }}
+    <>
+      <Modal
+        open={true}
+        onClose={onClose}
+        title={t('fc_gen_new_title')}
+        width={640}
+        footer={
+          step === 'setup' ? (
+            <>
+              <FBtn variant="secondary" onClick={onClose}>
+                {t('cancel')}
+              </FBtn>
+              <FBtn
+                variant="primary"
+                iconLeft={<MIcon name="sparkle" size={16} />}
+                disabled={!name.trim() || busy}
+                onClick={run}
               >
-                {r.image === 'loading' ? (
-                  <MIcon name="sparkle" size={14} />
-                ) : r.image ? (
-                  <img
-                    src={
-                      r.image.kind === 'ai'
-                        ? (flashcardImagePath(r.image.imageKey) ?? undefined)
-                        : r.image.thumbUrl
-                    }
-                    alt=""
-                    loading="lazy"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
-                ) : (
-                  <MIcon name="plus" size={14} />
-                )}
-              </button>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="m-row" style={{ gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{r.word}</span>
-                  {r.ipa && (
-                    <span
-                      style={{
-                        color: 'var(--text-muted)',
-                        fontFamily: 'var(--font-mono, monospace)',
-                        fontSize: 'var(--text-sm)',
-                      }}
-                    >
-                      {r.ipa}
-                    </span>
-                  )}
-                </div>
-                {r.definitionEn && (
-                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                    {r.definitionEn}
-                  </div>
-                )}
+                {busy ? t('fc_gen_running') : t('fc_gen_run')}
+              </FBtn>
+            </>
+          ) : (
+            <>
+              <FBtn variant="secondary" onClick={() => setStep('setup')}>
+                {t('cancel')}
+              </FBtn>
+              <FBtn variant="primary" disabled={readyCount === 0 || saving} onClick={submit}>
+                {saving ? t('fc_img_saving') : t('fc_gen_new_save', { n: readyCount })}
+              </FBtn>
+            </>
+          )
+        }
+      >
+        {step === 'setup' ? (
+          <>
+            <MSelect
+              label={t('fc_gen_topic_pick')}
+              value={VOCAB_TOPICS.find((vt) => vt.en === name)?.id ?? (name ? 'custom' : '')}
+              onChange={pick}
+              options={[
+                { value: '', label: t('fc_gen_topic_pick') },
+                ...VOCAB_TOPICS.map((vt) => ({ value: vt.id, label: vocabTopicLabel(vt, lang) })),
+                { value: 'custom', label: t('fc_gen_topic_custom') },
+              ]}
+              hint={t('fc_gen_new_hint')}
+            />
+            <FInput
+              label={t('fc_topic_name')}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <div className="m-grid cols-2" style={{ gap: 14 }}>
+              <div className="mochi-field">
+                <label className="mochi-field__label">{t('fc_gen_count')}</label>
                 <input
                   className="mochi-input"
-                  style={{ marginTop: 4 }}
-                  placeholder={t('fc_meaning_vi')}
-                  value={r.meaningVi}
-                  onChange={(e) => setRow(i, { meaningVi: e.target.value })}
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={count}
+                  onChange={(e) => setCount(e.target.value)}
                 />
               </div>
-              {r.image && r.image !== 'loading' && (
-                <FIB
-                  label={t('fc_img_remove')}
-                  size="sm"
-                  onClick={() => setRow(i, { image: null })}
-                >
-                  <MIcon name="trash" size={14} />
-                </FIB>
-              )}
+              <MSelect
+                label={t('fc_gen_level')}
+                value={level}
+                onChange={(v) => setLevel(v as (typeof GEN_LEVELS)[number])}
+                options={GEN_LEVELS.map((l) => ({ value: l, label: t(`fc_gen_level_${l}`) }))}
+              />
             </div>
-          ))}
-        </div>
-      )}
+            <ColorPicker label={t('color')} value={color} onChange={setColor} />
+            {busy && <span className="mochi-field__hint">{t('fc_gen_wait')}</span>}
+            {error && (
+              <span className="mochi-field__hint" style={{ color: 'var(--red-600, #c0392b)' }}>
+                {error}
+              </span>
+            )}
+          </>
+        ) : (
+          <div className="m-stack" style={{ gap: 8 }}>
+            {rows.map((r, i) => (
+              <div
+                key={i}
+                className="lrow"
+                style={{ alignItems: 'center', gap: 10, opacity: r.include ? 1 : 0.5 }}
+              >
+                <FCheck
+                  checked={r.include}
+                  onChange={(e) => setRow(i, { include: e.target.checked })}
+                />
+                {/* The proposed picture, swappable before anything is saved. A stock thumbnail is
+                  still hotlinked from the provider at this point; an AI illustration is already in
+                  our bucket, so it resolves through flashcardImagePath. */}
+                <button
+                  type="button"
+                  title={t('fc_img_change')}
+                  onClick={() => setPicking(i)}
+                  style={{
+                    width: 56,
+                    height: 42,
+                    flex: 'none',
+                    padding: 0,
+                    overflow: 'hidden',
+                    borderRadius: 6,
+                    border: '1px solid var(--border-soft, rgba(0,0,0,0.12))',
+                    background: 'var(--surface-muted, rgba(0,0,0,0.04))',
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                >
+                  {r.image === 'loading' ? (
+                    <MIcon name="sparkle" size={14} />
+                  ) : r.image ? (
+                    <img
+                      src={
+                        r.image.kind === 'ai'
+                          ? (flashcardImagePath(r.image.imageKey) ?? undefined)
+                          : r.image.thumbUrl
+                      }
+                      alt=""
+                      loading="lazy"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                    />
+                  ) : (
+                    <MIcon name="plus" size={14} />
+                  )}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="m-row" style={{ gap: 8, alignItems: 'baseline' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{r.word}</span>
+                    {r.ipa && (
+                      <span
+                        style={{
+                          color: 'var(--text-muted)',
+                          fontFamily: 'var(--font-mono, monospace)',
+                          fontSize: 'var(--text-sm)',
+                        }}
+                      >
+                        {r.ipa}
+                      </span>
+                    )}
+                  </div>
+                  {r.definitionEn && (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                      {r.definitionEn}
+                    </div>
+                  )}
+                  <input
+                    className="mochi-input"
+                    style={{ marginTop: 4 }}
+                    placeholder={t('fc_meaning_vi')}
+                    value={r.meaningVi}
+                    onChange={(e) => setRow(i, { meaningVi: e.target.value })}
+                  />
+                </div>
+                {r.image && r.image !== 'loading' && (
+                  <FIB
+                    label={t('fc_img_remove')}
+                    size="sm"
+                    onClick={() => setRow(i, { image: null })}
+                  >
+                    <MIcon name="trash" size={14} />
+                  </FIB>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+      {/* A sibling of the dialog, never a child: `.m-overlay` sets a backdrop-filter, which makes
+          it the containing block for fixed-position descendants, so a picker nested inside this
+          dialog's scrollable body could be clipped by it. */}
       {picking !== null && rows[picking] && (
         <ImagePicker
           initialQuery={rows[picking].imageQuery || rows[picking].word}
@@ -920,6 +922,6 @@ function GenerateTopicModal({
           }}
         />
       )}
-    </Modal>
+    </>
   );
 }

@@ -195,39 +195,91 @@ export async function commitImage(
 
 // ---- Generate ----
 
-/** Keep the model on a consistent, child-friendly register, and off lettering it cannot spell. */
-function illustrationPrompt(subject: string): string {
-  return (
-    `A simple, bright, friendly illustration for a children's vocabulary flashcard, ` +
-    `clearly showing: ${subject}. Centred, plain uncluttered background, warm colours, ` +
-    `no text, no letters, no words, no watermark.`
-  );
-}
+/**
+ * Keeping generated pictures free of lettering, which took three attempts to get right.
+ *
+ * These models render confident nonsense when they try to write — a card captioned "taiey tor
+ * feried" is worse than no card at all, on a deck whose whole purpose is spelling. Two things were
+ * learned the hard way:
+ *
+ *   1. **Never name a medium that carries text.** Asking for "an illustration for a children's
+ *      vocabulary flashcard" produced a bordered card with a caption top and bottom, because that
+ *      is what a flashcard looks like. "Children's storybook illustration" did the same. Naming a
+ *      medium that never carries words — clip art — stopped it dead.
+ *   2. **Never mention text in the prompt, even to forbid it.** Diffusion prompts have no negation:
+ *      "no text, no letters, no captions" reliably summoned a caption. Exclusions belong in
+ *      `negative_prompt`, which is why this uses Leonardo Phoenix — flux-1-schnell accepts only
+ *      `prompt` and `steps`, so there is nowhere to put them.
+ *
+ * The pair verified clean on a concrete noun and on a two-person scene (the harder case), both at
+ * the requested 3:2. Change either half only against regenerated samples, not by reading it.
+ */
+const ILLUSTRATION_STYLE =
+  'colourful cartoon clip art, bold outlines, flat solid colours, ' +
+  'single subject filling the frame, plain white background, simple and clear';
+
+/** Everything that must stay out of the picture. Only Phoenix can actually honour this. */
+const ILLUSTRATION_NEGATIVE =
+  'text, letters, words, caption, subtitle, title, label, alphabet, handwriting, numbers, ' +
+  'watermark, signature, logo, poster, book page, flashcard, worksheet, ' +
+  'frame, border, speech bubble, collage, multiple panels, blurry, distorted, scary';
 
 /**
- * Draw an illustration with Workers AI and store it, returning the key.
+ * Draw an illustration and store it, returning the key.
  *
  * This is the answer for words stock photography handles badly — abstract nouns, verbs, feelings.
  * Unlike a stock pick, the bytes exist nowhere else, so they go straight to R2 (which is why an
  * abandoned review can leave an unreferenced object behind; see `pruneImages`).
+ *
+ * Phoenix is asked for a 3:2 picture to match the shape of a flip card, and is given a negative
+ * prompt to keep lettering out. If it fails, flux-1-schnell still produces something usable — it
+ * just tends to add a garbled caption, and the teacher sees the result in the picker before saving
+ * either way.
  */
 export async function generateImage(env: Env, subject: string): Promise<string> {
-  const out = (await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
-    prompt: illustrationPrompt(subject),
-    steps: 6,
-  })) as unknown as { image?: string };
-  if (!out?.image) throw new Error('no image from model');
-
-  // The model hands back base64 JPEG rather than bytes.
-  const binary = atob(out.image);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const prompt = `${subject}. ${ILLUSTRATION_STYLE}`;
+  let bytes: Uint8Array;
+  try {
+    const out = await env.AI.run('@cf/leonardo/phoenix-1.0', {
+      prompt,
+      negative_prompt: ILLUSTRATION_NEGATIVE,
+      // 3:2, the aspect ratio of the card face the picture sits on.
+      width: 1024,
+      height: 680,
+    });
+    bytes = await imageBytes(out);
+  } catch (err) {
+    // Log it: falling back silently is how a captioned flux image gets mistaken for a Phoenix one.
+    console.error('phoenix-1.0 failed, falling back to flux-1-schnell:', err);
+    const out = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', { prompt, steps: 6 });
+    bytes = await imageBytes(out);
+  }
   if (bytes.byteLength === 0) throw new Error('empty image');
 
   const key = `${PREFIX}${crypto.randomUUID()}.jpg`;
   await env.FILES.put(key, bytes, { httpMetadata: { contentType: 'image/jpeg' } });
   return key;
 }
+
+/**
+ * Normalise what an image model hands back. The two used here disagree: flux returns
+ * `{ image: <base64> }`, while Phoenix returns the JPEG itself — as a stream at runtime, though
+ * its generated type says `string`. Accept all three shapes rather than betting on one.
+ */
+async function imageBytes(out: unknown): Promise<Uint8Array> {
+  if (out instanceof ReadableStream) {
+    return new Uint8Array(await new Response(out).arrayBuffer());
+  }
+  if (out instanceof ArrayBuffer) return new Uint8Array(out);
+  const base64 =
+    typeof out === 'string' ? out : ((out as { image?: string } | null)?.image ?? undefined);
+  if (!base64) throw new Error('no image from model');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 
 // ---- Housekeeping ----
 

@@ -25,7 +25,9 @@ type Question = {
 /** Roughly how often a word that has a picture is asked as a picture question. */
 const IMAGE_SHARE = 0.35;
 
-function buildQuestions(words: FlashcardWordRow[]): Question[] {
+// Exported for tests: the picture variant is chosen at random, so its shape is asserted directly
+// rather than by driving the UI and hoping the dice land.
+export function buildQuestions(words: FlashcardWordRow[]): Question[] {
   // A picture question needs three other spellings to choose between. Deck size already gates the
   // mode at MIN_WORDS.quiz = 4, but a deck of near-duplicates can still come up short per word.
   return shuffle(words).map((w) => {

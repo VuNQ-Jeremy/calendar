@@ -519,113 +519,122 @@ function WordModal({
   };
 
   return (
-    <Modal
-      open={true}
-      onClose={onClose}
-      title={draft.id ? t('fc_edit_word') : t('fc_add_word')}
-      width={520}
-      footer={
-        <>
-          <FBtn variant="secondary" onClick={onClose}>
-            {t('cancel')}
-          </FBtn>
-          <FBtn variant="primary" onClick={() => onSave(draft)}>
-            {t('save')}
-          </FBtn>
-        </>
-      }
-    >
-      <div className="mochi-field">
-        <label className="mochi-field__label">{t('fc_word')}</label>
-        <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
-          <input
-            className="mochi-input"
-            autoFocus={true}
-            style={{ flex: 1 }}
-            value={draft.word}
-            onChange={(e) => set('word', e.target.value)}
-          />
-          <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(draft.word)}>
-            <MIcon name="volume" size={18} />
-          </FIB>
-        </div>
-        {status !== 'idle' && (
-          <span className="mochi-field__hint">
-            {status === 'busy' ? t('fc_enriching') : t('fc_enrich_failed')}
-          </span>
-        )}
-      </div>
-      <div className="mochi-field">
-        <label className="mochi-field__label">{t('fc_meaning_vi')}</label>
-        <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
-          <input
-            className="mochi-input"
-            style={{ flex: 1 }}
-            value={draft.meaningVi}
-            onChange={(e) => set('meaningVi', e.target.value)}
-          />
-          {canUseAi && (
-            <FIB
-              label={t('fc_enrich')}
-              size="md"
-              disabled={!draft.word.trim() || status === 'busy'}
-              onClick={retryEnrich}
-            >
-              <MIcon name="sparkle" size={18} />
-            </FIB>
-          )}
-        </div>
-      </div>
-      <FInput label={t('fc_ipa')} value={draft.ipa} onChange={(e) => set('ipa', e.target.value)} />
-      <div className="mochi-field">
-        <label className="mochi-field__label">{t('fc_definition_en')}</label>
-        <textarea
-          className="mochi-input"
-          rows={2}
-          style={{ resize: 'vertical', minHeight: 56, paddingTop: 10 }}
-          value={draft.definitionEn}
-          onChange={(e) => set('definitionEn', e.target.value)}
-        />
-      </div>
-      <div className="mochi-field">
-        <label className="mochi-field__label">{t('fc_img_label')}</label>
-        <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
-          {draft.imageKey ? (
-            <img
-              src={flashcardImagePath(draft.imageKey) ?? undefined}
-              alt=""
-              style={{
-                width: 84,
-                height: 63,
-                flex: 'none',
-                objectFit: 'cover',
-                borderRadius: 8,
-                display: 'block',
-              }}
+    <>
+      <Modal
+        open={true}
+        onClose={onClose}
+        title={draft.id ? t('fc_edit_word') : t('fc_add_word')}
+        width={520}
+        footer={
+          <>
+            <FBtn variant="secondary" onClick={onClose}>
+              {t('cancel')}
+            </FBtn>
+            <FBtn variant="primary" onClick={() => onSave(draft)}>
+              {t('save')}
+            </FBtn>
+          </>
+        }
+      >
+        <div className="mochi-field">
+          <label className="mochi-field__label">{t('fc_word')}</label>
+          <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
+            <input
+              className="mochi-input"
+              autoFocus={true}
+              style={{ flex: 1 }}
+              value={draft.word}
+              onChange={(e) => set('word', e.target.value)}
             />
-          ) : (
-            <span className="mochi-field__hint" style={{ flex: 1 }}>
-              {t('fc_img_none')}
+            <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(draft.word)}>
+              <MIcon name="volume" size={18} />
+            </FIB>
+          </div>
+          {status !== 'idle' && (
+            <span className="mochi-field__hint">
+              {status === 'busy' ? t('fc_enriching') : t('fc_enrich_failed')}
             </span>
           )}
-          <FBtn
-            variant="secondary"
-            disabled={!draft.word.trim() || committing}
-            onClick={() => setPicking(true)}
-          >
-            {committing
-              ? t('fc_img_saving')
-              : draft.imageKey
-                ? t('fc_img_change')
-                : t('fc_img_find')}
-          </FBtn>
-          {draft.imageKey && (
-            <FIB label={t('fc_img_remove')} size="md" onClick={() => set('imageKey', '')}>
-              <MIcon name="trash" size={16} />
-            </FIB>
-          )}
         </div>
-      </div>
+        <div className="mochi-field">
+          <label className="mochi-field__label">{t('fc_meaning_vi')}</label>
+          <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
+            <input
+              className="mochi-input"
+              style={{ flex: 1 }}
+              value={draft.meaningVi}
+              onChange={(e) => set('meaningVi', e.target.value)}
+            />
+            {canUseAi && (
+              <FIB
+                label={t('fc_enrich')}
+                size="md"
+                disabled={!draft.word.trim() || status === 'busy'}
+                onClick={retryEnrich}
+              >
+                <MIcon name="sparkle" size={18} />
+              </FIB>
+            )}
+          </div>
+        </div>
+        <FInput
+          label={t('fc_ipa')}
+          value={draft.ipa}
+          onChange={(e) => set('ipa', e.target.value)}
+        />
+        <div className="mochi-field">
+          <label className="mochi-field__label">{t('fc_definition_en')}</label>
+          <textarea
+            className="mochi-input"
+            rows={2}
+            style={{ resize: 'vertical', minHeight: 56, paddingTop: 10 }}
+            value={draft.definitionEn}
+            onChange={(e) => set('definitionEn', e.target.value)}
+          />
+        </div>
+        <div className="mochi-field">
+          <label className="mochi-field__label">{t('fc_img_label')}</label>
+          <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
+            {draft.imageKey ? (
+              <img
+                src={flashcardImagePath(draft.imageKey) ?? undefined}
+                alt=""
+                style={{
+                  width: 84,
+                  height: 63,
+                  flex: 'none',
+                  objectFit: 'cover',
+                  borderRadius: 8,
+                  display: 'block',
+                }}
+              />
+            ) : (
+              <span className="mochi-field__hint" style={{ flex: 1 }}>
+                {t('fc_img_none')}
+              </span>
+            )}
+            <FBtn
+              variant="secondary"
+              disabled={!draft.word.trim() || committing}
+              onClick={() => setPicking(true)}
+            >
+              {committing
+                ? t('fc_img_saving')
+                : draft.imageKey
+                  ? t('fc_img_change')
+                  : t('fc_img_find')}
+            </FBtn>
+            {draft.imageKey && (
+              <FIB label={t('fc_img_remove')} size="md" onClick={() => set('imageKey', '')}>
+                <MIcon name="trash" size={16} />
+              </FIB>
+            )}
+          </div>
+        </div>
+      </Modal>
+      {/* A sibling of the dialog, never a child: `.m-overlay` sets a backdrop-filter, which makes
+          it the containing block for fixed-position descendants, so a picker nested inside this
+          dialog's scrollable body could be clipped by it. */}
       {picking && (
         <ImagePicker
           initialQuery={`${draft.word} ${draft.definitionEn}`.trim()}
@@ -641,7 +650,7 @@ function WordModal({
           }}
         />
       )}
-    </Modal>
+    </>
   );
 }
 
