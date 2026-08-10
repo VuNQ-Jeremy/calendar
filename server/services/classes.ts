@@ -14,10 +14,19 @@ export type ClassRow = {
   name: string;
   subject: string | null;
   color: string;
+  /** Competition cohort (khối, trình độ). Either half null → the class sits out cohort rankings. */
+  gradeLevelId: string | null;
+  classLevelId: string | null;
   studentIds: string[];
 };
 
-export type ClassLite = { id: string; name: string; color: string };
+export type ClassLite = {
+  id: string;
+  name: string;
+  color: string;
+  gradeLevelId: string | null;
+  classLevelId: string | null;
+};
 
 function assembleClass(
   cls: typeof classes.$inferSelect,
@@ -28,6 +37,8 @@ function assembleClass(
     name: cls.name,
     subject: cls.subject,
     color: cls.color,
+    gradeLevelId: cls.gradeLevelId,
+    classLevelId: cls.classLevelId,
     studentIds: csRows.filter((cs) => cs.classId === cls.id).map((cs) => cs.studentId),
   };
 }
@@ -41,7 +52,15 @@ export async function list(db: Db): Promise<ClassRow[]> {
 }
 
 export async function listLite(db: Db): Promise<ClassLite[]> {
-  return db.select({ id: classes.id, name: classes.name, color: classes.color }).from(classes);
+  return db
+    .select({
+      id: classes.id,
+      name: classes.name,
+      color: classes.color,
+      gradeLevelId: classes.gradeLevelId,
+      classLevelId: classes.classLevelId,
+    })
+    .from(classes);
 }
 
 export async function get(db: Db, id: string): Promise<ClassRow | null> {
@@ -62,6 +81,8 @@ export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
       name: input.name,
       subject: input.subject ?? null,
       color: input.color,
+      gradeLevelId: input.gradeLevelId ?? null,
+      classLevelId: input.classLevelId ?? null,
     }),
   ];
 
@@ -85,6 +106,8 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
   if (input.name !== undefined) scalarSet.name = input.name;
   if (input.subject !== undefined) scalarSet.subject = input.subject ?? null;
   if (input.color !== undefined) scalarSet.color = input.color;
+  if (input.gradeLevelId !== undefined) scalarSet.gradeLevelId = input.gradeLevelId ?? null;
+  if (input.classLevelId !== undefined) scalarSet.classLevelId = input.classLevelId ?? null;
   if (Object.keys(scalarSet).length) {
     ops.push(db.update(classes).set(scalarSet).where(eq(classes.id, id)));
   }

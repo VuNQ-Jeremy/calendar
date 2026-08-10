@@ -35,11 +35,25 @@ export const parents = sqliteTable('parents', {
   relation: text('relation'),
 });
 
+/**
+ * Trình độ — the second half of a class's competition cohort, alongside `gradeLevelId` (khối).
+ * Managed from /config like `gradeLevels`; see migrations/0029_class_cohort.sql.
+ */
+export const classLevels = sqliteTable('class_levels', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
 export const classes = sqliteTable('classes', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   subject: text('subject'),
   color: text('color').notNull().default('green'),
+  /** (khối, trình độ) — both set means the class competes in that cohort's rankings. */
+  gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, { onDelete: 'set null' }),
+  classLevelId: text('class_level_id').references(() => classLevels.id, { onDelete: 'set null' }),
   /**
    * DORMANT. `room` was removed from the product (only the phone could ever set it, and the web
    * displayed it without an input). The column stays so no migration is needed and the four

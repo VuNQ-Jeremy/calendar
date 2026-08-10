@@ -162,7 +162,9 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // every open month's fee amounts.
   config: {
     hard: [K.config],
-    stale: [K.assessments, K.questions, K.tests, K.tuition, K.rankings],
+    // K.classes: renaming or deactivating a grade/class level changes the cohort tags on the
+    // class cards and the options in the class form's dropdowns, both fed by the classes loader.
+    stale: [K.assessments, K.questions, K.tests, K.tuition, K.rankings, K.classes],
   },
   feedback: { hard: [K.feedback], stale: [] },
   // profile edits change name/color which surface in many lists; profile has

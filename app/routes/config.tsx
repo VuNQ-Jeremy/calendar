@@ -11,6 +11,7 @@ import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
 import * as criteriaSvc from '../../server/services/remark-criteria';
 import * as levelsSvc from '../../server/services/grade-levels';
+import * as classLevelsSvc from '../../server/services/class-levels';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import * as tuitionSvc from '../../server/services/tuition';
 import * as rankingsSvc from '../../server/services/rankings';
@@ -21,6 +22,8 @@ import * as classesSvc from '../../server/services/classes';
 import {
   AssessmentTypeInput,
   AssessmentTypeReorder,
+  ClassLevelInput,
+  ClassLevelReorder,
   GardenSettingsInput,
   GradeLevelInput,
   GradeLevelReorder,
@@ -43,6 +46,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     types,
     remarkCriteria,
     gradeLevels,
+    classLevels,
     uiPrefs,
     tuitionSettings,
     rankingWeights,
@@ -57,6 +61,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     typesSvc.list(db),
     criteriaSvc.list(db),
     levelsSvc.list(db),
+    classLevelsSvc.list(db),
     uiPrefsSvc.getUiPrefs(db),
     tuitionSvc.getTuitionSettings(db),
     rankingsSvc.getRankingWeights(db),
@@ -72,6 +77,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     types,
     remarkCriteria,
     gradeLevels,
+    classLevels,
     uiPrefs,
     tuitionSettings,
     rankingWeights,
@@ -260,6 +266,46 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
       await levelsSvc.reorder(db, parsed.data.ids);
+      return { ok: true };
+    }
+
+    if (intent === 'create-class-level') {
+      const parsed = ClassLevelInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await classLevelsSvc.create(db, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'update-class-level') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      const parsed = parsePatch(ClassLevelInput, raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await classLevelsSvc.update(db, id, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'delete-class-level') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      await classLevelsSvc.remove(db, id);
+      return { ok: true };
+    }
+
+    if (intent === 'reorder-class-levels') {
+      let ids: unknown;
+      try {
+        ids = JSON.parse((formData.get('ids') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid ids' }, { status: 400 });
+      }
+      const parsed = ClassLevelReorder.safeParse({ ids });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await classLevelsSvc.reorder(db, parsed.data.ids);
       return { ok: true };
     }
 

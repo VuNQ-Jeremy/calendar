@@ -61,6 +61,12 @@ export const ClassInput = z.object({
   name: z.string().trim().min(1).max(200),
   subject: z.string().max(200).nullish(),
   color: ColorId.default('green'),
+  /**
+   * Competition cohort (khối, trình độ). Nullish, NOT required: the mobile app posts this same
+   * schema through /api/classes and older builds never send them. The web form requires both.
+   */
+  gradeLevelId: z.string().nullish(),
+  classLevelId: z.string().nullish(),
   studentIds: z.array(z.string()).default([]),
 });
 export type ClassInput = z.infer<typeof ClassInput>;
@@ -474,6 +480,19 @@ export const GradeLevelReorder = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });
 export type GradeLevelReorder = z.infer<typeof GradeLevelReorder>;
+
+/** Trình độ — the managed enum pairing with grade level to form a class's ranking cohort. */
+export const ClassLevelInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  active: FormBool.default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type ClassLevelInput = z.infer<typeof ClassLevelInput>;
+
+export const ClassLevelReorder = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type ClassLevelReorder = z.infer<typeof ClassLevelReorder>;
 
 export const QuestionType = z.enum(['mcq', 'multi', 'text', 'essay']);
 export type QuestionType = z.infer<typeof QuestionType>;

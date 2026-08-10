@@ -46,6 +46,15 @@ DELETE FROM class_prices;
 -- run's "no links yet" assertion fail. Codes never cascade at all — they outlive their target.
 DELETE FROM zalo_chats;
 DELETE FROM zalo_pair_codes;
+-- Class levels (trình độ). seed.sql predates the table, so sweep rows the config spec creates
+-- and re-assert the two migration-seeded defaults the class/rankings specs pick from.
+DELETE FROM class_levels WHERE id NOT IN ('cl1','cl2');
+INSERT INTO class_levels (id, name, active, sort_order) VALUES
+  ('cl1','Cơ bản',1,1),('cl2','Nâng cao',1,2)
+ON CONFLICT(id) DO UPDATE SET
+  name       = excluded.name,
+  active     = 1,
+  sort_order = excluded.sort_order;
 
 INSERT INTO accounts (id, email, password_hash, staff_id, created_at) VALUES
   ('acc-e2e-staff-0001', 'dev@mochi.edu',
