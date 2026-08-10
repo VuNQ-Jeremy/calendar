@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0156 — 2026-08-10
+Invite codes are minted when a person is added and tied to them, so redeeming attaches a login instead of creating a duplicate. Parents can sign in to a profile-only portal; the student form takes a real parent (new or an existing one for siblings) in place of the free-text guardian.
+
 ## v0.0155 — 2026-08-10
 Tuition is staff-only again: the phone's Học phí screens, the /api/tuition/me endpoints and the fee-amount push notification are all removed. Families are told by the printed slip and the office, not by the app.
 
