@@ -7,7 +7,18 @@ import * as zalo from '../../server/services/zalo';
 /**
  * Post a share card into Zalo. **Staff only.**
  *
- *   POST /zalo-send-card   multipart: file=<png>, target=class:<id>|student:<id>, caption?
+ *   POST /zalo-send-card   multipart: file=<png>, caption?, and one target:
+ *
+ *     class:<classId>        the class group chat
+ *     student:<studentId>    that student's family, by either route — parent record or a chat
+ *                            paired straight to the student
+ *     parent-of:<studentId>  ONLY a `parents` record for that student
+ *
+ * The last one is for money. A student link is whoever redeemed that student's code, which may
+ * be the student; a class reminder reaching a teenager is fine, a fee slip is not. So the slip
+ * asks for `parent-of:` and gets `not_linked` when no parent record is paired, rather than
+ * quietly sending the bill to the child. The id after `parent-of:` is a STUDENT id — the parents
+ * are resolved from it.
  *
  * This replaces the flow the school runs by hand today — render the card, copy the image, open
  * the group, paste — with one button. The copy button stays beside it: when a group is not
@@ -51,14 +62,17 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (file.size > MAX_BYTES) return fail('file_too_large', 413);
 
   const [kind, id] = target.split(':');
-  if (!id || (kind !== 'class' && kind !== 'student')) return fail('bad_target', 400);
+  if (!id || (kind !== 'class' && kind !== 'student' && kind !== 'parent-of')) {
+    return fail('bad_target', 400);
+  }
 
-  // A class posts to its group; a student's card goes privately to that family. Both resolve to
-  // a list so the caller gets the same shape either way.
+  // Every branch resolves to a list, so the caller gets the same shape whichever it asked for.
   const chatIds =
     kind === 'class'
       ? [await zalo.chatForClass(db, id)].filter((c): c is string => Boolean(c))
-      : await zalo.chatsForParentsOfStudents(db, [id]);
+      : kind === 'parent-of'
+        ? await zalo.chatsForParentRecordsOf(db, [id])
+        : await zalo.chatsForParentsOfStudents(db, [id]);
   if (!chatIds.length) return fail('not_linked', 409);
 
   // Uploaded only once a recipient is known: an object nobody will ever be told about is just

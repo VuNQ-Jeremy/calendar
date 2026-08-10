@@ -154,14 +154,15 @@ export function FeeSlipView() {
   };
 
   /**
-   * Send the slip straight to the family's Zalo, replacing copy-open-paste.
+   * Send the slip to the student's PARENT, replacing copy-open-paste.
    *
-   * The target is the STUDENT, not a parent record: `/zalo-send-card` resolves that to every
-   * chat linked either directly to the student or through a `parents` row, deduped. Most
-   * families have no parent record, so addressing the parent would reach almost nobody.
+   * `parent-of:` deliberately, not `student:`. A student link is whoever redeemed that student's
+   * pairing code, which may be the student — fine for a class reminder, wrong for a bill. This
+   * is the one message that must reach an adult, so it resolves through `parents` records only.
    *
-   * A 409 means this family has not paired yet — an ordinary state on day one, not a fault, and
-   * the copy button beside this one still works.
+   * The cost is that a family paired only through the student target receives nothing and the
+   * button says so. That is the intended trade: a 409 a teacher can act on beats silently
+   * telling a fifteen-year-old what their parents owe.
    */
   const sendToZalo = async () => {
     const node = stageRef.current;
@@ -181,7 +182,7 @@ export function FeeSlipView() {
     try {
       const body = new FormData();
       body.set('file', blob, fileName);
-      body.set('target', `student:${student.id}`);
+      body.set('target', `parent-of:${student.id}`);
       body.set('caption', `${t('zalo_fee_caption')} ${monthNumeric(month)} · ${student.name}`);
       // NOT /api/zalo/… — that prefix is bearer-only and this page carries a cookie.
       const res = await fetch('/zalo-send-card', { method: 'POST', body });

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0145 — 2026-08-10
+Fee slips go to a parent record only — never to a chat that might be the student.
+
 ## v0.0144 — 2026-08-10
 Fee slips send straight to the family's Zalo instead of copy-and-paste.
 

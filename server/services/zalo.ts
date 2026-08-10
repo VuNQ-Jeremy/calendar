@@ -223,17 +223,35 @@ export async function chatsForAccounts(db: Db, accountIds: string[]): Promise<st
 export async function chatsForParentsOfStudents(db: Db, studentIds: string[]): Promise<string[]> {
   if (!studentIds.length) return [];
   const [viaParent, viaStudent] = await Promise.all([
-    db
-      .select({ chatId: zaloChats.chatId })
-      .from(zaloChats)
-      .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
-      .where(inArray(parentStudents.studentId, studentIds)),
+    chatsForParentRecordsOf(db, studentIds),
     db
       .select({ chatId: zaloChats.chatId })
       .from(zaloChats)
       .where(inArray(zaloChats.studentId, studentIds)),
   ]);
-  return [...new Set([...viaParent, ...viaStudent].map((r) => r.chatId))];
+  return [...new Set([...viaParent, ...viaStudent.map((r) => r.chatId)])];
+}
+
+/**
+ * Only the chats belonging to a real `parents` record for these students.
+ *
+ * The narrow half of the union above, and it exists for money. A student link is whoever
+ * redeemed that student's code — which may well be the student. A class reminder reaching a
+ * teenager directly is fine; a fee slip is not, so anything about what a family owes addresses
+ * a `parents` record or nobody at all.
+ *
+ * The cost is deliberate: a family paired only through the student target has no parent record,
+ * so it receives no slip and the caller answers `not_linked` rather than quietly sending the
+ * bill to the child.
+ */
+export async function chatsForParentRecordsOf(db: Db, studentIds: string[]): Promise<string[]> {
+  if (!studentIds.length) return [];
+  const rows = await db
+    .select({ chatId: zaloChats.chatId })
+    .from(zaloChats)
+    .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
+    .where(inArray(parentStudents.studentId, studentIds));
+  return [...new Set(rows.map((r) => r.chatId))];
 }
 
 /** The group chat linked to a class, if one has been. */

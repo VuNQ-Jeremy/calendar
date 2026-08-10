@@ -423,6 +423,26 @@ describe('targeting', () => {
     expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['same-chat']);
   });
 
+  /**
+   * Money goes to an adult. A student link is whoever redeemed that student's code — possibly
+   * the student — so the fee slip asks for parent records only and would rather send nothing.
+   */
+  it('excludes a student-paired chat from the parent-only route', async () => {
+    const d = db();
+    const student = await mkStudent(d, 'Chỉ học sinh');
+    const viaStudent = await zalo.createPairCode(d, { studentId: student.id });
+    await zalo.redeemCode(d, viaStudent.code, { chatId: 'the-teenager', kind: 'user' });
+
+    // The reminder route finds them; the fee-slip route deliberately does not.
+    expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['the-teenager']);
+    expect(await zalo.chatsForParentRecordsOf(d, [student.id])).toEqual([]);
+
+    const parent = await mkParent(d, 'Mẹ thật', [student.id]);
+    const viaParent = await zalo.createPairCode(d, { parentId: parent.id });
+    await zalo.redeemCode(d, viaParent.code, { chatId: 'the-parent', kind: 'user' });
+    expect(await zalo.chatsForParentRecordsOf(d, [student.id])).toEqual(['the-parent']);
+  });
+
   /** A student code is a private-chat code, exactly like a parent one. */
   it('refuses a student code sent in a group', async () => {
     const d = db();
