@@ -2,7 +2,7 @@ import React from 'react';
 import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
-import { Modal, ColorPicker, PageHeader, useConfirm } from '../ui.jsx';
+import { Modal, ColorPicker, PageHeader, useConfirm, MSelect } from '../ui.jsx';
 import { MaterialSearchDropdown } from '../material-search.jsx';
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
@@ -12,6 +12,8 @@ import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { MaterialRow } from '../../server/services/materials.js';
 import type { TestRow } from '../../server/services/tests.js';
+import type { GradeLevelRow } from '../../server/services/grade-levels.js';
+import type { ClassLevelRow } from '../../server/services/class-levels.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Avatar: MAv } = DS;
 
@@ -20,6 +22,8 @@ interface ClassesLoaderData {
   students: StudentRow[];
   materials: MaterialRow[];
   tests: TestRow[];
+  gradeLevels: GradeLevelRow[];
+  classLevels: ClassLevelRow[];
 }
 
 type ClassDraft = {
@@ -27,11 +31,14 @@ type ClassDraft = {
   name: string;
   subject?: string | null;
   color: string;
+  gradeLevelId?: string | null;
+  classLevelId?: string | null;
   studentIds: string[];
 };
 
 export function ClassesScreen() {
-  const { classes, students, materials, tests } = useLoaderData() as ClassesLoaderData;
+  const { classes, students, materials, tests, gradeLevels, classLevels } =
+    useLoaderData() as ClassesLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
   const [modal, setModal] = React.useState<ClassDraft | null>(null);
@@ -40,7 +47,26 @@ export function ClassesScreen() {
 
   const studentsOf = (c: ClassRow) => students.filter((s) => c.studentIds.includes(s.id));
 
-  const openNew = () => setModal({ name: '', subject: '', color: 'green', studentIds: [] });
+  // Cohort labels for the cards. Deactivated levels still resolve — a class keeps showing the
+  // khối/trình độ it was filed under even after that level is retired from the pickers.
+  const gradeName = React.useMemo(
+    () => new Map(gradeLevels.map((g) => [g.id, g.name])),
+    [gradeLevels],
+  );
+  const levelName = React.useMemo(
+    () => new Map(classLevels.map((c) => [c.id, c.name])),
+    [classLevels],
+  );
+
+  const openNew = () =>
+    setModal({
+      name: '',
+      subject: '',
+      color: 'green',
+      gradeLevelId: null,
+      classLevelId: null,
+      studentIds: [],
+    });
 
   const save = (f: ClassDraft) => {
     const name = f.name.trim() || t('cls_default_name');
@@ -50,6 +76,8 @@ export function ClassesScreen() {
     fd.set('name', name);
     if (f.subject) fd.set('subject', f.subject);
     fd.set('color', f.color || 'green');
+    fd.set('gradeLevelId', f.gradeLevelId ?? '');
+    fd.set('classLevelId', f.classLevelId ?? '');
     fd.set('studentIds', JSON.stringify(f.studentIds || []));
     fetcher.submit(fd, { action: '/classes', method: 'post' });
     setModal(null);
@@ -97,7 +125,15 @@ export function ClassesScreen() {
                 <div className="m-spread" style={{ alignItems: 'flex-start' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-lg)' }}>{c.name}</h3>
-                    <MTag color={c.color}>{c.subject || t('cls_general')}</MTag>
+                    <div className="m-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                      <MTag color={c.color}>{c.subject || t('cls_general')}</MTag>
+                      {gradeName.get(c.gradeLevelId ?? '') && (
+                        <MTag color="blue">{gradeName.get(c.gradeLevelId ?? '')}</MTag>
+                      )}
+                      {levelName.get(c.classLevelId ?? '') && (
+                        <MTag color="violet">{levelName.get(c.classLevelId ?? '')}</MTag>
+                      )}
+                    </div>
                   </div>
                   <div className="lrow__actions" style={{ flexShrink: 0 }}>
                     <MIB
@@ -144,12 +180,16 @@ export function ClassesScreen() {
           onClose={() => setModal(null)}
           onSave={save}
           students={students}
+          gradeLevels={gradeLevels}
+          classLevels={classLevels}
         />
       )}
       {detail && (
         <ClassDetailModal
           cls={detail}
           classes={classes}
+          gradeName={gradeName.get(detail.gradeLevelId ?? '')}
+          levelName={levelName.get(detail.classLevelId ?? '')}
           students={students}
           materials={materials}
           tests={tests}
@@ -168,6 +208,9 @@ export function ClassesScreen() {
 interface ClassDetailModalProps {
   cls: ClassRow;
   classes: ClassRow[];
+  /** Resolved cohort labels, or undefined when the class has no khối / trình độ set. */
+  gradeName?: string;
+  levelName?: string;
   students: StudentRow[];
   materials: MaterialRow[];
   tests: TestRow[];
@@ -178,6 +221,8 @@ interface ClassDetailModalProps {
 function ClassDetailModal({
   cls,
   classes,
+  gradeName,
+  levelName,
   students,
   materials,
   tests,
@@ -262,8 +307,10 @@ function ClassDetailModal({
         </>
       }
     >
-      <div className="m-row" style={{ gap: 10, marginBottom: 16 }}>
+      <div className="m-row" style={{ gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <MTag color={cls.color}>{cls.subject || t('cls_general')}</MTag>
+        {gradeName && <MTag color="blue">{gradeName}</MTag>}
+        {levelName && <MTag color="violet">{levelName}</MTag>}
       </div>
       <div className="m-row" style={{ gap: 10, marginBottom: 20 }}>
         {Stat('users', t('stat_students'), roster.length)}
@@ -339,10 +386,23 @@ interface ClassModalProps {
   onClose: () => void;
   onSave: (f: ClassDraft) => void;
   students: StudentRow[];
+  gradeLevels: GradeLevelRow[];
+  classLevels: ClassLevelRow[];
 }
 
-function ClassModal({ draft, setDraft, onClose, onSave, students }: ClassModalProps) {
+function ClassModal({
+  draft,
+  setDraft,
+  onClose,
+  onSave,
+  students,
+  gradeLevels,
+  classLevels,
+}: ClassModalProps) {
   const { t } = useLang();
+  // Both halves of the cohort are required going forward. Legacy classes stored NULLs, so
+  // editing one now forces a choice before anything else can be saved — deliberate backfill.
+  const cohortSet = Boolean(draft.gradeLevelId && draft.classLevelId);
   const set = <K extends keyof ClassDraft>(k: K, v: ClassDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
   const toggleStudent = (id: string) =>
@@ -364,7 +424,7 @@ function ClassModal({ draft, setDraft, onClose, onSave, students }: ClassModalPr
           <MBtn variant="secondary" onClick={onClose}>
             {t('cancel')}
           </MBtn>
-          <MBtn variant="primary" onClick={() => onSave(draft)}>
+          <MBtn variant="primary" disabled={!cohortSet} onClick={() => onSave(draft)}>
             {t('cls_save')}
           </MBtn>
         </>
@@ -390,6 +450,30 @@ function ClassModal({ draft, setDraft, onClose, onSave, students }: ClassModalPr
             onChange={(e) => set('subject', e.target.value)}
           />
         </div>
+      </div>
+      <div className="m-grid cols-2" style={{ gap: 14 }}>
+        <MSelect
+          label={t('cls_grade')}
+          value={draft.gradeLevelId ?? ''}
+          onChange={(v: string) => set('gradeLevelId', v || null)}
+          options={[
+            { value: '', label: t('cls_pick_one') },
+            ...gradeLevels
+              .filter((g) => g.active || g.id === draft.gradeLevelId)
+              .map((g) => ({ value: g.id, label: g.name })),
+          ]}
+        />
+        <MSelect
+          label={t('cls_level')}
+          value={draft.classLevelId ?? ''}
+          onChange={(v: string) => set('classLevelId', v || null)}
+          options={[
+            { value: '', label: t('cls_pick_one') },
+            ...classLevels
+              .filter((c) => c.active || c.id === draft.classLevelId)
+              .map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </div>
       <div className="m-grid cols-2" style={{ gap: 14 }}>
         <ColorPicker label={t('color')} value={draft.color} onChange={(v) => set('color', v)} />

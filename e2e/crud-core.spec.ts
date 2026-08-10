@@ -59,6 +59,11 @@ test.describe('CRUD: core domains', () => {
     await page.getByRole('button', { name: 'New class' }).click();
     await k.dlg.locator('input[placeholder="e.g. Biology 9A"]').fill(name);
     await k.dlg.locator('input[placeholder="e.g. Science"]').fill('E2E Subject');
+    // Khối + trình độ are required — Save stays disabled until both are picked. The options
+    // are the rows seeded by migrations 0017/0029 and re-asserted by scripts/test-accounts.sql.
+    await expect(k.submit()).toBeDisabled();
+    await k.pickSel('Grade', 'Khối 6');
+    await k.pickSel('Level', 'Cơ bản');
     await k.dlg.locator('button', { hasText: 'Leo Park' }).click();
     let post = k.posted('/classes');
     await k.submit().click(); // "Save class"
@@ -67,8 +72,11 @@ test.describe('CRUD: core domains', () => {
     const card = (n: string) => page.locator(`.mochi-card:has(h3:text-is("${n}"))`);
     await expect(card(name)).toBeVisible();
     await expect(card(name)).toContainText('1 student');
+    await expect(card(name).locator('.mochi-tag', { hasText: 'Khối 6' })).toBeVisible();
+    await expect(card(name).locator('.mochi-tag', { hasText: 'Cơ bản' })).toBeVisible();
 
-    // Edit via the card's pencil icon (the card body opens a detail dialog).
+    // Edit via the card's pencil icon (the card body opens a detail dialog). The cohort is not
+    // re-picked here: Save staying enabled proves both ids round-tripped into the draft.
     await card(name).getByRole('button', { name: 'Edit' }).click();
     await k.dlg.locator('input[placeholder="e.g. Biology 9A"]').fill(`${name} v2`);
     post = k.posted('/classes');

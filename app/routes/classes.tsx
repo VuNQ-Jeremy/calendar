@@ -12,6 +12,8 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import * as testsSvc from '../../server/services/tests';
+import * as levelsSvc from '../../server/services/grade-levels';
+import * as classLevelsSvc from '../../server/services/class-levels';
 import { ClassInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -20,13 +22,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [classes, students, materials, tests] = await Promise.all([
+  const [classes, students, materials, tests, gradeLevels, classLevels] = await Promise.all([
     classesSvc.list(db),
     peopleSvc.listStudents(db),
     materialsSvc.list(db),
     testsSvc.list(db),
+    levelsSvc.list(db),
+    classLevelsSvc.list(db),
   ]);
-  return { classes, students, materials, tests };
+  return { classes, students, materials, tests, gradeLevels, classLevels };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -49,10 +53,14 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   }
 
   const studentIdsRaw = formData.get('studentIds') as string | null;
-  const raw = {
+  const raw: Record<string, unknown> = {
     ...Object.fromEntries(formData),
     studentIds: studentIdsRaw ? (JSON.parse(studentIdsRaw) as string[]) : [],
   };
+  // An unset cohort dropdown posts '' — store it as a real NULL so the class is simply
+  // excluded from cohort rankings rather than pointing at a level id of ''.
+  if (raw.gradeLevelId === '') raw.gradeLevelId = null;
+  if (raw.classLevelId === '') raw.classLevelId = null;
 
   if (intent === 'create') {
     const parsed = ClassInput.safeParse(raw);
