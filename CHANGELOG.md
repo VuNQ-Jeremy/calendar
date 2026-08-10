@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0158 — 2026-08-10
+docs(plans): add monthly-report-v2 plan — attendance, per-class scores, vocab homework, author/sent tracking, roster
+
 ## v0.0156 — 2026-08-10
 Invite codes are minted when a person is added and tied to them, so redeeming attaches a login instead of creating a duplicate. Parents can sign in to a profile-only portal; the student form takes a real parent (new or an existing one for siblings) in place of the free-text guardian.
 
