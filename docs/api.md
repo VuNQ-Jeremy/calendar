@@ -296,6 +296,9 @@ assignment, and the push ledger dedupes the messages.
 
 ## Zalo
 
+> **[`docs/zalo.md`](./zalo.md) is the full picture** — pairing, the polling relay, configuration,
+> and the traps. What follows is the endpoint-level summary only.
+
 A second notification channel next to Expo push, using the **Zalo Bot Platform**
 (`bot.zaloplatforms.com`) — not an Official Account and not ZNS, both of which need a verified
 business. A bot is created from a personal Zalo account and may message any conversation that has

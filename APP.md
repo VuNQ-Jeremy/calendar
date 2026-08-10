@@ -16,6 +16,7 @@
 | Current architecture | [`docs/mobile/README.md`](./docs/mobile/README.md) → *Repo orientation* |
 | How it got here | [`docs/refactor/`](./docs/refactor/) |
 | The JSON API | [`docs/api.md`](./docs/api.md) |
+| How parents are reached | [`docs/zalo.md`](./docs/zalo.md) — the Zalo channel |
 | Project rules | [`CLAUDE.md`](./CLAUDE.md) |
 | Original design intent | [`README.md`](./README.md) — a design handoff, not current state |
 
