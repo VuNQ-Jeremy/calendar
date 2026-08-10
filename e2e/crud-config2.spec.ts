@@ -1,11 +1,14 @@
 import { test, expect, type Locator } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, openConfigEntry, signInStaff, ui } from './crud-helpers';
 
 /**
  * Remaining /config intents: remark criteria lifecycle, grade-level
  * deactivate, the tuition billing checkboxes, and ranking weights. Every test
  * restores what it changes — the seeded four criteria drive the assessments
  * monthly-report spec, and billing/weights feed live tuition and rankings.
+ *
+ * Each setting lives in the modal its row opens, and a page reload closes that
+ * modal — the persistence checks below reopen it before asserting.
  */
 
 test.describe('CRUD: config (criteria, billing, weights)', () => {
@@ -19,9 +22,7 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
   test('remark criterion: create, rename, deactivate, delete', async ({ page }) => {
     const k = ui(page);
     const name = `E2E criterion ${Date.now()}`;
-    const card = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Monthly remark criteria' }),
-    });
+    const card = await openConfigEntry(page, 'Monthly remark criteria');
     const row = (n: string) => card.locator('.lrow', { hasText: n });
 
     await card.getByRole('button', { name: 'Add criterion' }).click();
@@ -44,7 +45,7 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
     await post;
     await expect(row(`${name} v2`).getByText('Inactive')).toBeVisible();
 
-    // The criteria card reuses the assessment-type confirm strings.
+    // The criteria list reuses the assessment-type confirm strings.
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
     await k.dlgOf('Delete type?').getByRole('button', { name: 'Delete' }).click();
@@ -55,9 +56,7 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
   test('grade level: deactivate and reactivate', async ({ page }) => {
     const k = ui(page);
     const name = `E2E toggle level ${Date.now()}`;
-    const card = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Grade levels' }),
-    });
+    const card = await openConfigEntry(page, 'Grade levels');
     const row = (n: string) => card.locator('.lrow', { hasText: n });
 
     await card.getByRole('button', { name: 'Add grade level' }).click();
@@ -87,9 +86,7 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
 
   test('tuition billing: toggle Excused on and back off', async ({ page }) => {
     const k = ui(page);
-    const card = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Tuition billing' }),
-    });
+    const card = await openConfigEntry(page, 'Tuition billing');
     const excused = card.locator('label.mochi-check', { hasText: 'Excused' });
     const box = excused.locator('input[type="checkbox"]');
     await expect(box).not.toBeChecked(); // seed default: Present, Late, Absent
@@ -108,44 +105,47 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
 
   test('ranking weights: change, persist, restore', async ({ page }) => {
     const k = ui(page);
-    const card = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Ranking weights' }),
-    });
-    const attitude = card
-      .locator('.mochi-field', { hasText: 'Attitude weight' })
-      .locator('input[type="number"]');
-    const testScore = card
-      .locator('.mochi-field', { hasText: 'Test score weight' })
-      .locator('input[type="number"]');
-    const original = await attitude.inputValue();
+    let card = await openConfigEntry(page, 'Ranking weights');
+    const attitude = () =>
+      card.locator('.mochi-field', { hasText: 'Attitude weight' }).locator('input[type="number"]');
+    const testScore = () =>
+      card
+        .locator('.mochi-field', { hasText: 'Test score weight' })
+        .locator('input[type="number"]');
+    const original = await attitude().inputValue();
     const changed = original === '60' ? '70' : '60';
 
     // Typing one weight auto-fills the complement; Save enables at sum 100.
-    await attitude.fill(changed);
-    await expect(testScore).toHaveValue(String(100 - Number(changed)));
+    await attitude().fill(changed);
+    await expect(testScore()).toHaveValue(String(100 - Number(changed)));
     let post = k.posted('/config');
     await card.getByRole('button', { name: 'Save' }).click();
     await post;
 
+    // A reload closes the modal, so the persistence check reopens it — and the row's own
+    // summary must already carry the new split without being opened at all.
     await page.reload();
-    await expect(attitude).toHaveValue(changed);
+    await expect(
+      page.locator('.cfg-row:has(.lrow__title:text-is("Ranking weights")) .cfg-row__value'),
+    ).toHaveText(`${changed} / ${100 - Number(changed)}`);
+    card = await openConfigEntry(page, 'Ranking weights');
+    await expect(attitude()).toHaveValue(changed);
 
     // Restore the original weights.
-    await attitude.fill(original);
+    await attitude().fill(original);
     post = k.posted('/config');
     await card.getByRole('button', { name: 'Save' }).click();
     await post;
     await page.reload();
-    await expect(attitude).toHaveValue(original);
+    card = await openConfigEntry(page, 'Ranking weights');
+    await expect(attitude()).toHaveValue(original);
   });
 
   test('reorder assessment types by drag, persist, restore', async ({ page }) => {
     const k = ui(page);
-    const sec = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Assessment types' }),
-    });
+    let sec = await openConfigEntry(page, 'Assessment types');
     const row = (txt: string) => sec.locator('.lrow', { hasText: txt });
-    const titles = sec.locator('.lrow .lrow__title');
+    const titles = () => sec.locator('.lrow .lrow__title');
 
     // Playwright's dragTo is flaky here (the list reorders mid-drag), so the
     // HTML5 events are dispatched directly with one shared DataTransfer.
@@ -153,7 +153,9 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
       l.evaluate((el, t) => {
         const w = window as Window & { __dt?: DataTransfer };
         if (t === 'dragstart') w.__dt = new DataTransfer();
-        el.dispatchEvent(new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: w.__dt }));
+        el.dispatchEvent(
+          new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: w.__dt }),
+        );
       }, type);
     const move = async (from: string, to: string) => {
       await fire(row(from), 'dragstart');
@@ -164,14 +166,15 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
       await post;
     };
 
-    const before = await titles.allInnerTexts();
+    const before = await titles().allInnerTexts();
     const [a, b] = before;
     await move(b, a); // drop the 2nd row onto the 1st
-    await expect(titles).toHaveText([b, a, ...before.slice(2)]);
+    await expect(titles()).toHaveText([b, a, ...before.slice(2)]);
     await page.reload();
-    await expect(titles).toHaveText([b, a, ...before.slice(2)]); // persisted
+    sec = await openConfigEntry(page, 'Assessment types');
+    await expect(titles()).toHaveText([b, a, ...before.slice(2)]); // persisted
 
     await move(a, b); // restore the seeded order
-    await expect(titles).toHaveText(before);
+    await expect(titles()).toHaveText(before);
   });
 });

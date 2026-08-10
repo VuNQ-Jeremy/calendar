@@ -1,5 +1,17 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
-import { expandAllNavSections } from './crud-helpers';
+import { expandAllNavSections, openConfigEntry } from './crud-helpers';
+
+/**
+ * The idempotent /config write these tests use to stale the cache: re-pick the scrollbar preset
+ * that is already active, which rewrites settings['ui-prefs'] with its current value. The presets
+ * live behind /config's Scrollbar style row, so the modal has to be opened and closed again.
+ */
+async function rewriteUiPrefs(page: Page) {
+  const dlg = await openConfigEntry(page, 'Scrollbar style');
+  await dlg.locator('button.preset.preset--sb.is-active').click();
+  await page.keyboard.press('Escape');
+  await expect(dlg).toHaveCount(0);
+}
 
 /**
  * Verifies the navigation-latency work (docs/navigation-latency-plan.md) in a
@@ -170,7 +182,7 @@ test.describe('navigation latency', () => {
     // Profile's "Save changes" would stale everything but stays disabled until
     // the form is dirty, so it cannot be used without changing real data.
     await clickNav(page, '/config');
-    await page.click('button.preset.preset--sb.is-active');
+    await rewriteUiPrefs(page);
     await page.waitForLoadState('networkidle');
 
     // Settle somewhere neutral and let the layout revalidation that the /config
@@ -216,10 +228,8 @@ test.describe('navigation latency', () => {
     await clickNav(page, '/people');
     await page.waitForLoadState('networkidle');
 
-    // Idempotent write: re-click the scrollbar preset that is already active,
-    // which rewrites settings['ui-prefs'] with its current value.
     await clickNav(page, '/config');
-    await page.click('button.preset.preset--sb.is-active');
+    await rewriteUiPrefs(page);
     await page.waitForLoadState('networkidle');
 
     // A /config mutation stales assessments + tests (shared assessment types).

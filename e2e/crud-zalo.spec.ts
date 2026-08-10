@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, openConfigEntry, signInStaff, ui } from './crud-helpers';
 
 /**
  * The Zalo pairing lifecycle, driven from the UI and closed by a synthetic webhook call.
@@ -42,10 +42,7 @@ test.describe('CRUD: zalo pairing', () => {
     await signInStaff(page);
     await page.goto('/config');
 
-    const card = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Zalo connections' }),
-    });
-    await expect(card).toBeVisible();
+    let card = await openConfigEntry(page, 'Zalo connections');
 
     // The channel is off in calendar-test (no bot token), so the card says so and offers nothing
     // to click. That IS the assertion: a code for a bot that cannot send is worse than no code.
@@ -80,7 +77,9 @@ test.describe('CRUD: zalo pairing', () => {
     });
     expect(res.status()).toBe(200);
 
+    // A reload closes the modal — reopen it before asserting on the link list.
     await page.reload();
+    card = await openConfigEntry(page, 'Zalo connections');
     await expect(card.getByText(/Parent ·/)).toBeVisible();
 
     // ---- Unlink ----
@@ -89,6 +88,7 @@ test.describe('CRUD: zalo pairing', () => {
     await row.getByRole('button', { name: 'Delete' }).click();
     await gone;
     await page.reload();
+    card = await openConfigEntry(page, 'Zalo connections');
     await expect(card.getByText('Nobody connected yet')).toBeVisible();
   });
 

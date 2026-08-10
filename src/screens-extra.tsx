@@ -70,7 +70,9 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
       <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-md)' }}>{m.title}</h3>
       <div className="lrow__meta" style={{ marginBottom: 14 }}>
         <span className="mchip">{t(mt.tk)}</span>
-        <span className="mchip">{t(m.scope === 'event' ? 'mat_scope_event' : 'mat_scope_class')}</span>
+        <span className="mchip">
+          {t(m.scope === 'event' ? 'mat_scope_event' : 'mat_scope_class')}
+        </span>
         <XTag dot color={cls?.color || 'neutral'}>
           {cls?.name || t('mat_unfiled')}
         </XTag>
@@ -745,12 +747,9 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
   const pwErr = clientErr ?? pwStatus.error;
 
   return (
-    <div className="content" style={{ maxWidth: 920 }}>
+    <div className="content" style={{ maxWidth: 1320 }}>
       <PageHeader title={t('prof_title')} subtitle={t('prof_sub')} />
-      <div
-        className="m-grid profile-grid"
-        style={{ gridTemplateColumns: 'minmax(0,300px) minmax(0,1fr)' }}
-      >
+      <div className="m-grid profile-grid">
         {/* Avatar card */}
         <XC style={{ textAlign: 'center' }}>
           <div style={{ display: 'grid', placeItems: 'center', marginBottom: 16 }}>
@@ -828,141 +827,134 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
           </div>
         </XC>
         {/* Details card */}
-        <div className="m-stack" style={{ gap: 20 }}>
-          <XC>
-            <h2 style={{ margin: '0 0 16px', fontSize: 'var(--text-xl)' }}>{t('prof_personal')}</h2>
-            <div className="mochi-field">
-              <label className="mochi-field__label">{t('prof_fullname')}</label>
-              <input
-                className="mochi-input"
-                value={f.name}
-                onChange={(e) => set('name', e.target.value)}
-              />
-            </div>
-            <div className="m-grid cols-2" style={{ gap: 14 }}>
-              <div className="mochi-field">
-                <label className="mochi-field__label">{t('prof_email')}</label>
-                <input
-                  className="mochi-input"
-                  type="email"
-                  value={f.email}
-                  onChange={(e) => set('email', e.target.value)}
-                />
+        <XC>
+          <h2 style={{ margin: '0 0 16px', fontSize: 'var(--text-xl)' }}>{t('prof_personal')}</h2>
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('prof_fullname')}</label>
+            <input
+              className="mochi-input"
+              value={f.name}
+              onChange={(e) => set('name', e.target.value)}
+            />
+          </div>
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('prof_email')}</label>
+            <input
+              className="mochi-input"
+              type="email"
+              value={f.email}
+              onChange={(e) => set('email', e.target.value)}
+            />
+          </div>
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('prof_phone')}</label>
+            <input
+              className="mochi-input"
+              type="tel"
+              value={f.phone}
+              onChange={(e) => set('phone', e.target.value)}
+            />
+          </div>
+          <div className="m-row" style={{ gap: 12, marginTop: 6 }}>
+            <XBtn variant="primary" onClick={doSave} disabled={!dirty}>
+              {saved && !dirty ? t('prof_saved') : t('prof_save')}
+            </XBtn>
+            {saved && !dirty && (
+              <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                {t('prof_uptodate')}
+              </span>
+            )}
+          </div>
+        </XC>
+        {/* Account card */}
+        <XC>
+          <h2 style={{ margin: '0 0 4px', fontSize: 'var(--text-xl)' }}>{t('prof_account')}</h2>
+          <p className="m-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 0 }}>
+            {t('prof_account_sub')}
+          </p>
+          <div style={{ marginBottom: 24 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--text-md)', fontWeight: 600 }}>
+              {t('prof_change_pw')}
+            </h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitPw();
+              }}
+            >
+              <div className="mochi-field" style={{ marginBottom: 12 }}>
+                <label className="mochi-field__label">{t('prof_current_pw')}</label>
+                <div className="auth-field">
+                  <input
+                    className="mochi-input auth-input"
+                    type={showPw ? 'text' : 'password'}
+                    value={curPw}
+                    onChange={(e) => setCurPw(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                </div>
               </div>
-              <div className="mochi-field">
-                <label className="mochi-field__label">{t('prof_phone')}</label>
-                <input
-                  className="mochi-input"
-                  type="tel"
-                  value={f.phone}
-                  onChange={(e) => set('phone', e.target.value)}
-                />
+              <div className="mochi-field" style={{ marginBottom: 12 }}>
+                <label className="mochi-field__label">{t('prof_new_pw')}</label>
+                <div className="auth-field">
+                  <input
+                    className="mochi-input auth-input"
+                    type={showPw ? 'text' : 'password'}
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="auth-field__eye"
+                    onClick={() => setShowPw((s) => !s)}
+                    aria-label="Toggle password"
+                  >
+                    <MIcon name={showPw ? 'eyeOff' : 'eye'} size={18} />
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="m-row" style={{ gap: 12, marginTop: 6 }}>
-              <XBtn variant="primary" onClick={doSave} disabled={!dirty}>
-                {saved && !dirty ? t('prof_saved') : t('prof_save')}
-              </XBtn>
-              {saved && !dirty && (
-                <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
-                  {t('prof_uptodate')}
-                </span>
+              <div className="mochi-field" style={{ marginBottom: 12 }}>
+                <label className="mochi-field__label">{t('auth_confirm_pw')}</label>
+                <div className="auth-field">
+                  <input
+                    className="mochi-input auth-input"
+                    type={showPw ? 'text' : 'password'}
+                    value={confirmPw}
+                    onChange={(e) => setConfirmPw(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+              {pwErr && (
+                <div className="auth-error" style={{ marginBottom: 12 }}>
+                  {t(pwErr)}
+                </div>
               )}
-            </div>
-          </XC>
-          <XC>
-            <h2 style={{ margin: '0 0 4px', fontSize: 'var(--text-xl)' }}>{t('prof_account')}</h2>
-            <p className="m-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 0 }}>
-              {t('prof_account_sub')}
-            </p>
-            <div style={{ marginBottom: 24 }}>
-              <h3 style={{ margin: '0 0 12px', fontSize: 'var(--text-md)', fontWeight: 600 }}>
-                {t('prof_change_pw')}
-              </h3>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submitPw();
-                }}
-              >
-                <div className="mochi-field" style={{ marginBottom: 12 }}>
-                  <label className="mochi-field__label">{t('prof_current_pw')}</label>
-                  <div className="auth-field">
-                    <input
-                      className="mochi-input auth-input"
-                      type={showPw ? 'text' : 'password'}
-                      value={curPw}
-                      onChange={(e) => setCurPw(e.target.value)}
-                      autoComplete="current-password"
-                    />
-                  </div>
+              {pwStatus.ok && (
+                <div
+                  style={{ color: 'var(--brand)', fontSize: 'var(--text-sm)', marginBottom: 12 }}
+                >
+                  {t('prof_pw_changed')}
                 </div>
-                <div className="mochi-field" style={{ marginBottom: 12 }}>
-                  <label className="mochi-field__label">{t('prof_new_pw')}</label>
-                  <div className="auth-field">
-                    <input
-                      className="mochi-input auth-input"
-                      type={showPw ? 'text' : 'password'}
-                      value={newPw}
-                      onChange={(e) => setNewPw(e.target.value)}
-                      autoComplete="new-password"
-                    />
-                    <button
-                      type="button"
-                      className="auth-field__eye"
-                      onClick={() => setShowPw((s) => !s)}
-                      aria-label="Toggle password"
-                    >
-                      <MIcon name={showPw ? 'eyeOff' : 'eye'} size={18} />
-                    </button>
-                  </div>
-                </div>
-                <div className="mochi-field" style={{ marginBottom: 12 }}>
-                  <label className="mochi-field__label">{t('auth_confirm_pw')}</label>
-                  <div className="auth-field">
-                    <input
-                      className="mochi-input auth-input"
-                      type={showPw ? 'text' : 'password'}
-                      value={confirmPw}
-                      onChange={(e) => setConfirmPw(e.target.value)}
-                      autoComplete="new-password"
-                    />
-                  </div>
-                </div>
-                {pwErr && (
-                  <div className="auth-error" style={{ marginBottom: 12 }}>
-                    {t(pwErr)}
-                  </div>
-                )}
-                {pwStatus.ok && (
-                  <div
-                    style={{ color: 'var(--brand)', fontSize: 'var(--text-sm)', marginBottom: 12 }}
-                  >
-                    {t('prof_pw_changed')}
-                  </div>
-                )}
-                <div className="m-row" style={{ gap: 12 }}>
-                  <XBtn
-                    type="submit"
-                    variant="primary"
-                    disabled={pwStatus.busy || !curPw || !newPw || !confirmPw}
-                  >
-                    {t('prof_change_pw')}
-                  </XBtn>
-                </div>
-              </form>
-            </div>
-            <div className="m-row" style={{ gap: 12 }}>
-              <XBtn
-                variant="danger"
-                iconLeft={<MIcon name="logout" size={16} />}
-                onClick={onLogout}
-              >
-                {t('prof_logout')}
-              </XBtn>
-            </div>
-          </XC>
-        </div>
+              )}
+              <div className="m-row" style={{ gap: 12 }}>
+                <XBtn
+                  type="submit"
+                  variant="primary"
+                  disabled={pwStatus.busy || !curPw || !newPw || !confirmPw}
+                >
+                  {t('prof_change_pw')}
+                </XBtn>
+              </div>
+            </form>
+          </div>
+          <div className="m-row" style={{ gap: 12 }}>
+            <XBtn variant="danger" iconLeft={<MIcon name="logout" size={16} />} onClick={onLogout}>
+              {t('prof_logout')}
+            </XBtn>
+          </div>
+        </XC>
       </div>
     </div>
   );

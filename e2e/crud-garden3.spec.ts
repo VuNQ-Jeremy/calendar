@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, openConfigEntry, signInStaff, ui } from './crud-helpers';
 
 /**
- * Garden: the school-wide tuning card.
+ * Garden: the school-wide tuning settings, on /config behind the Garden row.
  *
  * These four numbers re-time every plant in the school, so the test puts them back when it is
  * done — a leaked `wiltAfterDays: 1` would make the plant specs wilt mid-run.
@@ -23,45 +23,46 @@ test.describe('CRUD: garden settings', () => {
     await signInStaff(page);
     await page.goto('/config');
 
-    const card = page.locator('.mochi-card', {
-      has: page.getByRole('heading', { name: 'Garden', exact: true }),
-    });
-    await expect(card).toBeVisible();
-    const f = k.on(card);
+    // The controls live in the modal the Garden row opens; a reload closes it, so the
+    // persistence checks below reopen it first.
+    let card = await openConfigEntry(page, 'Garden');
+    const textIn = (label: string) => k.on(card).textIn(label);
+    const save = () => card.getByRole('button', { name: 'Save' });
 
     // Save is disabled until something actually changes.
-    const save = card.getByRole('button', { name: 'Save' });
-    await expect(save).toBeDisabled();
+    await expect(save()).toBeDisabled();
 
-    await f.textIn('Minimum score for free study (%)').fill('60');
-    await f.textIn('Days of silence before wilting').fill('4');
-    await f.textIn('Further days per stage lost').fill('9');
-    await f.textIn('Most stages a student can gain in a day').fill('3');
+    await textIn('Minimum score for free study (%)').fill('60');
+    await textIn('Days of silence before wilting').fill('4');
+    await textIn('Further days per stage lost').fill('9');
+    await textIn('Most stages a student can gain in a day').fill('3');
 
     let post = k.posted('/config');
-    await save.click();
+    await save().click();
     await post;
 
     await page.reload();
-    await expect(f.textIn('Minimum score for free study (%)')).toHaveValue('60');
-    await expect(f.textIn('Days of silence before wilting')).toHaveValue('4');
-    await expect(f.textIn('Further days per stage lost')).toHaveValue('9');
-    await expect(f.textIn('Most stages a student can gain in a day')).toHaveValue('3');
+    card = await openConfigEntry(page, 'Garden');
+    await expect(textIn('Minimum score for free study (%)')).toHaveValue('60');
+    await expect(textIn('Days of silence before wilting')).toHaveValue('4');
+    await expect(textIn('Further days per stage lost')).toHaveValue('9');
+    await expect(textIn('Most stages a student can gain in a day')).toHaveValue('3');
 
     // Out-of-range input must not be saveable: 0 stages a day would freeze every plant.
-    await f.textIn('Most stages a student can gain in a day').fill('0');
-    await expect(save).toBeDisabled();
+    await textIn('Most stages a student can gain in a day').fill('0');
+    await expect(save()).toBeDisabled();
 
     for (const [label, value] of Object.entries(DEFAULTS)) {
-      await f.textIn(label).fill(value);
+      await textIn(label).fill(value);
     }
     post = k.posted('/config');
-    await save.click();
+    await save().click();
     await post;
 
     await page.reload();
+    card = await openConfigEntry(page, 'Garden');
     for (const [label, value] of Object.entries(DEFAULTS)) {
-      await expect(f.textIn(label)).toHaveValue(value);
+      await expect(textIn(label)).toHaveValue(value);
     }
   });
 

@@ -62,6 +62,20 @@ export async function expandAllNavSections(page: Page) {
   await expect(page.locator('.sb__section[aria-expanded="false"]')).toHaveCount(0);
 }
 
+/**
+ * Open one of /config's settings and return its modal.
+ *
+ * The page is a list of rows, one per setting; the controls only exist while the row's modal is
+ * open. Anything that reloads the page (a persistence check) closes it, so call this again after.
+ * `title` is matched exactly against the row title, which is also the modal title.
+ */
+export async function openConfigEntry(page: Page, title: string): Promise<Locator> {
+  await page.locator(`.cfg-row:has(.lrow__title:text-is("${title}"))`).click();
+  const dlg = page.locator(`.m-dialog:has(.m-dialog__title:text-is("${title}"))`);
+  await expect(dlg).toBeVisible();
+  return dlg;
+}
+
 /** The seeded student account (vunq@mochi.edu = Leo Park, in Biology 9A). */
 export async function signInStudent(page: Page) {
   await signIn(
