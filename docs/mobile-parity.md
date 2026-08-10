@@ -18,7 +18,7 @@ omission is built.
 | `/materials` | `(app)/materials/` | Phase 5. `.docx` via the platform viewer, not `docx-preview` |
 | `/assessments` | `(app)/assessments.tsx` | Phase 5. Tables → cards; same charts |
 | `/rankings/:month?` | **Not built** | Added 2026-08, web-only for now — see below |
-| `/tuition/:month?` | `(app)/tuition/` | Added 2026-08. **Student self-view only** — the admin half is web-only, see below |
+| `/tuition/:month?` | **Not built** | Web-only by design — tuition is staff-only, see below |
 | `/flashcards` | `(app)/vocabulary/` | Phase 3. The plant widget sits at the top for students, as on the web |
 | `/garden/:classId?` | `(app)/vocabulary/garden/[classId]/` | Added 2026-08. Student view only — see below |
 | `/garden/:classId/album/:month` | `(app)/vocabulary/garden/[classId]/album/[month].tsx` | Added 2026-08 |
@@ -52,25 +52,20 @@ lives in the right place: the scoring is pure functions in `shared/logic/ranking
 `settings` row under `ranking-weights`. A mobile version is one screen plus an `/api/rankings`
 endpoint, with no logic to reimplement.
 
-**Tuition's admin half** (web `/tuition/:month?`: class prices, the month close/reopen, recording
+**Tuition, all of it** (web `/tuition/:month?`: class prices, the month close/reopen, recording
 payments and adjustments, the per-student fee table).
-The phone has the *student* half only — a "Học phí" row in Profile opening a list of closed months
-and one detail screen. That split is the feature, not a shortage of time. Managing fees means
-reading a wide table of everyone at once and closing a month, which is desk work; what a family
-needs on a phone is one number, how it was arrived at, and how to pay it. The screens deliberately
-never show an open month: it is a live estimate that moves with every attendance mark, and a family
-quoted a number that later changes has been misled, however correct both figures were.
 
-Mobile gains two things the web has no equivalent for: **bank details with a VietQR code** (amount
-and transfer memo prefilled, configured once by an admin on `/config`), and a **share sheet** that
-sends the fee slip PNG straight into Zalo. The web's own slip is rasterized in the browser by
-`html-to-image`; the phone gets the same three themes rendered server-side by satori + resvg
-(`server/slip/`), since neither a Worker nor React Native has a DOM. See `server/slip/themes.tsx`
-for the per-theme degradations that rebuild cost.
+A student self-view shipped on the phone in Aug 2026 — a "Học phí" row in Profile, a list of closed
+months, bank details with a VietQR code, a shareable slip PNG — and was **removed** the same month.
+Fees are now staff-only end to end: nothing in the app tells a student or a family what they owe,
+and the "Gửi thông báo" push that announced a closed month is gone with it. A family is told by the
+printed slip (phiếu thu) and by the office.
 
-Announcing a closed month is a **manual admin action** — a "Gửi thông báo" button next to Reopen,
-not a cron and not a side effect of closing. Closing is an accounting step an admin may repeat
-while fixing a price, and each repeat would otherwise pop an amount onto every family's phone.
+What went with the removal, should it ever be rebuilt: `/api/tuition/me*`, the server-side slip
+renderer (`server/slip/`, satori + resvg — the web's own slip is rasterized in the browser by
+`html-to-image`, which needs a DOM neither a Worker nor React Native has), and the
+`tuition_me_*` / `tuition_pay_*` / `tuition_notify_*` string keys. The bank details on `/config`
+stayed: they are staff reference data now, not something a student is shown.
 
 **The garden's staff half** (web: watering, assignment CRUD, the event history, admin dev tools,
 "Save this month", the share card).

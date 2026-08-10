@@ -20,16 +20,6 @@ interface Env {
   ZALO_WEBHOOK_SECRET?: string;
 }
 
-/**
- * A `.wasm` import resolves to a `WebAssembly.Module` — the Cloudflare vite plugin emits it as a
- * `compiled-wasm` module. The Workers runtime refuses to compile wasm from bytes at request time,
- * so importing the module is the only way in; see server/slip/render.ts.
- */
-declare module '*.wasm' {
-  const module: WebAssembly.Module;
-  export default module;
-}
-
 /** Injected by vite `define` — see vite.config.ts. e.g. "v0.0042" */
 declare const __APP_VERSION__: string;
 /** Injected by vite `define` — short git SHA, or "dev" outside a git checkout. */

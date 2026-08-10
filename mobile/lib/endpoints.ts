@@ -61,8 +61,6 @@ import type {
   MeResponse,
   MonthlyRemarkRow,
   MySessionsResponse,
-  MyTuitionDetail,
-  MyTuitionMonth,
   ParentRow,
   ProfileRow,
   RemarkCriterionRow,
@@ -409,22 +407,4 @@ export const push = {
     apiFetch<{ ok: true }>('/api/push/register', { method: 'POST', body: input }),
   unregister: (expoToken: string) =>
     apiFetch<{ ok: true }>('/api/push/unregister', { method: 'POST', body: { expoToken } }),
-};
-
-// ---- Tuition (student self-view) ----
-
-/**
- * The student's own fees. Closed months only â€” an open month is a running estimate the admin
- * screen exists to read, not a number to quote a family.
- *
- * `slipUrl` returns a URL rather than fetching: the PNG is downloaded with `File.downloadFileAsync`
- * so it lands on disk for the share sheet, which means it sets its own Authorization header
- * (see app/(app)/material/[id].tsx for the same pattern).
- */
-export const myTuition = {
-  list: () => apiFetch<{ months: MyTuitionMonth[] }>('/api/tuition/me'),
-  month: (month: string) =>
-    apiFetch<MyTuitionDetail>(`/api/tuition/me/${encodeURIComponent(month)}`),
-  slipUrl: (month: string, theme: string) =>
-    `${BASE}/api/tuition/me/${encodeURIComponent(month)}/slip?theme=${encodeURIComponent(theme)}`,
 };

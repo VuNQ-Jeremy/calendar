@@ -1,8 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { Check, ChevronRight } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { ApiError } from '~/lib/api';
 import * as api from '~/lib/endpoints';
 import { useAuth } from '~/lib/auth';
@@ -26,7 +25,6 @@ const COLORS: ColorIdValue[] = ['violet', 'green', 'blue', 'orange', 'cocoa', 'r
 export default function Profile() {
   const th = useTheme();
   const { t } = useLang();
-  const router = useRouter();
   const { user, account, logout, refresh } = useAuth();
 
   const [name, setName] = React.useState(user?.name ?? '');
@@ -188,20 +186,6 @@ export default function Profile() {
           {t('prof_change_pw')}
         </Button>
       </Card>
-
-      {/* Students only: staff have no fees of their own, and the admin view lives on the web.
-          A row rather than a fourth tab — fees are read about once a month. */}
-      {user.kind === 'student' ? (
-        <Pressable accessibilityRole="button" onPress={() => router.push('/tuition')}>
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[3] }}>
-            <View style={{ flex: 1, gap: th.spacing[1] }}>
-              <Heading>{t('tuition_me_title')}</Heading>
-              <Muted>{t('tuition_me_sub')}</Muted>
-            </View>
-            <ChevronRight size={20} color={th.color.textMuted} />
-          </Card>
-        </Pressable>
-      ) : null}
 
       <Card style={{ gap: th.spacing[3] }}>
         <Heading>{t('prof_account')}</Heading>

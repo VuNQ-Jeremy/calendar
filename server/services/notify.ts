@@ -11,10 +11,7 @@ import { getNotifPrefs } from './notif-prefs';
 import * as previewSvc from './session-preview';
 import * as push from './push';
 import type { ExpoPushMessage } from './push';
-import * as tuitionSvc from './tuition';
 import * as zalo from './zalo';
-import { translate } from '../../shared/i18n/strings';
-import { formatVnd, monthNumeric } from '../../shared/logic/fees';
 
 /**
  * The scheduled notification jobs. Called from `scheduled()` in workers/app.ts, and from the
@@ -513,75 +510,6 @@ async function deliver(db: Db, messages: ExpoPushMessage[]): Promise<void> {
     console.log('[push] pruning dead tokens', { n: dead.length });
     await push.pruneTokens(db, dead);
   }
-}
-
-/**
- * "Học phí tháng N đã có" — sent when an admin presses the button on /tuition, never on a schedule.
- *
- * Manual on purpose. Closing a month is an accounting step an admin may repeat while correcting a
- * price or a stray attendance mark, and each of those closes would otherwise pop a fee amount onto
- * every family's phone. Announcing is a separate decision from finalising, so it is a separate act.
- *
- * The ledger key carries the amount — `tuition:{month}:{student}:{dueVnd}`. Pressing the button
- * twice reaches nobody the second time; pressing it after a reopen that actually changed someone's
- * fee reaches exactly the students whose number moved. Note that `pruneLedger` drops rows after 30
- * days, so this is a guard against a double-press, not a permanent record — acceptable only because
- * a human is choosing to send each time.
- *
- * Push only. Parents hear about fees over Zalo from the slip image, which is a different message
- * with a different audience; wiring this to `zaloDeliver` would send parents a bare number.
- */
-export async function notifyTuitionMonth(
-  db: Db,
-  month: string,
-): Promise<{ sent: number; skipped: number; noDevice: number }> {
-  const fees = await tuitionSvc.closedMonthFees(db, month);
-  // Nothing owed is not news. It also keeps a student who was billed nothing out of the count the
-  // confirmation dialog shows.
-  const billed = fees.filter((f) => f.dueVnd > 0);
-  if (!billed.length) return { sent: 0, skipped: 0, noDevice: 0 };
-
-  const keyFor = (f: (typeof billed)[number]) =>
-    `tuition:${month}:${f.studentId}:${f.dueVnd}`;
-  const already = await push.alreadySent(db, billed.map(keyFor));
-  const todo = billed.filter((f) => !already.has(keyFor(f)));
-
-  const messages: ExpoPushMessage[] = [];
-  const doneKeys: string[] = [];
-  let noDevice = 0;
-
-  for (const fee of todo) {
-    const accountIds = await push.accountIdsForStudents(db, [fee.studentId]);
-    const tokens = await push.tokensForAccounts(db, accountIds);
-    // Marked done either way: the student HAS been processed, and a later press should not keep
-    // re-finding the same person without a phone.
-    doneKeys.push(keyFor(fee));
-    if (!tokens.length) {
-      noDevice++;
-      continue;
-    }
-    for (const to of tokens) {
-      messages.push({
-        to,
-        title: translate('vi', 'tuition_notify_push_title', { month: monthNumeric(month) }),
-        body: `${translate('vi', 'tuition_total_due')}: ${formatVnd(fee.dueVnd)}`,
-        // `url` is the fallback for installed bundles that predate the tuition screen: they route
-        // on `url` and /profile exists in every student build, one tap from the fee list. Updated
-        // bundles match `kind` first and go straight to /tuition. Same trick as the garden.
-        data: { url: '/profile', kind: 'tuition' },
-        channelId: 'reminders',
-      });
-    }
-  }
-
-  await deliver(db, messages);
-  await push.markSent(db, doneKeys);
-
-  return {
-    sent: messages.length,
-    skipped: billed.length - todo.length,
-    noDevice,
-  };
 }
 
 /** Cron entry point. Branches on the schedule that fired. */

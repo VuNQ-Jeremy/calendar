@@ -321,24 +321,6 @@ function TuitionScreen() {
     submit(fd);
   };
 
-  /**
-   * Tell the students what they owe. Separate from closing on purpose — see the `notify-students`
-   * intent in app/routes/tuition.tsx. The count in the confirmation is the same set the server
-   * will message: students with something actually owed.
-   */
-  const notifyStudents = async () => {
-    const n = rows.filter((r) => r.dueVnd > 0).length;
-    const ok = await confirm({
-      title: t('tuition_notify_confirm', { month: fmtMonth(month) }),
-      message: `${t('tuition_notify_confirm_msg')} (${n})`,
-    });
-    if (!ok) return;
-    const fd = new FormData();
-    fd.set('intent', 'notify-students');
-    fd.set('month', month);
-    submit(fd);
-  };
-
   const reopenMonth = async () => {
     const ok = await confirm({
       title: t('tuition_reopen_confirm', { month: fmtMonth(month) }),
@@ -381,10 +363,6 @@ function TuitionScreen() {
   const refusedClasses = fetcher.data?.error === 'missing_price' ? fetcher.data.classes : undefined;
   const missing = refusedClasses ?? report.missingPriceClasses;
 
-  // How the last notify went. Only a send returns `sent`, so this cannot light up after a
-  // payment save or a close.
-  const notified = fetcher.data?.sent !== undefined ? fetcher.data : undefined;
-
   return (
     <div className="content">
       <PageHeader
@@ -411,14 +389,9 @@ function TuitionScreen() {
               {t('tuition_prices')}
             </Button>
             {closed ? (
-              <>
-                <Button variant="secondary" onClick={() => void notifyStudents()}>
-                  {t('tuition_notify_btn')}
-                </Button>
-                <Button variant="secondary" onClick={() => void reopenMonth()}>
-                  {t('tuition_reopen')}
-                </Button>
-              </>
+              <Button variant="secondary" onClick={() => void reopenMonth()}>
+                {t('tuition_reopen')}
+              </Button>
             ) : (
               <Button variant="primary" onClick={() => void closeMonth()}>
                 {t('tuition_close_month')}
@@ -440,15 +413,6 @@ function TuitionScreen() {
                 who: report.closedBy ?? '—',
               })}
             </span>
-          )}
-          {notified && (
-            <Badge color="green">
-              {t('tuition_notify_done', {
-                sent: notified.sent ?? 0,
-                skipped: notified.skipped ?? 0,
-                nodevice: notified.noDevice ?? 0,
-              })}
-            </Badge>
           )}
           <span className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
             {t('tuition_students')}: <strong>{rows.length}</strong>

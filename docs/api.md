@@ -166,40 +166,13 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/garden/snapshots?classId=` | **user** | Saved album months; add `&month=` for one frozen garden. Same membership rule as the class garden |
 | GET PUT | `/api/settings/garden` | admin | `GardenSettingsInput` — school-wide, and it re-times every plant |
 
-### Tuition, student self-view
+### Tuition
 
-| Method | Path | Level | Notes |
-|---|---|---|---|
-| GET | `/api/tuition/me` | **user** | `{ months: [...] }`, newest first. Students only — 403 for staff |
-| GET | `/api/tuition/me/:month` | **user** | One month: frozen `fee` plus `paymentInfo` |
-| GET | `/api/tuition/me/:month/slip` | **user** | `image/png`, not the envelope. `?theme=cute-pastel\|minimal\|classic`, default `minimal` |
-
-Self-scoped by construction: the student id comes from the session, never from the request.
-Staff get 403 (they have the admin `/tuition` screen, which answers a different question); parent
-accounts cannot sign in at all yet.
-
-**Closed months only.** An open month is a live estimate that moves with every attendance mark —
-quoting it to a family would mean the number they wrote down on Tuesday is not the one they are
-asked for on Friday. An open month, a month that does not exist, and a month this student has
-nothing in all answer the same **404**, so the response cannot be used to discover which months
-the centre is working on.
-
-Payments are *not* part of the snapshot, so `paidVnd`, `outstandingVnd` and `status`
-(`unpaid | partial | paid`) can still change after the close — that is how a month stops saying
-"chưa đóng". Clients should refetch on focus rather than treat a closed month as immutable.
-
-`paymentInfo` is `null` until an admin fills the form on `/config`. When set it carries the bank
-fields, a `memo` already resolved for this student and month, and `vietQrUrl` — an img.vietqr.io
-image with the amount and memo prefilled. The QR is omitted (`null`) once nothing is outstanding.
-
-The slip PNG is rendered in the Worker by satori + resvg (`server/slip/`), because the web's
-rasterizer (`html-to-image`) needs a DOM that neither the Worker nor React Native has. All three
-web themes are reproduced; see `server/slip/themes.tsx` for what each one gives up.
-
-Announcing a month is a **manual** admin action, not a cron: the `notify-students` intent on the
-web `/tuition` action. Closing is an accounting step an admin may repeat while correcting a price,
-so it deliberately sends nothing on its own. Idempotency key `tuition:{month}:{student}:{dueVnd}`
-— pressing twice reaches nobody, and a re-close reaches only students whose amount actually moved.
+**No student-facing API.** Tuition is staff-only, end to end: the amounts live on the web
+`/tuition` screen and leave the app as a printed slip (phiếu thu), never as an app screen or a
+push notification. `/api/tuition/me`, `/api/tuition/me/:month` and `/api/tuition/me/:month/slip`
+existed until Aug 2026 and were removed with the phone screens they served; the bank details on
+`/config` (`paymentInfo`) are kept as staff-recorded reference data.
 
 Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view`,
 `/materials/:id/download`, `/enrich-vocab`, `/generate-vocab`.

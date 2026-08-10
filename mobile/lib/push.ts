@@ -192,13 +192,9 @@ export function useNotificationRouting(ready: boolean): void {
         router.push('/vocabulary' as Href);
         return;
       }
-      // Same trick for the tuition announcement: the server sends `{url:'/profile',
-      // kind:'tuition'}` so a bundle installed before this screen existed lands on Profile, one
-      // tap from the "Học phí" row, instead of on +not-found. Updated bundles come straight here.
-      if (payload?.kind === 'tuition') {
-        router.push('/tuition' as Href);
-        return;
-      }
+      // The tuition announcement is gone (fees are staff-only), but a phone can still be holding
+      // one sent before the removal. Its `url` is '/profile', which still exists, so it lands
+      // there rather than on +not-found — no special case needed.
       const url = payload?.url;
       if (typeof url !== 'string' || !url.startsWith('/')) return;
       // The vocabulary tab moved from /flashcards to /vocabulary. The server still sends the old

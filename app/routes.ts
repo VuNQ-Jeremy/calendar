@@ -81,10 +81,6 @@ export default [
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
   route('api/settings/notifications', 'routes/api.settings.notifications.tsx'),
   route('api/settings/garden', 'routes/api.settings.garden.tsx'),
-  // Tuition, student self-view. All-literal prefixes under `me`, so no `:id?` can swallow them.
-  route('api/tuition/me', 'routes/api.tuition.me.tsx'),
-  route('api/tuition/me/:month', 'routes/api.tuition.me.$month.tsx'),
-  route('api/tuition/me/:month/slip', 'routes/api.tuition.me.$month.slip.tsx'),
   route('api/push/register', 'routes/api.push.register.tsx'),
   route('api/push/unregister', 'routes/api.push.unregister.tsx'),
   route('api/push/run', 'routes/api.push.run.tsx'),

@@ -260,8 +260,6 @@ export default function AppLayout() {
         <Tabs.Screen name="config" options={{ href: null }} />
         <Tabs.Screen name="language" options={{ href: null }} />
         <Tabs.Screen name="notifications" options={{ href: null }} />
-        {/* Pushed from Profile, and the target of a `kind: 'tuition'` notification tap. */}
-        <Tabs.Screen name="tuition" options={{ href: null }} />
       </Tabs>
       {/*
         A sibling of the navigator, not a screen in it. An RN Modal renders into its own native
