@@ -869,6 +869,11 @@ export const vocabAssignments = sqliteTable(
     /** ICT YYYY-MM-DD, inclusive. */
     deadline: text('deadline').notNull(),
     note: text('note'),
+    /**
+     * CSV of game-mode ids that count toward this assignment, canonicalised by
+     * VocabAssignmentInput; NULL / '' mean any mode — see 0034_vocab_assignment_modes.sql.
+     */
+    modes: text('modes'),
     createdAt: text('created_at').notNull(),
   },
   (t) => [

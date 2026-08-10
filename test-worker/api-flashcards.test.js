@@ -132,6 +132,39 @@ describe('recordResult idempotency', () => {
     expect(rows).toHaveLength(2);
   });
 
+  it('records the new game modes end to end, and the enum still rejects garbage', async () => {
+    const d = db();
+    const { topic, word } = await seedTopicWithWord(d);
+    const student = await seedStudent(d);
+
+    for (const mode of ['scramble', 'fill', 'type', 'picture']) {
+      const ok = await flashcardsSvc.recordResult(
+        d,
+        { kind: 'student', id: student.id },
+        { topicId: topic.id, mode, score: 1, total: 1, answers: [{ wordId: word.id, correct: true }] },
+      );
+      expect(ok).toBe(true);
+    }
+    const rows = await d
+      .select()
+      .from(flashcardResults)
+      .where(eq(flashcardResults.topicId, topic.id));
+    expect(rows.map((r) => r.mode).sort()).toEqual(['fill', 'picture', 'scramble', 'type']);
+
+    // The Zod gate in front of both the web action and /api/flashcards/results: every new mode
+    // parses, an unknown one still 422s (the mobile outbox deletes on 422, so this boundary is
+    // what keeps a typo from silently destroying rounds).
+    const { FlashcardResultInput } = await import('../shared/schemas');
+    expect(
+      FlashcardResultInput.safeParse({ topicId: topic.id, mode: 'scramble', score: 1, total: 1 })
+        .success,
+    ).toBe(true);
+    expect(
+      FlashcardResultInput.safeParse({ topicId: topic.id, mode: 'bogus', score: 1, total: 1 })
+        .success,
+    ).toBe(false);
+  });
+
   it('recordResults reports how many were new', async () => {
     const d = db();
     const { topic, word } = await seedTopicWithWord(d);

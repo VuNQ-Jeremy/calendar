@@ -9,12 +9,21 @@ import type { EnrichMap } from '../lib/enrich-client.js';
 import { playWord } from './audio.js';
 import { MIN_WORDS, fmtDuration, parseImportLines } from './game-utils.js';
 import type { GameMode, GameResult } from './game-utils.js';
-import { orderWordsByMastery, flashcardImagePath } from '../../shared/logic/flashcards';
+import {
+  orderWordsByMastery,
+  flashcardImagePath,
+  typeEligible,
+  wordsWithImages,
+} from '../../shared/logic/flashcards';
 import { ImagePicker, resolvePickedImageKey } from './image-picker.js';
 import { isDue } from '../../shared/logic/review';
 import { FlipGame } from './game-flip.jsx';
 import { QuizGame } from './game-quiz.jsx';
 import { MatchGame } from './game-match.jsx';
+import { ScrambleGame } from './game-scramble.jsx';
+import { FillGame } from './game-fill.jsx';
+import { TypeGame } from './game-type.jsx';
+import { PictureGame } from './game-picture.jsx';
 import type { RoundGarden } from '../garden/garden-widget.jsx';
 import type {
   FlashcardWordRow,
@@ -44,10 +53,18 @@ type LoaderData = {
   today: string;
 };
 
-const MODE_META: { id: GameMode; tk: string; icon: 'cards' | 'grid' | 'check' }[] = [
+const MODE_META: {
+  id: GameMode;
+  tk: string;
+  icon: 'cards' | 'grid' | 'check' | 'shuffle' | 'edit' | 'keyboard' | 'image';
+}[] = [
   { id: 'flip', tk: 'fc_mode_flip', icon: 'cards' },
   { id: 'quiz', tk: 'fc_mode_quiz', icon: 'check' },
   { id: 'match', tk: 'fc_mode_match', icon: 'grid' },
+  { id: 'scramble', tk: 'fc_mode_scramble', icon: 'shuffle' },
+  { id: 'fill', tk: 'fc_mode_fill', icon: 'edit' },
+  { id: 'type', tk: 'fc_mode_type', icon: 'keyboard' },
+  { id: 'picture', tk: 'fc_mode_picture', icon: 'image' },
 ];
 
 export function FlashcardTopicScreen() {
@@ -129,6 +146,18 @@ export function FlashcardTopicScreen() {
         {playing === 'match' && (
           <MatchGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
         )}
+        {playing === 'scramble' && (
+          <ScrambleGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
+        {playing === 'fill' && (
+          <FillGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
+        {playing === 'type' && (
+          <TypeGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
+        {playing === 'picture' && (
+          <PictureGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+        )}
       </GameOverlay>
     );
   }
@@ -166,14 +195,25 @@ export function FlashcardTopicScreen() {
 
       <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
         {MODE_META.map((m) => {
-          const disabled = deck.length < MIN_WORDS[m.id];
+          // Beyond the word-count floor: type needs a word whose hint isn't the answer, and
+          // picture needs at least one word that actually has a picture.
+          const disabled =
+            deck.length < MIN_WORDS[m.id] ||
+            (m.id === 'type' && !deck.some(typeEligible)) ||
+            (m.id === 'picture' && wordsWithImages(deck).length === 0);
           return (
             <FBtn
               key={m.id}
               variant="soft"
               iconLeft={<MIcon name={m.icon} size={18} />}
               disabled={disabled}
-              title={disabled ? t('fc_min_words', { n: MIN_WORDS[m.id] }) : undefined}
+              title={
+                disabled
+                  ? m.id === 'picture' && deck.length >= MIN_WORDS.picture
+                    ? t('fc_picture_none')
+                    : t('fc_min_words', { n: MIN_WORDS[m.id] })
+                  : undefined
+              }
               onClick={() => setPlaying(m.id)}
             >
               {t(m.tk)}

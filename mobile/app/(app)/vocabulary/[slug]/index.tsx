@@ -4,16 +4,20 @@ import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   Grid3x3,
+  Image as ImageIcon,
+  Keyboard,
   Layers,
   ListChecks,
   Pencil,
+  PencilLine,
   Plus,
+  Shuffle,
   Trash2,
   Upload,
   Volume2,
 } from 'lucide-react-native';
 import { useMutation } from '@tanstack/react-query';
-import { MIN_WORDS } from '@mochi/shared/logic/flashcards';
+import { MIN_WORDS, typeEligible, wordsWithImages } from '@mochi/shared/logic/flashcards';
 import type { GameMode } from '@mochi/shared/logic/flashcards';
 import * as api from '~/lib/endpoints';
 import { useAuth } from '~/lib/auth';
@@ -40,6 +44,10 @@ const MODES: { id: GameMode; tk: string; Icon: typeof Layers }[] = [
   { id: 'flip', tk: 'fc_mode_flip', Icon: Layers },
   { id: 'quiz', tk: 'fc_mode_quiz', Icon: ListChecks },
   { id: 'match', tk: 'fc_mode_match', Icon: Grid3x3 },
+  { id: 'scramble', tk: 'fc_mode_scramble', Icon: Shuffle },
+  { id: 'fill', tk: 'fc_mode_fill', Icon: PencilLine },
+  { id: 'type', tk: 'fc_mode_type', Icon: Keyboard },
+  { id: 'picture', tk: 'fc_mode_picture', Icon: ImageIcon },
 ];
 
 export default function TopicScreen() {
@@ -112,15 +120,20 @@ export default function TopicScreen() {
       <OfflineBanner pending={pending} />
 
       <View style={{ padding: th.spacing[4], gap: th.spacing[4] }}>
-        {/* Game launchers. A mode with too few words is disabled, same thresholds as the web. */}
-        <View style={{ flexDirection: 'row', gap: th.spacing[2] }}>
+        {/* Game launchers. Same gating as the web: the word-count floor, plus type needing a
+            word whose hint isn't the answer and picture needing at least one word with a
+            picture. Seven modes now, so the row wraps instead of squeezing. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: th.spacing[2] }}>
           {MODES.map(({ id, tk, Icon }) => {
-            const disabled = words.length < MIN_WORDS[id];
+            const disabled =
+              words.length < MIN_WORDS[id] ||
+              (id === 'type' && !words.some(typeEligible)) ||
+              (id === 'picture' && wordsWithImages(words).length === 0);
             return (
               <Button
                 key={id}
                 variant="soft"
-                style={{ flex: 1 }}
+                style={{ flexGrow: 1, flexBasis: '30%' }}
                 disabled={disabled}
                 iconLeft={<Icon size={16} color={th.color.brandSoftInk} />}
                 onPress={() => router.push(`/play/${encodeURIComponent(slug)}/${id}`)}

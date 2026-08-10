@@ -3,6 +3,8 @@ import { DS } from '../ds/index.js';
 import { Modal, MSelect, MDatePicker } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { addDaysVn } from '../../shared/logic/garden';
+import { ALL_MODES, normalizeModesCsv, parseModes } from '../../shared/logic/flashcards';
+import type { GameMode } from '../../shared/logic/flashcards';
 import type { VocabAssignmentRow } from '../../server/services/garden.js';
 
 /**
@@ -17,7 +19,7 @@ import type { VocabAssignmentRow } from '../../server/services/garden.js';
  * from the school's day, not from the device's.
  */
 
-const { Button } = DS;
+const { Button, Checkbox } = DS;
 
 /** A week is the default ask: long enough to fit a weekend, short enough to still be homework. */
 const DEFAULT_DAYS_AHEAD = 7;
@@ -51,8 +53,21 @@ export function AssignModal({
     String(existing?.minScorePct ?? DEFAULT_MIN_SCORE),
   );
   const [note, setNote] = React.useState(existing?.note ?? '');
+  // Which game modes count. Empty = any mode, the meaning of a NULL modes column — so the
+  // all-unchecked state is not an error, it is the default every assignment had before 0034.
+  const [modes, setModes] = React.useState<Set<GameMode>>(
+    () => new Set(parseModes(existing?.modes) ?? []),
+  );
 
   const valid = Boolean(classId && deadline);
+
+  const toggleMode = (id: GameMode, on: boolean) =>
+    setModes((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const submit = () => {
     if (!valid) return;
@@ -67,6 +82,8 @@ export function AssignModal({
     fd.set('requiredCount', String(Math.min(Math.max(parseInt(required, 10) || 1, 1), 20)));
     fd.set('minScorePct', String(Math.min(Math.max(parseInt(minScore, 10) || 0, 0), 100)));
     fd.set('note', note.trim());
+    // '' reaches the row as NULL ("any mode") through the schema's transform.
+    fd.set('modes', normalizeModesCsv([...modes]) ?? '');
     onSubmit(fd);
   };
 
@@ -122,6 +139,24 @@ export function AssignModal({
             onChange={(e) => setMinScore(e.target.value)}
           />
         </div>
+      </div>
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('garden_modes')}</label>
+        <div
+          className="m-row"
+          style={{ gap: '6px 14px', flexWrap: 'wrap', alignItems: 'center' }}
+          data-testid="assign-modes"
+        >
+          {ALL_MODES.map((id) => (
+            <Checkbox
+              key={id}
+              label={t(`fc_mode_${id}`)}
+              checked={modes.has(id)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => toggleMode(id, e.target.checked)}
+            />
+          ))}
+        </div>
+        {modes.size === 0 && <span className="mochi-field__hint">{t('garden_modes_any')}</span>}
       </div>
       <div className="mochi-field">
         <label className="mochi-field__label">{t('garden_water_note')}</label>

@@ -1,0 +1,11 @@
+-- Per-assignment game-mode restriction for "giao học từ vựng".
+--
+-- `modes` is a CSV of game-mode ids ('scramble,type') in the canonical order of
+-- shared/logic/flashcards.ts ALL_MODES, written only by VocabAssignmentInput which canonicalises
+-- through normalizeModesCsv. NULL — every row that exists before this migration — and '' both
+-- mean "any mode counts", which is exactly how these assignments behaved until now, so nothing
+-- changes for open homework when this lands.
+--
+-- A CSV in TEXT rather than a join table on purpose: the filter is applied in memory against a
+-- seven-value enum, the list is tiny, and every reader already loads the whole assignment row.
+ALTER TABLE vocab_assignments ADD COLUMN modes TEXT;

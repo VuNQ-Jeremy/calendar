@@ -8,6 +8,7 @@ import { useLang } from '../lib/i18n.jsx';
 import { formatDmy } from '../../shared/logic/tuition.js';
 import { PlantSvg, stageKey } from './plant-art.jsx';
 import { MAX_STAGE, daysBetweenVn } from '../../shared/logic/garden';
+import { parseModes } from '../../shared/logic/flashcards';
 import type { GardenSettings, PlantStage, PlantView } from '../../shared/logic/garden';
 import type { GardenOutcome, VocabAssignmentRow } from '../../server/services/garden.js';
 
@@ -42,6 +43,8 @@ export type StudentAssignmentChip = {
   deadline: string;
   requiredCount: number;
   minScorePct: number;
+  /** CSV of the game modes that count, null = any — parse with `parseModes`. */
+  modes: string | null;
   done: number;
 };
 
@@ -341,6 +344,7 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
   const { t } = useLang();
   const done = chip.done >= chip.requiredCount;
   const urgent = !done && daysBetweenVn(today, chip.deadline) <= URGENT_DAYS;
+  const modes = parseModes(chip.modes);
   return (
     <div
       className="lrow"
@@ -358,6 +362,12 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
       >
         {chip.topicName}
       </Link>
+      {modes &&
+        modes.map((m) => (
+          <Tag key={m} color="violet" dot={false}>
+            {t(`fc_mode_${m}`)}
+          </Tag>
+        ))}
       <span
         style={{
           color: urgent ? DANGER.ink : 'var(--text-muted)',

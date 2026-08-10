@@ -22,7 +22,7 @@ omission is built.
 | `/flashcards` | `(app)/vocabulary/` | Phase 3. The plant widget sits at the top for students, as on the web |
 | `/garden/:classId?` | `(app)/vocabulary/garden/[classId]/` | Added 2026-08. Student view only — see below |
 | `/garden/:classId/album/:month` | `(app)/vocabulary/garden/[classId]/album/[month].tsx` | Added 2026-08 |
-| `/flashcards/:slug` | `(app)/vocabulary/[slug]/` | Phase 3, plus offline study and the games |
+| `/flashcards/:slug` | `(app)/vocabulary/[slug]/` | Phase 3, plus offline study and the games. All seven game modes have mobile twins in `mobile/games/` (flip, quiz, match, scramble, fill, type, picture — 2026-08) |
 | `/config` | `(app)/config.tsx` | Phase 5. Scrollbar pref dropped — see below |
 | `/feedback` | `(app)/feedback.tsx` | Phase 5. Inbox and submit in one screen |
 | `/profile` | `(app)/profile.tsx` | Phase 2 |

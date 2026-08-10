@@ -360,6 +360,8 @@ export interface StudentAssignmentChip {
   deadline: string;
   requiredCount: number;
   minScorePct: number;
+  /** CSV of the game modes that count, null/absent = any — parse with `parseModes`. */
+  modes?: string | null;
   done: number;
 }
 

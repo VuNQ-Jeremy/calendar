@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ChevronRight, Clock, Flame, Pencil, Sprout } from 'lucide-react-native';
 import { daysBetweenVn } from '@mochi/shared/logic/garden';
 import { formatDmy } from '@mochi/shared/logic/dates';
+import { parseModes } from '@mochi/shared/logic/flashcards';
 import { useLang } from '~/lib/i18n';
 import { useHarvest, usePlant, useUpdatePlant } from '~/lib/use-garden';
 import { useTheme } from '~/theme';
@@ -311,6 +312,7 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
   const { t } = useLang();
   const done = chip.done >= chip.requiredCount;
   const urgent = !done && daysBetweenVn(today, chip.deadline) <= URGENT_DAYS;
+  const modes = parseModes(chip.modes);
 
   return (
     <Pressable
@@ -331,6 +333,15 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
         </Body>
         {done ? <Badge color="success">{t('garden_status_done')}</Badge> : null}
       </View>
+      {modes ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: th.spacing[1] }}>
+          {modes.map((m) => (
+            <Badge key={m} color="violet">
+              {t(`fc_mode_${m}`)}
+            </Badge>
+          ))}
+        </View>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
         <Clock size={14} color={urgent ? th.category.rose.ink : th.color.textMuted} />
         <Muted style={urgent ? { color: th.category.rose.ink } : undefined}>

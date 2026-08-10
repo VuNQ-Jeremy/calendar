@@ -14,6 +14,7 @@ import { VOCAB_TOPICS, vocabTopicLabel } from '../../shared/logic/vocab-topics';
 import { formatDmy } from '../../shared/logic/tuition.js';
 import { GardenWidget } from '../garden/garden-widget.jsx';
 import { AssignModal } from '../garden/assign-modal.jsx';
+import { parseModes } from '../../shared/logic/flashcards';
 import type {
   AssignmentBlock,
   StaffGardenData,
@@ -440,6 +441,11 @@ function AssignmentsPanel({
                     <Tag color="blue" dot={false}>
                       {a.className}
                     </Tag>
+                    {(parseModes(a.modes) ?? []).map((m) => (
+                      <Tag key={m} color="violet" dot={false}>
+                        {t(`fc_mode_${m}`)}
+                      </Tag>
+                    ))}
                   </div>
                   <div
                     className="m-row"

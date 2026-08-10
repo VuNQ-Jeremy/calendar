@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidModesCsv, normalizeModesCsv } from './logic/flashcards';
 
 /**
  * Parse a partial update payload. Zod's `.partial()` still applies `.default()`
@@ -385,7 +386,15 @@ export type VocabImageCandidate = {
   credit: string;
 };
 
-export const FlashcardMode = z.enum(['flip', 'quiz', 'match']);
+export const FlashcardMode = z.enum([
+  'flip',
+  'quiz',
+  'match',
+  'scramble',
+  'fill',
+  'type',
+  'picture',
+]);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
 
 export const FlashcardResultInput = z.object({
@@ -959,6 +968,17 @@ export const VocabAssignmentInput = z.object({
   /** ICT YYYY-MM-DD, inclusive. */
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().max(200).nullish(),
+  /**
+   * CSV of the game modes that count toward this assignment, canonicalised on the way in
+   * (`normalizeModesCsv`); NULL / '' mean any mode counts, which is what every pre-existing row
+   * reads as. Unknown ids are a 400, not a silent drop — a typo must not widen the filter.
+   */
+  modes: z
+    .string()
+    .max(120)
+    .nullish()
+    .refine((v) => v == null || isValidModesCsv(v), { message: 'Unknown game mode' })
+    .transform((v) => (v == null ? null : normalizeModesCsv(v.split(',')))),
 });
 export type VocabAssignmentInput = z.infer<typeof VocabAssignmentInput>;
 

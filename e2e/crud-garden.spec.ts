@@ -40,6 +40,12 @@ test.describe('CRUD: vocabulary assignments', () => {
     await f.pickSel('Class', CLASS);
     await f.textIn('Rounds required').fill('2');
     await f.textIn('Minimum score (%)').fill('50');
+    // Restrict which game modes count. Unchecked (the default) means any mode, so the hint is
+    // showing before the first tick and disappears after it.
+    await expect(dlg.getByText('Any mode counts')).toBeVisible();
+    await dlg.getByRole('checkbox', { name: 'Unscramble' }).check();
+    await dlg.getByRole('checkbox', { name: 'Type it' }).check();
+    await expect(dlg.getByText('Any mode counts')).toHaveCount(0);
     post = k.posted('/vocabulary');
     await dlg.locator('.m-dialog__foot .mochi-btn.is-primary').click();
     await post;
@@ -52,6 +58,9 @@ test.describe('CRUD: vocabulary assignments', () => {
     const row = panel.locator('.lrow', { hasText: topic });
     await expect(row).toBeVisible();
     await expect(row).toContainText(CLASS);
+    // The mode restriction shows as badges on the assignment row.
+    await expect(row).toContainText('Unscramble');
+    await expect(row).toContainText('Type it');
 
     // ---- Track it: nobody has played the new topic, so every member is behind. ----
     await row.getByRole('button', { name: 'Progress' }).click();
@@ -63,9 +72,15 @@ test.describe('CRUD: vocabulary assignments', () => {
     // Scoped to the footer: the dialog's own X is also labelled "Close".
     await track.locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
 
-    // ---- Edit the ask. ----
+    // ---- Edit the ask. The saved mode restriction comes back checked; clearing it returns the
+    // assignment to any-mode counting and drops the badges. ----
     await row.getByRole('button', { name: 'Edit' }).click();
     const edit = k.dlgOf('Edit assignment');
+    await expect(edit.getByRole('checkbox', { name: 'Unscramble' })).toBeChecked();
+    await expect(edit.getByRole('checkbox', { name: 'Type it' })).toBeChecked();
+    await expect(edit.getByRole('checkbox', { name: 'Quiz' })).not.toBeChecked();
+    await edit.getByRole('checkbox', { name: 'Unscramble' }).uncheck();
+    await edit.getByRole('checkbox', { name: 'Type it' }).uncheck();
     await k.on(edit).textIn('Rounds required').fill('5');
     post = k.posted('/vocabulary');
     await edit.locator('.m-dialog__foot .mochi-btn.is-primary').click();
@@ -73,6 +88,7 @@ test.describe('CRUD: vocabulary assignments', () => {
     // Wait for the LIST to catch up before reopening the tracking modal: the modal renders the
     // row it was handed, so asserting on it first would only re-read the pre-edit snapshot.
     await expect(row).toContainText('Rounds required: 5');
+    await expect(row.getByText('Unscramble')).toHaveCount(0);
     await row.getByRole('button', { name: 'Progress' }).click();
     const track2 = k.dlgOf(`Progress · ${topic}`);
     await expect(track2.locator('.lrow', { hasText: 'Leo Park' })).toContainText('0/5');

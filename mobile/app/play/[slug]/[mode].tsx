@@ -18,6 +18,10 @@ import { OfflineBanner } from '~/ui/OfflineBanner';
 import { FlipGame } from '~/games/FlipGame';
 import { QuizGame } from '~/games/QuizGame';
 import { MatchGame } from '~/games/MatchGame';
+import { ScrambleGame } from '~/games/ScrambleGame';
+import { FillGame } from '~/games/FillGame';
+import { TypeGame } from '~/games/TypeGame';
+import { PictureGame } from '~/games/PictureGame';
 import type { GameResult } from '~/games/types';
 
 /**
@@ -27,7 +31,7 @@ import type { GameResult } from '~/games/types';
  * It lives at `app/play/...`, OUTSIDE the `(app)` tab group, which is what removes the tab bar.
  * No CSS, no z-index, no scroll locking: it is simply a different route.
  */
-const MODES: GameMode[] = ['flip', 'quiz', 'match'];
+const MODES: GameMode[] = ['flip', 'quiz', 'match', 'scramble', 'fill', 'type', 'picture'];
 
 export default function PlayScreen() {
   const th = useTheme();
@@ -174,6 +178,14 @@ export default function PlayScreen() {
         <FlipGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       ) : gameMode === 'quiz' ? (
         <QuizGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+      ) : gameMode === 'scramble' ? (
+        <ScrambleGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+      ) : gameMode === 'fill' ? (
+        <FillGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+      ) : gameMode === 'type' ? (
+        <TypeGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+      ) : gameMode === 'picture' ? (
+        <PictureGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       ) : (
         <MatchGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       )}

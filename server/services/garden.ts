@@ -49,6 +49,7 @@ import {
   type PlantView,
 } from '../../shared/logic/garden';
 import { composeUtcFromIct, ictDateOf } from '../../shared/logic/tests';
+import { modeAllowed, parseModes } from '../../shared/logic/flashcards';
 
 /**
  * Vườn cây từ vựng — the garden's data layer.
@@ -223,6 +224,8 @@ export type VocabAssignmentRow = {
   minScorePct: number;
   deadline: string;
   note: string | null;
+  /** CSV of game modes that count, canonical order; null = any (see 0034). */
+  modes: string | null;
   createdAt: string;
 };
 
@@ -246,6 +249,7 @@ export async function listAssignments(
       minScorePct: vocabAssignments.minScorePct,
       deadline: vocabAssignments.deadline,
       note: vocabAssignments.note,
+      modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })
     .from(vocabAssignments)
@@ -269,6 +273,7 @@ export async function getAssignment(db: Db, id: string): Promise<VocabAssignment
       minScorePct: vocabAssignments.minScorePct,
       deadline: vocabAssignments.deadline,
       note: vocabAssignments.note,
+      modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })
     .from(vocabAssignments)
@@ -293,6 +298,7 @@ export async function createAssignment(
     minScorePct: input.minScorePct,
     deadline: input.deadline,
     note: input.note ?? null,
+    modes: input.modes ?? null,
     createdAt: new Date().toISOString(),
   });
   return id;
@@ -310,6 +316,7 @@ export async function updateAssignment(
   if (patch.minScorePct !== undefined) set.minScorePct = patch.minScorePct;
   if (patch.deadline !== undefined) set.deadline = patch.deadline;
   if (patch.note !== undefined) set.note = patch.note ?? null;
+  if (patch.modes !== undefined) set.modes = patch.modes ?? null;
   if (Object.keys(set).length) {
     await db.update(vocabAssignments).set(set).where(eq(vocabAssignments.id, id));
   }
@@ -360,6 +367,7 @@ export async function assignmentProgress(
     assignment.minScorePct,
     assignment.createdAt,
     deadlineEndUtc(assignment.deadline),
+    parseModes(assignment.modes),
   );
 
   return {
@@ -373,7 +381,11 @@ export async function assignmentProgress(
   };
 }
 
-/** Qualifying-round counts per student for one topic inside a time window. */
+/**
+ * Qualifying-round counts per student for one topic inside a time window. `modes` narrows the
+ * count to rounds played in those game modes; null (every assignment created before 0034, and
+ * any assignment the teacher left unrestricted) counts every mode, exactly as before.
+ */
 async function countQualifying(
   db: Db,
   topicId: string,
@@ -381,6 +393,7 @@ async function countQualifying(
   minScorePct: number,
   fromIso: string,
   toIso: string,
+  modes: string[] | null = null,
 ): Promise<Map<string, number>> {
   if (studentIds.length === 0) return new Map();
   const rows = await db
@@ -396,6 +409,7 @@ async function countQualifying(
         gte(flashcardResults.playedAt, fromIso),
         lt(flashcardResults.playedAt, toIso),
         sql`${flashcardResults.score} * 100 >= ${minScorePct} * ${flashcardResults.total}`,
+        modes && modes.length ? inArray(flashcardResults.mode, modes) : undefined,
       ),
     )
     .groupBy(flashcardResults.studentId);
@@ -410,13 +424,16 @@ export async function activeAssignmentsFor(
   studentId: string,
   topicId: string,
   vnToday: string,
-): Promise<{ id: string; minScorePct: number; requiredCount: number; deadline: string }[]> {
+): Promise<
+  { id: string; minScorePct: number; requiredCount: number; deadline: string; modes: string | null }[]
+> {
   return db
     .select({
       id: vocabAssignments.id,
       minScorePct: vocabAssignments.minScorePct,
       requiredCount: vocabAssignments.requiredCount,
       deadline: vocabAssignments.deadline,
+      modes: vocabAssignments.modes,
     })
     .from(vocabAssignments)
     .innerJoin(classStudents, eq(classStudents.classId, vocabAssignments.classId))
@@ -444,6 +461,8 @@ export async function studentAssignments(
     deadline: string;
     requiredCount: number;
     minScorePct: number;
+    /** The assignment's modes CSV, for the chip's mode badges. Null = any. */
+    modes: string | null;
     done: number;
   }[]
 > {
@@ -457,6 +476,7 @@ export async function studentAssignments(
       deadline: vocabAssignments.deadline,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
+      modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })
     .from(vocabAssignments)
@@ -475,6 +495,7 @@ export async function studentAssignments(
       a.minScorePct,
       a.createdAt,
       deadlineEndUtc(a.deadline),
+      parseModes(a.modes),
     );
     const { createdAt: _unused, ...rest } = a;
     out.push({ ...rest, done: counts.get(studentId) ?? 0 });
@@ -515,6 +536,7 @@ export async function studentAssignmentsInMonth(
       deadline: vocabAssignments.deadline,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
+      modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })
     .from(vocabAssignments)
@@ -539,6 +561,7 @@ export async function studentAssignmentsInMonth(
       a.minScorePct,
       a.createdAt,
       deadlineEndUtc(a.deadline),
+      parseModes(a.modes),
     );
     const done = counts.get(studentId) ?? 0;
     out.push({
@@ -571,15 +594,19 @@ export type { GardenOutcome };
 export async function onStudentResult(
   db: Db,
   studentId: string,
-  input: { topicId: string; score: number; total: number },
+  input: { topicId: string; mode: string; score: number; total: number },
   resultId: string,
   nowIso: string,
 ): Promise<GardenOutcome> {
   const vnToday = ictDateOf(nowIso);
   const settings = await getGardenSettings(db);
   const assignments = await activeAssignmentsFor(db, studentId, input.topicId, vnToday);
+  // Only assignments this round's mode counts toward set the bar. A round in an excluded mode
+  // is still free study: it grows the plant at the free-study threshold, it just doesn't tick
+  // the assignment's counter (countQualifying applies the same filter when it recounts).
+  const matching = assignments.filter((a) => modeAllowed(a.modes, input.mode));
   const thresholdPct = growthThresholdPct(
-    assignments.map((a) => a.minScorePct),
+    matching.map((a) => a.minScorePct),
     settings,
   );
 
@@ -1160,6 +1187,7 @@ export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResul
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
       deadline: vocabAssignments.deadline,
+      modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })
     .from(vocabAssignments)
@@ -1191,6 +1219,7 @@ export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResul
       a.minScorePct,
       a.createdAt,
       deadlineEndUtc(a.deadline),
+      parseModes(a.modes),
     );
 
     for (const m of members) {

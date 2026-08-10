@@ -46,11 +46,11 @@ async function seedClassWithStudent(d) {
 }
 
 /** A full-marks round, played through the same path the web action uses. */
-async function play(d, studentId, topicId, score = 10, total = 10) {
+async function play(d, studentId, topicId, score = 10, total = 10, mode = 'quiz') {
   return flashcardsSvc.recordResultWithGarden(
     d,
     { kind: 'student', id: studentId },
-    { topicId, mode: 'quiz', score, total, answers: [] },
+    { topicId, mode, score, total, answers: [] },
   );
 }
 
@@ -216,6 +216,50 @@ describe('assignments', () => {
 
     await gardenSvc.deleteAssignment(d, id);
     expect(await gardenSvc.assignmentProgress(d, id)).toBeNull();
+  });
+
+  it('counts only rounds in the assignment\'s modes, and matches the threshold the same way', async () => {
+    const d = db();
+    const topic = await seedTopic(d);
+    const { cls, student } = await seedClassWithStudent(d);
+
+    // Restricted to type+fill, with a bar LOWER than the free-study threshold (70), so which
+    // bar applies is observable from whether a 60% round grows the plant.
+    const id = await gardenSvc.createAssignment(
+      d,
+      {
+        classId: cls.id,
+        topicId: topic.id,
+        requiredCount: 2,
+        minScorePct: 50,
+        deadline: '2099-12-31',
+        note: null,
+        modes: 'fill,type',
+      },
+      null,
+    );
+
+    // A perfect quiz round: qualifies as free study, but must NOT tick the counter.
+    await play(d, student.id, topic.id);
+    expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(0);
+
+    // A 60% quiz round is an excluded mode: the assignment's 50% bar must not apply to it.
+    const excluded = await play(d, student.id, topic.id, 6, 10);
+    expect(excluded.garden).toMatchObject({ qualified: false });
+    expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(0);
+
+    // The same 60% in a required mode rides the assignment's bar — and ticks the counter.
+    const included = await play(d, student.id, topic.id, 6, 10, 'type');
+    expect(included.garden).toMatchObject({ qualified: true, thresholdPct: 50 });
+    expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(1);
+
+    // The student chip carries the CSV so the client can badge it.
+    const open = await gardenSvc.studentAssignments(d, student.id, '2026-08-07');
+    expect(open[0]).toMatchObject({ id, modes: 'fill,type', done: 1 });
+
+    // Clearing the restriction goes back to any-mode counting: both 60% rounds now qualify.
+    await gardenSvc.updateAssignment(d, id, { modes: null });
+    expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(3);
   });
 
   it('windows the report list by deadline month, missed deadlines included', async () => {
