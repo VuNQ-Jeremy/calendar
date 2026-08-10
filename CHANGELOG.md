@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0143 — 2026-08-10
+Send to Zalo works from the share cards: the upload endpoint was bearer-only and a browser has a cookie.
+
 ## v0.0142 — 2026-08-09
 Zalo: pair a family by student, not just by parent record — most students have no parent row.
 

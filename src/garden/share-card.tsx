@@ -50,7 +50,18 @@ const ERR_INK = '#B3261E';
 
 const FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
 
-type CopyState = 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' | 'sent' | 'not_linked';
+type CopyState =
+  | 'idle'
+  | 'busy'
+  | 'copied'
+  | 'downloaded'
+  /** The rasterizer failed — the image was never made. */
+  | 'error'
+  | 'sent'
+  /** The target has no Zalo chat yet. Normal on day one, not a fault. */
+  | 'not_linked'
+  /** The image was fine; the upload or the Zalo call was not. */
+  | 'send_failed';
 
 export function ClassShareCard() {
   const { garden, vnToday } = useLoaderData() as ShareLoaderData;
@@ -117,15 +128,34 @@ export function ClassShareCard() {
   const sendToZalo = async () => {
     if (!stageRef.current) return;
     setCopy('busy');
+
+    // Rasterizing and sending fail for entirely different reasons, and reporting both as "could
+    // not create the image" sent a real 401 on this button looking like a broken renderer. They
+    // get separate states so the next failure names itself.
+    let blob: Blob;
     try {
-      const body = new FormData();
-      body.set('file', await render(), fileName);
-      body.set('target', `class:${garden.classId}`);
-      body.set('caption', `${garden.className} · ${formatDmy(vnToday)}`);
-      const res = await fetch('/api/zalo/send-card', { method: 'POST', body });
-      setCopy(res.ok ? 'sent' : res.status === 409 ? 'not_linked' : 'error');
+      blob = await render();
     } catch {
       setCopy('error');
+      return;
+    }
+
+    try {
+      const body = new FormData();
+      body.set('file', blob, fileName);
+      body.set('target', `class:${garden.classId}`);
+      body.set('caption', `${garden.className} · ${formatDmy(vnToday)}`);
+      // NOT /api/zalo/… — that prefix is bearer-only and this page has a cookie. See
+      // app/routes/zalo-send-card.tsx.
+      const res = await fetch('/zalo-send-card', { method: 'POST', body });
+      if (res.ok) setCopy('sent');
+      else if (res.status === 409) setCopy('not_linked');
+      else {
+        console.error('[zalo] send-card failed', { status: res.status });
+        setCopy('send_failed');
+      }
+    } catch {
+      setCopy('send_failed');
     }
   };
 
@@ -220,6 +250,9 @@ export function ClassShareCard() {
             fixed. Saying so beats a red failure for a state that is normal on day one. */}
         {copy === 'not_linked' && (
           <span style={{ color: MUTED, fontWeight: 600 }}>{t('zalo_not_linked')}</span>
+        )}
+        {copy === 'send_failed' && (
+          <span style={{ color: ERR_INK, fontWeight: 600 }}>{t('zalo_send_failed')}</span>
         )}
         {copy === 'error' && (
           <span style={{ color: ERR_INK, fontWeight: 600 }}>{t('slip_copy_failed')}</span>

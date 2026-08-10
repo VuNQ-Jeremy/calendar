@@ -92,7 +92,9 @@ export default [
   route('api/zalo/webhook', 'routes/api.zalo.webhook.tsx'),
   route('api/zalo/pair', 'routes/api.zalo.pair.tsx'),
   route('api/zalo/admin', 'routes/api.zalo.admin.tsx'),
-  route('api/zalo/send-card', 'routes/api.zalo.send-card.tsx'),
+  // NOT under api/: that prefix is bearer-only, and every caller is a browser with a session
+  // cookie. See the route file, and garden-month.tsx for the same trap.
+  route('zalo-send-card', 'routes/zalo-send-card.tsx'),
   // Share-card images, fetched by Zalo's own servers — the only unauthenticated R2 route in the
   // app, and it can only reach the `zalo/` prefix. See the file for why that is unavoidable.
   route('zalo-media/:key', 'routes/zalo-media.$key.tsx'),
