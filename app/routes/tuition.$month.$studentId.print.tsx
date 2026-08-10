@@ -2,11 +2,10 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { FeeSlipView } from '../../src/tuition/fee-slip.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireAdmin } from '../../server/services/auth';
-import * as tuitionSvc from '../../server/services/tuition';
-import * as peopleSvc from '../../server/services/people';
+import { requireUser, requireAdmin } from '../../server/services/auth';
+import * as parentPortalSvc from '../../server/services/parent-portal';
+import { buildFeeSlip } from '../../server/services/fee-slip';
 import { TuitionMonth } from '../../shared/schemas';
-import { studentFees } from '../../shared/logic/tuition';
 
 /**
  * Tuition slip (phiếu thu) for one student and one month.
@@ -15,13 +14,17 @@ import { studentFees } from '../../shared/logic/tuition';
  * and no route cache (`cacheKeyForPath` only matches the single-segment month URL).
  *
  * The slip is copied to the clipboard as an image (parents get it over Zalo), not printed, so this
- * is really a rendering surface for `src/tuition/slip-themes.tsx`. The returned shape is the theme
- * contract: flat, self-contained, and the same for every theme — adding a theme touches no server
- * code at all.
+ * is really a rendering surface for `src/tuition/slip-themes.tsx`. `buildFeeSlip`'s shape is the
+ * theme contract: flat, self-contained, and the same for every theme — adding a theme touches no
+ * server code at all.
+ *
+ * Two callers, two guards. Staff still need Admin, exactly as before — money stays admin-only. A
+ * PARENT may open their own child's slip once an admin has switched the portal on, which is the
+ * one loosening here: `portalChild` checks both the toggle and the parent_students link, and the
+ * family already receives this same slip over Zalo today.
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
   const db = createDb(env);
 
   const parsedMonth = TuitionMonth.safeParse(params.month);
@@ -29,48 +32,13 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const month = parsedMonth.data;
   const studentId = params.studentId!;
 
-  const [report, students, parents] = await Promise.all([
-    tuitionSvc.getMonthReport(db, month),
-    peopleSvc.listStudents(db),
-    peopleSvc.listParents(db),
-  ]);
+  const viewer = await requireUser(request, env);
+  if (viewer.kind === 'parent') await parentPortalSvc.portalChild(db, viewer.user.id, studentId);
+  else await requireAdmin(request, env);
 
-  const student = students.find((s) => s.id === studentId);
-  if (!student) throw Response.json({ error: 'unknown_student' }, { status: 404 });
-
-  const fee = studentFees(report.lines, report.studentMonths).find(
-    (f) => f.studentId === studentId,
-  );
-
-  // The paper pads have an SĐT line. Students carry no phone of their own, so it comes from the
-  // first linked parent who has one — null when nobody does, and the theme just omits the line.
-  const phone = parents.find((p) => p.studentIds.includes(studentId) && p.phone)?.phone ?? null;
-
-  // Same idea for the guardian line: the linked parent, falling back to the free-text
-  // `guardian` column that students added before the People form dropped that field carry.
-  const guardian =
-    parents.find((p) => p.studentIds.includes(studentId))?.name ?? student.guardian;
-
-  return {
-    month,
-    student: { id: student.id, name: student.name, guardian, phone },
-    // A student with nothing billed still gets a valid (zero) slip rather than an error page.
-    fee: fee ?? {
-      studentId,
-      lines: [],
-      billedVnd: 0,
-      adjustmentVnd: 0,
-      adjustmentNote: null,
-      dueVnd: 0,
-      paidVnd: 0,
-      paidAt: null,
-      paymentNote: null,
-      outstandingVnd: 0,
-      status: 'paid' as const,
-    },
-    closedAt: report.closedAt,
-    isClosed: report.status === 'closed',
-  };
+  const data = await buildFeeSlip(db, studentId, month);
+  if (!data) throw Response.json({ error: 'unknown_student' }, { status: 404 });
+  return data;
 }
 
 export default function TuitionSlipPrint() {

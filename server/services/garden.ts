@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, lte, like, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   classStudents,
@@ -478,6 +478,78 @@ export async function studentAssignments(
     );
     const { createdAt: _unused, ...rest } = a;
     out.push({ ...rest, done: counts.get(studentId) ?? 0 });
+  }
+  return out;
+}
+
+export type StudentMonthAssignment = {
+  id: string;
+  topicName: string;
+  className: string;
+  deadline: string;
+  requiredCount: number;
+  done: number;
+  /** done >= requiredCount — what the slip prints as hoàn thành. */
+  completed: boolean;
+};
+
+/**
+ * Every assignment whose DEADLINE falls inside one ICT month, for one student, with progress —
+ * the homework block on the monthly report slip. Contrast `studentAssignments` above, which is
+ * forward-looking (deadline >= today) for the /vocabulary chips; a report describes a finished
+ * window, missed deadlines included. Same per-assignment `countQualifying` loop, kept on
+ * purpose: a student has a handful of assignments a month, and the loop is what lets this share
+ * the module-private window logic (created_at .. deadlineEndUtc) with everything else that counts.
+ */
+export async function studentAssignmentsInMonth(
+  db: Db,
+  studentId: string,
+  month: string,
+): Promise<StudentMonthAssignment[]> {
+  const list = await db
+    .select({
+      id: vocabAssignments.id,
+      topicId: vocabAssignments.topicId,
+      topicName: flashcardTopics.name,
+      className: classes.name,
+      deadline: vocabAssignments.deadline,
+      requiredCount: vocabAssignments.requiredCount,
+      minScorePct: vocabAssignments.minScorePct,
+      createdAt: vocabAssignments.createdAt,
+    })
+    .from(vocabAssignments)
+    .innerJoin(classStudents, eq(classStudents.classId, vocabAssignments.classId))
+    .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
+    .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
+    .where(
+      and(
+        eq(classStudents.studentId, studentId),
+        gte(vocabAssignments.deadline, `${month}-01`),
+        lte(vocabAssignments.deadline, `${month}-31`),
+      ),
+    )
+    .orderBy(asc(vocabAssignments.deadline));
+
+  const out: StudentMonthAssignment[] = [];
+  for (const a of list) {
+    const counts = await countQualifying(
+      db,
+      a.topicId,
+      [studentId],
+      a.minScorePct,
+      a.createdAt,
+      deadlineEndUtc(a.deadline),
+    );
+    const done = counts.get(studentId) ?? 0;
+    out.push({
+      id: a.id,
+      topicName: a.topicName,
+      className: a.className,
+      deadline: a.deadline,
+      requiredCount: a.requiredCount,
+      done,
+      completed: done >= a.requiredCount,
+    });
   }
   return out;
 }

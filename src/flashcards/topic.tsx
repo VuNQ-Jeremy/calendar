@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLoaderData, useFetcher, useNavigate } from 'react-router';
+import { useLoaderData, useFetcher, useNavigate, useParams, useSearchParams } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { Modal, PageHeader, Empty, useConfirm } from '../ui.jsx';
@@ -10,6 +10,7 @@ import { playWord } from './audio.js';
 import { MIN_WORDS, fmtDuration, parseImportLines } from './game-utils.js';
 import type { GameMode, GameResult } from './game-utils.js';
 import { orderWordsByMastery } from '../../shared/logic/flashcards';
+import { isDue } from '../../shared/logic/review';
 import { FlipGame } from './game-flip.jsx';
 import { QuizGame } from './game-quiz.jsx';
 import { MatchGame } from './game-match.jsx';
@@ -38,6 +39,8 @@ type LoaderData = {
   mastery: MasteryRow[];
   kind: 'staff' | 'student';
   canUseAi: boolean;
+  /** ICT today, from the server. Decides which words `?review=1` plays. */
+  today: string;
 };
 
 const MODE_META: { id: GameMode; tk: string; icon: 'cards' | 'grid' | 'check' }[] = [
@@ -47,8 +50,12 @@ const MODE_META: { id: GameMode; tk: string; icon: 'cards' | 'grid' | 'check' }[
 ];
 
 export function FlashcardTopicScreen() {
-  const { topic, words, results, mastery, kind, canUseAi } = useLoaderData() as LoaderData;
+  const { topic, words, results, mastery, kind, canUseAi, today } = useLoaderData() as LoaderData;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // The URL segment the student arrived on — slug or id. Leaving review mode must land on the
+  // same page, and the loader payload carries no slug of its own.
+  const { slug } = useParams();
   const { t } = useLang();
   const fetcher = useFetcher();
   const resultFetcher = useFetcher<{ ok?: boolean; garden?: RoundGarden | null }>();
@@ -61,12 +68,31 @@ export function FlashcardTopicScreen() {
   const [playing, setPlaying] = React.useState<GameMode | null>(null);
   const isStaff = kind === 'staff';
 
+  /**
+   * Ôn tập: `?review=1` narrows every game to the words that have come round again today.
+   *
+   * The filter is the loader's `today` against each word's `dueDay`, which is the same comparison
+   * the vocabulary page's due card made — so "12 từ cần ôn" over there is 12 cards over here. Staff
+   * have no mastery rows and so never enter review mode, whatever the URL says.
+   */
+  const reviewMode = kind === 'student' && searchParams.get('review') === '1';
+  const dueWords = React.useMemo(() => {
+    if (!reviewMode) return words;
+    const byWord = new Map(mastery.map((m) => [m.wordId, m]));
+    return words.filter((w) => isDue(byWord.get(w.id) ?? null, today));
+  }, [reviewMode, words, mastery, today]);
+  // The round just finished and the revalidation landed: everything is rescheduled into the future,
+  // so there is nothing left to review. Fall back to the whole topic rather than an empty deck.
+  const reviewEmpty = reviewMode && dueWords.length === 0;
+  const deck = reviewEmpty ? words : dueWords;
+
   // Flip mode prioritizes words the student answered wrong most often, then words not seen for
   // the longest. Students with no history (or staff preview) get a plain shuffle. The comparison
-  // moved to shared/logic/flashcards.ts in phase 3 so mobile orders cards identically.
+  // moved to shared/logic/flashcards.ts in phase 3 so mobile orders cards identically. In review
+  // mode the same ordering applies to the due subset — "worst first" is exactly review priority.
   const orderedWords = React.useMemo(
-    () => orderWordsByMastery(words, kind === 'student' ? mastery : []),
-    [words, mastery, kind],
+    () => orderWordsByMastery(deck, kind === 'student' ? mastery : []),
+    [deck, mastery, kind],
   );
 
   React.useEffect(() => {
@@ -97,10 +123,10 @@ export function FlashcardTopicScreen() {
           <FlipGame words={orderedWords} onExit={exit} onFinish={finish} garden={roundGarden} />
         )}
         {playing === 'quiz' && (
-          <QuizGame words={words} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <QuizGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
         )}
         {playing === 'match' && (
-          <MatchGame words={words} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <MatchGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
         )}
       </GameOverlay>
     );
@@ -120,9 +146,26 @@ export function FlashcardTopicScreen() {
         subtitle={t('fc_word_count', { n: words.length })}
       />
 
+      {reviewMode && (
+        <div
+          className="m-row"
+          style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}
+        >
+          <MIcon name="repeat" size={18} />
+          <span>
+            {reviewEmpty
+              ? t('fc_review_done_today')
+              : t('fc_review_playing', { n: dueWords.length })}
+          </span>
+          <FBtn variant="ghost" onClick={() => navigate(`/vocabulary/${slug ?? topic.id}`)}>
+            {t('fc_review_whole_topic')}
+          </FBtn>
+        </div>
+      )}
+
       <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
         {MODE_META.map((m) => {
-          const disabled = words.length < MIN_WORDS[m.id];
+          const disabled = deck.length < MIN_WORDS[m.id];
           return (
             <FBtn
               key={m.id}

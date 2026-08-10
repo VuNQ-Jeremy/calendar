@@ -17,8 +17,9 @@ import * as previewSvc from '../../server/services/session-preview';
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const { user, kind } = await requireLearner(request, env);
-  // Staff have the calendar; anything that is not a student has no schedule of its own.
-  // (Parents cannot authenticate today — the branch is defensive, not reachable.)
+  // Staff have the calendar; anything that is not a student has no schedule of its own. A parent
+  // never reaches this — requireLearner already sent them to /profile — and their children's
+  // sessions live on /children instead.
   if (kind === 'staff') throw redirect('/calendar');
   if (kind !== 'student') throw redirect('/profile');
 

@@ -96,12 +96,34 @@ async function loadGarden(
   }
 }
 
+/**
+ * What the student owes a review on today, or null.
+ *
+ * Degrades to null on failure for the same reason the garden does: this page is the topics list
+ * first, and a deploy that lands before its migration must not take that down. Staff get null
+ * because only students have mastery rows to schedule.
+ */
+async function loadReview(db: Db, su: SessionUser) {
+  if (su.kind !== 'student') return null;
+  const today = ictDateOf(new Date().toISOString());
+  try {
+    const { groups, total } = await flashcardsSvc.listDueForStudent(db, su.user.id, today);
+    return { today, total, groups };
+  } catch (err) {
+    console.error('review due list unavailable on /vocabulary', err);
+    return null;
+  }
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireLearner(request, env);
   const db = createDb(env);
   const topics = await flashcardsSvc.listTopics(db);
-  const { garden, gardenStaff } = await loadGarden(db, su);
+  const [{ garden, gardenStaff }, review] = await Promise.all([
+    loadGarden(db, su),
+    loadReview(db, su),
+  ]);
   // Gates the AI generator in the UI — same flag the topic page passes down.
   return {
     topics,
@@ -109,6 +131,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     canUseAi: Boolean(env.ANTHROPIC_API_KEY),
     garden,
     gardenStaff,
+    review,
   };
 }
 

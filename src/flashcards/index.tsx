@@ -31,7 +31,72 @@ type LoaderData = {
   garden: StudentGardenData | null;
   /** Staff only, same null contract. */
   gardenStaff: StaffGardenData | null;
+  /** Student only, null while the review columns are missing — see the route's loadReview. */
+  review: ReviewData | null;
 };
+
+/** Today's review backlog, grouped by topic. `total` is the sum, and what the sidebar badge shows. */
+type ReviewData = {
+  today: string;
+  total: number;
+  groups: {
+    topic: { id: string; name: string; slug: string | null; color: string };
+    wordIds: string[];
+  }[];
+};
+
+/**
+ * Ôn tập hôm nay — the words that have come round again, by topic.
+ *
+ * Shown only when something is actually due: an empty "nothing to review" card would sit under the
+ * plant every day saying nothing. The counts are the server's, computed against ICT today, so this
+ * agrees with the sidebar badge by construction rather than by coincidence.
+ */
+function ReviewCard({ review }: { review: ReviewData }) {
+  const navigate = useNavigate();
+  const { t } = useLang();
+
+  return (
+    <FC style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+      <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
+        <MIcon name="repeat" size={20} />
+        <strong style={{ fontSize: 'var(--text-lg)' }}>{t('fc_review_title')}</strong>
+        <Badge>{review.total}</Badge>
+      </div>
+      <div className="m-stack" style={{ gap: 8 }}>
+        {review.groups.map((g) => {
+          const c = colorOf(g.topic.color);
+          return (
+            <div
+              key={g.topic.id}
+              className="m-row"
+              style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 999,
+                  background: c.ink,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ flex: 1, minWidth: 160 }}>
+                {t('fc_review_due_topic', { n: g.wordIds.length, topic: g.topic.name })}
+              </span>
+              <FBtn
+                variant="secondary"
+                onClick={() => navigate(`/vocabulary/${g.topic.slug ?? g.topic.id}?review=1`)}
+              >
+                {t('fc_review_now')}
+              </FBtn>
+            </div>
+          );
+        })}
+      </div>
+    </FC>
+  );
+}
 
 interface TopicDraft {
   id?: string;
@@ -41,7 +106,7 @@ interface TopicDraft {
 }
 
 export function FlashcardTopicsScreen() {
-  const { topics, kind, canUseAi, garden, gardenStaff } = useLoaderData() as LoaderData;
+  const { topics, kind, canUseAi, garden, gardenStaff, review } = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useLang();
@@ -155,6 +220,7 @@ export function FlashcardTopicsScreen() {
         }
       />
       {!isStaff && <GardenWidget data={garden} />}
+      {!isStaff && review && review.total > 0 && <ReviewCard review={review} />}
       {topics.length ? (
         <div
           style={{

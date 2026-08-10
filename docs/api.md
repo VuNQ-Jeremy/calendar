@@ -66,8 +66,9 @@ its SHA-256 hash, so a database dump cannot be replayed.
   made the change keeps its token. Expect a 401 on other devices — present it as a re-login,
   not a crash.
 - Signup is invite-only (`POST /api/auth/redeem-invite`).
-- **Parents can authenticate, but have no mobile screens.** `userFromToken` resolves
-  `kind: 'parent'`; the app sends them to `/profile` and nothing else.
+- **Parents can authenticate.** `userFromToken` resolves `kind: 'parent'`. They always get
+  `/profile`; the Children tab and `/api/parent/*` appear only once an admin switches on the
+  parent portal in System Config (`/api/settings/parent-portal`).
 - **Codes minted by the web are linked to a person.** Redeeming one attaches an account to
   the existing `students`/`staff`/`parents` row — it does not create a second one, and the
   name in the body is ignored (the school's spelling wins). Codes created through
@@ -79,17 +80,39 @@ its SHA-256 hash, so a database dump cannot be replayed.
 |---|---|
 | `any` | any authenticated caller, parents included |
 | `user` | staff or student — **not** parents |
+| `parent` | parents only — **not** staff or students |
 | `staff` | `Teacher`, `Admin`, `Assistant` |
 | `admin` | `Admin` only |
 
 Students can reach only `user`-level endpoints — mirroring the web, where they see just
 `/flashcards` and `/profile`. Everything else returns **403**, not a redirect.
 
-Parents are narrower still: `any` covers the endpoints about themselves (`/api/auth/me`,
+Parents get `any` plus `parent`. `any` covers the endpoints about themselves (`/api/auth/me`,
 `/api/auth/logout`, `/api/auth/change-password`, `/api/bootstrap`, `/api/profile`,
-`/api/settings/ui-prefs`, `/api/settings/notifications`, `/api/push/*`). `user`-level
-handlers branch `student ? own data : everything`, so a parent reaching one would be
-served the teacher's view — they get **403** instead.
+`/api/settings/ui-prefs`, `/api/settings/notifications`, `/api/settings/parent-portal`,
+`/api/push/*`). `user`-level handlers branch `student ? own data : everything`, so a parent
+reaching one would be served the teacher's view — they get **403** instead.
+
+`parent` is the mirror image: those handlers scope everything to `parent_students`, so a staff
+or student caller has no children to resolve and gets **403**. Every `parent`-level handler
+additionally passes through `server/services/parent-portal.ts`, which **403**s when an admin has
+the portal switched off or when the `studentId` in the path belongs to another family.
+
+### Parent portal
+
+| Method | Path | Level | Notes |
+|---|---|---|---|
+| GET | `/api/settings/parent-portal` | **any** | `{ enabled }` — the school-wide switch. A parent reads it to know whether their Children tab exists |
+| PATCH | `/api/settings/parent-portal` | admin | `ParentPortalInput`. Never gates login; a parent always keeps `/profile` |
+| GET | `/api/parent/home` | **parent** | Every linked child with `classNames` and the next `?days=` (default 7) of sessions, in one round trip. Server-clock derived, so `serverNow` rides along and clients must not cache it long |
+| GET | `/api/parent/attendance/:studentId` | **parent** | `?month=YYYY-MM` (defaults to the ICT month). Session-by-session roll, newest first |
+| GET | `/api/parent/report/:studentId/:month` | **parent** | The monthly report. Same payload as the printable document — both call `buildReportCard`. `remark: null` for a month the teacher has not written |
+| GET | `/api/parent/tuition/:studentId/:month` | **parent** | The fee slip. Same payload as the printable document — both call `buildFeeSlip` |
+
+The two document routes `/assessments/:month/:studentId/report` and
+`/tuition/:month/:studentId/print` accept a parent cookie for their own child under the same
+rule, so a parent on the web reads the identical slip staff print. Staff still need
+`requireStaff` / `requireAdmin` respectively.
 
 ---
 
@@ -130,7 +153,7 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/materials/:id?` | staff | `MaterialInput` — **multipart**, see below |
 | `/api/assessments/scores/:id?` | staff | `ScoreRecordInput` |
 | `/api/assessments/behavior/:id?` | staff | `BehaviorRecordInput` |
-| `/api/assessments/remarks/:id?` | staff | `MonthlyRemarkInput` — one row per (student, month); POST upserts on that pair. `ratings` is `{ criterionId: 1-5 }`, keyed by `/api/remark-criteria` ids |
+| `/api/assessments/remarks/:id?` | staff | `MonthlyRemarkInput` — one row per (student, month); POST upserts on that pair. `ratings` is `{ criterionId: 1-5 }`, keyed by `/api/remark-criteria` ids. Rows also carry server-set `staffId` (last author), `createdAt`, `updatedAt`, `sentAt` (last Zalo delivery of the printed slip) — never accepted from the client |
 | `/api/assessment-types/:id?` | **admin** | `AssessmentTypeInput` |
 | `/api/remark-criteria/:id?` | **admin** (GET: staff) | `RemarkCriterionInput` — the monthly report's rating rows; teachers read them to render the remark form |
 | `/api/grade-levels/:id?` | **admin** | `GradeLevelInput` — managed Khối 6..9 list, categorizes questions and tests |
@@ -153,7 +176,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/my-sessions` | **user** | Upcoming sessions with composed previews, `?days=` 1-14 (default 7). A student sees their own classes, staff see every class. Tests appear as title + window only. Computed against the server clock — do not cache |
 | GET | `/api/flashcards/topics/:id?` | **user** | Students play games |
 | POST PATCH DELETE | `/api/flashcards/topics/:id?` | staff | Replies with the refreshed topic list |
-| GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, results, mastery }` — one round trip, and exactly what an offline download stores. `results` is user-level because the web gives students the leaderboard too; `mastery` is empty for staff |
+| GET | `/api/flashcards/topic/:slug` | **user** | `{ topic, words, results, mastery }` — one round trip, and exactly what an offline download stores. `results` is user-level because the web gives students the leaderboard too; `mastery` is empty for staff. Each mastery row carries `level` + `dueDay` (the spaced-repetition schedule — see the review section below), so a client can compute today's due words offline |
 | GET POST PATCH DELETE | `/api/flashcards/words/:id?` | staff | `?topicId=` required on GET and POST |
 | POST | `/api/flashcards/import?topicId=` | staff | `{ words: [...] }`, max 200 |
 | POST | `/api/flashcards/generate-topic` | staff | `{ name, description?, color?, words: [...] }` — creates a topic and its words in one write; replies with the new topic (incl. `slug`). NOT under `/topics`, whose `:id?` would swallow the segment |
@@ -180,11 +203,18 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 
 ### Tuition
 
-**No student-facing API.** Tuition is staff-only, end to end: the amounts live on the web
-`/tuition` screen and leave the app as a printed slip (phiếu thu), never as an app screen or a
-push notification. `/api/tuition/me`, `/api/tuition/me/:month` and `/api/tuition/me/:month/slip`
-existed until Aug 2026 and were removed with the phone screens they served; the bank details on
-`/config` (`paymentInfo`) are kept as staff-recorded reference data.
+**No student-facing API.** `/api/tuition/me`, `/api/tuition/me/:month` and
+`/api/tuition/me/:month/slip` existed until Aug 2026 and were removed with the phone screens they
+served: a child is not told what their family owes. That still holds — there is no `user`-level
+tuition endpoint. The bank details on `/config` (`paymentInfo`) are kept as staff-recorded
+reference data.
+
+**One parent-facing read, added with the parent portal.**
+`GET /api/parent/tuition/:studentId/:month` deliberately revisits that removal, and only for
+parents: they are the audience the printed slip was always for, and they already receive this
+same document over Zalo. It is gated on the portal toggle and the `parent_students` link, and it
+carries the payment and adjustment notes the printed slip carries. Staff amounts still live on the
+web `/tuition` screen (`requireAdmin`).
 
 Also bearer-aware (they accept either a cookie or a token): `/materials/:id/view`,
 `/materials/:id/download`, `/enrich-vocab`, `/generate-vocab`.
@@ -246,6 +276,26 @@ student stats. For the same reason they do not grow a garden plant.
 
 ---
 
+## Ôn tập (spaced-repetition review)
+
+**There is no review endpoint, and that is the design.** Every mastery row carries `level` and
+`dueDay`, both already in the topic bundle above, and "due" is `dueDay <= today in ICT` — so a
+client answers "what do I owe today?" from data it has. Nothing is swept, no cron runs, and the
+badge, the due card and the review deck cannot drift apart because they all evaluate the same
+comparison against the same server-supplied day.
+
+Rescheduling happens inside the ordinary `POST /api/flashcards/results` write: answer a word
+correctly on or after its due day and it climbs a rung of the interval ladder (3, 5, 7, 14, 30 days
+by default, tunable school-wide by an admin); answer it wrong and it drops a rung and comes back
+sooner; answer it early and nothing moves. The rules are pure functions in `shared/logic/review.ts`,
+shared by both clients. `clientId` idempotency covers the schedule exactly as it covers the score —
+a replayed offline flush cannot advance the ladder twice.
+
+The phone does not yet show a review screen; it receives the schedule regardless. See
+`docs/mobile-parity.md`.
+
+---
+
 ## The garden (vườn cây từ vựng)
 
 Each student has ONE plant, school-wide. A qualifying round grows it a stage (at most
@@ -289,8 +339,9 @@ A second notification channel next to Expo push, using the **Zalo Bot Platform**
 business. A bot is created from a personal Zalo account and may message any conversation that has
 paired with it, unprompted, which is what makes cron delivery possible at all.
 
-It exists because it reaches people push cannot: **parents**, who have no account and no app, and
-who cannot be given one — `userFromToken` refuses any account with a `parentId`.
+It exists because it reaches people push cannot: **parents**. Most have no account — an app login
+is opt-in per family and the parent portal is opt-in per school, whereas every family is already on
+Zalo. Zalo therefore stays the channel, not a fallback for it.
 
 **Pairing is always two-sided.** Staff generate a code (`/api/zalo/pair`, or the Zalo card on
 /config); the person messages that code to the bot from their own Zalo. Nothing can link a chat

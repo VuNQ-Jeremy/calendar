@@ -8,8 +8,8 @@ const routes = crud({
   live: 'assessments',
   list: ({ db }) => svc.listRemarks(db),
   // POST upserts on (studentId, month) — one report per student per month is the identity.
-  create: (input, { db }) => svc.createRemark(db, input),
-  update: (id, patch, { db }) => svc.updateRemark(db, id, patch),
+  create: (input, { db, user }) => svc.createRemark(db, input, user.user.id),
+  update: (id, patch, { db, user }) => svc.updateRemark(db, id, patch, user.user.id),
   remove: (id, { db }) => svc.removeRemark(db, id).then(() => ({ id })),
 });
 

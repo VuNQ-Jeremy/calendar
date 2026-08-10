@@ -22,10 +22,13 @@ import { Badge, Button, Card, Heading, IconButton, Input, Mono, Muted } from '~/
  * share sheet hands it straight to Zalo, Messenger or SMS, which is how these codes actually
  * travel.
  *
- * **Parent invites are not offered here.** Parents can sign in now (`userFromToken` resolves
- * `kind: 'parent'`), but the web mints their code automatically when staff adds the parent, and
- * a parent's app is the profile screen — there is nothing for this panel to hand them that the
- * People screen has not already handed out. Existing Parent invites still list and revoke here.
+ * **Parent invites are not offered here**, and that is not about what a parent can do with an
+ * account — they sign in, and with the parent portal open they get their children's schedule,
+ * attendance, report and fee slips. It is about WHERE a parent code is minted: the web attaches
+ * one to the parent row automatically when staff adds the parent, so there is nothing for this
+ * panel to hand out that the People screen has not already handed out. Offering Parent here would
+ * only produce an UNLINKED code (see below), which is the path the auto-minting replaced.
+ * Existing Parent invites still list and revoke here.
  *
  * **Codes made here are unlinked.** The web attaches a code to the person it was minted for, so
  * redeeming attaches an account to that row. A code made here has no such link and still creates

@@ -264,6 +264,19 @@ export async function findParent(db: Db, id: string): Promise<ParentRow | null> 
 }
 
 /**
+ * Just the linked children's ids. Cheaper than `findParent` when the parent's own row is not
+ * needed — which is every authorization check in the parent portal, where this set IS the
+ * permission list.
+ */
+export async function studentIdsOfParent(db: Db, parentId: string): Promise<string[]> {
+  const rows = await db
+    .select({ studentId: parentStudents.studentId })
+    .from(parentStudents)
+    .where(eq(parentStudents.parentId, parentId));
+  return rows.map((r) => r.studentId);
+}
+
+/**
  * Add one child to a parent who already exists — the sibling case.
  *
  * Deliberately not `updateParent({ studentIds })`: that replaces the whole set, so adding

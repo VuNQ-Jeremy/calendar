@@ -6,8 +6,11 @@ Zalo is what this school actually uses. Before this feature the app only helped 
 rendered share cards that a teacher copied and pasted into a group chat by hand, one family at a
 time. This makes Zalo a real delivery channel next to Expo push.
 
-It exists to reach people push cannot — **parents**, who have no account and never will
-(`userFromToken` refuses any account with a `parentId`, deliberately; see `server/services/auth.ts`).
+It exists to reach people push cannot — **parents**. A parent *can* have an account now (and the
+parent portal, when an admin switches it on, gives them their children's schedule, attendance,
+report and fee slips), but that is opt-in twice over: per school and per family. Every family is
+already on Zalo. So Zalo is the channel this feature is built around, not a stopgap until logins
+arrive — and the share cards below remain how most parents receive a document.
 
 > Keep this file current when the channel changes. It is the only place the operational details
 > and the traps are written down; the code comments explain individual decisions, not the shape.

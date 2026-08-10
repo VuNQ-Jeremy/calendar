@@ -217,6 +217,47 @@ describe('assignments', () => {
     await gardenSvc.deleteAssignment(d, id);
     expect(await gardenSvc.assignmentProgress(d, id)).toBeNull();
   });
+
+  it('windows the report list by deadline month, missed deadlines included', async () => {
+    const d = db();
+    const topic = await seedTopic(d);
+    const { cls, student } = await seedClassWithStudent(d);
+
+    const inMonth = await gardenSvc.createAssignment(
+      d,
+      {
+        classId: cls.id,
+        topicId: topic.id,
+        requiredCount: 1,
+        minScorePct: 80,
+        deadline: '2099-09-20',
+        note: null,
+      },
+      null,
+    );
+    await gardenSvc.createAssignment(
+      d,
+      {
+        classId: cls.id,
+        topicId: topic.id,
+        requiredCount: 1,
+        minScorePct: 80,
+        deadline: '2099-10-05',
+        note: null,
+      },
+      null,
+    );
+
+    // Only the September deadline is in the reported window, and it is unfinished so far.
+    let rows = await gardenSvc.studentAssignmentsInMonth(d, student.id, '2099-09');
+    expect(rows).toEqual([
+      expect.objectContaining({ id: inMonth, done: 0, requiredCount: 1, completed: false }),
+    ]);
+
+    await play(d, student.id, topic.id);
+    rows = await gardenSvc.studentAssignmentsInMonth(d, student.id, '2099-09');
+    expect(rows[0]).toMatchObject({ done: 1, completed: true, className: cls.name });
+  });
 });
 
 describe('the daily sweep', () => {

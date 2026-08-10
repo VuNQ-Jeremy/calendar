@@ -3,7 +3,12 @@ import { useLoaderData } from 'react-router';
 import { useLang } from '../lib/i18n.jsx';
 import { colorOf } from '../lib/core.js';
 import { monthLabel } from '../../shared/logic/month.js';
-import { BEHAVIOR_META, scoreColorId } from '../../shared/logic/assess.js';
+import {
+  ATTENDANCE_META,
+  ATTENDANCE_STATUSES,
+  BEHAVIOR_META,
+  scoreColorId,
+} from '../../shared/logic/assess.js';
 import type { BehaviorTypeId } from '../../shared/logic/assess.js';
 
 /**
@@ -35,8 +40,37 @@ type ReportLoaderData = {
     incidents: Record<string, number>;
     praiseCount: number;
   };
+  teacher: string | null;
+  scoreLines: {
+    className: string | null;
+    subjectName: string | null;
+    average: number;
+    count: number;
+  }[];
+  attendance: {
+    classId: string;
+    className: string;
+    counts: Record<string, number>;
+    total: number;
+  }[];
+  homework: {
+    id: string;
+    topicName: string;
+    className: string;
+    deadline: string;
+    requiredCount: number;
+    done: number;
+    completed: boolean;
+  }[];
   /** The month's vocabulary garden, or null when there was no activity worth printing. */
-  garden: { activeDays: number; fruits: number } | null;
+  garden: {
+    activeDays: number;
+    playDays: number;
+    stagesGained: number;
+    fruits: number;
+    /** 0 unless the reported month is still running. */
+    streak: number;
+  } | null;
 };
 
 const SLIP_CSS = `
@@ -177,6 +211,19 @@ const SLIP_CSS = `
 .rslip__sign-role { font-weight: 700; font-size: 14px; }
 .rslip__sign-hint { font-size: 12.5px; color: var(--muted); font-style: italic; }
 .rslip__sign-rule { margin-top: 42px; border-bottom: 1.5px dotted #A9C3AF; }
+.rslip__table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rslip__table td, .rslip__table th { padding: 4px 6px; border-bottom: 1px dotted #A9C3AF; }
+.rslip__table-h { font-size: 12px; color: var(--muted); font-weight: 700; text-align: center; white-space: nowrap; }
+.rslip__table-name { text-align: left; font-weight: 600; }
+.rslip__table-sub { color: var(--muted); font-weight: 400; font-size: 13px; }
+.rslip__table-avg { text-align: center; font-size: 15px; }
+.rslip__table-n { text-align: center; color: var(--muted); }
+.rslip__hw { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 3px 2px 4px; border-bottom: 1px dotted #A9C3AF; font-size: 14px; }
+.rslip__hw-name { min-width: 0; word-break: break-word; }
+.rslip__hw-count { font-weight: 700; color: #B3261E; white-space: nowrap; }
+.rslip__hw-count--done { color: #2F5C3A; }
+.rslip__hw-summary { font-weight: 400; text-transform: none; letter-spacing: 0; }
+.rslip__sign-name { font-weight: 700; font-size: 15px; margin-top: 2px; }
 `;
 
 /**
@@ -230,8 +277,19 @@ function Stars({ value }: { value: number }) {
 }
 
 export function ReportSlipView() {
-  const { month, student, classNames, remark, criteria, stats, garden } =
-    useLoaderData() as ReportLoaderData;
+  const {
+    month,
+    student,
+    classNames,
+    remark,
+    criteria,
+    stats,
+    scoreLines,
+    attendance,
+    homework,
+    garden,
+    teacher,
+  } = useLoaderData() as ReportLoaderData;
   const { t, lang } = useLang();
   const stageRef = React.useRef<HTMLDivElement>(null);
   const [copy, setCopy] = React.useState<CopyState>({ kind: 'idle' });
@@ -297,6 +355,8 @@ export function ReportSlipView() {
       body.set('file', blob, fileName);
       body.set('target', `student:${student.id}`);
       body.set('caption', `${t('rslip_title')} ${month} · ${student.name}`);
+      // Lets the server stamp monthly_remarks.sent_at — only when there is a saved remark to stamp.
+      if (remark) body.set('remarkId', remark.id);
       // NOT /api/zalo/… — that prefix is bearer-only and this page carries a cookie.
       const res = await fetch('/zalo-send-card', { method: 'POST', body });
       if (res.ok) setCopy({ kind: 'sent' });
@@ -394,14 +454,86 @@ export function ReportSlipView() {
                       <Sprout />
                       {t('rslip_garden_days')}: <b>{garden.activeDays}</b>
                     </span>
+                    <span className="rslip__stat rslip__stat--garden">
+                      {t('remark_garden_plays')}: <b>{garden.playDays}</b>
+                    </span>
+                    {garden.stagesGained > 0 && (
+                      <span className="rslip__stat rslip__stat--garden">
+                        {t('remark_garden_stages')}: <b>{garden.stagesGained}</b>
+                      </span>
+                    )}
                     {garden.fruits > 0 && (
                       <span className="rslip__stat rslip__stat--garden">
                         {t('rslip_garden_fruit')}: <b>{garden.fruits}</b>
                       </span>
                     )}
+                    {garden.streak > 1 && (
+                      <span className="rslip__stat rslip__stat--garden">
+                        {t('garden_streak', { n: garden.streak })}
+                      </span>
+                    )}
                   </>
                 )}
               </div>
+
+              {scoreLines.length > 0 && (
+                <>
+                  <p className="rslip__section-title">{t('rslip_scores_by_class')}</p>
+                  <table className="rslip__table">
+                    <tbody>
+                      {scoreLines.map((l, i) => {
+                        const c = colorOf(scoreColorId(l.average));
+                        return (
+                          <tr key={i}>
+                            <td className="rslip__table-name">
+                              {l.className ?? t('assess_no_class')}
+                              {l.subjectName && (
+                                <span className="rslip__table-sub"> · {l.subjectName}</span>
+                              )}
+                            </td>
+                            <td className="rslip__table-avg">
+                              <b style={{ color: c.ink }}>{l.average}</b>
+                            </td>
+                            <td className="rslip__table-n">
+                              {t('rslip_score_count', { n: l.count })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {attendance.length > 0 && (
+                <>
+                  <p className="rslip__section-title">{t('rslip_attendance')}</p>
+                  <table className="rslip__table">
+                    <thead>
+                      <tr>
+                        <th />
+                        {ATTENDANCE_STATUSES.map((s) => (
+                          <th key={s} className="rslip__table-h">
+                            {t(ATTENDANCE_META[s].tk)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendance.map((a) => (
+                        <tr key={a.classId}>
+                          <td className="rslip__table-name">{a.className}</td>
+                          {ATTENDANCE_STATUSES.map((s) => (
+                            <td key={s} className="rslip__table-n">
+                              {a.counts[s] ?? 0}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
 
               <p className="rslip__section-title">{t('remark_title')}</p>
               {criteria.map((c) => (
@@ -416,9 +548,37 @@ export function ReportSlipView() {
                 {remark?.comment || t('remark_none')}
               </p>
 
+              {homework.length > 0 && (
+                <>
+                  <p className="rslip__section-title">
+                    {t('rslip_homework')}
+                    {' — '}
+                    <span className="rslip__hw-summary">
+                      {t('rslip_homework_done', {
+                        done: homework.filter((h) => h.completed).length,
+                        total: homework.length,
+                      })}
+                    </span>
+                  </p>
+                  {homework.map((h) => (
+                    <div key={h.id} className="rslip__hw">
+                      <span className="rslip__hw-name">
+                        {h.topicName} · {h.className}
+                      </span>
+                      <span
+                        className={`rslip__hw-count${h.completed ? ' rslip__hw-count--done' : ''}`}
+                      >
+                        {h.done}/{h.requiredCount} {h.completed ? '✓' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+
               <div className="rslip__foot">
                 <div className="rslip__sign">
                   <div className="rslip__sign-role">{t('rslip_teacher_sign')}</div>
+                  {teacher && <div className="rslip__sign-name">{teacher}</div>}
                   <div className="rslip__sign-hint">{t('rslip_signature')}</div>
                   <div className="rslip__sign-rule" />
                 </div>

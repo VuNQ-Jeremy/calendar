@@ -318,10 +318,17 @@ export const monthlyRemarks = sqliteTable(
     /** JSON object: remark_criteria id -> 1-5 rating. */
     ratings: text('ratings').notNull().default('{}'),
     comment: text('comment'),
+    /** Author of the last save; see migrations/0032_remark_meta.sql. */
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    createdAt: text('created_at'),
+    updatedAt: text('updated_at'),
+    /** When the slip image last reached a family chat via /zalo-send-card. */
+    sentAt: text('sent_at'),
   },
   (t) => [
     unique('uq_monthly_remarks_student_month').on(t.studentId, t.month),
     index('idx_monthly_remarks_month').on(t.month),
+    index('idx_monthly_remarks_staff').on(t.staffId),
   ],
 );
 
@@ -520,10 +527,15 @@ export const flashcardMastery = sqliteTable(
     correct: integer('correct').notNull().default(0),
     wrong: integer('wrong').notNull().default(0),
     lastSeen: text('last_seen'),
+    /** Spaced-repetition rung: index into the review settings' intervals. See shared/logic/review.ts. */
+    level: integer('level').notNull().default(0),
+    /** ICT YYYY-MM-DD the word next falls due; NULL = not scheduled. */
+    dueDay: text('due_day'),
   },
   (t) => [
     primaryKey({ columns: [t.studentId, t.wordId] }),
     index('idx_flashcard_mastery_word').on(t.wordId),
+    index('idx_flashcard_mastery_due').on(t.studentId, t.dueDay),
   ],
 );
 

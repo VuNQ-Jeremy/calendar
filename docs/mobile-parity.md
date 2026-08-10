@@ -45,6 +45,25 @@ This table used to carry a `/homework` row. That module was dropped in favour of
 
 ## Deliberate omissions, with reasons
 
+**Ôn tập / spaced-repetition review** (web: the "Ôn tập hôm nay" card on `/vocabulary`, the
+`?review=1` deck on a topic, and the sidebar badge — added 2026-08).
+
+Not built on the phone in v1, but the data gap is already closed: the schedule (`level`, `dueDay`)
+rides in every mastery row of the topic bundle the app already downloads for offline study, and the
+rules are pure functions in `shared/logic/review.ts` with no `server/` imports. So the mobile
+version is a client-side filter and a screen, publishable as an OTA with no server change:
+
+- `mobile/app/(app)/vocabulary/index.tsx` — the due section, counting with `isDue` across the
+  bundles already cached.
+- `mobile/app/play/[slug]/[mode].tsx` — accept `review=1` and narrow `bundle.words` the same way
+  `src/flashcards/topic.tsx` does.
+- `mobile/lib/endpoints.ts` — only if a cross-topic due list is wanted; per-topic needs nothing.
+
+The reason it waits: the phone's vocabulary flow is offline-first, so "what is due today" has to be
+answered from cached bundles rather than a query, and that is a design question about which topics
+a student has downloaded — not a port. Recording a round already reschedules correctly from the
+phone today, because the write path is shared.
+
 **Student rankings** (web `/rankings/:month?`, added 2026-08).
 Not an omission on principle — just not built yet. Everything that would be hard to port already
 lives in the right place: the scoring is pure functions in `shared/logic/rankings.ts` (no React, no
@@ -108,14 +127,16 @@ neither client hides a setting the other can change; each simply applies the hal
 GET on `/api/settings/ui-prefs` is `user`-level because every client renders from it; PATCH is
 `admin`, because these are school-wide values.
 
-**Parent invite codes** (web People → Generate invite → role "Parent").
-A Parent invite creates an `accounts` row with a `parentId`, and `userFromToken` returns `null` for
-exactly that shape (`server/services/auth.ts:118`, "parent accounts remain unsupported"). The code
-redeems, a password is set, and the person can still never sign in. The mobile invite UI therefore
-offers Student and Staff only, and says why. Parent *records* are fully manageable on the Parents
-tab; Parent invites created on the web still list and revoke on the phone. **This is a server
-capability gap, not a mobile one** — if parent login ships, delete the restriction in
-`components/InvitesPanel.tsx` and the note in `people/parent/[id].tsx`.
+**Parent invite codes.** No longer a capability gap: parents sign in (`userFromToken` resolves
+`kind: 'parent'`), and with the parent portal switched on in System Config both clients give them
+their children's schedule, attendance, report and fee slips — web at `/children`, mobile on the
+Children tab.
+
+What remains is a deliberate difference in WHERE a code is minted, not in what it can do. The web
+attaches a Parent code to the parent row automatically when staff adds the parent, so the mobile
+invite UI still offers Student and Staff only: a Parent code made there would be an *unlinked* one,
+which is the legacy path the auto-minting replaced. Parent invites created on the web list and
+revoke on the phone as normal.
 
 **The intro modal.** No longer a parity question: the first-visit intro modal
 (`src/instructions.tsx`, `SEEN_INTRO_KEY`) was deleted from the web app, so neither client has it.

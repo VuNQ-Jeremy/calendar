@@ -9,6 +9,7 @@ import {
   Layers,
   MoreHorizontal,
   UserRound,
+  Users,
 } from 'lucide-react-native';
 import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
 import { ExitConfirmDialog } from '~/components/ExitConfirmDialog';
@@ -18,6 +19,7 @@ import { useLang } from '~/lib/i18n';
 import { usePushRegistration, useNotificationRouting } from '~/lib/push';
 import { useSync } from '~/lib/use-sync';
 import { useTabBarStyle } from '~/lib/use-ui-prefs';
+import { useParentPortalEnabled } from '~/lib/use-parent-portal';
 
 /**
  * The tab bar's own screens, by URL. A tab is a ROOT: back on one leaves the app.
@@ -29,8 +31,11 @@ import { useTabBarStyle } from '~/lib/use-ui-prefs';
  */
 const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/vocabulary', '/more'];
 const STUDENT_TAB_ROOTS = ['/vocabulary', '/schedule', '/profile'];
-/** A parent has one tab, so their only root is the screen they land on. */
-const PARENT_TAB_ROOTS = ['/profile'];
+/**
+ * A parent has one tab, or two once an admin opens the portal — so the list is computed from the
+ * flag rather than fixed. Getting this wrong strands back on a tab that is no longer a root.
+ */
+const parentTabRoots = (portalOn: boolean) => (portalOn ? ['/children', '/profile'] : ['/profile']);
 
 /**
  * Back on a tab is a dead end, not a hop to the tab you were on before — so it asks first.
@@ -61,7 +66,10 @@ const PARENT_TAB_ROOTS = ['/profile'];
  * Registering later than the NavigationContainer is what gives this priority — RN calls
  * hardwareBackPress subscribers in reverse order of registration.
  */
-function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | 'parent' | undefined) {
+function useTabRootsEndTheBackStack(
+  kind: 'staff' | 'student' | 'parent' | undefined,
+  parentPortalOn: boolean,
+) {
   const pathname = usePathname();
   const roots =
     kind === 'staff'
@@ -69,7 +77,7 @@ function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | 'parent' | undef
       : kind === 'student'
         ? STUDENT_TAB_ROOTS
         : kind === 'parent'
-          ? PARENT_TAB_ROOTS
+          ? parentTabRoots(parentPortalOn)
           : [];
   const onTabRoot = roots.includes(pathname);
   const [asking, setAsking] = React.useState(false);
@@ -112,6 +120,8 @@ function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | 'parent' | undef
  *             maximum; everything else lives behind More.
  *   Student — 2 tabs: Flashcards, Profile. Mirrors the server exactly: `requireStaff` bounces
  *             students to /vocabulary, so those are the only two places they can be.
+ *   Parent  — 1 tab: Profile. Plus Children once an admin opens the parent portal in System
+ *             Config, which is the only tab in here gated on a setting rather than a role.
  *
  * ONE tab group, with per-role hiding via `href: null`, rather than a (staff) and a (student)
  * group. Two groups would both want to own `/vocabulary`, and expo-router resolves group
@@ -124,6 +134,9 @@ export default function AppLayout() {
   // been fetched once — after that the query cache is persisted to AsyncStorage, so a cold start
   // renders the right variant immediately, offline included.
   const tabBarVariant = useTabBarStyle();
+  // Whether this parent gets a Children tab. Inert for staff and students (the query is disabled
+  // for them), and false until resolved — a tab whose endpoints would 403 must not appear.
+  const parentPortalOn = useParentPortalEnabled();
 
   // Flushes the offline outbox and refreshes downloaded topics on foreground and on reconnect.
   // Mounted here rather than in the root layout so it only runs for a signed-in user — a flush
@@ -140,7 +153,10 @@ export default function AppLayout() {
 
   // Above the early return, like the three hooks before it: hook order cannot depend on `user`.
   // Passing undefined while signed out leaves it inert.
-  const { askingExit, cancelExit, confirmExit } = useTabRootsEndTheBackStack(user?.kind);
+  const { askingExit, cancelExit, confirmExit } = useTabRootsEndTheBackStack(
+    user?.kind,
+    parentPortalOn,
+  );
 
   // Belt and braces with app/index.tsx: a deep link straight into a tab must not render the
   // shell for a signed-out user.
@@ -250,6 +266,17 @@ export default function AppLayout() {
           options={{ title: t('m_more'), href: staff ? undefined : null, tabBarIcon: TabIconMore }}
         />
         <Tabs.Screen
+          name="children"
+          options={{
+            title: t('nav_children'),
+            // The only parent-ONLY tab, and the only one gated on a setting rather than a role:
+            // hidden until an admin opens the portal, at which point every endpoint behind it
+            // starts answering. Declared before `profile` so it is the parent's first tab.
+            href: parent && parentPortalOn ? undefined : null,
+            tabBarIcon: TabIconChildren,
+          }}
+        />
+        <Tabs.Screen
           name="profile"
           options={{
             title: t('prof_title'),
@@ -276,6 +303,8 @@ export default function AppLayout() {
         <Tabs.Screen name="config" options={{ href: null }} />
         <Tabs.Screen name="language" options={{ href: null }} />
         <Tabs.Screen name="notifications" options={{ href: null }} />
+        {/* The parent portal's pushed detail: one child, one month. */}
+        <Tabs.Screen name="child" options={{ href: null }} />
       </Tabs>
       {/*
         A sibling of the navigator, not a screen in it. An RN Modal renders into its own native
@@ -314,3 +343,5 @@ const TabIconProfile = ({ color, size }: IconArgs) => <UserRound color={hex(colo
 const TabIconSchedule = ({ color, size }: IconArgs) => (
   <CalendarClock color={hex(color)} size={size} />
 );
+// Plural, unlike Profile's single figure: a parent's tab is about the children, not themselves.
+const TabIconChildren = ({ color, size }: IconArgs) => <Users color={hex(color)} size={size} />;

@@ -24,11 +24,12 @@ import * as zalo from './zalo';
  *
  * **Two channels, one sweep.** Each job decides WHAT to say once, then hands it to Expo push and
  * to Zalo (server/services/zalo.ts) separately. They reach different people — push reaches
- * students and staff who installed the app, Zalo reaches parents, who have no account and never
- * will — so neither is a fallback for the other. Each keeps its OWN idempotency keys (Zalo's
- * carry a `zalo-` prefix): sharing them would mean the day Zalo is switched on, every occurrence
- * push already handled is silently marked done and no parent ever hears about it. The Zalo pass
- * always runs after the push pass and never throws, so a Zalo outage cannot cost a push.
+ * students and staff who installed the app, Zalo reaches parents, most of whom have no account
+ * (one is opt-in per school and per family) — so neither is a fallback for the other. Each keeps
+ * its OWN idempotency keys (Zalo's carry a `zalo-` prefix): sharing them would mean the day Zalo
+ * is switched on, every occurrence push already handled is silently marked done and no parent ever
+ * hears about it. The Zalo pass always runs after the push pass and never throws, so a Zalo outage
+ * cannot cost a push.
  *
  * `env` is optional throughout: without it — or without ZALO_BOT_TOKEN in it — the Zalo pass is
  * skipped entirely and these jobs behave exactly as they did before the channel existed.
@@ -61,11 +62,7 @@ function addDaysIso(dateIso: string, days: number): string {
  * mobile agenda use. If this job and the calendar disagreed about when a class runs, users would
  * be notified for classes that are not happening, which is worse than not being notified at all.
  */
-export async function runClassReminders(
-  db: Db,
-  at: Date = new Date(),
-  env?: Env,
-): Promise<number> {
+export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
   const prefs = await getNotifPrefs(db);
   if (!prefs.classReminders) return 0;
 
@@ -240,11 +237,7 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
  * find the book. Students get one message per class they are in; staff get one summary of the
  * whole day, because the thing a teacher needs is the list, not five separate pings.
  */
-export async function runEveningPreview(
-  db: Db,
-  at: Date = new Date(),
-  env?: Env,
-): Promise<number> {
+export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
   const prefs = await getNotifPrefs(db);
   if (!prefs.previewEvening) return 0;
 
@@ -350,7 +343,10 @@ export async function runEveningPreview(
     occs
       .map((ev) => {
         const cls = classes.find((c) => c.id === ev.classId);
-        const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW, 60);
+        const line = previewLine(
+          previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW,
+          60,
+        );
         return `${ev.start ?? '--:--'} ${cls?.name ?? ev.title}${line ? ` — ${line}` : ''}`;
       })
       .join('\n');

@@ -1241,6 +1241,49 @@ body {
   flex: 1;
   min-height: 0;
 }
+/* The roster: who has a report this month and who does not. A fixed-width scrolling column like
+   .assess-split__list, so a long roll never stretches the row. */
+.assess-report__roster {
+  width: 250px;
+  flex: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.assess-report__roster-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.assess-report__roster-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.assess-report__roster-row:hover,
+.assess-report__roster-row.is-active {
+  background: var(--cream-200);
+}
+.assess-report__roster-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
 /* The rail: the academic summary and the garden block, stacked. It owns the fixed width and the
    scroll, so each card inside sits at its natural height — two cards splitting the row height
    between them left both looking half-empty. */
@@ -1340,58 +1383,24 @@ body {
   flex: none;
 }
 
-/* Three columns once there is room for all of them: the remark, then the two rail cards side by
-   side rather than stacked. The remark keeps a 340px floor — below that its criteria rows (label
-   plus five stars) start wrapping — and the rail columns give up their slack to it first, which
-   is what keeps 1366px laptops on three columns instead of a crushed one. Under the floor the
-   flex rail below takes over. `display: contents` promotes the rail's two cards to columns of
-   this grid without a second wrapper. */
+/* Wide screens: roster | form | rail as grid tracks. The old version promoted the rail's two
+   cards to grid columns via `display: contents`; the rail now holds four cards (stats, garden,
+   attendance, homework), so it goes back to being a real scrolling column and keeps the compact
+   tile styling at every width. The form keeps its 340px floor for the criteria rows. */
 @media (min-width: 1360px) {
   .assess-report {
     display: grid;
-    grid-template-columns: minmax(340px, 1fr) minmax(290px, 340px) minmax(290px, 340px);
-    /* all three columns run the full height of the row, so their bottoms line up */
+    grid-template-columns: 260px minmax(340px, 1fr) 380px;
     align-items: stretch;
   }
-  .assess-report__rail {
-    display: contents;
+  /* a grid item's width comes from its track */
+  .assess-report__roster {
+    width: auto;
   }
-  /* the remark's content-height cap is for the stacked rail below this breakpoint; here it is a
-     column of its own and matches its neighbours. */
+  /* the stacked-layout content-height cap does not apply to a full-height column */
   .assess-report__form {
     align-self: stretch;
     max-height: none;
-  }
-  /* the tile grids take the column's slack, so the cards fill their full height rather than
-     ending in dead space. The conditional rows (incident badges, streak line, the
-     never-planted note) ride below the grid and end up pinned to the card's bottom edge. */
-  .assess-report__garden {
-    display: flex;
-    flex-direction: column;
-  }
-  .assess-report__stats .m-grid,
-  .assess-report__garden .m-grid {
-    flex: 1;
-  }
-  /* tall cells get the dashboard tile layout — icon above a centered number — instead of the
-     compact horizontal row, which floated small in all that height */
-  .assess-report__rail .statcard {
-    height: 100%;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    gap: 8px;
-  }
-  .assess-report__rail .statcard__icon {
-    width: 40px;
-    height: 40px;
-  }
-  .assess-report__rail .statcard__num {
-    font-size: var(--text-2xl);
-  }
-  .assess-report__rail .statcard__label {
-    font-size: var(--text-sm);
   }
 }
 
@@ -1417,6 +1426,13 @@ body {
   .assess-report__rail {
     width: auto;
     overflow-y: visible;
+  }
+  /* stacked: the roster is a capped, full-width list above the form */
+  .assess-report__roster {
+    width: auto;
+  }
+  .assess-report__roster-list {
+    max-height: 280px;
   }
   .assess-report__form {
     flex: none;

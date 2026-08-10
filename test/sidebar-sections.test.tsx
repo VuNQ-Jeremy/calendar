@@ -75,9 +75,35 @@ describe('sidebar nav sections', () => {
 
   // Unflagged rows are staff+student. A parent must not inherit them by default: their app
   // is /profile, and /vocabulary and /garden would 403 behind the scenes.
-  it('shows a parent no navigation at all', () => {
-    const parent = { kind: 'parent', role: 'Parent' };
+  const parent = { kind: 'parent', role: 'Parent' };
+
+  it('shows a parent no navigation while the portal is closed', () => {
+    // No opts at all, and an explicit false — a caller that forgets to pass the flag must get the
+    // closed behaviour, not an open portal.
     expect(NAV.flatMap((sec) => visibleItems(sec, parent))).toEqual([]);
+    expect(NAV.flatMap((sec) => visibleItems(sec, parent, {}))).toEqual([]);
+    expect(NAV.flatMap((sec) => visibleItems(sec, parent, { parentPortal: false }))).toEqual([]);
+  });
+
+  it('shows a parent exactly one row once the portal opens', () => {
+    const items = NAV.flatMap((sec) => visibleItems(sec, parent, { parentPortal: true }));
+    expect(items.map((n) => n.id)).toEqual(['children']);
+  });
+
+  // The flag is about parents only. Opening the portal must not add a row to anyone else's rail,
+  // and /children must never appear for staff or students.
+  it('leaves staff and student navigation untouched by the portal flag', () => {
+    for (const user of [
+      { kind: 'staff', role: 'Admin' },
+      { kind: 'student', role: 'Student' },
+    ]) {
+      const closed = NAV.flatMap((sec) => visibleItems(sec, user)).map((n) => n.id);
+      const open = NAV.flatMap((sec) => visibleItems(sec, user, { parentPortal: true })).map(
+        (n) => n.id,
+      );
+      expect(open).toEqual(closed);
+      expect(open).not.toContain('children');
+    }
   });
 
   it('hides admin-only rows from a non-admin staff user', () => {

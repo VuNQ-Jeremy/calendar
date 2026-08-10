@@ -8,6 +8,7 @@ import * as svc from '../../server/services/session-preview';
  * they see only the classes they are enrolled in. A staff caller gets every class, which is the
  * teacher's own "what am I preparing" list. 'user' also excludes parents, which matters here —
  * the empty filter means "every class", so a third kind would fall into the teacher's list.
+ * A parent's equivalent is /api/parent/home, which fans out per child instead.
  *
  * Tests appear as title + window only. Nothing here goes near a question or an answer key.
  *

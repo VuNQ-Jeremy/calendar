@@ -490,6 +490,15 @@ export const NotifPrefsInput = z.object({
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;
 
+/**
+ * Whether a signed-in parent sees the children screens. Off by default: the portal ships dark
+ * and an admin opens it. Never gates login — a parent can always reach /profile.
+ */
+export const ParentPortalInput = z.object({
+  enabled: FormBool.default(false),
+});
+export type ParentPortalInput = z.infer<typeof ParentPortalInput>;
+
 /* ── Tests module: grade levels, question bank, tests, attempts ─────────────────────────── */
 
 export const GradeLevelInput = z.object({
@@ -852,6 +861,33 @@ export const GardenSettingsInput = z.object({
   dailyGrowthCap: z.coerce.number().int().min(1).max(5),
 });
 export type GardenSettingsInput = z.infer<typeof GardenSettingsInput>;
+
+/* ── Ôn tập (spaced-repetition review) ──────────────────────────────────────────────────── */
+
+/**
+ * The interval ladder, as the five flat fields the admin form posts; the service folds them into
+ * the `{ intervals: [...] }` blob `shared/logic/review.ts` works with. Bounds match
+ * `REVIEW_INTERVAL_BOUNDS` — a 0 first rung is legal on purpose (it means "due again today", the
+ * only way to walk a full cycle in a test), but a ladder that shortens as it climbs would send
+ * mastered words back sooner than new ones.
+ */
+export const ReviewSettingsInput = z
+  .object({
+    interval1: z.coerce.number().int().min(0).max(365),
+    interval2: z.coerce.number().int().min(0).max(365),
+    interval3: z.coerce.number().int().min(0).max(365),
+    interval4: z.coerce.number().int().min(0).max(365),
+    interval5: z.coerce.number().int().min(0).max(365),
+  })
+  .refine(
+    (v) =>
+      v.interval1 <= v.interval2 &&
+      v.interval2 <= v.interval3 &&
+      v.interval3 <= v.interval4 &&
+      v.interval4 <= v.interval5,
+    { message: 'Intervals must not decrease' },
+  );
+export type ReviewSettingsInput = z.infer<typeof ReviewSettingsInput>;
 
 /** Giao bài từ vựng: one topic, one class, one deadline. */
 export const VocabAssignmentInput = z.object({

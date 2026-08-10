@@ -29,9 +29,11 @@ interface ConfigLoaderData {
   classLevels: ClassLevelRow[];
   subjects: SubjectRow[];
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
+  parentPortal: { enabled: boolean };
   tuitionSettings: TuitionSettings;
   rankingWeights: RankingWeights;
   gardenSettings: GardenSettings;
+  reviewSettings: { intervals: number[] };
   paymentInfo: TuitionPaymentInfo;
   zalo: ZaloConfig;
 }
@@ -713,12 +715,86 @@ function GardenSettingsSection({ settings }: { settings: GardenSettings }) {
 }
 
 /**
+ * Ôn tập: how long the gaps are between reviews of the same word.
+ *
+ * Five rungs, held in a draft until Save for the same reason the garden's numbers are: the ladder
+ * is read together, and a half-typed field would reschedule the school's whole backlog. The form
+ * enforces what `ReviewSettingsInput` enforces, including the non-decreasing rule — a ladder that
+ * shortened as it climbed would bring mastered words back sooner than new ones.
+ *
+ * A 0 in the first field is legal and useful: it means "due again today", which is how you demo
+ * the cycle without waiting three days.
+ */
+const REVIEW_FIELDS = [
+  { key: 'interval1', tk: 'cfg_review_interval_1' },
+  { key: 'interval2', tk: 'cfg_review_interval_2' },
+  { key: 'interval3', tk: 'cfg_review_interval_3' },
+  { key: 'interval4', tk: 'cfg_review_interval_4' },
+  { key: 'interval5', tk: 'cfg_review_interval_5' },
+] as const;
+
+function ReviewSettingsSection({ intervals }: { intervals: number[] }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [draft, setDraft] = React.useState<Record<string, string> | null>(null);
+
+  const current =
+    draft ?? Object.fromEntries(REVIEW_FIELDS.map((f, i) => [f.key, String(intervals[i] ?? 0)]));
+  const numbers = REVIEW_FIELDS.map((f) => Number(current[f.key]));
+  const valid =
+    REVIEW_FIELDS.every((f, i) => {
+      const n = numbers[i];
+      return current[f.key] !== '' && Number.isInteger(n) && n >= 0 && n <= 365;
+    }) && numbers.every((n, i) => i === 0 || n >= numbers[i - 1]);
+
+  const save = () => {
+    if (!valid) return;
+    const fd = new FormData();
+    fd.set('intent', 'review-settings');
+    for (const f of REVIEW_FIELDS) fd.set(f.key, String(Number(current[f.key])));
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+    setDraft(null);
+  };
+
+  return (
+    <>
+      <div className="m-row" style={{ gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        {REVIEW_FIELDS.map((f) => (
+          <div key={f.key} className="mochi-field" style={{ marginBottom: 0 }}>
+            <label className="mochi-field__label">{t(f.tk)}</label>
+            <input
+              type="number"
+              min={0}
+              max={365}
+              step={1}
+              className="mochi-input"
+              value={current[f.key]}
+              onChange={(e) => setDraft({ ...current, [f.key]: e.target.value })}
+            />
+          </div>
+        ))}
+        <Button onClick={save} disabled={!valid || !draft}>
+          {t('save')}
+        </Button>
+      </div>
+      <p
+        className="m-muted"
+        style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.6, maxWidth: 640 }}
+      >
+        {t('cfg_review_hint')}
+      </p>
+    </>
+  );
+}
+
+/**
  * Zalo connections.
  *
  * The one screen where the school's real communication channel becomes visible. Pairing is a
  * two-step dance by necessity: generate a code here, and the person messages it to the bot from
  * their own Zalo. It cannot be done from this side alone — Zalo will not tell us who anybody is
- * until they talk to the bot first, and parents have no login to do it themselves.
+ * until they talk to the bot first, and there is no in-app way for a family to volunteer it (most
+ * parents have no account, and pairing is a Zalo action regardless of whether they do).
  *
  * The code is shown once, large, with the sentence to forward alongside it, because what actually
  * happens next is a teacher copying both into a chat.
@@ -942,6 +1018,41 @@ function TabBarSection({ value }: { value: TabBarStyle }) {
 }
 
 /**
+ * Whether parents see the children screens. Optimistic like the two sections above.
+ *
+ * Worth being precise in the copy, because the switch is narrower than it looks: parents have
+ * been able to sign in since v0.0156 and turning this off does not take that away. It decides
+ * whether signing in leads anywhere past their own profile.
+ */
+function ParentPortalSection({ enabled }: { enabled: boolean }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [local, setLocal] = React.useState<boolean | null>(null);
+  const on = local ?? enabled;
+
+  const set = (next: boolean) => {
+    setLocal(next);
+    const fd = new FormData();
+    fd.set('intent', 'parent-portal');
+    fd.set('enabled', String(next));
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+  };
+
+  return (
+    <div>
+      <Checkbox
+        checked={on}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => set(e.target.checked)}
+        label={t('cfg_parent_portal_switch')}
+      />
+      <p className="m-muted" style={{ margin: '10px 0 0', fontSize: 'var(--text-sm)' }}>
+        {t('cfg_parent_portal_hint')}
+      </p>
+    </div>
+  );
+}
+
+/**
  * One openable setting. `render` is a thunk rather than an element so a section only mounts while
  * its modal is open: that is what keeps eleven fetchers and eleven drafts off the page at rest,
  * and what discards a half-typed draft when the modal is dismissed.
@@ -980,7 +1091,9 @@ function SystemConfigScreen() {
     tuitionSettings,
     rankingWeights,
     gardenSettings,
+    reviewSettings,
     paymentInfo,
+    parentPortal,
     zalo,
   } = useLoaderData() as ConfigLoaderData;
   const { t } = useLang();
@@ -1092,6 +1205,15 @@ function SystemConfigScreen() {
           width: 720,
           render: () => <GardenSettingsSection settings={gardenSettings} />,
         },
+        {
+          id: 'review',
+          icon: 'repeat',
+          title: t('cfg_review'),
+          sub: t('cfg_review_sub'),
+          summary: reviewSettings.intervals.join(' · '),
+          width: 760,
+          render: () => <ReviewSettingsSection intervals={reviewSettings.intervals} />,
+        },
       ],
     },
     {
@@ -1124,6 +1246,15 @@ function SystemConfigScreen() {
           summary: t(TB_LABEL[uiPrefs.mobileTabBar]),
           width: 720,
           render: () => <TabBarSection value={uiPrefs.mobileTabBar} />,
+        },
+        {
+          id: 'parentPortal',
+          icon: 'users',
+          title: t('cfg_parent_portal_title'),
+          sub: t('cfg_parent_portal_sub'),
+          summary: parentPortal.enabled ? t('cfg_parent_portal_on') : t('cfg_parent_portal_off'),
+          width: 620,
+          render: () => <ParentPortalSection enabled={parentPortal.enabled} />,
         },
       ],
     },

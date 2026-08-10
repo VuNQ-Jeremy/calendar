@@ -140,6 +140,11 @@ export type RemarkRow = {
   /** remark_criteria id -> 1-5 rating. Keys for deleted criteria may linger; no screen renders them. */
   ratings: Record<string, number>;
   comment: string | null;
+  staffId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  /** When the slip image last reached a family chat; null = never sent. */
+  sentAt: string | null;
 };
 
 function mapRemark(r: typeof monthlyRemarks.$inferSelect): RemarkRow {
@@ -155,6 +160,10 @@ function mapRemark(r: typeof monthlyRemarks.$inferSelect): RemarkRow {
     month: r.month,
     ratings,
     comment: r.comment,
+    staffId: r.staffId,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    sentAt: r.sentAt,
   };
 }
 
@@ -181,16 +190,31 @@ export async function getRemark(
  * "create" from a client that had not seen the first must land on the same row rather than fail
  * the UNIQUE constraint — the teacher would only see an opaque 500 for what is a save.
  */
-export async function createRemark(db: Db, input: MonthlyRemarkInput): Promise<RemarkRow> {
+export async function createRemark(
+  db: Db,
+  input: MonthlyRemarkInput,
+  staffId: string | null,
+): Promise<RemarkRow> {
+  const now = new Date().toISOString();
   const fields = {
     ratings: JSON.stringify(input.ratings),
     comment: input.comment ?? null,
+    staffId,
+    updatedAt: now,
   };
   await db
     .insert(monthlyRemarks)
-    .values({ id: crypto.randomUUID(), studentId: input.studentId, month: input.month, ...fields })
+    .values({
+      id: crypto.randomUUID(),
+      studentId: input.studentId,
+      month: input.month,
+      createdAt: now,
+      ...fields,
+    })
     .onConflictDoUpdate({
       target: [monthlyRemarks.studentId, monthlyRemarks.month],
+      // created_at and sent_at deliberately survive the upsert: first save and delivery are
+      // historical facts a re-save must not rewrite.
       set: fields,
     });
   return (await getRemark(db, input.studentId, input.month))!;
@@ -200,6 +224,7 @@ export async function updateRemark(
   db: Db,
   id: string,
   patch: Partial<MonthlyRemarkInput>,
+  staffId: string | null,
 ): Promise<RemarkRow> {
   const set: Partial<typeof monthlyRemarks.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
@@ -207,6 +232,8 @@ export async function updateRemark(
   if (patch.ratings !== undefined) set.ratings = JSON.stringify(patch.ratings);
   if (patch.comment !== undefined) set.comment = patch.comment ?? null;
   if (Object.keys(set).length) {
+    set.staffId = staffId;
+    set.updatedAt = new Date().toISOString();
     await db.update(monthlyRemarks).set(set).where(eq(monthlyRemarks.id, id));
   }
   const rows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.id, id));
@@ -215,4 +242,16 @@ export async function updateRemark(
 
 export async function removeRemark(db: Db, id: string): Promise<void> {
   await db.delete(monthlyRemarks).where(eq(monthlyRemarks.id, id));
+}
+
+/**
+ * Stamp the moment a slip image for this remark reached at least one family chat.
+ * Called by /zalo-send-card only after Zalo accepted the photo — never speculatively.
+ * A repeat send simply moves the stamp forward; "last sent" is the honest reading.
+ */
+export async function markRemarkSent(db: Db, id: string): Promise<void> {
+  await db
+    .update(monthlyRemarks)
+    .set({ sentAt: new Date().toISOString() })
+    .where(eq(monthlyRemarks.id, id));
 }

@@ -3,6 +3,8 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import * as zalo from '../../server/services/zalo';
+import * as assessSvc from '../../server/services/assessments';
+import { notifyLive } from '../../server/live';
 
 /**
  * Post a share card into Zalo. **Staff only.**
@@ -13,6 +15,9 @@ import * as zalo from '../../server/services/zalo';
  *     student:<studentId>    that student's family, by either route — parent record or a chat
  *                            paired straight to the student
  *     parent-of:<studentId>  ONLY a `parents` record for that student
+ *
+ * Optional `remarkId`: the monthly report slip passes the monthly_remarks row it was rendered
+ * from, and a delivery that reached at least one chat stamps that row's `sent_at`.
  *
  * The last one is for money. A student link is whoever redeemed that student's code, which may
  * be the student; a class reminder reaching a teenager is fine, a fee slip is not. So the slip
@@ -47,7 +52,7 @@ function fail(error: string, status: number): Response {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = context.get(cloudflareCtx).env;
+  const { env, ctx } = context.get(cloudflareCtx);
   await requireStaffCookieOrBearer(request, env);
   if (request.method !== 'POST') return fail('method_not_allowed', 405);
   if (!zalo.isEnabled(env)) return fail('zalo_disabled', 503);
@@ -90,6 +95,24 @@ export async function action({ request, context }: ActionFunctionArgs) {
     results.push({ chatId, ok: await zalo.sendPhoto(env, chatId, url, caption) });
   }
   const sent = results.filter((r) => r.ok).length;
+
+  // Optional send-tracking: the monthly report slip passes the remark row it was rendered from,
+  // and a delivery that reached at least one chat stamps monthly_remarks.sent_at. try/catch so a
+  // bookkeeping hiccup can never turn a delivered photo into a reported failure — the send
+  // happened either way. notifyLive because the roster on /assessments shows the stamp as a
+  // "Sent" badge and this document tab has no route cache of its own to invalidate: the
+  // broadcast is the only freshness channel there is, and a downed hub honestly degrades to
+  // stale-until-next-load.
+  const remarkId = String(form.get('remarkId') ?? '');
+  if (remarkId && sent > 0) {
+    try {
+      await assessSvc.markRemarkSent(db, remarkId);
+      notifyLive(env, ctx, 'assessments');
+    } catch (err) {
+      console.error('[zalo] sent-stamp failed', { remarkId, err: String(err) });
+    }
+  }
+
   return Response.json({ sent, total: results.length, results }, { status: sent ? 200 : 502 });
 }
 

@@ -133,8 +133,8 @@ Only `CLAUDE.md`, the code itself, and `docs/refactor/phase-*.md` reflect realit
   has to change for API callers.
 - Signup is **invite-code only** (`invites` table, `XXX-XXX` codes).
 - Three user kinds: **staff** (`Teacher`/`Admin`/`Assistant`), **student**, **parent**.
-  `getUser` returns `null` for parents — *parent accounts remain unsupported*. Do not build
-  for them.
+  Parents sign in and always get `/profile`; the Children tab and `/api/parent/*` appear only
+  while an admin has the parent portal switched on (`server/services/parent-portal.ts`).
 - **Students only ever see `/flashcards` and `/profile`.** `requireStaff` redirects them to
   `/flashcards`. Mirror this exactly on mobile.
 

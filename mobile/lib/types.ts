@@ -21,6 +21,7 @@ import type {
   UiPrefsInput,
 } from '@mochi/shared/schemas';
 import type { GardenSettings, GardenSnapshotData, PlantView } from '@mochi/shared/logic/garden';
+import type { StudentFee } from '@mochi/shared/logic/fees';
 import type { z } from 'zod';
 
 /**
@@ -119,6 +120,12 @@ export interface MasteryRow {
   correct: number;
   wrong: number;
   lastSeen: string | null;
+  /**
+   * Spaced-repetition state, carried in the bundle so a future review screen can filter offline
+   * with no new endpoint. Nothing on the phone reads these yet — see docs/mobile-parity.md.
+   */
+  level: number;
+  dueDay: string | null;
 }
 
 /** A topic without its word count — what a create call replies with. */
@@ -149,7 +156,10 @@ export interface AuthUser {
   role: string;
   color: string;
   phone: string | null;
-  /** A parent can sign in but has no mobile screens yet — see mobile/app/index.tsx. */
+  /**
+   * A parent gets Profile always, and the Children tab once an admin switches the portal on —
+   * see mobile/lib/use-parent-portal.ts and the tab options in app/(app)/_layout.tsx.
+   */
   kind: 'staff' | 'student' | 'parent';
 }
 
@@ -251,6 +261,75 @@ export interface MySessionsResponse {
   items: UpcomingSession[];
 }
 
+/* ── Parent portal ─────────────────────────────────────────────────────────────────────────── */
+
+/** `/api/settings/parent-portal` — the school-wide switch, readable by every signed-in kind. */
+export interface ParentPortalSettings {
+  enabled: boolean;
+}
+
+export interface ParentChild {
+  id: string;
+  name: string;
+  color: string;
+  classNames: string[];
+  items: UpcomingSession[];
+}
+
+/** `/api/parent/home` — every child and their week in one round trip. */
+export interface ParentHomeResponse {
+  serverNow: string;
+  children: ParentChild[];
+}
+
+/** One past session as a family sees it — the server type of the same name. */
+export interface AttendanceHistoryRow {
+  eventId: string;
+  date: string;
+  status: string;
+  eventTitle: string;
+  startTime: string | null;
+  endTime: string | null;
+  classId: string | null;
+  className: string | null;
+}
+
+/** `/api/parent/attendance/:studentId?month=YYYY-MM`. */
+export interface ParentAttendanceResponse {
+  month: string;
+  attendance: AttendanceHistoryRow[];
+}
+
+/**
+ * `/api/parent/report/:studentId/:month` — the same payload the printable slip renders, from
+ * `server/services/report-card.ts`. Only the fields the phone actually draws are typed here; the
+ * document carries more (per-class score lines, homework, the garden block).
+ */
+export interface ParentReportResponse {
+  month: string;
+  student: { id: string; name: string };
+  classNames: string[];
+  /** null when the teacher has not written this month's remark yet. */
+  remark: MonthlyRemarkRow | null;
+  teacher: string | null;
+  criteria: { id: string; name: string }[];
+  stats: {
+    average: number | null;
+    testCount: number;
+    incidents: Record<string, number>;
+    praiseCount: number;
+  };
+}
+
+/** `/api/parent/tuition/:studentId/:month` — the fee slip, `server/services/fee-slip.ts`. */
+export interface ParentTuitionResponse {
+  month: string;
+  student: { id: string; name: string; guardian: string | null; phone: string | null };
+  fee: StudentFee;
+  closedAt: string | null;
+  isClosed: boolean;
+}
+
 /** `/api/dashboard` — the mirror of the web's /dashboard loader. */
 export interface DashboardResponse {
   /** The server's idea of today, as `YYYY-MM-DD`. */
@@ -329,4 +408,3 @@ export interface GardenSnapshotResponse {
   month: string;
   data: GardenSnapshotData;
 }
-

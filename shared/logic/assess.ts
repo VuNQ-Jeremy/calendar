@@ -183,3 +183,30 @@ export function scoreStats(records: ScoreLike[]): ScoreStats {
   }
   return { average, latest, delta };
 }
+
+/** The minimum a score record must have for the per-class breakdown on the report slip. */
+export interface ClassScoreLike extends ScoreLike {
+  classId: string | null;
+}
+
+export type ClassScoreSummary = { classId: string | null; average: number; count: number };
+
+/**
+ * Per-class score averages for the monthly report. Records with no class group under
+ * `classId: null` (rendered with the generic "no class" label). First-appearance order is kept:
+ * the input is date-sorted, so classes come out in the order they were first tested that month.
+ */
+export function scoreStatsByClass(records: ClassScoreLike[]): ClassScoreSummary[] {
+  const groups = new Map<string | null, number[]>();
+  for (const r of records) {
+    const list = groups.get(r.classId);
+    if (list) list.push(r.score);
+    else groups.set(r.classId, [r.score]);
+  }
+  const out: ClassScoreSummary[] = [];
+  for (const [classId, scores] of groups) {
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    out.push({ classId, average: Math.round(avg * 10) / 10, count: scores.length });
+  }
+  return out;
+}

@@ -5,8 +5,8 @@ Mochi is a warm, family-friendly **learning management web app** for a teacher/a
 audience. It combines **authentication**, **calendar** (Google-Calendar-style, fully
 customizable), **class management**, **people management** (students, staff, parents),
 **materials/resources**, and **homework tracking** — all under one cosy, cream-colored
-shell. A **parent-facing portal** is designed-for but intentionally out of scope for the
-first build (kept in backlog).
+shell. A read-only **parent-facing portal** now ships alongside it, switched on per school
+from System Config → Parent access.
 
 The product voice is "a kind, organized friend who happens to love your kids" — calm,
 encouraging, sentence-case, never enterprise-clinical.
@@ -232,7 +232,8 @@ variables — these hexes are for reference only:**
 6. **Materials & Homework:** uploads/links + download; manual homework checklist with
    points/notes.
 7. **Dashboard:** compose today's events + due homework from the above.
-8. **Backlog (design-aware, don't build yet):** parent-facing portal.
+8. **Parent portal:** a signed-in parent's children — schedule, attendance, monthly report and
+   fee slip, read-only. Off by default; System Config → Parent access opens it.
 
 ---
 

@@ -201,6 +201,26 @@ export async function requireLearner(request: Request, env: Env): Promise<Learne
   return sessionUser as LearnerUser;
 }
 
+/** A session known to be a parent — the mirror of LearnerUser, for the portal's loaders. */
+export type ParentUser = SessionUser & { kind: 'parent' };
+
+/**
+ * Parents only, for the portal pages under /children.
+ *
+ * The narrowed type is the point, same as requireLearner: a parent-scoped loader takes a
+ * parent id, and passing it a staff or student id would read the wrong person's children.
+ * Anyone else goes to their own home rather than seeing a 403 for a page that is simply
+ * not theirs.
+ *
+ * Note this guard says nothing about whether the portal is ENABLED — that is
+ * parent-portal.ts's job, because it is a per-request data question, not an identity one.
+ */
+export async function requireParent(request: Request, env: Env): Promise<ParentUser> {
+  const sessionUser = await requireUser(request, env);
+  if (sessionUser.kind !== 'parent') throw redirect(homeFor(sessionUser.kind));
+  return sessionUser as ParentUser;
+}
+
 export async function requireStaff(request: Request, env: Env): Promise<SessionUser> {
   const sessionUser = await requireUser(request, env);
   if (sessionUser.kind === 'student') throw redirect('/vocabulary');

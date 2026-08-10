@@ -70,6 +70,20 @@ export const qk = {
   mySessions: ['mySessions'] as const,
 
   /**
+   * The parent portal. `parentPortal` is the school-wide switch and is read by the signed-in
+   * shell (it decides whether the Children tab exists), so like `uiPrefs` it is chrome rather
+   * than data and carries a long staleTime. The rest are per-child, per-month reads.
+   */
+  parentPortal: ['parentPortal'] as const,
+  parentHome: ['parent', 'home'] as const,
+  parentAttendance: (studentId: string, month: string) =>
+    ['parent', 'attendance', studentId, month] as const,
+  parentReport: (studentId: string, month: string) =>
+    ['parent', 'report', studentId, month] as const,
+  parentTuition: (studentId: string, month: string) =>
+    ['parent', 'tuition', studentId, month] as const,
+
+  /**
    * The garden — web `route:garden` and `garden:{classId}`.
    *
    * The ICT day is part of the key, and that is load-bearing rather than decorative. A plant is

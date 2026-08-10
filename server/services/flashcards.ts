@@ -1,20 +1,31 @@
-import { eq, or, and, desc, sql, isNotNull } from 'drizzle-orm';
+import { eq, or, and, desc, sql, isNotNull, inArray, lte } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   flashcardTopics,
   flashcardWords,
   flashcardResults,
   flashcardMastery,
+  settings,
   students,
   staff,
 } from '../db/schema';
 import type { Db } from '../db/index';
 import * as gardenSvc from './garden';
 import type { GardenOutcome } from './garden';
+import {
+  DEFAULT_REVIEW_SETTINGS,
+  foldAnswers,
+  groupDueByTopic,
+  isValidLadder,
+  type ReviewSettings,
+  type ReviewState,
+} from '../../shared/logic/review';
+import { ictDateOf } from '../../shared/logic/tests';
 import type {
   FlashcardTopicInput,
   FlashcardWordInput,
   FlashcardResultInput,
+  ReviewSettingsInput,
 } from '../../shared/schemas';
 
 export type FlashcardTopicRow = {
@@ -100,6 +111,10 @@ export type MasteryRow = {
   correct: number;
   wrong: number;
   lastSeen: string | null;
+  /** Review rung; see shared/logic/review.ts. */
+  level: number;
+  /** ICT day the word next falls due, or null when it is not in the review cycle. */
+  dueDay: string | null;
 };
 
 export type StudentFlashcardStats = {
@@ -342,6 +357,34 @@ export async function recordResultWithGarden(
   const now = new Date().toISOString();
   const isStudent = player.kind === 'student';
   const resultId = crypto.randomUUID();
+
+  // Reschedule every answered word before the batch is built, so mastery and review state land in
+  // the same write. The clientId check above is what keeps a replayed offline flush from advancing
+  // the ladder twice — same guarantee the score counters rely on.
+  let review = new Map<string, ReviewState>();
+  if (isStudent && input.answers.length) {
+    const wordIds = [...new Set(input.answers.map((a) => a.wordId))];
+    const [{ intervals }, prior] = await Promise.all([
+      getReviewSettings(db),
+      db
+        .select({
+          wordId: flashcardMastery.wordId,
+          level: flashcardMastery.level,
+          dueDay: flashcardMastery.dueDay,
+        })
+        .from(flashcardMastery)
+        .where(
+          and(eq(flashcardMastery.studentId, player.id), inArray(flashcardMastery.wordId, wordIds)),
+        ),
+    ]);
+    review = foldAnswers(
+      input.answers,
+      new Map(prior.map((r) => [r.wordId, { level: r.level, dueDay: r.dueDay }])),
+      intervals,
+      ictDateOf(now),
+    );
+  }
+
   const ops: BatchItem<'sqlite'>[] = [
     db.insert(flashcardResults).values({
       id: resultId,
@@ -355,10 +398,13 @@ export async function recordResultWithGarden(
       playedAt: now,
       clientId: input.clientId ?? null,
     }),
-    // Mastery tracks per-student adaptive ordering; staff plays don't feed it.
+    // Mastery tracks per-student adaptive ordering and the review schedule; staff plays don't feed
+    // it. The counters are SQL increments (two devices flushing at once must both be counted); the
+    // review state is a computed value, where last-write-wins is the right and harmless answer.
     ...(isStudent
-      ? input.answers.map((a) =>
-          db
+      ? input.answers.map((a) => {
+          const next = review.get(a.wordId);
+          return db
             .insert(flashcardMastery)
             .values({
               studentId: player.id,
@@ -366,6 +412,8 @@ export async function recordResultWithGarden(
               correct: a.correct ? 1 : 0,
               wrong: a.correct ? 0 : 1,
               lastSeen: now,
+              level: next?.level ?? 0,
+              dueDay: next?.dueDay ?? null,
             })
             .onConflictDoUpdate({
               target: [flashcardMastery.studentId, flashcardMastery.wordId],
@@ -373,9 +421,11 @@ export async function recordResultWithGarden(
                 correct: sql`${flashcardMastery.correct} + ${a.correct ? 1 : 0}`,
                 wrong: sql`${flashcardMastery.wrong} + ${a.correct ? 0 : 1}`,
                 lastSeen: now,
+                level: next?.level ?? 0,
+                dueDay: next?.dueDay ?? null,
               },
-            }),
-        )
+            });
+        })
       : []),
   ];
   try {
@@ -451,11 +501,124 @@ export async function listMasteryForStudent(
       correct: flashcardMastery.correct,
       wrong: flashcardMastery.wrong,
       lastSeen: flashcardMastery.lastSeen,
+      level: flashcardMastery.level,
+      dueDay: flashcardMastery.dueDay,
     })
     .from(flashcardMastery)
     .innerJoin(flashcardWords, eq(flashcardWords.id, flashcardMastery.wordId))
     .where(and(eq(flashcardMastery.studentId, studentId), eq(flashcardWords.topicId, topicId)));
   return rows;
+}
+
+/* ── Ôn tập (spaced-repetition review) ──────────────────────────────────────────────────────
+ *
+ * The scheduling rules live in shared/logic/review.ts; this section only loads rows, hands them to
+ * those pure functions, and writes back what they produce. Due-ness is never stored as a flag and
+ * never swept: it is `due_day <= today in ICT`, evaluated by whoever is reading. There is no cron.
+ */
+
+const REVIEW_SETTINGS_KEY = 'review-settings';
+
+/** Same store and defaulting shape as `getGardenSettings`. */
+export async function getReviewSettings(db: Db): Promise<ReviewSettings> {
+  const rows = await db.select().from(settings).where(eq(settings.key, REVIEW_SETTINGS_KEY));
+  const row = rows[0];
+  if (!row) return { intervals: [...DEFAULT_REVIEW_SETTINGS.intervals] };
+  try {
+    const parsed = JSON.parse(row.value) as Partial<ReviewSettings>;
+    // A stored blob out of range would reschedule every word in the school, so fall back rather
+    // than schedule on it.
+    return isValidLadder(parsed?.intervals)
+      ? { intervals: parsed.intervals }
+      : { intervals: [...DEFAULT_REVIEW_SETTINGS.intervals] };
+  } catch {
+    return { intervals: [...DEFAULT_REVIEW_SETTINGS.intervals] };
+  }
+}
+
+/** The admin form posts five flat fields; the ladder is stored as the array the logic wants. */
+export async function setReviewSettings(
+  db: Db,
+  input: ReviewSettingsInput,
+): Promise<ReviewSettings> {
+  const intervals = [
+    input.interval1,
+    input.interval2,
+    input.interval3,
+    input.interval4,
+    input.interval5,
+  ];
+  const value = JSON.stringify({ intervals });
+  await db
+    .insert(settings)
+    .values({ key: REVIEW_SETTINGS_KEY, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  return { intervals };
+}
+
+/** One topic with the words the student owes a review on today. */
+export type DueTopicGroup = {
+  topic: TopicInfo;
+  wordIds: string[];
+};
+
+/**
+ * Everything the student is due to review, grouped by topic.
+ *
+ * Words a student has never answered have no mastery row and so are not in the cycle — you cannot
+ * be due to *re*-study something you never studied. New words are found by browsing topics, which
+ * is what the rest of the vocabulary screen is for.
+ */
+export async function listDueForStudent(
+  db: Db,
+  studentId: string,
+  todayVn: string,
+): Promise<{ groups: DueTopicGroup[]; total: number }> {
+  const rows = await db
+    .select({
+      wordId: flashcardMastery.wordId,
+      dueDay: flashcardMastery.dueDay,
+      topicId: flashcardWords.topicId,
+      topicName: flashcardTopics.name,
+      topicSlug: flashcardTopics.slug,
+      topicDescription: flashcardTopics.description,
+      topicColor: flashcardTopics.color,
+    })
+    .from(flashcardMastery)
+    .innerJoin(flashcardWords, eq(flashcardWords.id, flashcardMastery.wordId))
+    .innerJoin(flashcardTopics, eq(flashcardTopics.id, flashcardWords.topicId))
+    .where(and(eq(flashcardMastery.studentId, studentId), lte(flashcardMastery.dueDay, todayVn)));
+
+  const topics = new Map<string, TopicInfo>();
+  for (const r of rows) {
+    if (!topics.has(r.topicId)) {
+      topics.set(r.topicId, {
+        id: r.topicId,
+        name: r.topicName,
+        slug: r.topicSlug,
+        description: r.topicDescription,
+        color: r.topicColor,
+      });
+    }
+  }
+  const groups = groupDueByTopic(rows, todayVn).flatMap((g) => {
+    const topic = topics.get(g.topicId);
+    return topic ? [{ topic, wordIds: g.words.map((w) => w.wordId) }] : [];
+  });
+  return { groups, total: groups.reduce((n, g) => n + g.wordIds.length, 0) };
+}
+
+/** Just the number, for the sidebar badge. Index-only against `idx_flashcard_mastery_due`. */
+export async function countDueForStudent(
+  db: Db,
+  studentId: string,
+  todayVn: string,
+): Promise<number> {
+  const rows = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(flashcardMastery)
+    .where(and(eq(flashcardMastery.studentId, studentId), lte(flashcardMastery.dueDay, todayVn)));
+  return Number(rows[0]?.n ?? 0);
 }
 
 export async function studentFlashcardStats(db: Db): Promise<StudentFlashcardStats[]> {

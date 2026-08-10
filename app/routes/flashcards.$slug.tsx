@@ -15,6 +15,7 @@ import {
   FlashcardResultInput,
   parsePatch,
 } from '../../shared/schemas';
+import { ictDateOf } from '../../shared/logic/tests';
 import { invalidate, markStale } from '../../src/lib/cache.js';
 import { K, flashcardTopicKey, swrLoad } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -39,6 +40,9 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     mastery,
     kind: su.kind,
     canUseAi: Boolean(env.ANTHROPIC_API_KEY),
+    // ICT today, from the server, so `?review=1` picks the same due words the vocabulary page
+    // counted — a device clock set abroad must not shift the deck by a day.
+    today: ictDateOf(new Date().toISOString()),
   };
 }
 

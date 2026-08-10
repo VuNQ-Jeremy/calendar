@@ -175,7 +175,8 @@ buys nothing here.
   React code and design system (see Phase 2 rationale).
 - No CSS overhaul — the DS tokens are the binding contract; keep the BEM layer.
 - No redesign of `design/` reference files; optionally exclude them from any tooling globs.
-- Parent portal stays in the backlog.
+- ~~Parent portal stays in the backlog.~~ Shipped: read-only children screens on both clients,
+  behind the `parent-portal` settings toggle. See `server/services/parent-portal.ts`.
 
 ### Sequencing & risk summary
 

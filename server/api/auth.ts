@@ -8,6 +8,7 @@ import {
   userFromToken,
   type SessionUser,
   type LearnerUser,
+  type ParentUser,
 } from '../services/auth';
 
 /**
@@ -87,6 +88,24 @@ export async function requireApiLearner(request: Request, env: Env): Promise<Lea
   const u = await requireApiUser(request, env);
   if (u.kind === 'parent') throw Response.json({ error: 'forbidden' }, { status: 403 });
   return u as LearnerUser;
+}
+
+/**
+ * Parents only — the mirror of requireApiLearner, for /api/parent/*.
+ *
+ * Staff and students are refused rather than waved through: these handlers scope every read
+ * to `parent_students`, so another kind of caller has no children to resolve and would either
+ * read nothing or, worse, be handed an empty filter meaning "the whole school".
+ *
+ * Whether the portal is switched on is a separate check each handler makes through
+ * parent-portal.ts — this guard only answers "who is calling".
+ *
+ * @throws {Response} 401 when unauthenticated, 403 when the caller is not a parent.
+ */
+export async function requireApiParent(request: Request, env: Env): Promise<ParentUser> {
+  const u = await requireApiUser(request, env);
+  if (u.kind !== 'parent') throw Response.json({ error: 'forbidden' }, { status: 403 });
+  return u as ParentUser;
 }
 
 /** @throws {Response} 403 for any staff member who is not an Admin. */

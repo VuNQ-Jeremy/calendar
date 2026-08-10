@@ -17,10 +17,14 @@ const RELATIONS = ['Mother', 'Father', 'Guardian', 'Other'] as const;
 /**
  * Parent detail: contact record and linked students.
  *
- * A parent is a *record*, not a user. `userFromToken` returns null for an account with a
- * `parentId` (`server/services/auth.ts:118`), so there is no parent app to build and no invite
- * worth sending — see the note in `components/InvitesPanel.tsx`. What is useful, and what this
- * screen does, is keeping the phone number of whoever picks the child up.
+ * A parent record is both a contact card and, since the parent portal, an account holder: this row
+ * is what `parent_students` authorizes a signed-in parent against, so the linked students here are
+ * exactly what they can see of the school. Editing that list changes someone's access, not just an
+ * address book entry.
+ *
+ * Codes are minted on the web when the parent is added, not here — see the note in
+ * `components/InvitesPanel.tsx`. What this screen is still primarily for is the mundane and most
+ * used part: the phone number of whoever picks the child up.
  */
 export default function ParentDetail() {
   const th = useTheme();

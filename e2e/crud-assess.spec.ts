@@ -172,4 +172,73 @@ test.describe('CRUD: assessments', () => {
     expect(new URL((await load).url()).searchParams.get('month')).toBe('2026-06');
     await expect(tiles).toHaveCount(6);
   });
+
+  test('report roster: coverage counter, status badges, row click switches student', async ({
+    page,
+  }) => {
+    const k = ui(page);
+    await page.getByRole('tab', { name: 'Monthly report' }).click();
+
+    const roster = page.locator('.mochi-card', {
+      has: page.getByRole('heading', { name: 'Students', exact: true }),
+    });
+    await expect(roster).toBeVisible();
+    // Coverage header always reads n/m — n depends on rows other tests may have left behind.
+    await expect(roster.getByText(/\d+\/\d+ reports written/)).toBeVisible();
+    // Four seeded students, one row each (default class filter is "All classes").
+    await expect(roster.locator('.assess-report__roster-row')).toHaveCount(4);
+
+    // Clicking a roster row drives the same state as the Student dropdown: the remark form
+    // re-keys to the clicked student, so its print link now carries her id.
+    await roster.locator('.assess-report__roster-row', { hasText: 'Mia Chen' }).click();
+    const card = page.locator('.mochi-card', {
+      has: page.getByRole('heading', { name: 'Monthly remark' }),
+    });
+
+    // Writing a report flips the badge to Written and bumps the counter by one.
+    const before = await roster.getByText(/\d+\/\d+ reports written/).textContent();
+    const beforeN = Number(before!.match(/(\d+)\//)![1]);
+    for (const star of await card.getByRole('button', { name: '5', exact: true }).all()) {
+      await star.click();
+    }
+    let post = k.posted('/assessments');
+    await card.getByRole('button', { name: 'Save report' }).click();
+    await post;
+    await expect(card.locator('a', { hasText: 'Print report' })).toHaveAttribute(
+      'href',
+      /\/s2\/report$/,
+    );
+    const miaRow = roster.locator('.assess-report__roster-row', { hasText: 'Mia Chen' });
+    await expect(miaRow.getByText('Written')).toBeVisible();
+    // Zalo is disabled in the test env, so a Sent badge can never appear here.
+    await expect(miaRow.getByText('Sent')).toHaveCount(0);
+    await expect(roster.getByText(`${beforeN + 1}/`)).toBeVisible();
+
+    // Clean up the row this test created.
+    post = k.posted('/assessments');
+    await card.getByRole('button', { name: 'Delete' }).click();
+    await k.dlgOf('Delete').getByRole('button', { name: 'Confirm' }).click();
+    await post;
+    await expect(miaRow.getByText('Written')).toHaveCount(0);
+  });
+
+  test('report slip: prints real attendance and per-class scores for a seeded month', async ({
+    page,
+  }) => {
+    // June 2026 is the seeded month: attendance rows exist only for 2026-06-22 (s1 present in
+    // Biology 9A), and s1 has June scores in c1 and c3. Navigate the document route directly.
+    await page.goto('/assessments/2026-06/s1/report');
+    await expect(page.getByRole('heading', { name: 'MONTHLY STUDENT REPORT' })).toBeVisible();
+
+    // Attendance section: the real roll, per class.
+    await expect(page.getByText('Attendance', { exact: true })).toBeVisible();
+    await expect(page.locator('.rslip__table', { hasText: 'Biology 9A' }).first()).toBeVisible();
+
+    // Per-class scores: Biology 9A (7.5, 8.5 -> 8) and World Lit (8) both print.
+    await expect(page.getByText('Scores by class')).toBeVisible();
+    await expect(page.getByText('World Lit')).toBeVisible();
+
+    // No vocab assignments are seeded for June, so the homework section stays off the slip.
+    await expect(page.getByText('Vocabulary homework')).toHaveCount(0);
+  });
 });

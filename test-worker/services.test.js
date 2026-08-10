@@ -13,6 +13,7 @@ import * as invitesSvc from '../server/services/invites';
 import * as assessSvc from '../server/services/assessments';
 import * as typesSvc from '../server/services/assessment-types';
 import * as attendanceSvc from '../server/services/attendance';
+import * as parentPortalSvc from '../server/services/parent-portal';
 import * as gradeLevelsSvc from '../server/services/grade-levels';
 import * as tuitionSvc from '../server/services/tuition';
 import * as questionsSvc from '../server/services/questions';
@@ -33,6 +34,7 @@ import {
   scoreRecords,
   behaviorRecords,
   attendanceRecords,
+  settings,
   questions as questionsTable,
   tests as testsTable,
   testQuestions,
@@ -813,6 +815,32 @@ describe('assessments service', () => {
     const behAfter = await d.select().from(behaviorRecords).where(eq(behaviorRecords.id, beh.id));
     expect(scoreAfter[0]?.classId).toBeNull();
     expect(behAfter[0]?.classId).toBeNull();
+  });
+});
+
+describe('monthly remarks provenance', () => {
+  it('stamps created_at/updated_at/staff_id on create; created_at and sent_at survive the upsert', async () => {
+    const d = db();
+    const teacher = await peopleSvc.createStaff(d, { name: 'T', role: 'Teacher', color: 'blue' });
+    const student = await peopleSvc.createStudent(d, { name: 'S', color: 'green', classIds: [] });
+    const input = { studentId: student.id, month: '2026-07', ratings: { rc: 4 }, comment: 'x' };
+
+    const first = await assessSvc.createRemark(d, input, teacher.id);
+    expect(first.staffId).toBe(teacher.id);
+    expect(first.createdAt).toBeTruthy();
+    expect(first.updatedAt).toBeTruthy();
+    expect(first.sentAt).toBeNull();
+
+    await assessSvc.markRemarkSent(d, first.id);
+    const second = await assessSvc.createRemark(d, { ...input, comment: 'y' }, null);
+    expect(second.id).toBe(first.id); // upsert landed on the same row
+    expect(second.createdAt).toBe(first.createdAt); // first save survives
+    expect(second.sentAt).toBeTruthy(); // delivery survives a re-save
+    expect(second.staffId).toBeNull(); // last author wins
+
+    const patched = await assessSvc.updateRemark(d, first.id, { comment: 'z' }, teacher.id);
+    expect(patched.staffId).toBe(teacher.id);
+    expect(patched.comment).toBe('z');
   });
 });
 
@@ -3376,5 +3404,177 @@ describe('tuition — settings', () => {
     await tuitionSvc.setTuitionSettings(d, { billableStatuses: [] });
     expect(await tuitionSvc.getTuitionSettings(d)).toEqual(tuitionSvc.DEFAULT_TUITION_SETTINGS);
     await tuitionSvc.setTuitionSettings(d, tuitionSvc.DEFAULT_TUITION_SETTINGS);
+  });
+});
+
+describe('parent portal — settings', () => {
+  it('defaults to disabled, round-trips, and survives a corrupt row', async () => {
+    const d = db();
+    // Off by default: the portal ships dark and an admin opens it deliberately.
+    expect(await parentPortalSvc.getParentPortal(d)).toEqual(parentPortalSvc.DEFAULT_PARENT_PORTAL);
+    expect((await parentPortalSvc.getParentPortal(d)).enabled).toBe(false);
+
+    expect((await parentPortalSvc.setParentPortal(d, { enabled: true })).enabled).toBe(true);
+    expect((await parentPortalSvc.getParentPortal(d)).enabled).toBe(true);
+
+    // A hand-edited or half-written settings row must not 500 the app shell for every parent.
+    await d
+      .insert(settings)
+      .values({ key: 'parent-portal', value: 'not json' })
+      .onConflictDoUpdate({ target: settings.key, set: { value: 'not json' } });
+    expect(await parentPortalSvc.getParentPortal(d)).toEqual(parentPortalSvc.DEFAULT_PARENT_PORTAL);
+
+    await parentPortalSvc.setParentPortal(d, { enabled: false });
+  });
+});
+
+describe('parent portal — authorization', () => {
+  it('gates on the toggle and on the parent_students link', async () => {
+    const d = db();
+    const mine = await peopleSvc.createStudent(d, {
+      name: 'Portal Own Child',
+      color: 'blue',
+      classIds: [],
+    });
+    const other = await peopleSvc.createStudent(d, {
+      name: 'Portal Other Child',
+      color: 'green',
+      classIds: [],
+    });
+    const parent = await peopleSvc.createParent(d, {
+      name: 'Portal Parent',
+      color: 'green',
+      studentIds: [mine.id],
+    });
+
+    // studentIdsOfParent is the authorization set the rest of the portal is built on.
+    expect(await peopleSvc.studentIdsOfParent(d, parent.id)).toEqual([mine.id]);
+
+    // Portal OFF: even their own child is refused, with a 403 rather than an empty list — an
+    // empty list would read as "you have no children" and the screen would say so.
+    await parentPortalSvc.setParentPortal(d, { enabled: false });
+    await expect(parentPortalSvc.portalChildIds(d, parent.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(parentPortalSvc.portalChild(d, parent.id, mine.id)).rejects.toMatchObject({
+      status: 403,
+    });
+
+    // Portal ON: own child passes, another family's child is still refused.
+    await parentPortalSvc.setParentPortal(d, { enabled: true });
+    expect(await parentPortalSvc.portalChildIds(d, parent.id)).toEqual([mine.id]);
+    await expect(parentPortalSvc.portalChild(d, parent.id, mine.id)).resolves.toBeUndefined();
+    await expect(parentPortalSvc.portalChild(d, parent.id, other.id)).rejects.toMatchObject({
+      status: 403,
+    });
+
+    // A parent nobody linked a child to gets an empty set, not an error.
+    const childless = await peopleSvc.createParent(d, {
+      name: 'Portal Childless Parent',
+      color: 'green',
+      studentIds: [],
+    });
+    expect(await parentPortalSvc.portalChildIds(d, childless.id)).toEqual([]);
+
+    await parentPortalSvc.setParentPortal(d, { enabled: false });
+    await peopleSvc.removeParent(d, parent.id);
+    await peopleSvc.removeParent(d, childless.id);
+    await peopleSvc.removeStudent(d, mine.id);
+    await peopleSvc.removeStudent(d, other.id);
+  });
+});
+
+describe('attendance — history for one student', () => {
+  it('lists sessions newest first, keeps class-less events, and honours the range', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'History Student',
+      color: 'blue',
+      classIds: [],
+    });
+    const cls = await classesSvc.create(d, {
+      name: 'History Class',
+      color: 'green',
+      studentIds: [],
+      schedule: [],
+    });
+    const classEvent = await eventsSvc.create(d, {
+      title: 'History Class Session',
+      date: '2026-05-04',
+      start: '09:00',
+      end: '10:30',
+      classId: cls.id,
+      recurrence: 'none',
+    });
+    // No classId: an ad-hoc one-off. The monthly SUMMARY drops these (a summary is per class);
+    // this list must keep them, or it disagrees with what the family remembers.
+    const adHoc = await eventsSvc.create(d, {
+      title: 'Extra Revision',
+      date: '2026-05-20',
+      start: '15:00',
+      recurrence: 'none',
+    });
+    // Outside the range below — proves the bounds are actually applied.
+    const nextMonth = await eventsSvc.create(d, {
+      title: 'June Session',
+      date: '2026-06-02',
+      classId: cls.id,
+      recurrence: 'none',
+    });
+
+    await attendanceSvc.saveOccurrence(d, classEvent.id, '2026-05-04', [
+      { studentId: student.id, status: 'present' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, adHoc.id, '2026-05-20', [
+      { studentId: student.id, status: 'absent' },
+    ]);
+    await attendanceSvc.saveOccurrence(d, nextMonth.id, '2026-06-02', [
+      { studentId: student.id, status: 'present' },
+    ]);
+
+    const may = await attendanceSvc.historyForStudent(d, student.id, {
+      from: '2026-05-01',
+      to: '2026-05-31',
+    });
+    expect(may.map((r) => r.date)).toEqual(['2026-05-20', '2026-05-04']); // newest first
+    expect(may[0]).toMatchObject({
+      status: 'absent',
+      eventTitle: 'Extra Revision',
+      classId: null,
+      className: null, // the LEFT join, not a dropped row
+    });
+    expect(may[1]).toMatchObject({
+      status: 'present',
+      className: 'History Class',
+      startTime: '09:00',
+      endTime: '10:30',
+    });
+
+    // Inclusive bounds: a session exactly on `from`/`to` is in.
+    const oneDay = await attendanceSvc.historyForStudent(d, student.id, {
+      from: '2026-05-04',
+      to: '2026-05-04',
+    });
+    expect(oneDay.length).toBe(1);
+
+    // Another student's rows never leak in.
+    const sibling = await peopleSvc.createStudent(d, {
+      name: 'History Sibling',
+      color: 'rose',
+      classIds: [],
+    });
+    expect(
+      await attendanceSvc.historyForStudent(d, sibling.id, {
+        from: '2026-05-01',
+        to: '2026-05-31',
+      }),
+    ).toEqual([]);
+
+    await eventsSvc.remove(d, classEvent.id);
+    await eventsSvc.remove(d, adHoc.id);
+    await eventsSvc.remove(d, nextMonth.id);
+    await classesSvc.remove(d, cls.id);
+    await peopleSvc.removeStudent(d, student.id);
+    await peopleSvc.removeStudent(d, sibling.id);
   });
 });

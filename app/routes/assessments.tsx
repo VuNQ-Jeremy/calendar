@@ -57,7 +57,7 @@ function preprocessRaw(raw: Record<string, unknown>) {
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
+  const session = await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
@@ -104,14 +104,14 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   if (intent === 'create-remark') {
     const parsed = MonthlyRemarkInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await assessSvc.createRemark(db, parsed.data);
+    await assessSvc.createRemark(db, parsed.data, session.user.id);
     return { ok: true };
   }
   if (intent === 'update-remark') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     const parsed = parsePatch(MonthlyRemarkInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await assessSvc.updateRemark(db, id, parsed.data);
+    await assessSvc.updateRemark(db, id, parsed.data, session.user.id);
     return { ok: true };
   }
 

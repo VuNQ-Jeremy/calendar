@@ -3,8 +3,14 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { createDb, type Db } from '../db';
 import { cloudflareCtx } from '../../app/load-context';
 import { parsePatch } from '../../shared/schemas';
-import type { SessionUser, LearnerUser } from '../services/auth';
-import { requireApiUser, requireApiLearner, requireApiStaff, requireApiAdmin } from './auth';
+import type { SessionUser, LearnerUser, ParentUser } from '../services/auth';
+import {
+  requireApiUser,
+  requireApiLearner,
+  requireApiParent,
+  requireApiStaff,
+  requireApiAdmin,
+} from './auth';
 import { notifyLive } from '../live';
 import type { MutationDomain } from '../../shared/live';
 
@@ -20,14 +26,22 @@ import type { MutationDomain } from '../../shared/live';
  *   themselves: profile, prefs, push tokens, logout.
  * 'user' — staff or student. The default for shared surfaces, because their handlers branch
  *   `student ? own : all` and a parent falling into the else-branch would read the school.
+ * 'parent' — parents only, for /api/parent/*. The inverse of 'user': these handlers scope
+ *   everything to `parent_students`, so no other kind has an answer here. Each one still asks
+ *   parent-portal.ts whether the portal is switched on — this level is identity, not access.
  */
-export type AuthLevel = 'any' | 'user' | 'staff' | 'admin';
+export type AuthLevel = 'any' | 'user' | 'parent' | 'staff' | 'admin';
 
 /**
- * Every level except 'any' has already turned parents away, so a handler at those levels
- * gets the narrowed session the flashcard and garden services require.
+ * 'any' sees every kind; 'parent' sees exactly one; the rest have already turned parents away
+ * and get the narrowed session the flashcard and garden services require. The narrowing is
+ * load-bearing: a parent handler cannot compile against a staff id and vice versa.
  */
-type UserFor<L extends AuthLevel> = L extends 'any' ? SessionUser : LearnerUser;
+type UserFor<L extends AuthLevel> = L extends 'any'
+  ? SessionUser
+  : L extends 'parent'
+    ? ParentUser
+    : LearnerUser;
 
 export type ApiCtx<L extends AuthLevel = AuthLevel> = {
   user: UserFor<L>;
@@ -62,6 +76,7 @@ async function resolveUser(level: AuthLevel, request: Request, env: Env): Promis
   if (level === 'admin') return requireApiAdmin(request, env);
   if (level === 'staff') return requireApiStaff(request, env);
   if (level === 'user') return requireApiLearner(request, env);
+  if (level === 'parent') return requireApiParent(request, env);
   return requireApiUser(request, env);
 }
 

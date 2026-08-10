@@ -18,11 +18,13 @@ export interface NavItem {
   studentOnly?: boolean;
   adminOnly?: boolean;
   /**
-   * Opt-in for parents. Nothing sets it: a parent's app is the profile screen, and the
-   * two unflagged learning rows (/vocabulary, /garden) are a student's surface, not
-   * theirs. The flag exists so adding a parent screen is a one-word change.
+   * Opt-in for parents. Only /children sets it — the two unflagged learning rows
+   * (/vocabulary, /garden) are a student's surface, not theirs. Note the row is
+   * additionally hidden until an admin switches the portal on; see `visibleItems`.
    */
   parentOk?: boolean;
+  /** The mirror of staffOnly: hidden from everyone EXCEPT parents. */
+  parentOnly?: boolean;
 }
 
 export interface NavSection {
@@ -46,6 +48,14 @@ export const NAV: NavSection[] = [
     items: [
       { id: 'dashboard', path: '/dashboard', tk: 'nav_dashboard', icon: 'home', staffOnly: true },
       { id: 'calendar', path: '/calendar', tk: 'nav_calendar', icon: 'calendar', staffOnly: true },
+      {
+        id: 'children',
+        path: '/children',
+        tk: 'nav_children',
+        icon: 'users',
+        parentOnly: true,
+        parentOk: true,
+      },
     ],
   },
   {
@@ -127,14 +137,27 @@ export const NAV: NavSection[] = [
   },
 ];
 
-/** The items of `sec` this user may see. Empty means the section is hidden entirely. */
-export function visibleItems(sec: NavSection, user: { kind: string; role: string }): NavItem[] {
+/**
+ * The items of `sec` this user may see. Empty means the section is hidden entirely.
+ *
+ * `opts.parentPortal` is the admin toggle. It only ever subtracts: with the portal off a parent
+ * sees no rows at all, which is the profile-only app they had before the portal existed. The flag
+ * has to be passed in rather than read here because this module may not import from server/.
+ */
+export function visibleItems(
+  sec: NavSection,
+  user: { kind: string; role: string },
+  opts?: { parentPortal?: boolean },
+): NavItem[] {
+  const isParent = user.kind === 'parent';
   return sec.items.filter(
     (n) =>
       (!n.staffOnly || user.kind === 'staff') &&
       (!n.studentOnly || user.kind === 'student') &&
-      // Unflagged rows are staff+student by default; a parent must be named explicitly.
-      (user.kind !== 'parent' || n.parentOk) &&
+      (!n.parentOnly || isParent) &&
+      // Unflagged rows are staff+student by default; a parent must be named explicitly, and then
+      // only while the portal is open.
+      (!isParent || (n.parentOk && opts?.parentPortal === true)) &&
       (!n.adminOnly || user.role === 'Admin'),
   );
 }

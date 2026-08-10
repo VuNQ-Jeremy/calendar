@@ -7,6 +7,8 @@ import { colorOf, iso, TODAY } from './lib/core.js';
 import { useLang, locale } from './lib/i18n.jsx';
 import { ProgressLineChart, StackedBarChart } from './components/charts.jsx';
 import {
+  ATTENDANCE_META,
+  ATTENDANCE_STATUSES,
   BEHAVIOR_META,
   BEHAVIOR_TYPES,
   NEGATIVE_TYPES,
@@ -26,8 +28,10 @@ import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
+import type { ClassAttendanceSummary } from '../server/services/attendance.js';
+import type { StudentMonthAssignment } from '../server/services/garden.js';
 
-const { Card, Button, IconButton, Tabs } = DS;
+const { Card, Button, IconButton, Tabs, Badge, Avatar, ProgressBar } = DS;
 
 const INCIDENT_WEEKS = 12;
 
@@ -303,12 +307,157 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
   );
 }
 
+/**
+ * Attendance and vocabulary homework for the shown (student, month) — the same fetch discipline
+ * as GardenMonthCard above (one load per pair; the previous numbers stay on screen while a fetch
+ * is in flight), against the cookie-authed /report-extras twin. Chips and rows rather than stat
+ * tiles: the rail is 380px, and these are rosters, not headline numbers.
+ */
+function ReportExtrasCards({ studentId, month }: { studentId: string; month: string }) {
+  const { t } = useLang();
+  const fetcher = useFetcher<{
+    data?: { attendance: ClassAttendanceSummary[]; homework: StudentMonthAssignment[] };
+    error?: string;
+  }>();
+
+  const key = `${studentId}:${month}`;
+  const loaded = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!studentId || loaded.current === key) return;
+    loaded.current = key;
+    fetcher.load(`/report-extras?student=${encodeURIComponent(studentId)}&month=${month}`);
+  }, [key, studentId, month, fetcher]);
+
+  const d = fetcher.data?.data;
+  if (fetcher.data?.error || !d) return null;
+
+  return (
+    <>
+      <Card style={{ padding: 14 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 'var(--text-base)' }}>
+          {t('remark_attendance_title')}
+        </h2>
+        {d.attendance.length ? (
+          <div className="m-stack" style={{ gap: 8 }}>
+            {d.attendance.map((a) => (
+              <div key={a.classId} className="m-spread" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{a.className}</span>
+                <span className="m-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  {ATTENDANCE_STATUSES.filter((s) => (a.counts[s] ?? 0) > 0).map((s) => {
+                    const c = colorOf(ATTENDANCE_META[s].color);
+                    return (
+                      <span
+                        key={s}
+                        className="mchip"
+                        style={{ background: c.soft, color: c.ink, fontWeight: 700 }}
+                      >
+                        {t(ATTENDANCE_META[s].tk)} · {a.counts[s]}
+                      </span>
+                    );
+                  })}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="m-muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+            {t('remark_attendance_none')}
+          </p>
+        )}
+      </Card>
+
+      <Card style={{ padding: 14 }}>
+        <h2 style={{ margin: '0 0 10px', fontSize: 'var(--text-base)' }}>
+          {t('remark_homework_title')}
+        </h2>
+        {d.homework.length ? (
+          <div className="m-stack" style={{ gap: 8 }}>
+            {d.homework.map((h) => (
+              <div key={h.id} className="m-spread" style={{ gap: 8 }}>
+                <span style={{ fontSize: 'var(--text-sm)', minWidth: 0 }}>
+                  {h.topicName} · {h.className}
+                </span>
+                <Badge color={h.completed ? 'green' : 'rose'}>
+                  {h.done}/{h.requiredCount}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="m-muted" style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+            {t('remark_homework_none')}
+          </p>
+        )}
+      </Card>
+    </>
+  );
+}
+
 function TypeBadge({ type, label }: { type: BehaviorTypeId; label: string }) {
   const c = colorOf(BEHAVIOR_META[type].color);
   return (
     <span className="mchip" style={{ background: c.soft, color: c.ink, fontWeight: 700 }}>
       {label}
     </span>
+  );
+}
+
+/**
+ * Who has this month's report and who does not — the coverage column on the report tab.
+ * Pure client derivation: the loader already carries every remark and every student, so
+ * written/sent needs no extra fetch. Clicking a row drives the same `studentId` state as the
+ * Student dropdown; the two controls stay in agreement because they share it.
+ */
+function ReportRoster({
+  students,
+  remarkByStudent,
+  activeStudentId,
+  onSelect,
+}: {
+  students: StudentRow[];
+  remarkByStudent: Map<string, RemarkRow>;
+  activeStudentId: string;
+  onSelect: (id: string) => void;
+}) {
+  const { t } = useLang();
+  const written = students.filter((s) => remarkByStudent.has(s.id)).length;
+  const pct = students.length ? Math.round((written / students.length) * 100) : 0;
+  return (
+    <Card className="assess-report__roster" style={{ padding: 14 }}>
+      <div className="m-spread" style={{ marginBottom: 8, gap: 8 }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-base)' }}>{t('remark_roster_title')}</h2>
+        <span className="m-muted" style={{ fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+          {t('remark_coverage', { n: written, total: students.length })}
+        </span>
+      </div>
+      <ProgressBar value={pct} color="green" />
+      <div className="assess-report__roster-list">
+        {students.map((s) => {
+          const r = remarkByStudent.get(s.id);
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className={`assess-report__roster-row${
+                s.id === activeStudentId ? ' is-active' : ''
+              }`}
+              aria-pressed={s.id === activeStudentId}
+              onClick={() => onSelect(s.id)}
+            >
+              <Avatar name={s.name} color={s.color} size="sm" />
+              <span className="assess-report__roster-name">{s.name}</span>
+              {r?.sentAt ? (
+                <Badge color="blue">{t('remark_status_sent')}</Badge>
+              ) : r ? (
+                <Badge color="green">{t('remark_status_written')}</Badge>
+              ) : (
+                <Badge>{t('remark_status_missing')}</Badge>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 
@@ -467,9 +616,13 @@ function AssessmentsScreen() {
   }
   const reportIncidentTotal = Object.values(reportIncidents).reduce((a, b) => a + b, 0);
   const reportPraise = reportBehavior.filter((r) => r.type === 'praise').length;
-  const existingRemark = remarks.find(
-    (r) => r.studentId === activeStudentId && r.month === reportMonth,
+  // One report per (student, month): this map is both the roster's coverage source and the
+  // form's "existing" lookup, so the two can never disagree.
+  const reportRemarks = React.useMemo(
+    () => new Map(remarks.filter((r) => r.month === reportMonth).map((r) => [r.studentId, r])),
+    [remarks, reportMonth],
   );
+  const existingRemark = reportRemarks.get(activeStudentId);
 
   const saveRemark = (d: RemarkDraft) => {
     const fd = new FormData();
@@ -809,10 +962,17 @@ function AssessmentsScreen() {
           </div>
         </>
       ) : (
-        /* Form first, summary second — the same shape as the scores tab (working area left,
-           fixed rail right). Source order follows the visual order so focus does too, which
-           also means the narrow layout stacks form-then-summary. */
+        /* Roster, form, summary — the same shape as the scores tab (working area centre, fixed
+           rail right) with the coverage column added on the left. Source order follows the
+           visual order so focus does too, which also means the narrow layout stacks in that
+           order. */
         <div className="assess-report">
+          <ReportRoster
+            students={visibleStudents}
+            remarkByStudent={reportRemarks}
+            activeStudentId={activeStudentId}
+            onSelect={setStudentId}
+          />
           <RemarkForm
             key={`${activeStudentId}:${reportMonth}`}
             className="assess-report__form"
@@ -822,9 +982,9 @@ function AssessmentsScreen() {
             onSave={saveRemark}
             onDelete={() => void removeRemarkRec()}
           />
-          {/* The rail holds two cards now, so it is a scrolling column: the academic summary keeps
-              its natural height and the garden block follows it, rather than the two of them
-              fighting over the row's height. */}
+          {/* Four cards, so the rail is a scrolling column: each block keeps its natural height
+              and the next one follows it, rather than all of them fighting over the row's
+              height. */}
           <div className="assess-report__rail">
             <Card className="assess-report__stats" style={{ padding: 14 }}>
               <h2 style={{ margin: '0 0 10px', fontSize: 'var(--text-base)' }}>
@@ -853,6 +1013,7 @@ function AssessmentsScreen() {
               )}
             </Card>
             <GardenMonthCard studentId={activeStudentId} month={reportMonth} />
+            <ReportExtrasCards studentId={activeStudentId} month={reportMonth} />
           </div>
         </div>
       )}

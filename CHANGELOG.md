@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0159 — 2026-08-10
+Ôn tập: words a student has studied come back for review after 3, 5, 7, 14, 30 days — a due card and sidebar badge on /vocabulary, a review deck behind ?review=1, and an admin-tunable interval ladder. Answering right at the due date stretches the gap, wrong shortens it; nothing is swept and no notification is sent. Monthly report v2: remarks now record their author and when the slip last reached a family, the report gains attendance, per-class scores and vocabulary homework, and the roster shows what has been sent. Parents get a portal — a Children tab on web and phone, dark until an admin switches it on.
+
 ## v0.0158 — 2026-08-10
 docs(plans): add monthly-report-v2 plan — attendance, per-class scores, vocab homework, author/sent tracking, roster
 

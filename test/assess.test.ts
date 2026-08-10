@@ -6,6 +6,7 @@ import {
   monthWeekStarts,
   scoreColorId,
   scoreStats,
+  scoreStatsByClass,
 } from '../src/lib/assess.js';
 import type { BehaviorRow, ScoreRow } from '../server/services/assessments.js';
 
@@ -170,5 +171,25 @@ describe('bucketBehaviorByWeekInMonth()', () => {
     const buckets = bucketBehaviorByWeekInMonth([], '2027-02');
     expect(buckets.map((b) => b.key)).toEqual(monthWeekStarts('2027-02'));
     expect(buckets.every((b) => b.total === 0)).toBe(true);
+  });
+});
+
+describe('scoreStatsByClass', () => {
+  it('groups by class, rounds to 1dp, keeps first-appearance order', () => {
+    const rows = [
+      { classId: 'c1', score: 7.5 },
+      { classId: 'c2', score: 8 },
+      { classId: 'c1', score: 8.5 },
+      { classId: null, score: 5 },
+    ];
+    expect(scoreStatsByClass(rows)).toEqual([
+      { classId: 'c1', average: 8, count: 2 },
+      { classId: 'c2', average: 8, count: 1 },
+      { classId: null, average: 5, count: 1 },
+    ]);
+  });
+
+  it('returns [] for no records', () => {
+    expect(scoreStatsByClass([])).toEqual([]);
   });
 });

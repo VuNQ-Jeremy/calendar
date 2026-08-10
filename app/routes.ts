@@ -11,6 +11,8 @@ export default [
   // Cookie-authed twin of api/garden/month/:id for the assessments report card. /api/* is
   // bearer-only, so a browser fetcher there gets a 401 — see routes/garden-month.tsx.
   route('garden-month', 'routes/garden-month.tsx'),
+  // Cookie-authed attendance + homework for the report tab's rail — same twin reasoning.
+  route('report-extras', 'routes/report-extras.tsx'),
   // Printable test document — outside the _app layout on purpose: no app shell, no nav chrome.
   route('tests/:id/print', 'routes/tests.$id.print.tsx'),
   // Printable tuition slip (phiếu thu), same reasoning.
@@ -81,6 +83,14 @@ export default [
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
   route('api/settings/notifications', 'routes/api.settings.notifications.tsx'),
   route('api/settings/garden', 'routes/api.settings.garden.tsx'),
+  route('api/settings/parent-portal', 'routes/api.settings.parent-portal.tsx'),
+  // The parent portal's own namespace. Every one of these is `withAuth('parent')` — staff and
+  // students 403 — and every one starts by asking parent-portal.ts whether the toggle is on and
+  // whether the child in the path is actually theirs.
+  route('api/parent/home', 'routes/api.parent.home.tsx'),
+  route('api/parent/attendance/:studentId', 'routes/api.parent.attendance.$studentId.tsx'),
+  route('api/parent/report/:studentId/:month', 'routes/api.parent.report.$studentId.$month.tsx'),
+  route('api/parent/tuition/:studentId/:month', 'routes/api.parent.tuition.$studentId.$month.tsx'),
   route('api/push/register', 'routes/api.push.register.tsx'),
   route('api/push/unregister', 'routes/api.push.unregister.tsx'),
   route('api/push/run', 'routes/api.push.run.tsx'),
@@ -129,5 +139,10 @@ export default [
     route('config', 'routes/config.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),
+    // The parent portal. Gated twice: `parentOk` in sidebar-nav.tsx hides the nav item and
+    // PARENT_PATHS in _app.tsx refuses the path, both keyed on the admin toggle. Month in the
+    // PATH for the same cache reason as tuition above.
+    route('children', 'routes/children.tsx'),
+    route('children/:studentId/:month?', 'routes/children.$studentId.tsx'),
   ]),
 ] satisfies RouteConfig;

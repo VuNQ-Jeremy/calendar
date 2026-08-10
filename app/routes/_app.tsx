@@ -35,8 +35,11 @@ import * as feedbackSvc from '../../server/services/feedback';
 import * as invitesSvc from '../../server/services/invites';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
 import * as testsSvc from '../../server/services/tests';
+import * as flashcardsSvc from '../../server/services/flashcards';
+import { ictDateOf } from '../../shared/logic/tests';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
+import { getParentPortal } from '../../server/services/parent-portal';
 
 const { Avatar: ShAv, Badge: ShBadge } = DS;
 
@@ -50,31 +53,61 @@ const TWEAKS = {
 };
 
 /**
- * The only page inside this layout a parent may open. Everything else here is either a
+ * The pages inside this layout a parent may open. Everything else here is either a
  * staff tool or a student's own learning surface; the child loaders that guard themselves
  * do it with `kind === 'staff' ? … : …`, which would silently serve a parent the student
  * view. One rule at the layout, rather than a parent branch in fourteen loaders.
+ *
+ * `PARENT_BASE` is unconditional — a parent always has their own profile. The portal
+ * prefixes open only while an admin has the toggle on, which is what makes the switch a
+ * real gate rather than a way to hide a nav link.
  */
-const PARENT_PATHS = ['/profile'];
+const PARENT_BASE = ['/profile'];
+const PARENT_PORTAL_PREFIXES = ['/children'];
+
+function parentMayOpen(path: string, portalOn: boolean): boolean {
+  if (PARENT_BASE.includes(path)) return true;
+  if (!portalOn) return false;
+  return PARENT_PORTAL_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
+}
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const { user, kind } = await requireUser(request, env);
+  const db = createDb(env);
+  // Only parents pay for this read; for everyone else the portal flag is not part of the answer.
+  const parentPortal = kind === 'parent' ? (await getParentPortal(db)).enabled : false;
   if (kind === 'parent') {
     // Single-fetch asks for "<path>.data"; compare on the page path either way.
     const path = new URL(request.url).pathname.replace(/\.data$/, '');
-    if (!PARENT_PATHS.includes(path)) throw redirect('/profile');
+    if (!parentMayOpen(path, parentPortal)) throw redirect('/profile');
   }
-  const db = createDb(env);
   // Anyone who is not staff gets the light payload: the badge counts are a staff view of
   // the school, and the queries behind them read the whole roster.
   if (kind !== 'staff') {
     const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
+    // The one badge a student has: how many vocabulary words have come round for review today.
+    // Wrapped because a deploy can land before its migration and the app shell must not 500 over
+    // a badge — same contract as the garden's reads on /vocabulary.
+    let dueReviewCount = 0;
+    if (kind === 'student') {
+      try {
+        dueReviewCount = await flashcardsSvc.countDueForStudent(
+          db,
+          user.id,
+          ictDateOf(new Date().toISOString()),
+        );
+      } catch (err) {
+        console.error('review badge unavailable', err);
+      }
+    }
     return {
       unusedInviteCount: 0,
       unresolvedFeedbackCount: 0,
       needsGradingCount: 0,
+      dueReviewCount,
       uiPrefs,
+      parentPortal,
       user: { ...user, kind },
     };
   }
@@ -89,7 +122,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     unusedInviteCount,
     unresolvedFeedbackCount,
     needsGradingCount,
+    // Staff have no mastery rows, so nothing is ever due for them.
+    dueReviewCount: 0,
     uiPrefs,
+    // Staff nav has no parent rows to gate; the field exists so the payload shape is uniform.
+    parentPortal,
     user: { ...user, kind },
   };
 }
@@ -117,6 +154,10 @@ export function shouldRevalidate({
   if (isLiveLayoutRefreshPending()) return true;
   if (!formAction || !formMethod || formMethod.toUpperCase() === 'GET') return false;
   const path = formAction.split('?')[0];
+  // A finished vocabulary round reschedules the words it covered, so the student's review badge
+  // really is out of date. Only that one intent: a teacher editing words posts to the same path
+  // several times a minute and can never change a count that is nobody's but the student's.
+  if (path.startsWith('/vocabulary') && formData?.get('intent') === 'record-result') return true;
   if (!APP_DATA_MUTATION_PATHS.some((p) => path === p || path.startsWith(p + '/'))) return false;
   // Paper score entry autosaves to /tests/:id on every keystroke, but a paper
   // attempt is stored already graded, so it can never move needsGradingCount.
@@ -129,13 +170,19 @@ export type AppLoaderData = Awaited<ReturnType<typeof loader>>;
 export type SessionUser = AppLoaderData['user'];
 
 function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => void }) {
-  const { unusedInviteCount, unresolvedFeedbackCount, needsGradingCount } =
-    useLoaderData<typeof loader>();
+  const {
+    unusedInviteCount,
+    unresolvedFeedbackCount,
+    needsGradingCount,
+    dueReviewCount,
+    parentPortal,
+  } = useLoaderData<typeof loader>();
   const { t } = useLang();
   const counts: Record<string, number> = {
     people: unusedInviteCount,
     feedback: unresolvedFeedbackCount,
     tests: needsGradingCount,
+    vocabulary: dueReviewCount,
   };
   const { pathname } = useLocation();
   const { collapsed, toggle } = useCollapsedSections(activeSectionFor(pathname));
@@ -143,10 +190,17 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
   return (
     <aside className="sb">
       {/* Students never reach /dashboard — requireStaff bounces them to /vocabulary, and a
-          parent to /profile — so send each straight home rather than through a redirect. */}
+          parent to /profile — so send each straight home rather than through a redirect. A
+          parent's home is their children once the portal is open, and /profile before that. */}
       <Link
         to={
-          user.kind === 'staff' ? '/dashboard' : user.kind === 'parent' ? '/profile' : '/vocabulary'
+          user.kind === 'staff'
+            ? '/dashboard'
+            : user.kind === 'parent'
+              ? parentPortal
+                ? '/children'
+                : '/profile'
+              : '/vocabulary'
         }
         prefetch="intent"
         className="sb__brand"
@@ -157,7 +211,7 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
         Mochi
       </Link>
       {NAV.map((sec) => {
-        const items = visibleItems(sec, user);
+        const items = visibleItems(sec, user, { parentPortal });
         if (items.length === 0) return null;
         const open = !collapsed.has(sec.id);
         // Collapsed rows still render — the ≤720px icon rail shows every item and

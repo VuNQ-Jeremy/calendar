@@ -38,20 +38,7 @@ endpoint, no logic to reimplement.
 
 **~2–3 hours.**
 
-## 3. Parent login
-
-`userFromToken` returns `null` for any account carrying a `parentId`
-(`server/services/auth.ts:118`, "parent accounts remain unsupported"). A parent invite code
-redeems, a password is set, and the person still cannot sign in — so both clients have to
-apologise for it in the UI.
-
-This is the single blocker under the parent portal, the standing "design-aware, don't build yet"
-item in `README.md` and `REFACTOR_PLAN.md`. When it ships, delete the restriction in
-`mobile/components/InvitesPanel.tsx` and the note in `mobile/app/(app)/people/parent/[id].tsx`.
-
-**~1 day** for login itself; the portal is its own project.
-
-## 4. Smaller, unranked
+## 3. Smaller, unranked
 
 Ordered by how much they annoy, not by value.
 

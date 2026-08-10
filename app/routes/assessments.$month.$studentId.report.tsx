@@ -1,34 +1,31 @@
+import { redirect } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { ReportSlipView } from '../../src/assessments/report-slip.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireStaff } from '../../server/services/auth';
-import * as assessSvc from '../../server/services/assessments';
-import * as criteriaSvc from '../../server/services/remark-criteria';
-import * as peopleSvc from '../../server/services/people';
-import * as classesSvc from '../../server/services/classes';
-import * as gardenSvc from '../../server/services/garden';
+import { requireUser, homeFor } from '../../server/services/auth';
+import * as parentPortalSvc from '../../server/services/parent-portal';
+import { buildReportCard } from '../../server/services/report-card';
 import { TuitionMonth } from '../../shared/schemas';
-import { NEGATIVE_TYPES, scoreStats } from '../../shared/logic/assess';
-import { ictDateOf } from '../../shared/logic/tests';
 
 /**
  * Monthly report (phiếu nhận xét) for one student and one month.
  *
  * Registered OUTSIDE the `_app` layout, for the same reason as the tuition slip: a document, not
- * an app screen — no shell, no nav chrome, no route cache. Parents have no login, so the teacher
- * copies this as an image and sends it over Zalo.
+ * an app screen — no shell, no nav chrome, no route cache. The teacher copies it as an image and
+ * sends it over Zalo, which is still how most families receive it.
  *
- * `requireStaff`, not `requireAdmin` — every other assessments surface is staff-level, and the
- * teacher who wrote the remark has to be able to hand it over.
+ * Two callers, two guards. Staff at `requireStaff` strength, not `requireAdmin` — every other
+ * assessments surface is staff-level, and the teacher who wrote the remark has to be able to hand
+ * it over. A PARENT may open it for their own child once an admin has switched the portal on;
+ * `portalChild` answers both halves of that (see server/services/parent-portal.ts) and 403s
+ * otherwise.
  *
- * The ratings and the comment come from the stored remark; every number next to them is computed
- * here from the month's score and behaviour records. Nothing is denormalized, so a corrected score
- * shows up on the next reload of the slip.
+ * The payload itself is `buildReportCard`, shared with /api/parent/report/* so the phone cannot
+ * drift from the printed slip.
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
   const db = createDb(env);
 
   const parsedMonth = TuitionMonth.safeParse(params.month);
@@ -36,57 +33,13 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const month = parsedMonth.data;
   const studentId = params.studentId!;
 
-  const [students, classes, remark, scores, behavior, criteria, garden] = await Promise.all([
-    peopleSvc.listStudents(db),
-    classesSvc.listLite(db),
-    assessSvc.getRemark(db, studentId, month),
-    assessSvc.listScores(db),
-    assessSvc.listBehavior(db),
-    criteriaSvc.list(db),
-    // The slip is a keepsake, so a garden hiccup must not 500 the whole document — it drops the
-    // garden line and prints everything else.
-    gardenSvc
-      .studentGardenMonth(db, studentId, month, ictDateOf(new Date().toISOString()))
-      .catch(() => null),
-  ]);
+  const viewer = await requireUser(request, env);
+  if (viewer.kind === 'parent') await parentPortalSvc.portalChild(db, viewer.user.id, studentId);
+  else if (viewer.kind !== 'staff') throw redirect(homeFor(viewer.kind));
 
-  const student = students.find((s) => s.id === studentId);
-  if (!student) throw Response.json({ error: 'unknown_student' }, { status: 404 });
-
-  const monthScores = scores.filter((r) => r.studentId === studentId && r.date.startsWith(month));
-  const monthBehavior = behavior.filter(
-    (r) => r.studentId === studentId && r.date.startsWith(month),
-  );
-
-  const incidents: Record<string, number> = {};
-  for (const ty of NEGATIVE_TYPES) {
-    const n = monthBehavior.filter((r) => r.type === ty).length;
-    if (n > 0) incidents[ty] = n;
-  }
-
-  return {
-    month,
-    student: { id: student.id, name: student.name },
-    classNames: classes.filter((c) => student.classIds.includes(c.id)).map((c) => c.name),
-    // null when the teacher has not written one yet — the slip renders empty stars and says so,
-    // rather than 404ing on a URL that is perfectly valid.
-    remark,
-    // Active criteria only: a retired criterion disappears from newly printed slips even for
-    // months whose stored ratings still carry its key.
-    criteria: criteria.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name })),
-    stats: {
-      average: scoreStats(monthScores).average,
-      testCount: monthScores.length,
-      incidents,
-      praiseCount: monthBehavior.filter((r) => r.type === 'praise').length,
-    },
-    // Only the two numbers a parent can act on. The teacher-facing rail shows all six; a slip that
-    // listed "stages lost" would turn a keepsake into a scolding.
-    garden:
-      garden && (garden.activeDays > 0 || garden.fruits > 0)
-        ? { activeDays: garden.activeDays, fruits: garden.fruits }
-        : null,
-  };
+  const data = await buildReportCard(db, studentId, month);
+  if (!data) throw Response.json({ error: 'unknown_student' }, { status: 404 });
+  return data;
 }
 
 export default function AssessmentReportPrint() {

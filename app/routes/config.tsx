@@ -14,9 +14,11 @@ import * as levelsSvc from '../../server/services/grade-levels';
 import * as classLevelsSvc from '../../server/services/class-levels';
 import * as subjectsSvc from '../../server/services/subjects';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
+import * as parentPortalSvc from '../../server/services/parent-portal';
 import * as tuitionSvc from '../../server/services/tuition';
 import * as rankingsSvc from '../../server/services/rankings';
 import * as gardenSvc from '../../server/services/garden';
+import * as flashcardsSvc from '../../server/services/flashcards';
 import * as zaloSvc from '../../server/services/zalo';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
@@ -28,6 +30,7 @@ import {
   SubjectInput,
   SubjectReorder,
   GardenSettingsInput,
+  ReviewSettingsInput,
   GradeLevelInput,
   GradeLevelReorder,
   RankingWeightsInput,
@@ -36,6 +39,7 @@ import {
   TuitionPaymentInfoInput,
   TuitionSettingsInput,
   UiPrefsInput,
+  ParentPortalInput,
   parsePatch,
 } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -52,9 +56,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     classLevels,
     subjects,
     uiPrefs,
+    parentPortal,
     tuitionSettings,
     rankingWeights,
     gardenSettings,
+    reviewSettings,
     paymentInfo,
     zaloLinks,
     zaloCodes,
@@ -68,9 +74,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     classLevelsSvc.list(db),
     subjectsSvc.list(db),
     uiPrefsSvc.getUiPrefs(db),
+    parentPortalSvc.getParentPortal(db),
     tuitionSvc.getTuitionSettings(db),
     rankingsSvc.getRankingWeights(db),
     gardenSvc.getGardenSettings(db),
+    flashcardsSvc.getReviewSettings(db),
     tuitionSvc.getPaymentInfo(db),
     zaloSvc.listLinks(db),
     zaloSvc.pendingCodes(db),
@@ -85,9 +93,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     classLevels,
     subjects,
     uiPrefs,
+    parentPortal,
     tuitionSettings,
     rankingWeights,
     gardenSettings,
+    reviewSettings,
     paymentInfo,
     // The Zalo card needs names, not ids: a chat_id and a parent id next to each other tell an
     // admin nothing about who is actually connected.
@@ -397,6 +407,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       return { ok: true, gardenSettings };
     }
 
+    if (intent === 'review-settings') {
+      const parsed = ReviewSettingsInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const reviewSettings = await flashcardsSvc.setReviewSettings(db, parsed.data);
+      return { ok: true, reviewSettings };
+    }
+
     if (intent === 'ui-prefs') {
       const parsed = UiPrefsInput.safeParse(raw);
       if (!parsed.success) {
@@ -404,6 +423,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       const uiPrefs = await uiPrefsSvc.setUiPrefs(db, parsed.data);
       return { ok: true, uiPrefs };
+    }
+
+    if (intent === 'parent-portal') {
+      const parsed = ParentPortalInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const parentPortal = await parentPortalSvc.setParentPortal(db, parsed.data);
+      return { ok: true, parentPortal };
     }
   } catch {
     return Response.json({ error: 'duplicate' }, { status: 400 });

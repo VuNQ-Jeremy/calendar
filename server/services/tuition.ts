@@ -20,8 +20,10 @@ import type {
 /**
  * Tuition (học phí): turn attendance into a monthly fee.
  *
- * Staff-only, end to end. There is no student self-view: a family is told what it owes by the
- * printed slip (phiếu thu) and by the office, never by an app screen or a notification.
+ * No student self-view: a child is never told what their family owes. Everything that computes or
+ * edits a month is staff-only, and a family learns the amount from the printed slip (phiếu thu) or
+ * the office. The one read outside that is a PARENT's own slip, assembled by
+ * server/services/fee-slip.ts behind the portal toggle — the audience the slip was always for.
  *
  * A month is computed live from `attendance_records` until an admin closes it. Closing freezes the
  * numbers into `tuition_lines`, so later attendance fixes, price changes, or a different billable

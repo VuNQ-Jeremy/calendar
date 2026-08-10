@@ -16,12 +16,15 @@ export {
   monthWeekStarts,
   scoreColorId,
   scoreStats,
+  scoreStatsByClass,
   weekStart,
 } from '../../shared/logic/assess';
 
 export type {
   AttendanceStatusId,
   BehaviorTypeId,
+  ClassScoreLike,
+  ClassScoreSummary,
   ScoreColorId,
   ScoreStats,
   WeekBucket,

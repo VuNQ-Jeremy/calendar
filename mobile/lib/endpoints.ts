@@ -62,6 +62,11 @@ import type {
   MonthlyRemarkRow,
   MySessionsResponse,
   ParentRow,
+  ParentAttendanceResponse,
+  ParentHomeResponse,
+  ParentPortalSettings,
+  ParentReportResponse,
+  ParentTuitionResponse,
   ProfileRow,
   RemarkCriterionRow,
   ScoreRecordRow,
@@ -387,11 +392,38 @@ export const profile = {
     apiFetch<ProfileRow>('/api/profile', { method: 'PATCH', body: patch }),
 };
 
+/**
+ * The parent portal. Every one of these 403s unless the caller is a parent AND an admin has the
+ * portal switched on AND the child in the path is theirs — see server/services/parent-portal.ts.
+ */
+export const parent = {
+  /** Every child plus their week, in one round trip. */
+  home: () => apiFetch<ParentHomeResponse>('/api/parent/home'),
+  attendance: (studentId: string, month: string) =>
+    apiFetch<ParentAttendanceResponse>(
+      `/api/parent/attendance/${encodeURIComponent(studentId)}?month=${month}`,
+    ),
+  report: (studentId: string, month: string) =>
+    apiFetch<ParentReportResponse>(`/api/parent/report/${encodeURIComponent(studentId)}/${month}`),
+  /** The one tuition read that exists on mobile; see the route file on why it is parent-only. */
+  tuition: (studentId: string, month: string) =>
+    apiFetch<ParentTuitionResponse>(
+      `/api/parent/tuition/${encodeURIComponent(studentId)}/${month}`,
+    ),
+};
+
 export const settings = {
   getTheme: () => apiFetch<ThemeRow>('/api/settings/theme'),
   updateTheme: (patch: Partial<ThemeInput>) =>
     apiFetch<ThemeRow>('/api/settings/theme', { method: 'PATCH', body: patch }),
   getUiPrefs: () => apiFetch<UiPrefs>('/api/settings/ui-prefs'),
+  /** `any` level on GET: a parent's own tab bar depends on it. Admin-only to write. */
+  getParentPortal: () => apiFetch<ParentPortalSettings>('/api/settings/parent-portal'),
+  updateParentPortal: (patch: Partial<ParentPortalSettings>) =>
+    apiFetch<ParentPortalSettings>('/api/settings/parent-portal', {
+      method: 'PATCH',
+      body: patch,
+    }),
   updateUiPrefs: (patch: Partial<UiPrefsInput>) =>
     apiFetch<UiPrefs>('/api/settings/ui-prefs', { method: 'PATCH', body: patch }),
   /** What the cron jobs may send. School-wide today — see server/services/notif-prefs.ts. */
