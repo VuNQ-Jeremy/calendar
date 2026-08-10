@@ -59,7 +59,13 @@ export type EventInput = z.infer<typeof EventInput>;
 
 export const ClassInput = z.object({
   name: z.string().trim().min(1).max(200),
+  /**
+   * LEGACY free text. Kept only so an older mobile build can still save a class: the service
+   * resolves it to a `subjects` row by name and never writes the column. New clients send
+   * `subjectId`, which wins when both are present.
+   */
   subject: z.string().max(200).nullish(),
+  subjectId: z.string().nullish(),
   color: ColorId.default('green'),
   /**
    * Competition cohort (khối, trình độ). Nullish, NOT required: the mobile app posts this same
@@ -480,6 +486,19 @@ export const GradeLevelReorder = z.object({
   ids: z.array(z.string().min(1)).min(1),
 });
 export type GradeLevelReorder = z.infer<typeof GradeLevelReorder>;
+
+/** Môn học — the managed enum a class's subject is picked from. */
+export const SubjectInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  active: FormBool.default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type SubjectInput = z.infer<typeof SubjectInput>;
+
+export const SubjectReorder = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type SubjectReorder = z.infer<typeof SubjectReorder>;
 
 /** Trình độ — the managed enum pairing with grade level to form a class's ranking cohort. */
 export const ClassLevelInput = z.object({

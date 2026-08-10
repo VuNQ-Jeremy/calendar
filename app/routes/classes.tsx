@@ -14,6 +14,7 @@ import * as materialsSvc from '../../server/services/materials';
 import * as testsSvc from '../../server/services/tests';
 import * as levelsSvc from '../../server/services/grade-levels';
 import * as classLevelsSvc from '../../server/services/class-levels';
+import * as subjectsSvc from '../../server/services/subjects';
 import { ClassInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -22,15 +23,17 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [classes, students, materials, tests, gradeLevels, classLevels] = await Promise.all([
-    classesSvc.list(db),
-    peopleSvc.listStudents(db),
-    materialsSvc.list(db),
-    testsSvc.list(db),
-    levelsSvc.list(db),
-    classLevelsSvc.list(db),
-  ]);
-  return { classes, students, materials, tests, gradeLevels, classLevels };
+  const [classes, students, materials, tests, gradeLevels, classLevels, subjects] =
+    await Promise.all([
+      classesSvc.list(db),
+      peopleSvc.listStudents(db),
+      materialsSvc.list(db),
+      testsSvc.list(db),
+      levelsSvc.list(db),
+      classLevelsSvc.list(db),
+      subjectsSvc.list(db),
+    ]);
+  return { classes, students, materials, tests, gradeLevels, classLevels, subjects };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -59,6 +62,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   };
   // An unset cohort dropdown posts '' — store it as a real NULL so the class is simply
   // excluded from cohort rankings rather than pointing at a level id of ''.
+  if (raw.subjectId === '') raw.subjectId = null;
   if (raw.gradeLevelId === '') raw.gradeLevelId = null;
   if (raw.classLevelId === '') raw.classLevelId = null;
 

@@ -58,7 +58,9 @@ test.describe('CRUD: core domains', () => {
     // Create, enrolling one seeded student through the roster toggles.
     await page.getByRole('button', { name: 'New class' }).click();
     await k.dlg.locator('input[placeholder="e.g. Biology 9A"]').fill(name);
-    await k.dlg.locator('input[placeholder="e.g. Science"]').fill('E2E Subject');
+    // Subject is a managed list now — 'Science' is seeded on class c1 and re-derived by
+    // scripts/test-accounts.sql after every reset.
+    await k.pickSel('Subject', 'Science');
     // Khối + trình độ are required — Save stays disabled until both are picked. The options
     // are the rows seeded by migrations 0017/0029 and re-asserted by scripts/test-accounts.sql.
     await expect(k.submit()).toBeDisabled();
@@ -72,6 +74,7 @@ test.describe('CRUD: core domains', () => {
     const card = (n: string) => page.locator(`.mochi-card:has(h3:text-is("${n}"))`);
     await expect(card(name)).toBeVisible();
     await expect(card(name)).toContainText('1 student');
+    await expect(card(name).locator('.mochi-tag', { hasText: 'Science' })).toBeVisible();
     await expect(card(name).locator('.mochi-tag', { hasText: 'Khối 6' })).toBeVisible();
     await expect(card(name).locator('.mochi-tag', { hasText: 'Cơ bản' })).toBeVisible();
 

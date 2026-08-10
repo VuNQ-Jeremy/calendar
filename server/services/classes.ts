@@ -1,8 +1,26 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { classes, classStudents } from '../db/schema';
+import * as subjectsSvc from './subjects';
 import type { Db } from '../db/index';
 import type { ClassInput } from '../../shared/schemas';
+
+/**
+ * Which subject row a write means.
+ *
+ * `subjectId` is the real field. `subject` is the legacy free-text one an older mobile build
+ * still sends: it is resolved to a managed row by name, and a name that matches nothing returns
+ * undefined — "leave the subject alone" — so a stale client cannot blank it or invent a row.
+ */
+async function resolveSubjectId(
+  db: Db,
+  input: Partial<ClassInput>,
+): Promise<string | null | undefined> {
+  if (input.subjectId !== undefined) return input.subjectId ?? null;
+  if (input.subject === undefined) return undefined;
+  if (!input.subject) return null; // an explicit clear from an older client
+  return (await subjectsSvc.findByName(db, input.subject))?.id;
+}
 
 /**
  * `class_schedule` is deliberately absent from every read below. Weekly schedules were a
@@ -12,7 +30,12 @@ import type { ClassInput } from '../../shared/schemas';
 export type ClassRow = {
   id: string;
   name: string;
+  /**
+   * LEGACY free text, still returned so an older mobile build has something to show. The live
+   * value is `subjectId`; this is whatever the class was called before subjects were managed.
+   */
   subject: string | null;
+  subjectId: string | null;
   color: string;
   /** Competition cohort (khối, trình độ). Either half null → the class sits out cohort rankings. */
   gradeLevelId: string | null;
@@ -24,6 +47,7 @@ export type ClassLite = {
   id: string;
   name: string;
   color: string;
+  subjectId: string | null;
   gradeLevelId: string | null;
   classLevelId: string | null;
 };
@@ -36,6 +60,7 @@ function assembleClass(
     id: cls.id,
     name: cls.name,
     subject: cls.subject,
+    subjectId: cls.subjectId,
     color: cls.color,
     gradeLevelId: cls.gradeLevelId,
     classLevelId: cls.classLevelId,
@@ -57,6 +82,7 @@ export async function listLite(db: Db): Promise<ClassLite[]> {
       id: classes.id,
       name: classes.name,
       color: classes.color,
+      subjectId: classes.subjectId,
       gradeLevelId: classes.gradeLevelId,
       classLevelId: classes.classLevelId,
     })
@@ -74,12 +100,13 @@ export async function get(db: Db, id: string): Promise<ClassRow | null> {
 
 export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
   const id = crypto.randomUUID();
+  const subjectId = await resolveSubjectId(db, input);
 
   const ops: BatchItem<'sqlite'>[] = [
     db.insert(classes).values({
       id,
       name: input.name,
-      subject: input.subject ?? null,
+      subjectId: subjectId ?? null,
       color: input.color,
       gradeLevelId: input.gradeLevelId ?? null,
       classLevelId: input.classLevelId ?? null,
@@ -104,7 +131,8 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
 
   const scalarSet: Partial<typeof classes.$inferInsert> = {};
   if (input.name !== undefined) scalarSet.name = input.name;
-  if (input.subject !== undefined) scalarSet.subject = input.subject ?? null;
+  const subjectId = await resolveSubjectId(db, input);
+  if (subjectId !== undefined) scalarSet.subjectId = subjectId;
   if (input.color !== undefined) scalarSet.color = input.color;
   if (input.gradeLevelId !== undefined) scalarSet.gradeLevelId = input.gradeLevelId ?? null;
   if (input.classLevelId !== undefined) scalarSet.classLevelId = input.classLevelId ?? null;

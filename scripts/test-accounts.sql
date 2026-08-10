@@ -46,6 +46,21 @@ DELETE FROM class_prices;
 -- run's "no links yet" assertion fail. Codes never cascade at all — they outlive their target.
 DELETE FROM zalo_chats;
 DELETE FROM zalo_pair_codes;
+-- Subjects (môn học). seed.sql still writes the legacy free-text `classes.subject`, so re-derive
+-- the managed rows and the subject_id link after every reset — otherwise the seeded classes come
+-- back reading "General" and the class spec has nothing to pick.
+INSERT INTO subjects (id, name, active, sort_order)
+SELECT 'sub_' || lower(hex(randomblob(8))), name, 1, 0
+FROM (
+  SELECT DISTINCT TRIM(subject) AS name
+  FROM classes
+  WHERE subject IS NOT NULL AND TRIM(subject) <> ''
+)
+WHERE name NOT IN (SELECT name FROM subjects);
+UPDATE classes
+SET subject_id = (SELECT s.id FROM subjects s WHERE s.name = TRIM(classes.subject))
+WHERE subject IS NOT NULL AND TRIM(subject) <> '';
+
 -- Class levels (trình độ). seed.sql predates the table, so sweep rows the config spec creates
 -- and re-assert the two migration-seeded defaults the class/rankings specs pick from.
 DELETE FROM class_levels WHERE id NOT IN ('cl1','cl2');

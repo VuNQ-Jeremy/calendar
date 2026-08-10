@@ -1,6 +1,7 @@
 import { apiFetch, apiUpload, BASE } from './api';
 import type {
   AssessmentTypeInput,
+  SubjectInput,
   AttendanceSaveInput,
   BehaviorRecordInput,
   ChangePasswordInput,
@@ -38,6 +39,7 @@ import type {
 import type { GardenOutcome } from '@mochi/shared/logic/garden';
 import type {
   AssessmentTypeRow,
+  SubjectRow,
   AttendanceRow,
   DashboardResponse,
   BehaviorRecordRow,
@@ -148,6 +150,8 @@ export const remarkCriteria = collection<RemarkCriterionRow, RemarkCriterionInpu
 export const assessmentTypes = collection<AssessmentTypeRow, AssessmentTypeInput>(
   '/api/assessment-types',
 );
+/** The subject list the class editor picks from. Writes are admin (web /config); reads are staff. */
+export const subjects = collection<SubjectRow, SubjectInput>('/api/subjects');
 
 /** Invites have no PATCH — a code is issued or revoked, never edited. */
 export const invites = {
@@ -361,7 +365,8 @@ export const garden = {
    * Bank a fruit and replant a seed. Throws `ApiError` 409 (`not_ripe` / `dead`) when the plant is
    * not at the fruit stage — including on a double tap, which is the point.
    */
-  harvest: () => apiFetch<{ ok: true; fruitsTotal: number }>('/api/garden/harvest', { method: 'POST' }),
+  harvest: () =>
+    apiFetch<{ ok: true; fruitsTotal: number }>('/api/garden/harvest', { method: 'POST' }),
   /** One class's garden plus its cooperative tree. 403 for a class the student is not in. */
   classGarden: (classId: string) =>
     apiFetch<ClassGardenResponse>(`/api/garden/class/${encodeURIComponent(classId)}`),

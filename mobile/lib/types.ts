@@ -1,5 +1,6 @@
 import type {
   AssessmentTypeInput,
+  SubjectInput,
   AttendanceStatus,
   BehaviorRecordInput,
   ClassInput,
@@ -19,11 +20,7 @@ import type {
   ThemeInput,
   UiPrefsInput,
 } from '@mochi/shared/schemas';
-import type {
-  GardenSettings,
-  GardenSnapshotData,
-  PlantView,
-} from '@mochi/shared/logic/garden';
+import type { GardenSettings, GardenSnapshotData, PlantView } from '@mochi/shared/logic/garden';
 import type { PaymentStatus, StudentFee } from '@mochi/shared/logic/fees';
 import type { z } from 'zod';
 
@@ -58,6 +55,7 @@ export type ScoreRecordRow = Row<z.infer<typeof ScoreRecordInput>>;
 export type BehaviorRecordRow = Row<z.infer<typeof BehaviorRecordInput>>;
 export type MonthlyRemarkRow = Row<z.infer<typeof MonthlyRemarkInput>>;
 export type AssessmentTypeRow = Row<z.infer<typeof AssessmentTypeInput>>;
+export type SubjectRow = Row<z.infer<typeof SubjectInput>>;
 export type RemarkCriterionRow = Row<z.infer<typeof RemarkCriterionInput>>;
 /**
  * The flashcard rows are spelled out rather than derived from their input schemas, because the

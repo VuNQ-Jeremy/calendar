@@ -53,6 +53,7 @@ export const qk = {
    */
   uiPrefs: ['uiPrefs'] as const,
   assessmentTypes: ['assessmentTypes'] as const,
+  subjects: ['subjects'] as const,
   feedback: ['feedback'] as const,
   assessments: ['assessments'] as const,
   profile: ['profile'] as const,
@@ -91,11 +92,9 @@ export const qk = {
    * The album is exempt: a frozen month is frozen.
    */
   gardenPlant: (ictDay: string) => ['garden', 'plant', ictDay] as const,
-  gardenClass: (classId: string, ictDay: string) =>
-    ['garden', 'class', classId, ictDay] as const,
+  gardenClass: (classId: string, ictDay: string) => ['garden', 'class', classId, ictDay] as const,
   gardenSnapshots: (classId: string) => ['garden', 'album', classId] as const,
-  gardenSnapshot: (classId: string, month: string) =>
-    ['garden', 'album', classId, month] as const,
+  gardenSnapshot: (classId: string, month: string) => ['garden', 'album', classId, month] as const,
 };
 
 export const queryClient = new QueryClient({

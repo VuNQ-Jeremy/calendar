@@ -52,6 +52,7 @@ export default [
   route('api/remark-criteria/:id?', 'routes/api.remark-criteria.tsx'),
   route('api/grade-levels/reorder', 'routes/api.grade-levels.reorder.tsx'),
   route('api/grade-levels/:id?', 'routes/api.grade-levels.tsx'),
+  route('api/subjects/:id?', 'routes/api.subjects.tsx'),
   route('api/attendance', 'routes/api.attendance.tsx'),
   route('api/event-materials', 'routes/api.event-materials.tsx'),
   route('api/event-previews', 'routes/api.event-previews.tsx'),

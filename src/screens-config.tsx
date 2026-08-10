@@ -11,6 +11,7 @@ import type { AttendanceStatusId } from '../shared/logic/assess.js';
 import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
 import type { ClassLevelRow } from '../server/services/class-levels.js';
+import type { SubjectRow } from '../server/services/subjects.js';
 import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 import type { TuitionPaymentInfo, TuitionSettings } from '../server/services/tuition.js';
 import type { RankingWeights } from '../shared/logic/rankings.js';
@@ -25,6 +26,7 @@ interface ConfigLoaderData {
   remarkCriteria: RemarkCriterionRow[];
   gradeLevels: GradeLevelRow[];
   classLevels: ClassLevelRow[];
+  subjects: SubjectRow[];
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
   tuitionSettings: TuitionSettings;
   rankingWeights: RankingWeights;
@@ -861,6 +863,209 @@ function ClassLevelsSection({ levels }: { levels: ClassLevelRow[] }) {
 }
 
 /**
+ * Managed subjects (môn học). Was free text on the class form until every teacher spelled it
+ * their own way. Structural clone of the two level cards above, its own component for the same
+ * reason: the cards' drag/modal state must not collide.
+ */
+function SubjectsSection({ subjects }: { subjects: SubjectRow[] }) {
+  const levels = subjects;
+  const fetcher = useFetcher<{ error?: string }>();
+  const { t } = useLang();
+  const [confirm, confirmNode] = useConfirm();
+  const [modal, setModal] = React.useState<TypeDraft | null>(null);
+
+  const submit = (fd: FormData) => fetcher.submit(fd, { action: '/config', method: 'post' });
+
+  const openAdd = () => setModal({ name: '' });
+  const openRename = (cl: SubjectRow) => setModal({ id: cl.id, name: cl.name });
+
+  const save = (draft: TypeDraft) => {
+    const fd = new FormData();
+    fd.set('intent', draft.id ? 'update-subject' : 'create-subject');
+    if (draft.id) fd.set('id', draft.id);
+    fd.set('name', draft.name.trim());
+    submit(fd);
+    setModal(null);
+  };
+
+  const toggleActive = async (cl: SubjectRow) => {
+    if (cl.active) {
+      const ok = await confirm({
+        title: t('cfg_deactivate'),
+        message: cl.name + '?',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'update-subject');
+    fd.set('id', cl.id);
+    fd.set('active', String(!cl.active));
+    submit(fd);
+  };
+
+  const del = async (cl: SubjectRow) => {
+    const ok = await confirm({
+      title: t('sub_delete_confirm'),
+      message: cl.name + '?',
+      confirmLabel: t('delete'),
+      danger: true,
+    });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'delete-subject');
+    fd.set('id', cl.id);
+    submit(fd);
+  };
+
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [localOrder, setLocalOrder] = React.useState<string[] | null>(null);
+  const reorderPending = React.useRef(false);
+
+  const ordered = React.useMemo(() => {
+    if (!localOrder) return levels;
+    const byId = new Map(levels.map((cl) => [cl.id, cl]));
+    const rows = localOrder.flatMap((id) => byId.get(id) ?? []);
+    for (const cl of levels) if (!localOrder.includes(cl.id)) rows.push(cl);
+    return rows;
+  }, [levels, localOrder]);
+
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && reorderPending.current) {
+      reorderPending.current = false;
+      setLocalOrder(null);
+    }
+  }, [fetcher.state]);
+
+  const previewMove = (srcId: string, overId: string) => {
+    setLocalOrder((prev) => {
+      const cur = prev ?? levels.map((cl) => cl.id);
+      const from = cur.indexOf(srcId);
+      const to = cur.indexOf(overId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = cur.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, srcId);
+      return next;
+    });
+  };
+
+  const commitOrder = () => {
+    setDragId(null);
+    if (!localOrder) return;
+    if (localOrder.join('|') === levels.map((cl) => cl.id).join('|')) {
+      setLocalOrder(null);
+      return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'reorder-subjects');
+    fd.set('ids', JSON.stringify(localOrder));
+    submit(fd);
+    reorderPending.current = true;
+  };
+
+  return (
+    <Card style={{ padding: 18, marginTop: 16 }}>
+      <div
+        className="m-row"
+        style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('sub_title')}</h2>
+          <p className="m-muted" style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)' }}>
+            {t('sub_subtitle')}
+          </p>
+        </div>
+        <Button variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openAdd}>
+          {t('sub_add')}
+        </Button>
+      </div>
+      {ordered.length ? (
+        <div className="m-stack">
+          {ordered.map((cl) => (
+            <div
+              key={cl.id}
+              className={'lrow' + (dragId === cl.id ? ' is-dragging' : '')}
+              draggable
+              onDragStart={(e) => {
+                setDragId(cl.id);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', cl.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragId && dragId !== cl.id) previewMove(dragId, cl.id);
+              }}
+              onDrop={(e) => e.preventDefault()}
+              onDragEnd={commitOrder}
+            >
+              <span className="lrow__grip" title={t('cfg_drag_reorder')} aria-hidden="true">
+                <MIcon name="grip" size={16} />
+              </span>
+              <div className="m-row" style={{ flex: 1, gap: 10 }}>
+                <span className="lrow__title">{cl.name}</span>
+                <Badge color={cl.active ? 'green' : 'neutral'}>
+                  {cl.active ? t('cfg_active') : t('cfg_inactive')}
+                </Badge>
+              </div>
+              <div className="lrow__actions">
+                <IconButton label={t('cfg_rename')} size="sm" onClick={() => openRename(cl)}>
+                  <MIcon name="edit" size={16} />
+                </IconButton>
+                <Button variant="secondary" size="sm" onClick={() => toggleActive(cl)}>
+                  {cl.active ? t('cfg_deactivate') : t('cfg_activate')}
+                </Button>
+                <IconButton label={t('delete')} size="sm" onClick={() => del(cl)}>
+                  <MIcon name="trash" size={16} />
+                </IconButton>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty icon="settings" title={t('sub_empty')} />
+      )}
+
+      {modal && (
+        <Modal
+          open
+          onClose={() => setModal(null)}
+          title={modal.id ? t('cfg_rename') : t('sub_add')}
+          width={420}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(null)}>
+                {t('cancel')}
+              </Button>
+              <Button variant="primary" disabled={!modal.name.trim()} onClick={() => save(modal)}>
+                {t('save')}
+              </Button>
+            </>
+          }
+        >
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('sub_name_ph')}</label>
+            <input
+              className="mochi-input"
+              autoFocus
+              value={modal.name}
+              onChange={(e) => setModal((m) => (m ? { ...m, name: e.target.value } : m))}
+            />
+          </div>
+          {fetcher.data?.error && (
+            <div className="m-muted" style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)' }}>
+              {fetcher.data.error}
+            </div>
+          )}
+        </Modal>
+      )}
+      {confirmNode}
+    </Card>
+  );
+}
+
+/**
  * The monthly report's rating rows (remark criteria). Structural clone of GradeLevelsSection —
  * its own component for the same reason: drag/modal state that must not collide with the cards
  * around it.
@@ -1222,6 +1427,7 @@ function SystemConfigScreen() {
     remarkCriteria,
     gradeLevels,
     classLevels,
+    subjects,
     uiPrefs,
     tuitionSettings,
     rankingWeights,
@@ -1416,6 +1622,8 @@ function SystemConfigScreen() {
       <GradeLevelsSection levels={gradeLevels} />
 
       <ClassLevelsSection levels={classLevels} />
+
+      <SubjectsSection subjects={subjects} />
 
       <TuitionSettingsSection settings={tuitionSettings} />
 

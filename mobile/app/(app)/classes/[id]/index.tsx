@@ -4,10 +4,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { ChevronRight, Trash2, Users } from 'lucide-react-native';
 import { NotifPrompt } from '~/components/NotifPrompt';
+import { ChipSelect } from '~/components/ChipSelect';
 import { ScreenHeader } from '~/components/ScreenHeader';
 import { useLang } from '~/lib/i18n';
 import * as api from '~/lib/endpoints';
-import { rosterOf, useClasses, useInvalidateStaff, useStudents } from '~/lib/staff-data';
+import {
+  rosterOf,
+  useClasses,
+  useInvalidateStaff,
+  useStudents,
+  useSubjects,
+} from '~/lib/staff-data';
 import { useTheme, TOUCH } from '~/theme';
 import { Avatar, Body, Button, Card, ColorPicker, Heading, Input, Muted, Screen } from '~/ui';
 import type { ColorIdValue } from '~/lib/types';
@@ -34,10 +41,12 @@ export default function ClassDetail() {
 
   const { data: classes } = useClasses();
   const { data: students } = useStudents();
+  const { data: subjects } = useSubjects();
   const cls = isNew ? undefined : classes?.find((c) => c.id === id);
+  const subjectName = subjects?.find((s) => s.id === cls?.subjectId)?.name;
 
   const [name, setName] = React.useState('');
-  const [subject, setSubject] = React.useState('');
+  const [subjectId, setSubjectId] = React.useState('');
   const [color, setColor] = React.useState<ColorIdValue>('green');
 
   const seeded = React.useRef<string | null>(null);
@@ -45,7 +54,7 @@ export default function ClassDetail() {
     if (!cls || seeded.current === cls.id) return;
     seeded.current = cls.id;
     setName(cls.name);
-    setSubject(cls.subject ?? '');
+    setSubjectId(cls.subjectId ?? '');
     setColor((cls.color ?? 'green') as ColorIdValue);
   }, [cls]);
 
@@ -53,7 +62,7 @@ export default function ClassDetail() {
     mutationFn: async () => {
       const base = {
         name: name.trim() || t('cls_default_name'),
-        subject: subject || null,
+        subjectId: subjectId || null,
         color,
       };
       if (isNew) {
@@ -89,7 +98,7 @@ export default function ClassDetail() {
     <Screen edges={{ top: true }}>
       <ScreenHeader
         title={isNew ? t('cls_new_class') : t('cls_edit_class')}
-        subtitle={isNew ? undefined : (cls?.subject || t('cls_general'))}
+        subtitle={isNew ? undefined : subjectName || t('cls_general')}
       />
 
       <ScrollView
@@ -102,11 +111,18 @@ export default function ClassDetail() {
           value={name}
           onChangeText={setName}
         />
-        <Input
+        <ChipSelect
           label={t('cls_subject')}
-          placeholder={t('cls_subject_ph')}
-          value={subject}
-          onChangeText={setSubject}
+          value={subjectId}
+          onChange={setSubjectId}
+          options={[
+            { value: '', label: t('cls_general') },
+            // A deactivated subject stays offered on a class that already uses it, so editing
+            // the name does not silently move the class to "General".
+            ...(subjects ?? [])
+              .filter((s) => s.active || s.id === subjectId)
+              .map((s) => ({ value: s.id, label: s.name })),
+          ]}
         />
         <ColorPicker label={t('color')} value={color} onChange={setColor} />
 

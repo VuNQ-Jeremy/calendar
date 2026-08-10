@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0153 — 2026-08-10
+Subject becomes a managed config list instead of free text, on web and phone.
+
 ## v0.0152 — 2026-08-10
 Rankings month picker stops at the current month — future months could only ever be empty.
 

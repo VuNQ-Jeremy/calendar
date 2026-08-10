@@ -80,7 +80,14 @@ describe('CalendarScreen', () => {
 describe('ClassesScreen', () => {
   it('renders Classes heading', async () => {
     const Stub = makeStub(
-      { classes: [], students: [], materials: [], gradeLevels: [], classLevels: [] },
+      {
+        classes: [],
+        students: [],
+        materials: [],
+        gradeLevels: [],
+        classLevels: [],
+        subjects: [],
+      },
       ClassesScreen,
     );
     await renderStub(Stub);

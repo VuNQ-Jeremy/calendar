@@ -14,6 +14,7 @@ import type { MaterialRow } from '../../server/services/materials.js';
 import type { TestRow } from '../../server/services/tests.js';
 import type { GradeLevelRow } from '../../server/services/grade-levels.js';
 import type { ClassLevelRow } from '../../server/services/class-levels.js';
+import type { SubjectRow } from '../../server/services/subjects.js';
 
 const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Avatar: MAv } = DS;
 
@@ -24,12 +25,13 @@ interface ClassesLoaderData {
   tests: TestRow[];
   gradeLevels: GradeLevelRow[];
   classLevels: ClassLevelRow[];
+  subjects: SubjectRow[];
 }
 
 type ClassDraft = {
   id?: string;
   name: string;
-  subject?: string | null;
+  subjectId?: string | null;
   color: string;
   gradeLevelId?: string | null;
   classLevelId?: string | null;
@@ -37,7 +39,7 @@ type ClassDraft = {
 };
 
 export function ClassesScreen() {
-  const { classes, students, materials, tests, gradeLevels, classLevels } =
+  const { classes, students, materials, tests, gradeLevels, classLevels, subjects } =
     useLoaderData() as ClassesLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
@@ -57,11 +59,12 @@ export function ClassesScreen() {
     () => new Map(classLevels.map((c) => [c.id, c.name])),
     [classLevels],
   );
+  const subjectName = React.useMemo(() => new Map(subjects.map((s) => [s.id, s.name])), [subjects]);
 
   const openNew = () =>
     setModal({
       name: '',
-      subject: '',
+      subjectId: null,
       color: 'green',
       gradeLevelId: null,
       classLevelId: null,
@@ -74,7 +77,7 @@ export function ClassesScreen() {
     fd.set('intent', f.id ? 'update' : 'create');
     if (f.id) fd.set('id', f.id);
     fd.set('name', name);
-    if (f.subject) fd.set('subject', f.subject);
+    fd.set('subjectId', f.subjectId ?? '');
     fd.set('color', f.color || 'green');
     fd.set('gradeLevelId', f.gradeLevelId ?? '');
     fd.set('classLevelId', f.classLevelId ?? '');
@@ -126,7 +129,9 @@ export function ClassesScreen() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-lg)' }}>{c.name}</h3>
                     <div className="m-row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                      <MTag color={c.color}>{c.subject || t('cls_general')}</MTag>
+                      <MTag color={c.color}>
+                        {subjectName.get(c.subjectId ?? '') || t('cls_general')}
+                      </MTag>
                       {gradeName.get(c.gradeLevelId ?? '') && (
                         <MTag color="blue">{gradeName.get(c.gradeLevelId ?? '')}</MTag>
                       )}
@@ -182,6 +187,7 @@ export function ClassesScreen() {
           students={students}
           gradeLevels={gradeLevels}
           classLevels={classLevels}
+          subjects={subjects}
         />
       )}
       {detail && (
@@ -190,6 +196,7 @@ export function ClassesScreen() {
           classes={classes}
           gradeName={gradeName.get(detail.gradeLevelId ?? '')}
           levelName={levelName.get(detail.classLevelId ?? '')}
+          subjectName={subjectName.get(detail.subjectId ?? '')}
           students={students}
           materials={materials}
           tests={tests}
@@ -211,6 +218,7 @@ interface ClassDetailModalProps {
   /** Resolved cohort labels, or undefined when the class has no khối / trình độ set. */
   gradeName?: string;
   levelName?: string;
+  subjectName?: string;
   students: StudentRow[];
   materials: MaterialRow[];
   tests: TestRow[];
@@ -223,6 +231,7 @@ function ClassDetailModal({
   classes,
   gradeName,
   levelName,
+  subjectName,
   students,
   materials,
   tests,
@@ -308,7 +317,7 @@ function ClassDetailModal({
       }
     >
       <div className="m-row" style={{ gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <MTag color={cls.color}>{cls.subject || t('cls_general')}</MTag>
+        <MTag color={cls.color}>{subjectName || t('cls_general')}</MTag>
         {gradeName && <MTag color="blue">{gradeName}</MTag>}
         {levelName && <MTag color="violet">{levelName}</MTag>}
       </div>
@@ -388,6 +397,7 @@ interface ClassModalProps {
   students: StudentRow[];
   gradeLevels: GradeLevelRow[];
   classLevels: ClassLevelRow[];
+  subjects: SubjectRow[];
 }
 
 function ClassModal({
@@ -398,6 +408,7 @@ function ClassModal({
   students,
   gradeLevels,
   classLevels,
+  subjects,
 }: ClassModalProps) {
   const { t } = useLang();
   // Both halves of the cohort are required going forward. Legacy classes stored NULLs, so
@@ -441,15 +452,17 @@ function ClassModal({
             onChange={(e) => set('name', e.target.value)}
           />
         </div>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('cls_subject')}</label>
-          <input
-            className="mochi-input"
-            placeholder={t('cls_subject_ph')}
-            value={draft.subject ?? ''}
-            onChange={(e) => set('subject', e.target.value)}
-          />
-        </div>
+        <MSelect
+          label={t('cls_subject')}
+          value={draft.subjectId ?? ''}
+          onChange={(v: string) => set('subjectId', v || null)}
+          options={[
+            { value: '', label: t('cls_general') },
+            ...subjects
+              .filter((s) => s.active || s.id === draft.subjectId)
+              .map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
       </div>
       <div className="m-grid cols-2" style={{ gap: 14 }}>
         <MSelect

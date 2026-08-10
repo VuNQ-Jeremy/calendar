@@ -39,6 +39,14 @@ export const parents = sqliteTable('parents', {
  * Trình độ — the second half of a class's competition cohort, alongside `gradeLevelId` (khối).
  * Managed from /config like `gradeLevels`; see migrations/0029_class_cohort.sql.
  */
+/** Môn học — managed from /config; see migrations/0030_subjects.sql. */
+export const subjects = sqliteTable('subjects', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
 export const classLevels = sqliteTable('class_levels', {
   id: text('id').primaryKey(),
   name: text('name').notNull().unique(),
@@ -49,7 +57,13 @@ export const classLevels = sqliteTable('class_levels', {
 export const classes = sqliteTable('classes', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  /**
+   * DORMANT since 0030, like `room` below. Subjects are a managed enum now (`subjectId`); this
+   * column is what that enum was seeded from and is the only record of the original free text.
+   * Read by nothing, written by nothing. Delete the field, not the data.
+   */
   subject: text('subject'),
+  subjectId: text('subject_id').references(() => subjects.id, { onDelete: 'set null' }),
   color: text('color').notNull().default('green'),
   /** (khối, trình độ) — both set means the class competes in that cohort's rankings. */
   gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, { onDelete: 'set null' }),

@@ -50,6 +50,10 @@ export function useAssessmentTypes() {
   return useQuery({ queryKey: qk.assessmentTypes, queryFn: api.assessmentTypes.list });
 }
 
+export function useSubjects() {
+  return useQuery({ queryKey: qk.subjects, queryFn: api.subjects.list });
+}
+
 // ---- Phase 5 reads: the rest of People, Assessments and Feedback ----
 
 export function useStaff() {

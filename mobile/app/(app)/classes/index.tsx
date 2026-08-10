@@ -1,8 +1,9 @@
+import React from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronRight, Plus } from 'lucide-react-native';
 import { useLang } from '~/lib/i18n';
-import { useClasses, useInvalidateStaff, useStudents } from '~/lib/staff-data';
+import { useClasses, useInvalidateStaff, useStudents, useSubjects } from '~/lib/staff-data';
 import { useTheme } from '~/theme';
 import { Avatar, Body, Button, Card, Heading, Muted, Screen, Tag, Title } from '~/ui';
 import type { ColorIdKey } from '@mochi/shared/tokens';
@@ -22,6 +23,11 @@ export default function ClassesList() {
 
   const { data: classes, isLoading, isRefetching, error, refetch } = useClasses();
   const { data: students } = useStudents();
+  const { data: subjects } = useSubjects();
+  const subjectName = React.useMemo(
+    () => new Map((subjects ?? []).map((s) => [s.id, s.name])),
+    [subjects],
+  );
 
   return (
     <Screen edges={{ top: true }}>
@@ -98,7 +104,9 @@ export default function ClassesList() {
                     flexWrap: 'wrap',
                   }}
                 >
-                  <Tag color={c.color}>{c.subject || t('cls_general')}</Tag>
+                  <Tag color={c.color}>
+                    {subjectName.get(c.subjectId ?? '') || t('cls_general')}
+                  </Tag>
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[3] }}>
