@@ -3,7 +3,7 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { MyTestsScreen } from '../../src/tests/student-list.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireLearner } from '../../server/services/auth';
 import * as attemptsSvc from '../../server/services/attempts';
 
 /**
@@ -18,7 +18,7 @@ import * as attemptsSvc from '../../server/services/attempts';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireUser(request, env);
+  const { user, kind } = await requireLearner(request, env);
   // Staff have their own screen; anything that is not a student has no test list at all.
   // (Parents cannot authenticate today — the branch is defensive, not reachable.)
   if (kind === 'staff') throw redirect('/tests');

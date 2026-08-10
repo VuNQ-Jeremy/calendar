@@ -73,6 +73,13 @@ describe('sidebar nav sections', () => {
     ).toEqual(['vocabulary', 'garden', 'my-tests', 'my-schedule']);
   });
 
+  // Unflagged rows are staff+student. A parent must not inherit them by default: their app
+  // is /profile, and /vocabulary and /garden would 403 behind the scenes.
+  it('shows a parent no navigation at all', () => {
+    const parent = { kind: 'parent', role: 'Parent' };
+    expect(NAV.flatMap((sec) => visibleItems(sec, parent))).toEqual([]);
+  });
+
   it('hides admin-only rows from a non-admin staff user', () => {
     const teacher = { kind: 'staff', role: 'Teacher' };
     expect(

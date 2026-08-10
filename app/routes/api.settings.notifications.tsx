@@ -8,9 +8,9 @@ import { NotifPrefsInput } from '../../shared/schemas';
  * Note these are school-wide today, not per-account; see the comment in
  * server/services/notif-prefs.ts.
  */
-export const loader = withAuth('user', ({ db }) => svc.getNotifPrefs(db));
+export const loader = withAuth('any', ({ db }) => svc.getNotifPrefs(db));
 
-export const action = withAuth('user', async ({ request, db }) => {
+export const action = withAuth('any', async ({ request, db }) => {
   const patch = await parsePatchBody(request, NotifPrefsInput);
   return svc.setNotifPrefs(db, patch);
 });

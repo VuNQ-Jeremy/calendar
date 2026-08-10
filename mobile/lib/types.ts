@@ -145,11 +145,12 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string | null;
-  /** 'Teacher' | 'Admin' | 'Assistant' for staff; 'Student' for students. */
+  /** 'Teacher' | 'Admin' | 'Assistant' for staff; 'Student' / 'Parent' otherwise. */
   role: string;
   color: string;
   phone: string | null;
-  kind: 'staff' | 'student';
+  /** A parent can sign in but has no mobile screens yet — see mobile/app/index.tsx. */
+  kind: 'staff' | 'student' | 'parent';
 }
 
 export interface AuthAccount {

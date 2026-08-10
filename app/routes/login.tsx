@@ -9,13 +9,14 @@ import { useLang } from '../../src/lib/i18n.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
-import type { InviteRow } from '../../server/services/invites';
 import { MASKED_INVITE_CODE } from '../../shared/logic/invite-code';
 import {
   getUser,
   login,
   createSession,
   redeemInvite,
+  findOpenInvite,
+  homeFor,
   requestReset,
   resetPassword,
 } from '../../server/services/auth';
@@ -28,7 +29,7 @@ const { Button: LBtn, Switch: LSw, Tag: LTag } = DS;
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const user = await getUser(request, env);
-  if (user) return redirect('/dashboard');
+  if (user) return redirect(homeFor(user.kind));
   const db = createDb(env);
   const url = new URL(request.url);
   // Only whether a code is waiting, never which one. This page is unauthenticated, so the code
@@ -83,15 +84,18 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'redeem-check') {
     const code = (formData.get('code') as string) ?? '';
-    const norm = code.trim().toUpperCase().replace(/[-\s]/g, '');
-    const allInvites = await invitesSvc.list(db);
-    const invite = allInvites.find(
-      (i) => i.code.replace('-', '').toUpperCase() === norm && !i.used,
-    );
+    const invite = await findOpenInvite(db, code);
     if (!invite) {
       return Response.json({ intent, error: 'auth_invite_invalid' }, { status: 400 });
     }
-    return Response.json({ intent, invite });
+    // Only the three fields the form renders. This response goes to an anonymous visitor,
+    // so the invite row itself — ids, the class it links to — stays on the server.
+    const linkedId = invite.studentId ?? invite.staffId ?? invite.parentId;
+    const personName = await invitesSvc.linkedPersonName(db, invite);
+    return Response.json({
+      intent,
+      invite: { role: invite.role, name: personName ?? invite.name ?? null, linked: !!linkedId },
+    });
   }
 
   if (intent === 'redeem') {
@@ -171,8 +175,9 @@ export default function Login() {
   const [codeValue, setCodeValue] = React.useState('');
 
   // When redeem-check fetcher succeeds, advance to onboarding form.
+  type CheckedInvite = { role: string; name: string | null; linked: boolean };
   const checkData = checkFetcher.data as
-    { intent?: string; invite?: InviteRow; error?: string } | undefined;
+    { intent?: string; invite?: CheckedInvite; error?: string } | undefined;
   const checkedInvite =
     checkData?.intent === 'redeem-check' && checkData?.invite ? checkData.invite : null;
 
@@ -354,7 +359,15 @@ export default function Login() {
           {t('auth_joining_as')} <strong>{roleLabel(checkedInvite.role).toLowerCase()}</strong>
           {checkedInvite.name ? ` · ${checkedInvite.name}` : ''}
         </p>
-        <AuthField icon="users" name="name" placeholder={t('auth_your_name')} />
+        {/* A linked code already knows who it belongs to — the school entered the name.
+            It still posts (the action requires one) but the server ignores it. */}
+        <AuthField
+          icon="users"
+          name="name"
+          placeholder={t('auth_your_name')}
+          defaultValue={checkedInvite.name ?? ''}
+          readOnly={checkedInvite.linked && !!checkedInvite.name}
+        />
         <AuthField icon="mail" type="email" name="email" placeholder={t('auth_email_optional')} />
         <AuthField icon="lock" type="password" name="password" placeholder={t('auth_choose_pw')} />
         {navError && <div className="auth-error">{navError}</div>}

@@ -17,6 +17,12 @@ export interface NavItem {
   staffOnly?: boolean;
   studentOnly?: boolean;
   adminOnly?: boolean;
+  /**
+   * Opt-in for parents. Nothing sets it: a parent's app is the profile screen, and the
+   * two unflagged learning rows (/vocabulary, /garden) are a student's surface, not
+   * theirs. The flag exists so adding a parent screen is a one-word change.
+   */
+  parentOk?: boolean;
 }
 
 export interface NavSection {
@@ -127,6 +133,8 @@ export function visibleItems(sec: NavSection, user: { kind: string; role: string
     (n) =>
       (!n.staffOnly || user.kind === 'staff') &&
       (!n.studentOnly || user.kind === 'student') &&
+      // Unflagged rows are staff+student by default; a parent must be named explicitly.
+      (user.kind !== 'parent' || n.parentOk) &&
       (!n.adminOnly || user.role === 'Admin'),
   );
 }

@@ -2,7 +2,13 @@ import { eq } from 'drizzle-orm';
 import { createDb, type Db } from '../db';
 import { sessions } from '../db/schema';
 import { hashToken } from '../services/crypto';
-import { DAY_MS, requireStaff, userFromToken, type SessionUser } from '../services/auth';
+import {
+  DAY_MS,
+  requireStaff,
+  userFromToken,
+  type SessionUser,
+  type LearnerUser,
+} from '../services/auth';
 
 /**
  * Bearer-token auth for the JSON API.
@@ -67,6 +73,22 @@ export async function requireApiStaff(request: Request, env: Env): Promise<Sessi
   return u;
 }
 
+/**
+ * Staff or student — the two kinds every 'user'-level endpoint was written for.
+ *
+ * Those handlers are shaped `kind === 'student' ? own-data : everything`, so letting a
+ * third kind through hands a parent the teacher's view by default. A parent's API is the
+ * short 'any' list (profile, prefs, push, logout); everything else is 403 until a
+ * handler is deliberately taught what a parent should see.
+ *
+ * @throws {Response} 403 when the caller is a parent.
+ */
+export async function requireApiLearner(request: Request, env: Env): Promise<LearnerUser> {
+  const u = await requireApiUser(request, env);
+  if (u.kind === 'parent') throw Response.json({ error: 'forbidden' }, { status: 403 });
+  return u as LearnerUser;
+}
+
 /** @throws {Response} 403 for any staff member who is not an Admin. */
 export async function requireApiAdmin(request: Request, env: Env): Promise<SessionUser> {
   const u = await requireApiStaff(request, env);
@@ -81,10 +103,7 @@ export async function requireApiAdmin(request: Request, env: Env): Promise<Sessi
  * 401/403, anything else falls through to the cookie guard and its redirect. That keeps
  * browser behaviour byte-identical while giving native clients something parseable.
  */
-export async function requireStaffCookieOrBearer(
-  request: Request,
-  env: Env,
-): Promise<SessionUser> {
+export async function requireStaffCookieOrBearer(request: Request, env: Env): Promise<SessionUser> {
   if (bearer(request)) return requireApiStaff(request, env);
   return requireStaff(request, env);
 }

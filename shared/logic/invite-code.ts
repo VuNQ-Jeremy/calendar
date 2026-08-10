@@ -18,6 +18,17 @@ export function makeInviteCode(): string {
 }
 
 /**
+ * Fold whatever the visitor typed — lower case, spaces, a missing or doubled dash — back
+ * into stored form, so a code can be looked up on its unique index instead of by scanning
+ * every invite. Null when it cannot be a code at all.
+ */
+export function normalizeInviteCode(code: string): string | null {
+  const bare = code.trim().toUpperCase().replace(/[-\s]/g, '');
+  if (bare.length !== 6) return null;
+  return `${bare.slice(0, 3)}-${bare.slice(3)}`;
+}
+
+/**
  * Stand-in for a code the viewer is not entitled to read. The login page tells an anonymous
  * visitor that an unused code exists; it must not tell them what it is, because redeeming one
  * creates an account — a `Staff` invite creates an admin.

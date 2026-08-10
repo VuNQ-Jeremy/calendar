@@ -7,7 +7,7 @@ import type {
 import { FlashcardTopicsScreen } from '../../src/flashcards/index.jsx';
 import { createDb, type Db } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser, requireStaff, type SessionUser } from '../../server/services/auth';
+import { requireLearner, requireStaff, type SessionUser } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
 import * as gardenSvc from '../../server/services/garden';
 import * as classesSvc from '../../server/services/classes';
@@ -98,7 +98,7 @@ async function loadGarden(
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const su = await requireUser(request, env);
+  const su = await requireLearner(request, env);
   const db = createDb(env);
   const topics = await flashcardsSvc.listTopics(db);
   const { garden, gardenStaff } = await loadGarden(db, su);
@@ -128,7 +128,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   // away. Both act on the caller's own plant and on nothing else: the student id comes from the
   // session, never from the form, so there is no plant to point them at but their own.
   if (intent === 'harvest' || intent === 'plant-update') {
-    const su = await requireUser(request, env);
+    const su = await requireLearner(request, env);
     if (su.kind !== 'student') return Response.json({ error: 'forbidden' }, { status: 403 });
 
     if (intent === 'harvest') {

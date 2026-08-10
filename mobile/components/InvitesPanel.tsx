@@ -22,12 +22,15 @@ import { Badge, Button, Card, Heading, IconButton, Input, Mono, Muted } from '~/
  * share sheet hands it straight to Zalo, Messenger or SMS, which is how these codes actually
  * travel.
  *
- * **Parent invites are not offered.** A Parent invite creates an `accounts` row with a `parentId`,
- * and `userFromToken` returns `null` for exactly that case (`server/services/auth.ts:118`,
- * "parent accounts remain unsupported"). The code redeems, the password is set, and the person
- * can never sign in. Offering it would be offering a broken thing. Parent *records* are fully
- * manageable on the Parents tab; only the login is missing, and that is a server capability, not
- * a mobile one. Existing Parent invites created on the web still list and revoke here.
+ * **Parent invites are not offered here.** Parents can sign in now (`userFromToken` resolves
+ * `kind: 'parent'`), but the web mints their code automatically when staff adds the parent, and
+ * a parent's app is the profile screen — there is nothing for this panel to hand them that the
+ * People screen has not already handed out. Existing Parent invites still list and revoke here.
+ *
+ * **Codes made here are unlinked.** The web attaches a code to the person it was minted for, so
+ * redeeming attaches an account to that row. A code made here has no such link and still creates
+ * a fresh person on redeem — the old behaviour, deliberately preserved so shipped builds keep
+ * working. Prefer the web when the person already exists.
  */
 
 const INVITE_ROLES = ['Student', 'Staff'] as const;

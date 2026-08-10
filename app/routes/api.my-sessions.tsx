@@ -6,7 +6,8 @@ import * as svc from '../../server/services/session-preview';
  *
  * Auth level 'user', not 'staff': this is the one session-shaped endpoint a student may read, and
  * they see only the classes they are enrolled in. A staff caller gets every class, which is the
- * teacher's own "what am I preparing" list.
+ * teacher's own "what am I preparing" list. 'user' also excludes parents, which matters here —
+ * the empty filter means "every class", so a third kind would fall into the teacher's list.
  *
  * Tests appear as title + window only. Nothing here goes near a question or an answer key.
  *

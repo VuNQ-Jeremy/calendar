@@ -33,6 +33,13 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
         ...(email !== null ? { email: email || null } : {}),
         ...(colorParsed.success ? { color: colorParsed.data } : {}),
       });
+    } else if (sessionUser.kind === 'parent') {
+      await peopleSvc.updateParent(db, user.id, {
+        ...(name ? { name } : {}),
+        ...(email !== null ? { email: email || null } : {}),
+        ...(phone !== null ? { phone: phone || null } : {}),
+        ...(colorParsed.success ? { color: colorParsed.data } : {}),
+      });
     } else {
       await peopleSvc.updateStaff(db, user.id, {
         ...(name ? { name } : {}),

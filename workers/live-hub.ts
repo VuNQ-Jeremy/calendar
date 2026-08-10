@@ -25,7 +25,7 @@ import { isMutationDomain, STUDENT_LIVE_DOMAINS, type MutationDomain } from '../
  *   - the constructor re-runs on every wake, so setup belongs there.
  */
 
-type SocketTag = { kind: 'staff' | 'student'; userId: string };
+type SocketTag = { kind: 'staff' | 'student' | 'parent'; userId: string };
 
 export class LiveHub extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -60,6 +60,9 @@ export class LiveHub extends DurableObject<Env> {
       const tag = ws.deserializeAttachment() as SocketTag | null;
       if (!tag) continue;
       if (tag.kind === 'student' && !STUDENT_LIVE_DOMAINS.has(domain as MutationDomain)) continue;
+      // A parent's app is /profile, and nothing broadcasts a profile edit back to its own
+      // author. They connect (the socket is opened by the app shell) and receive nothing.
+      if (tag.kind === 'parent') continue;
       try {
         ws.send(message);
         delivered++;
@@ -80,7 +83,7 @@ export class LiveHub extends DurableObject<Env> {
     // forwarded here; it overwrites these headers, so a client cannot set them.
     const kind = request.headers.get('X-Live-Kind');
     const userId = request.headers.get('X-Live-User');
-    if ((kind !== 'staff' && kind !== 'student') || !userId) {
+    if ((kind !== 'staff' && kind !== 'student' && kind !== 'parent') || !userId) {
       return new Response('unauthorized', { status: 401 });
     }
 

@@ -13,5 +13,8 @@ export default function Index() {
   const { user } = useAuth();
 
   if (!user) return <Redirect href="/login" />;
+  // A parent's app is the profile screen and nothing else — the web is where their
+  // children's information lives. Sending them to /dashboard would be a wall of 403s.
+  if (user.kind === 'parent') return <Redirect href="/profile" />;
   return <Redirect href={user.kind === 'student' ? '/vocabulary' : '/dashboard'} />;
 }

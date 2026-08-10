@@ -260,6 +260,200 @@ describe('auth service — invite redemption', () => {
   });
 });
 
+/**
+ * Linked invites — the code the People screen mints for someone who already exists.
+ *
+ * The whole point is that redeeming must NOT create a second person: before this, a
+ * student the school had entered and then invited ended up in the roster twice.
+ */
+describe('auth service — linked invite redemption', () => {
+  it('mints a linked code and attaches an account to the existing student', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Linked Student',
+      color: 'blue',
+      classIds: [],
+    });
+    const before = (await peopleSvc.listStudents(d)).length;
+
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
+    expect(invite.code).toMatch(/^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
+    expect(invite.studentId).toBe(student.id);
+
+    const result = await authSvc.redeemInvite(d, invite.code, {
+      name: 'Whatever They Typed',
+      email: 'linked-student@test.com',
+      password: 'pw123456',
+    });
+    expect(result).not.toBeNull();
+
+    // No duplicate row, and the name staff entered is the one that survives.
+    const after = await peopleSvc.listStudents(d);
+    expect(after.length).toBe(before);
+    expect(after.find((s) => s.id === student.id)?.name).toBe('Linked Student');
+
+    const account = await d.query.accounts.findFirst({
+      where: eq(accounts.studentId, student.id),
+    });
+    expect(account?.id).toBe(result.accountId);
+
+    const list = await invitesSvc.list(d);
+    expect(list.find((i) => i.id === invite.id)?.used).toBe(true);
+    expect(list.find((i) => i.id === invite.id)?.personName).toBe('Linked Student');
+  });
+
+  // The legacy path hardcodes role 'Teacher'; an Admin invited by code must stay an Admin.
+  it('leaves a linked staff row its own role and colour', async () => {
+    const d = db();
+    const member = await peopleSvc.createStaff(d, {
+      name: 'Linked Admin',
+      role: 'Admin',
+      color: 'cocoa',
+    });
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Staff', staffId: member.id }]);
+    await authSvc.redeemInvite(d, invite.code, {
+      name: 'Ignored',
+      password: 'pw123456',
+    });
+    const after = (await peopleSvc.listStaff(d)).find((s) => s.id === member.id);
+    expect(after.role).toBe('Admin');
+    expect(after.color).toBe('cocoa');
+  });
+
+  it('backfills an email only when staff left it blank', async () => {
+    const d = db();
+    const blank = await peopleSvc.createStudent(d, {
+      name: 'No Email',
+      color: 'blue',
+      classIds: [],
+    });
+    const set = await peopleSvc.createStudent(d, {
+      name: 'Has Email',
+      email: 'staff-entered@test.com',
+      color: 'blue',
+      classIds: [],
+    });
+    const codes = await invitesSvc.createLinked(d, [
+      { role: 'Student', studentId: blank.id },
+      { role: 'Student', studentId: set.id },
+    ]);
+    await authSvc.redeemInvite(d, codes[0].code, {
+      name: 'x',
+      email: 'they-signed-up@test.com',
+      password: 'pw123456',
+    });
+    await authSvc.redeemInvite(d, codes[1].code, {
+      name: 'x',
+      email: 'different@test.com',
+      password: 'pw123456',
+    });
+    const after = await peopleSvc.listStudents(d);
+    expect(after.find((s) => s.id === blank.id)?.email).toBe('they-signed-up@test.com');
+    expect(after.find((s) => s.id === set.id)?.email).toBe('staff-entered@test.com');
+  });
+
+  // Staff can issue a second code before the first is redeemed. One login per person.
+  it('refuses a second code once the person has an account', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Twice Invited',
+      color: 'blue',
+      classIds: [],
+    });
+    const first = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
+    const second = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
+
+    expect(
+      await authSvc.redeemInvite(d, first[0].code, { name: 'x', password: 'pw123456' }),
+    ).not.toBeNull();
+    expect(
+      await authSvc.redeemInvite(d, second[0].code, { name: 'x', password: 'pw999999' }),
+    ).toBeNull();
+  });
+
+  // ON DELETE CASCADE: removing the person removes the code they were never going to use.
+  it('drops a linked invite when the person is deleted', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Deleted Soon',
+      color: 'blue',
+      classIds: [],
+    });
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
+    await peopleSvc.removeStudent(d, student.id);
+    const list = await invitesSvc.list(d);
+    expect(list.some((i) => i.id === invite.id)).toBe(false);
+  });
+
+  // Linking a sibling's parent must not mint them a second code: the first is either
+  // already spent (they have an account) or still waiting in the Invites tab.
+  it('only wants a code for someone who has neither an account nor one waiting', async () => {
+    const d = db();
+    const fresh = await peopleSvc.createParent(d, {
+      name: 'Fresh',
+      color: 'green',
+      studentIds: [],
+    });
+    const target = { role: 'Parent', parentId: fresh.id };
+    // A parent carried over from before linked invites: nothing issued, so mint one.
+    expect(await invitesSvc.needsInvite(d, target)).toBe(true);
+
+    const [open] = await invitesSvc.createLinked(d, [target]);
+    expect(await invitesSvc.needsInvite(d, target)).toBe(false); // code still waiting
+
+    await authSvc.redeemInvite(d, open.code, { name: 'x', password: 'pw123456' });
+    expect(await invitesSvc.needsInvite(d, target)).toBe(false); // now they have a login
+  });
+
+  it('links a second child to an existing parent without dropping the first', async () => {
+    const d = db();
+    const first = await peopleSvc.createStudent(d, { name: 'Older', color: 'blue', classIds: [] });
+    const second = await peopleSvc.createStudent(d, {
+      name: 'Younger',
+      color: 'blue',
+      classIds: [],
+    });
+    const parent = await peopleSvc.createParent(d, {
+      name: 'One Mother',
+      color: 'green',
+      studentIds: [first.id],
+    });
+
+    await peopleSvc.linkParentToStudent(d, parent.id, second.id);
+    // Re-linking is a no-op, not a primary-key error.
+    await peopleSvc.linkParentToStudent(d, parent.id, second.id);
+
+    const after = await peopleSvc.findParent(d, parent.id);
+    expect(after.studentIds.sort()).toEqual([first.id, second.id].sort());
+    // And still exactly one parent row for the family.
+    expect((await peopleSvc.listParents(d)).filter((p) => p.name === 'One Mother')).toHaveLength(1);
+  });
+
+  it('resolves a parent account to kind parent', async () => {
+    const d = db();
+    const parent = await peopleSvc.createParent(d, {
+      name: 'Signed In Parent',
+      color: 'green',
+      relation: 'Mother',
+      studentIds: [],
+    });
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Parent', parentId: parent.id }]);
+    const result = await authSvc.redeemInvite(d, invite.code, {
+      name: 'x',
+      email: 'signed-in-parent@test.com',
+      password: 'pw123456',
+    });
+    expect(result).not.toBeNull();
+
+    const token = await authSvc.createSession(d, result.accountId, true);
+    const session = await authSvc.userFromToken(d, token);
+    expect(session.kind).toBe('parent');
+    expect(session.user.id).toBe(parent.id);
+    expect(session.user.name).toBe('Signed In Parent');
+    expect(session.user.role).toBe('Parent');
+  });
+});
+
 describe('auth service — password reset', () => {
   it('resetPassword updates hash and invalidates old sessions', async () => {
     const d = db();

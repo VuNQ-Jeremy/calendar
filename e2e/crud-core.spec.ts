@@ -102,17 +102,20 @@ test.describe('CRUD: core domains', () => {
 
     await page.getByRole('button', { name: 'Add student' }).click();
     await k.textIn('Full name').fill(name);
-    await k.textIn('Grade').fill('9');
+    // Grade sits with the classes it belongs to and is labelled by its placeholder.
+    await k.dlg.getByPlaceholder('Grade').fill('9');
     // TokenSearch: the suggestion menu is portalled to document.body.
     await k.dlg.locator('input.tokensearch__input').fill('Bio');
     await page.locator('.tokensearch__menu .tokensearch__opt', { hasText: 'Biology 9A' }).click();
     await expect(k.dlg.locator('.tokensearch .mchip', { hasText: 'Biology 9A' })).toBeVisible();
     // The suggestion menu only closes on an outside pointerdown and would
     // otherwise sit over the footer, swallowing the Save click.
-    await k.textIn('Grade').click();
+    await k.dlg.getByPlaceholder('Grade').click();
     let post = k.posted('/people');
     await k.submit().click(); // "Save"
     await post;
+    // Creating mints the student's login code; the modal ends on it.
+    await k.dlgOf('Invite codes ready').getByRole('button', { name: 'Done' }).click();
 
     const row = (n: string) => page.locator('.lrow', { hasText: n });
     await expect(row(name)).toBeVisible();

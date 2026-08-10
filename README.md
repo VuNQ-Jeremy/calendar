@@ -122,18 +122,23 @@ shows count of unused invite codes.
 
 ### 5. People (`app/screens-manage.jsx` → `StudentsScreen`)
 Segmented `Tabs`: **Students · Staff · Parents · Invites** (counts in labels).
-- **Students:** list rows (avatar, grade, guardian, email, class tags); add/edit via
-  `StudentModal` — including **"Enrolled classes" as a type-ahead search** (the
-  `TokenSearch` component: search by name, pick to add a removable colored chip).
+- **Students:** list rows (avatar, grade, linked parent, email, class tags); add/edit via
+  `StudentModal` — name and email, then a **Grade & classes** section (grade sits with
+  the **"Enrolled classes" type-ahead search**: the `TokenSearch` component — search by
+  name, pick to add a removable colored chip), then a **Parent** section when adding.
+  Filling the parent in creates a real linked `parents` row, not a free-text label —
+  or tick **"Link an existing parent"** and pick one from the dropdown, which is the
+  sibling case (a second row for the same mother would be wrong).
 - **Staff:** list of staff users; add/edit via `StaffModal` (name, email, role, color,
   phone — phone inputs have **no placeholder**, blank by design).
 - **Parents:** list rows (avatar, contact, linked children as tags, relation badge);
   add/edit via `ParentModal` (name, relation, email, phone, color, and **children linked
-  via the same `TokenSearch`**). Supports the backlogged parent portal.
-- **Invites (one-time onboarding codes):** `InvitesPanel` — admin **generates a code**
-  for a Student/Staff/Parent (role chosen via a Student·Staff·Parent tablist, Staff in
-  the middle), optionally tied to a name/class. Shows code (`XXX-XXX`, mono), role,
-  used/unused state; copy + revoke.
+  via the same `TokenSearch`**).
+- **Invites (one-time onboarding codes):** there is no "generate" button — **adding
+  anyone mints their code**, and the modal ends on it (`XXX-XXX`, mono, copy button; two
+  codes when a student was added with a parent). Each code is tied to the person it was
+  made for, so redeeming attaches a login to that row instead of creating a second one.
+  `InvitesPanel` lists them by the person's name with used/unused state; copy + revoke.
 
 ### 6. Materials (`app/screens-extra.jsx` → `MaterialsScreen`)
 - List/grid of resources filtered by class. Each item: type icon
@@ -189,8 +194,9 @@ In-browser store persisted to `localStorage` under a single key. Collections:
 - **homework** — `{ id, title, classId, due, points, notes, done }`
 - **materials** — `{ id, title, type, classId, url|file, favorite }`
   (`type`: `notes` | `worksheet` | `video` | `link`)
-- **invites** — `{ id, code, role, name, classId, createdAt, used }`
-  (`role`: `Student` | `Staff` | `Parent`; `code` = `XXX-XXX`)
+- **invites** — `{ id, code, role, name, classId, createdAt, used, studentId|staffId|parentId }`
+  (`role`: `Student` | `Staff` | `Parent`; `code` = `XXX-XXX`; the id links the code to
+  the person it was minted for — all three null on a legacy/mobile-made code)
 - **theme** — calendar customization: background color/image + opacity, grid color,
   today tint, header strip color.
 

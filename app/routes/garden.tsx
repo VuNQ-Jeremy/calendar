@@ -8,7 +8,7 @@ import type {
 import { ClassGardenScreen } from '../../src/garden/class-garden.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireAdmin, requireStaff, requireUser } from '../../server/services/auth';
+import { requireAdmin, requireStaff, requireLearner } from '../../server/services/auth';
 import * as gardenSvc from '../../server/services/garden';
 import * as classesSvc from '../../server/services/classes';
 import { GardenDevInput, WaterInput } from '../../shared/schemas';
@@ -34,7 +34,7 @@ import { withLiveAction } from '../../server/live';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireUser(request, env);
+  const { user, kind } = await requireLearner(request, env);
   const db = createDb(env);
   const vnToday = ictDateOf(new Date().toISOString());
   const isStaff = kind === 'staff';

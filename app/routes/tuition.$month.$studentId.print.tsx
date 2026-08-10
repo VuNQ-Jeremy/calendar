@@ -46,9 +46,14 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   // first linked parent who has one — null when nobody does, and the theme just omits the line.
   const phone = parents.find((p) => p.studentIds.includes(studentId) && p.phone)?.phone ?? null;
 
+  // Same idea for the guardian line: the linked parent, falling back to the free-text
+  // `guardian` column that students added before the People form dropped that field carry.
+  const guardian =
+    parents.find((p) => p.studentIds.includes(studentId))?.name ?? student.guardian;
+
   return {
     month,
-    student: { id: student.id, name: student.name, guardian: student.guardian, phone },
+    student: { id: student.id, name: student.name, guardian, phone },
     // A student with nothing billed still gets a valid (zero) slip rather than an error page.
     fee: fee ?? {
       studentId,

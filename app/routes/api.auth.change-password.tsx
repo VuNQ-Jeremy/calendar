@@ -7,7 +7,7 @@ import { ChangePasswordInput } from '../../shared/schemas';
  * Changing the password signs out every OTHER session for the account — including any
  * browser the user is logged into. The calling device keeps its token.
  */
-export const action = withAuth('user', async ({ request, db, user }) => {
+export const action = withAuth('any', async ({ request, db, user }) => {
   const input = await parseBody(request, ChangePasswordInput);
   const raw = (request.headers.get('Authorization') ?? '').slice(7).trim();
   const currentTokenHash = await hashToken(raw);

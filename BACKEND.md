@@ -135,8 +135,12 @@ npm run db:migrate:local        # local dev
 | `createSession(db, accountId, remember)` | Returns raw cookie token |
 | `getUser(request, env)` | Returns `SessionUser` or `null` |
 | `requireUser(request, env)` | Returns `SessionUser` or throws redirect to `/login` |
+| `requireLearner(request, env)` | Staff or student; redirects a parent to `/profile` |
+| `requireStaff(request, env)` | Staff only; student → `/vocabulary`, parent → `/profile` |
+| `homeFor(kind)` | Where a signed-in user of that kind belongs |
 | `logout(db, request)` | Deletes session row |
-| `redeemInvite(db, code, {name, email, password})` | Atomic invite redemption |
+| `findOpenInvite(db, code)` | The unused invite for a typed code, or `null` |
+| `redeemInvite(db, code, {name, email, password})` | Atomic invite redemption. A **linked** code attaches an account to the existing person; a legacy (unlinked) one creates them |
 | `requestReset(db, email)` | Creates reset token; returns `devUrl` in DEV mode |
 | `resetPassword(db, token, newPassword)` | Updates hash; invalidates all sessions |
 

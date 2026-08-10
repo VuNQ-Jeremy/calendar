@@ -15,7 +15,7 @@ import { UiPrefsInput } from '../../shared/schemas';
  * Note `scrollbar` is meaningless on Android and `mobileTabBar` is meaningless on the web; each
  * client reads the whole object and applies the half that concerns it.
  */
-export const loader = withAuth('user', ({ db }) => svc.getUiPrefs(db));
+export const loader = withAuth('any', ({ db }) => svc.getUiPrefs(db));
 
 export const action = withAuth(
   'admin',

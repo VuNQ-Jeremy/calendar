@@ -4,7 +4,7 @@ import { TakeTestScreen } from '../../src/tests/take.jsx';
 import { createDb } from '../../server/db/index';
 import type { Db } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireLearner } from '../../server/services/auth';
 import * as attemptsSvc from '../../server/services/attempts';
 import type { StudentQuestion } from '../../server/services/attempts';
 import * as testsSvc from '../../server/services/tests';
@@ -80,7 +80,7 @@ async function ownItem(db: Db, testId: string, studentId: string, now: Date) {
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireUser(request, env);
+  const { user, kind } = await requireLearner(request, env);
   if (kind === 'staff') throw redirect('/tests');
   if (kind !== 'student') throw redirect('/profile');
 
@@ -158,7 +158,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
 
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireUser(request, env);
+  const { user, kind } = await requireLearner(request, env);
   if (kind !== 'student') return Response.json({ error: 'forbidden' }, { status: 403 });
 
   const db = createDb(env);

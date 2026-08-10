@@ -29,6 +29,8 @@ import { useTabBarStyle } from '~/lib/use-ui-prefs';
  */
 const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/vocabulary', '/more'];
 const STUDENT_TAB_ROOTS = ['/vocabulary', '/schedule', '/profile'];
+/** A parent has one tab, so their only root is the screen they land on. */
+const PARENT_TAB_ROOTS = ['/profile'];
 
 /**
  * Back on a tab is a dead end, not a hop to the tab you were on before — so it asks first.
@@ -59,9 +61,16 @@ const STUDENT_TAB_ROOTS = ['/vocabulary', '/schedule', '/profile'];
  * Registering later than the NavigationContainer is what gives this priority — RN calls
  * hardwareBackPress subscribers in reverse order of registration.
  */
-function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | undefined) {
+function useTabRootsEndTheBackStack(kind: 'staff' | 'student' | 'parent' | undefined) {
   const pathname = usePathname();
-  const roots = kind === 'staff' ? STAFF_TAB_ROOTS : kind === 'student' ? STUDENT_TAB_ROOTS : [];
+  const roots =
+    kind === 'staff'
+      ? STAFF_TAB_ROOTS
+      : kind === 'student'
+        ? STUDENT_TAB_ROOTS
+        : kind === 'parent'
+          ? PARENT_TAB_ROOTS
+          : [];
   const onTabRoot = roots.includes(pathname);
   const [asking, setAsking] = React.useState(false);
 
@@ -137,6 +146,9 @@ export default function AppLayout() {
   // shell for a signed-out user.
   if (!user) return <Redirect href="/login" />;
   const staff = user.kind === 'staff';
+  // A parent has neither the staff tabs nor the student's learning ones — Profile is the
+  // whole app, and the endpoints behind Vocabulary and Schedule return 403 for them.
+  const parent = user.kind === 'parent';
 
   return (
     <>
@@ -217,15 +229,19 @@ export default function AppLayout() {
         />
         <Tabs.Screen
           name="vocabulary"
-          options={{ title: t('nav_flashcards'), tabBarIcon: TabIconCards }}
+          options={{
+            title: t('nav_flashcards'),
+            href: parent ? null : undefined,
+            tabBarIcon: TabIconCards,
+          }}
         />
         <Tabs.Screen
           name="schedule"
           options={{
             title: t('sched_title'),
             // The mirror of `profile` below: a tab for students, nothing for staff, who reach the
-            // same sessions through the calendar.
-            href: staff ? null : undefined,
+            // same sessions through the calendar, and nothing for parents.
+            href: staff || parent ? null : undefined,
             tabBarIcon: TabIconSchedule,
           }}
         />

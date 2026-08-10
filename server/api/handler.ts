@@ -3,8 +3,8 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { createDb, type Db } from '../db';
 import { cloudflareCtx } from '../../app/load-context';
 import { parsePatch } from '../../shared/schemas';
-import type { SessionUser } from '../services/auth';
-import { requireApiUser, requireApiStaff, requireApiAdmin } from './auth';
+import type { SessionUser, LearnerUser } from '../services/auth';
+import { requireApiUser, requireApiLearner, requireApiStaff, requireApiAdmin } from './auth';
 import { notifyLive } from '../live';
 import type { MutationDomain } from '../../shared/live';
 
@@ -15,10 +15,22 @@ import type { MutationDomain } from '../../shared/live';
  * Envelope: `{ data }` on success, `{ error, issues? }` on failure. Never a redirect.
  */
 
-export type AuthLevel = 'user' | 'staff' | 'admin';
+/**
+ * 'any' — every signed-in kind, parents included. Reserved for endpoints about the caller
+ *   themselves: profile, prefs, push tokens, logout.
+ * 'user' — staff or student. The default for shared surfaces, because their handlers branch
+ *   `student ? own : all` and a parent falling into the else-branch would read the school.
+ */
+export type AuthLevel = 'any' | 'user' | 'staff' | 'admin';
 
-export type ApiCtx = {
-  user: SessionUser;
+/**
+ * Every level except 'any' has already turned parents away, so a handler at those levels
+ * gets the narrowed session the flashcard and garden services require.
+ */
+type UserFor<L extends AuthLevel> = L extends 'any' ? SessionUser : LearnerUser;
+
+export type ApiCtx<L extends AuthLevel = AuthLevel> = {
+  user: UserFor<L>;
   db: Db;
   env: Env;
   request: Request;
@@ -49,6 +61,7 @@ export function corsPreflight(): Response {
 async function resolveUser(level: AuthLevel, request: Request, env: Env): Promise<SessionUser> {
   if (level === 'admin') return requireApiAdmin(request, env);
   if (level === 'staff') return requireApiStaff(request, env);
+  if (level === 'user') return requireApiLearner(request, env);
   return requireApiUser(request, env);
 }
 
@@ -59,9 +72,9 @@ async function resolveUser(level: AuthLevel, request: Request, env: Env): Promis
  * which gets wrapped in `{ data }`. Guards throw a Response; anything else becomes a 500
  * with the detail logged server-side rather than leaked to the client.
  */
-export function withAuth<T>(
-  level: AuthLevel,
-  handler: (ctx: ApiCtx) => Promise<T>,
+export function withAuth<T, L extends AuthLevel>(
+  level: L,
+  handler: (ctx: ApiCtx<L>) => Promise<T>,
   opts?: {
     /**
      * Broadcast this domain to connected web clients after a successful write,
@@ -77,7 +90,7 @@ export function withAuth<T>(
     try {
       const user = await resolveUser(level, request, env);
       const result = await handler({
-        user,
+        user: user as UserFor<L>,
         db: createDb(env),
         env,
         request,

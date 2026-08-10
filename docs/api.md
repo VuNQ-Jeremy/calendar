@@ -66,18 +66,30 @@ its SHA-256 hash, so a database dump cannot be replayed.
   made the change keeps its token. Expect a 401 on other devices — present it as a re-login,
   not a crash.
 - Signup is invite-only (`POST /api/auth/redeem-invite`).
-- **Parent accounts cannot authenticate.** `userFromToken` returns null for them by design.
+- **Parents can authenticate, but have no mobile screens.** `userFromToken` resolves
+  `kind: 'parent'`; the app sends them to `/profile` and nothing else.
+- **Codes minted by the web are linked to a person.** Redeeming one attaches an account to
+  the existing `students`/`staff`/`parents` row — it does not create a second one, and the
+  name in the body is ignored (the school's spelling wins). Codes created through
+  `POST /api/invites` carry no link and still create the person on redeem.
 
 ### Roles
 
 | Level | Who |
 |---|---|
-| `user` | any authenticated staff member or student |
+| `any` | any authenticated caller, parents included |
+| `user` | staff or student — **not** parents |
 | `staff` | `Teacher`, `Admin`, `Assistant` |
 | `admin` | `Admin` only |
 
 Students can reach only `user`-level endpoints — mirroring the web, where they see just
 `/flashcards` and `/profile`. Everything else returns **403**, not a redirect.
+
+Parents are narrower still: `any` covers the endpoints about themselves (`/api/auth/me`,
+`/api/auth/logout`, `/api/auth/change-password`, `/api/bootstrap`, `/api/profile`,
+`/api/settings/ui-prefs`, `/api/settings/notifications`, `/api/push/*`). `user`-level
+handlers branch `student ? own data : everything`, so a parent reaching one would be
+served the teacher's view — they get **403** instead.
 
 ---
 
@@ -114,7 +126,7 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/students/:id?` | staff | `StudentInput` |
 | `/api/staff/:id?` | staff | `StaffInput` |
 | `/api/parents/:id?` | staff | `ParentInput` |
-| `/api/invites/:id?` | staff | `InviteInput` (no PATCH) |
+| `/api/invites/:id?` | staff | `InviteInput` (no PATCH) — creates an **unlinked** code; see Auth |
 | `/api/materials/:id?` | staff | `MaterialInput` — **multipart**, see below |
 | `/api/assessments/scores/:id?` | staff | `ScoreRecordInput` |
 | `/api/assessments/behavior/:id?` | staff | `BehaviorRecordInput` |

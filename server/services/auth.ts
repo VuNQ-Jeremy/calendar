@@ -1,4 +1,5 @@
-import { eq, and, lt, ne } from 'drizzle-orm';
+import { eq, and, lt, ne, inArray } from 'drizzle-orm';
+import type { BatchItem } from 'drizzle-orm/batch';
 import { redirect } from 'react-router';
 import { createDb } from '../db';
 import type { Db } from '../db';
@@ -12,6 +13,7 @@ import {
   passwordResets,
 } from '../db/schema';
 import { hashPassword, verifyPassword, newToken, hashToken } from './crypto';
+import { normalizeInviteCode } from '../../shared/logic/invite-code';
 import { sessionCookie } from '../session';
 
 // Static dummy hash for timing-safe login (prevents user-enumeration via timing).
@@ -19,7 +21,12 @@ const DUMMY_HASH =
   'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 export type SessionUser = {
-  kind: 'staff' | 'student';
+  /**
+   * `parent` is a minimal portal: profile + password, nothing else. Every surface that
+   * branches on kind must treat it explicitly — the historical `kind === 'staff' ? … : …`
+   * shape silently hands a parent the student's view, and the inverse hands them staff data.
+   */
+  kind: 'staff' | 'student' | 'parent';
   account: { id: string; email: string };
   user: {
     id: string;
@@ -63,15 +70,22 @@ export async function createSession(
  */
 export async function userFromToken(db: Db, rawToken: string): Promise<SessionUser | null> {
   const tokenHash = await hashToken(rawToken);
-  // One joined query instead of 3 sequential D1 round-trips. The account join is
+  // One joined query instead of sequential D1 round-trips. The account join is
   // inner (sessions.account_id is ON DELETE CASCADE, so orphan sessions cannot
-  // exist); staff/students are left joins because exactly one of them applies.
+  // exist); staff/students/parents are left joins because exactly one applies.
   const rows = await db
-    .select({ session: sessions, account: accounts, staffRow: staff, studentRow: students })
+    .select({
+      session: sessions,
+      account: accounts,
+      staffRow: staff,
+      studentRow: students,
+      parentRow: parents,
+    })
     .from(sessions)
     .innerJoin(accounts, eq(accounts.id, sessions.accountId))
     .leftJoin(staff, eq(staff.id, accounts.staffId))
     .leftJoin(students, eq(students.id, accounts.studentId))
+    .leftJoin(parents, eq(parents.id, accounts.parentId))
     .where(eq(sessions.token, tokenHash))
     .limit(1);
   const row = rows[0];
@@ -115,7 +129,23 @@ export async function userFromToken(db: Db, rawToken: string): Promise<SessionUs
     };
   }
 
-  return null; // parent accounts remain unsupported
+  if (account.parentId) {
+    if (!row.parentRow) return null;
+    return {
+      kind: 'parent',
+      account: { id: account.id, email: account.email },
+      user: {
+        id: row.parentRow.id,
+        name: row.parentRow.name,
+        email: row.parentRow.email ?? null,
+        role: 'Parent',
+        color: row.parentRow.color,
+        phone: row.parentRow.phone ?? null,
+      },
+    };
+  }
+
+  return null;
 }
 
 // On a cold document load the layout loader and the page loader run in the
@@ -154,10 +184,36 @@ export async function requireUser(request: Request, env: Env): Promise<SessionUs
   return user;
 }
 
+/** A session that is known not to be a parent — see requireLearner. */
+export type LearnerUser = SessionUser & { kind: 'staff' | 'student' };
+
+/**
+ * Staff or student — the guard for pages that serve both, like the vocabulary lists and
+ * the class garden. They branch `kind === 'staff' ? teacher view : learner view`, so a
+ * parent must be turned away here rather than falling into one of those two.
+ *
+ * The narrowed return type is the point: the flashcard and garden services take
+ * `kind: 'staff' | 'student'`, so a caller that skipped this guard will not compile.
+ */
+export async function requireLearner(request: Request, env: Env): Promise<LearnerUser> {
+  const sessionUser = await requireUser(request, env);
+  if (sessionUser.kind === 'parent') throw redirect('/profile');
+  return sessionUser as LearnerUser;
+}
+
 export async function requireStaff(request: Request, env: Env): Promise<SessionUser> {
   const sessionUser = await requireUser(request, env);
-  if (sessionUser.kind !== 'staff') throw redirect('/vocabulary');
+  if (sessionUser.kind === 'student') throw redirect('/vocabulary');
+  // Parents have no learning surface; /profile is their whole app.
+  if (sessionUser.kind !== 'staff') throw redirect('/profile');
   return sessionUser;
+}
+
+/** Where a signed-in user belongs when they land somewhere they may not be. */
+export function homeFor(kind: SessionUser['kind']): string {
+  if (kind === 'staff') return '/dashboard';
+  if (kind === 'student') return '/vocabulary';
+  return '/profile';
 }
 
 export async function requireAdmin(request: Request, env: Env): Promise<SessionUser> {
@@ -208,14 +264,38 @@ export async function logout(db: Db, request: Request): Promise<void> {
   await db.delete(sessions).where(eq(sessions.token, tokenHash));
 }
 
+/**
+ * The unused invite for a typed code, or null.
+ *
+ * Two stored spellings are accepted, not one: `makeInviteCode` writes `ABC-123`, but codes
+ * created through the API carry whatever the caller sent, and some were stored bare. The
+ * old lookup read every invite and compared in JS, which tolerated both; matching on the
+ * pair keeps that tolerance while still using the unique index.
+ */
+export async function findOpenInvite(
+  db: Db,
+  code: string,
+): Promise<typeof invites.$inferSelect | null> {
+  const normalized = normalizeInviteCode(code);
+  if (!normalized) return null;
+  const rows = await db
+    .select()
+    .from(invites)
+    .where(inArray(invites.code, [normalized, normalized.replace('-', '')]));
+  return rows.find((r) => !r.used) ?? null;
+}
+
+/** True for codes minted against a person who already exists. */
+function linkedIdOf(invite: typeof invites.$inferSelect): string | null {
+  return invite.studentId ?? invite.staffId ?? invite.parentId ?? null;
+}
+
 export async function redeemInvite(
   db: Db,
   code: string,
   { name, email, password }: { name: string; email?: string; password: string },
 ): Promise<{ accountId: string } | null> {
-  const norm = code.trim().toUpperCase().replace(/[-\s]/g, '');
-  const allInvites = await db.select().from(invites);
-  const invite = allInvites.find((i) => i.code.replace('-', '').toUpperCase() === norm && !i.used);
+  const invite = await findOpenInvite(db, code);
   if (!invite) return null;
 
   const accountId = crypto.randomUUID();
@@ -223,6 +303,61 @@ export async function redeemInvite(
   const now = new Date().toISOString();
   const normalizedEmail = (email || '').trim().toLowerCase() || null;
 
+  // ---- Linked invite: attach an account to the row staff already created. ----
+  const linkedId = linkedIdOf(invite);
+  if (linkedId) {
+    const person = invite.studentId
+      ? await db.query.students.findFirst({ where: eq(students.id, linkedId) })
+      : invite.staffId
+        ? await db.query.staff.findFirst({ where: eq(staff.id, linkedId) })
+        : await db.query.parents.findFirst({ where: eq(parents.id, linkedId) });
+    if (!person) return null;
+
+    // A person can end up with two codes (staff re-issues one). The first redeem wins;
+    // the second must not mint a second login for the same row.
+    const existing = await db.query.accounts.findFirst({
+      where: invite.studentId
+        ? eq(accounts.studentId, linkedId)
+        : invite.staffId
+          ? eq(accounts.staffId, linkedId)
+          : eq(accounts.parentId, linkedId),
+    });
+    if (existing) return null;
+
+    const ops: BatchItem<'sqlite'>[] = [
+      db.insert(accounts).values({
+        id: accountId,
+        email: normalizedEmail || `invite-${accountId}@mochi.local`,
+        passwordHash,
+        studentId: invite.studentId ?? null,
+        staffId: invite.staffId ?? null,
+        parentId: invite.parentId ?? null,
+        createdAt: now,
+      }),
+    ];
+    // The staff-entered name is canonical, so `name` is ignored — no second row, no rename.
+    // An email the person signed up with is worth keeping, but only where staff left it blank.
+    if (!person.email && normalizedEmail) {
+      const set = { email: normalizedEmail };
+      ops.push(
+        invite.studentId
+          ? db.update(students).set(set).where(eq(students.id, linkedId))
+          : invite.staffId
+            ? db.update(staff).set(set).where(eq(staff.id, linkedId))
+            : db.update(parents).set(set).where(eq(parents.id, linkedId)),
+      );
+    }
+    ops.push(
+      db
+        .update(invites)
+        .set({ used: true, usedBy: accountId, usedAt: now })
+        .where(eq(invites.id, invite.id)),
+    );
+    await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+    return { accountId };
+  }
+
+  // ---- Legacy invite (no link): the code creates the person. Still minted by mobile. ----
   if (invite.role === 'Staff') {
     const staffId = crypto.randomUUID();
     await db.batch([

@@ -7,7 +7,7 @@ import type {
 import { FlashcardTopicScreen } from '../../src/flashcards/topic.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireLearner } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
 import {
   FlashcardWordInput,
@@ -21,7 +21,7 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const su = await requireUser(request, env);
+  const su = await requireLearner(request, env);
   const db = createDb(env);
   const topic = await flashcardsSvc.getTopicBySlug(db, params.slug!);
   if (!topic) throw new Response('Not found', { status: 404 });
@@ -62,7 +62,7 @@ function preprocessWord(raw: Record<string, unknown>) {
 
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const su = await requireUser(request, env);
+  const su = await requireLearner(request, env);
   const db = createDb(env);
   const topic = await flashcardsSvc.getTopicBySlug(db, params.slug!);
   if (!topic) throw new Response('Not found', { status: 404 });

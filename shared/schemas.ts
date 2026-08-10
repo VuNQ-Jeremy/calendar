@@ -91,6 +91,23 @@ export const StudentInput = z.object({
 });
 export type StudentInput = z.infer<typeof StudentInput>;
 
+/**
+ * Creating a student from the People screen, where the parent is entered inline and
+ * becomes a real `parents` row linked through `parent_students` — not the legacy
+ * free-text `guardian` column, which the web form no longer offers.
+ *
+ * Web-only: `/api/students` still takes plain StudentInput, so shipped mobile builds
+ * (which post `guardian`) are unaffected.
+ */
+export const StudentCreateInput = StudentInput.extend({
+  /** An existing parent to link — a sibling's mother, say. Wins over the fields below. */
+  parentId: z.string().nullish(),
+  parentName: z.string().trim().max(200).nullish(),
+  parentRelation: z.string().max(50).nullish(),
+  parentPhone: z.string().max(50).nullish(),
+});
+export type StudentCreateInput = z.infer<typeof StudentCreateInput>;
+
 export const StaffInput = z.object({
   name: z.string().trim().min(1).max(200),
   email: z

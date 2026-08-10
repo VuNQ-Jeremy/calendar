@@ -14,13 +14,13 @@ import * as themeSvc from '../../server/services/theme';
  * Vietnamese mobile connection five sequential requests is the difference between a fast
  * app and a slow one.
  *
- * Students receive only their own identity and prefs: they must never be sent the roster.
- * Mirrors the student branch of the _app.tsx layout loader.
+ * Only staff receive the roster. Students and parents get their own identity and prefs and
+ * nothing else. Mirrors the non-staff branch of the _app.tsx layout loader.
  */
-export const loader = withAuth('user', async ({ user, db }) => {
+export const loader = withAuth('any', async ({ user, db }) => {
   const identity = { user: { ...user.user, kind: user.kind }, account: user.account };
 
-  if (user.kind === 'student') {
+  if (user.kind !== 'staff') {
     const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
     return {
       ...identity,

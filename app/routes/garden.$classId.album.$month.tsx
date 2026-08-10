@@ -3,7 +3,7 @@ import type { ClientLoaderFunctionArgs, LoaderFunctionArgs } from 'react-router'
 import { GardenAlbumScreen } from '../../src/garden/class-garden.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireLearner } from '../../server/services/auth';
 import * as gardenSvc from '../../server/services/garden';
 import { gardenAlbumKey, swrLoad } from '../../src/lib/route-cache.js';
 
@@ -20,7 +20,7 @@ import { gardenAlbumKey, swrLoad } from '../../src/lib/route-cache.js';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireUser(request, env);
+  const { user, kind } = await requireLearner(request, env);
   const db = createDb(env);
   const classId = params.classId ?? '';
   const month = params.month ?? '';

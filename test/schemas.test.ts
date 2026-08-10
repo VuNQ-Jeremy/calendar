@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   FormBool,
   InviteInput,
+  StudentCreateInput,
   MaterialInput,
   AssessmentTypeInput,
   NotifPrefsInput,
@@ -59,6 +60,47 @@ describe('InviteInput', () => {
 
   it('defaults to unused when the field is absent', () => {
     expect(InviteInput.parse({ code: 'ABC-123', role: 'Parent' }).used).toBe(false);
+  });
+});
+
+describe('StudentCreateInput', () => {
+  // The parent section is optional: leaving it blank must still add the student, and the
+  // action decides whether to create a parent by whether parentName came back non-empty.
+  it('accepts a student with no parent entered', () => {
+    const parsed = StudentCreateInput.parse({ name: 'Solo', classIds: [] });
+    expect(parsed.name).toBe('Solo');
+    expect(parsed.parentName ?? null).toBeNull();
+  });
+
+  it('carries the inline parent fields through', () => {
+    const parsed = StudentCreateInput.parse({
+      name: 'With Parent',
+      grade: '9',
+      classIds: [],
+      parentName: '  Mai Nguyễn  ',
+      parentRelation: 'Mother',
+      parentPhone: '0900000000',
+    });
+    expect(parsed.parentName).toBe('Mai Nguyễn');
+    expect(parsed.parentRelation).toBe('Mother');
+    expect(parsed.parentPhone).toBe('0900000000');
+  });
+
+  it('carries an existing parent id for the sibling case', () => {
+    const parsed = StudentCreateInput.parse({
+      name: 'Sibling',
+      classIds: [],
+      parentId: 'parent-uuid',
+    });
+    expect(parsed.parentId).toBe('parent-uuid');
+    expect(parsed.parentName ?? null).toBeNull();
+  });
+
+  // It extends StudentInput, so /api/students keeps working for shipped mobile builds.
+  it('still accepts the legacy guardian string', () => {
+    expect(
+      StudentCreateInput.parse({ name: 'Old', guardian: 'Bố Nam', classIds: [] }).guardian,
+    ).toBe('Bố Nam');
   });
 });
 

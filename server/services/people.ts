@@ -254,3 +254,26 @@ export async function removeParent(db: Db, id: string): Promise<void> {
   // ON DELETE CASCADE on parent_students.parent_id handles join-table cleanup.
   await db.delete(parents).where(eq(parents.id, id));
 }
+
+export async function findParent(db: Db, id: string): Promise<ParentRow | null> {
+  const [pRows, psRows] = await db.batch([
+    db.select().from(parents).where(eq(parents.id, id)),
+    db.select().from(parentStudents).where(eq(parentStudents.parentId, id)),
+  ]);
+  return pRows[0] ? assembleParent(pRows[0], psRows) : null;
+}
+
+/**
+ * Add one child to a parent who already exists — the sibling case.
+ *
+ * Deliberately not `updateParent({ studentIds })`: that replaces the whole set, so adding
+ * a second child through it would unlink the first. `onConflictDoNothing` because the
+ * composite primary key already forbids the duplicate, and re-linking is not an error.
+ */
+export async function linkParentToStudent(
+  db: Db,
+  parentId: string,
+  studentId: string,
+): Promise<void> {
+  await db.insert(parentStudents).values({ parentId, studentId }).onConflictDoNothing();
+}

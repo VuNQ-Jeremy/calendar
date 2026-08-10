@@ -11,6 +11,7 @@ import {
   isRouteErrorResponse,
   useRouteError,
 } from 'react-router';
+import { redirect } from 'react-router';
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from 'react-router';
 import { cacheGet, subscribe } from '../../src/lib/cache.js';
 import { cacheKeyForPath } from '../../src/lib/route-cache.js';
@@ -48,11 +49,26 @@ const TWEAKS = {
   density: 'regular',
 };
 
+/**
+ * The only page inside this layout a parent may open. Everything else here is either a
+ * staff tool or a student's own learning surface; the child loaders that guard themselves
+ * do it with `kind === 'staff' ? … : …`, which would silently serve a parent the student
+ * view. One rule at the layout, rather than a parent branch in fourteen loaders.
+ */
+const PARENT_PATHS = ['/profile'];
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const { user, kind } = await requireUser(request, env);
+  if (kind === 'parent') {
+    // Single-fetch asks for "<path>.data"; compare on the page path either way.
+    const path = new URL(request.url).pathname.replace(/\.data$/, '');
+    if (!PARENT_PATHS.includes(path)) throw redirect('/profile');
+  }
   const db = createDb(env);
-  if (kind === 'student') {
+  // Anyone who is not staff gets the light payload: the badge counts are a staff view of
+  // the school, and the queries behind them read the whole roster.
+  if (kind !== 'staff') {
     const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
     return {
       unusedInviteCount: 0,
@@ -126,10 +142,12 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
 
   return (
     <aside className="sb">
-      {/* Students never reach /dashboard — requireStaff bounces them to /vocabulary — so
-          send them straight to their own home rather than through a redirect. */}
+      {/* Students never reach /dashboard — requireStaff bounces them to /vocabulary, and a
+          parent to /profile — so send each straight home rather than through a redirect. */}
       <Link
-        to={user.kind === 'staff' ? '/dashboard' : '/vocabulary'}
+        to={
+          user.kind === 'staff' ? '/dashboard' : user.kind === 'parent' ? '/profile' : '/vocabulary'
+        }
         prefetch="intent"
         className="sb__brand"
       >

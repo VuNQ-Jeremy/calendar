@@ -199,6 +199,18 @@ export const invites = sqliteTable('invites', {
   used: integer('used', { mode: 'boolean' }).notNull().default(false),
   usedBy: text('used_by').references(() => accounts.id, { onDelete: 'set null' }),
   usedAt: text('used_at'),
+  /**
+   * The person this code belongs to — exactly one is set for codes minted by the People
+   * screen, which generates them right after creating the row. Redeeming a linked code
+   * attaches an account to that row instead of inserting a second one.
+   *
+   * All three NULL = legacy invite (still minted by the mobile app); redeem falls back to
+   * creating the person. CASCADE so a deleted person's unused code dies with them rather
+   * than silently demoting to the legacy path. See migrations/0030_invite_links.sql.
+   */
+  studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
+  staffId: text('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
+  parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
 });
 
 export const settings = sqliteTable('settings', {

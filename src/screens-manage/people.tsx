@@ -4,14 +4,22 @@ import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from '../ui.jsx';
-import { colorOf, iso, TODAY, makeCode } from '../lib/core.js';
+import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import type { ClassLite } from '../../server/services/classes.js';
 import type { StudentRow, StaffRow, ParentRow } from '../../server/services/people.js';
 import type { InviteRow } from '../../server/services/invites.js';
 import type { StudentFlashcardStats } from '../../server/services/flashcards.js';
 
-const { Card: MC, Button: MBtn, IconButton: MIB, Tag: MTag, Badge: MBadge, Avatar: MAv } = DS;
+const {
+  Card: MC,
+  Button: MBtn,
+  IconButton: MIB,
+  Tag: MTag,
+  Badge: MBadge,
+  Avatar: MAv,
+  Checkbox: MCheck,
+} = DS;
 
 interface PeopleLoaderData {
   students: StudentRow[];
@@ -30,7 +38,24 @@ type StudentDraft = {
   email?: string | null;
   color: string;
   classIds: string[];
+  /**
+   * Only filled when adding: the parent becomes a real `parents` row linked to this
+   * student, and gets a login code of their own. Editing a student does not touch
+   * parents — that is the Parents tab's job.
+   *
+   * `parentLink` picks which half applies — a new parent, or an existing one (`parentId`)
+   * for the sibling case, where a second row for the same mother would be wrong.
+   */
+  parentLink?: 'new' | 'existing';
+  parentId?: string;
+  parentName?: string;
+  parentRelation?: string;
+  parentPhone?: string;
 };
+
+/** What the /people action hands back after a create. See app/routes/people.tsx. */
+type NewInvite = { role: string; code: string };
+type PeopleActionData = { ok?: boolean; invites?: NewInvite[] } | undefined;
 
 type StaffDraft = {
   id?: string;
@@ -63,30 +88,24 @@ export function StudentsScreen() {
   const [modal, setModal] = React.useState<StudentDraft | null>(null);
   const [staffModal, setStaffModal] = React.useState<StaffDraft | null>(null);
   const [parentModal, setParentModal] = React.useState<ParentDraft | null>(null);
-  const [inviteModal, setInviteModal] = React.useState(false);
   const [confirm, confirmNode] = useConfirm();
 
   const classNames = (ids: string[]) =>
     classes.filter((c) => ids.includes(c.id)).map((c) => c.name);
 
   const openNew = () =>
-    setModal({ name: '', grade: '', color: 'blue', guardian: '', email: '', classIds: [] });
-
-  const save = (f: StudentDraft) => {
-    const name = f.name.trim() || t('sm_default_name');
-    const fd = new FormData();
-    fd.set('entity', 'student');
-    fd.set('intent', f.id ? 'update' : 'create');
-    if (f.id) fd.set('id', f.id);
-    fd.set('name', name);
-    if (f.grade) fd.set('grade', f.grade);
-    if (f.guardian) fd.set('guardian', f.guardian);
-    fd.set('email', f.email || '');
-    fd.set('color', f.color || 'blue');
-    fd.set('classIds', JSON.stringify(f.classIds || []));
-    fetcher.submit(fd, { action: '/people', method: 'post' });
-    setModal(null);
-  };
+    setModal({
+      name: '',
+      grade: '',
+      color: 'blue',
+      email: '',
+      classIds: [],
+      parentLink: 'new',
+      parentId: '',
+      parentName: '',
+      parentRelation: 'Guardian',
+      parentPhone: '',
+    });
 
   const del = async (s: StudentRow) => {
     if (
@@ -107,21 +126,6 @@ export function StudentsScreen() {
 
   const openNewStaff = () =>
     setStaffModal({ name: '', email: '', role: 'Teacher', color: 'violet', phone: '' });
-
-  const saveStaff = (f: StaffDraft) => {
-    const name = f.name.trim() || t('stf_default_name');
-    const fd = new FormData();
-    fd.set('entity', 'staff');
-    fd.set('intent', f.id ? 'update' : 'create');
-    if (f.id) fd.set('id', f.id);
-    fd.set('name', name);
-    fd.set('email', f.email || '');
-    fd.set('role', f.role || 'Teacher');
-    fd.set('color', f.color || 'violet');
-    if (f.phone) fd.set('phone', f.phone);
-    fetcher.submit(fd, { action: '/people', method: 'post' });
-    setStaffModal(null);
-  };
 
   const delStaff = async (u: StaffRow) => {
     if (
@@ -150,22 +154,6 @@ export function StudentsScreen() {
       studentIds: [],
     });
 
-  const saveParent = (f: ParentDraft) => {
-    const name = f.name.trim() || t('par_default_name');
-    const fd = new FormData();
-    fd.set('entity', 'parent');
-    fd.set('intent', f.id ? 'update' : 'create');
-    if (f.id) fd.set('id', f.id);
-    fd.set('name', name);
-    fd.set('email', f.email || '');
-    if (f.phone) fd.set('phone', f.phone);
-    fd.set('color', f.color || 'green');
-    if (f.relation) fd.set('relation', f.relation);
-    fd.set('studentIds', JSON.stringify(f.studentIds || []));
-    fetcher.submit(fd, { action: '/people', method: 'post' });
-    setParentModal(null);
-  };
-
   const delParent = async (p: ParentRow) => {
     if (
       await confirm({
@@ -189,14 +177,9 @@ export function StudentsScreen() {
         title={t('ppl_title')}
         subtitle={t('ppl_sub')}
         actions={
+          /* No "generate invite" button: adding a person mints their code, so a code that
+             belongs to nobody is not a thing this screen can make any more. */
           <div className="m-row">
-            <MBtn
-              variant="secondary"
-              iconLeft={<MIcon name="key" size={17} />}
-              onClick={() => setInviteModal(true)}
-            >
-              {t('ppl_gen_invite')}
-            </MBtn>
             {tab === 'students' && (
               <MBtn variant="primary" iconLeft={<MIcon name="plus" size={18} />} onClick={openNew}>
                 {t('ppl_add_student')}
@@ -239,47 +222,56 @@ export function StudentsScreen() {
 
       {tab === 'students' && (
         <div className="m-stack">
-          {students.map((s) => (
-            <div key={s.id} className="lrow">
-              <MAv name={s.name} color={s.color} size="md" />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="lrow__title">{s.name}</div>
-                <div className="lrow__meta">
-                  <span>{t('ppl_grade', { g: s.grade ?? '' })}</span>
-                  {s.guardian && (
-                    <span className="m-row" style={{ gap: 5 }}>
-                      <MIcon name="users" size={13} />
-                      {s.guardian}
-                    </span>
+          {students.map((s) => {
+            // Linked parents first; `guardian` is the free-text column the form no longer
+            // writes, kept so students added before this still show one.
+            const guardians =
+              parents
+                .filter((p) => p.studentIds.includes(s.id))
+                .map((p) => p.name)
+                .join(', ') || s.guardian;
+            return (
+              <div key={s.id} className="lrow">
+                <MAv name={s.name} color={s.color} size="md" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="lrow__title">{s.name}</div>
+                  <div className="lrow__meta">
+                    <span>{t('ppl_grade', { g: s.grade ?? '' })}</span>
+                    {guardians && (
+                      <span className="m-row" style={{ gap: 5 }}>
+                        <MIcon name="users" size={13} />
+                        {guardians}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="tablebar" style={{ maxWidth: 320, justifyContent: 'flex-end' }}>
+                  {classNames(s.classIds)
+                    .slice(0, 3)
+                    .map((n, i) => (
+                      <MTag key={i} dot={false}>
+                        {n}
+                      </MTag>
+                    ))}
+                  {s.classIds.length > 3 && (
+                    <span className="mchip">{`+${s.classIds.length - 3}`}</span>
                   )}
                 </div>
+                <div className="lrow__actions">
+                  <MIB
+                    label={t('edit')}
+                    size="sm"
+                    onClick={() => setModal({ ...s, classIds: s.classIds })}
+                  >
+                    <MIcon name="edit" size={16} />
+                  </MIB>
+                  <MIB label={t('delete')} size="sm" onClick={() => del(s)}>
+                    <MIcon name="trash" size={16} />
+                  </MIB>
+                </div>
               </div>
-              <div className="tablebar" style={{ maxWidth: 320, justifyContent: 'flex-end' }}>
-                {classNames(s.classIds)
-                  .slice(0, 3)
-                  .map((n, i) => (
-                    <MTag key={i} dot={false}>
-                      {n}
-                    </MTag>
-                  ))}
-                {s.classIds.length > 3 && (
-                  <span className="mchip">{`+${s.classIds.length - 3}`}</span>
-                )}
-              </div>
-              <div className="lrow__actions">
-                <MIB
-                  label={t('edit')}
-                  size="sm"
-                  onClick={() => setModal({ ...s, classIds: s.classIds })}
-                >
-                  <MIcon name="edit" size={16} />
-                </MIB>
-                <MIB label={t('delete')} size="sm" onClick={() => del(s)}>
-                  <MIcon name="trash" size={16} />
-                </MIB>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -380,8 +372,8 @@ export function StudentsScreen() {
           draft={modal}
           setDraft={setModal}
           onClose={() => setModal(null)}
-          onSave={save}
           classes={classes}
+          parents={parents}
           stats={modal.id ? flashcardStats.find((s) => s.studentId === modal.id) : undefined}
         />
       )}
@@ -390,7 +382,6 @@ export function StudentsScreen() {
           draft={staffModal}
           setDraft={setStaffModal}
           onClose={() => setStaffModal(null)}
-          onSave={saveStaff}
         />
       )}
       {parentModal && (
@@ -398,27 +389,45 @@ export function StudentsScreen() {
           draft={parentModal}
           setDraft={setParentModal}
           onClose={() => setParentModal(null)}
-          onSave={saveParent}
           students={students}
         />
       )}
-      {inviteModal && <InviteModal onClose={() => setInviteModal(false)} classes={classes} />}
       {confirmNode}
     </div>
   );
+}
+
+/**
+ * Submit a create/edit and, for a create, hold the modal open on the codes the server
+ * just minted.
+ *
+ * The fetcher belongs to the modal rather than the screen on purpose: saving revalidates
+ * the People loader, and anything keyed off loader data would blink away the codes before
+ * they could be copied. An edit has nothing to show, so it closes as it always did.
+ */
+function useCreateFetcher(isNew: boolean, onClose: () => void) {
+  const fetcher = useFetcher<PeopleActionData>();
+  const idle = fetcher.state === 'idle';
+  const codes = isNew && idle && fetcher.data?.invites?.length ? fetcher.data.invites : null;
+  React.useEffect(() => {
+    if (!isNew && idle && fetcher.data?.ok) onClose();
+  }, [isNew, idle, fetcher.data, onClose]);
+  return { fetcher, codes, busy: !idle };
 }
 
 interface StudentModalProps {
   draft: StudentDraft;
   setDraft: React.Dispatch<React.SetStateAction<StudentDraft | null>>;
   onClose: () => void;
-  onSave: (f: StudentDraft) => void;
   classes: ClassLite[];
+  parents: ParentRow[];
   stats?: StudentFlashcardStats;
 }
 
-function StudentModal({ draft, setDraft, onClose, onSave, classes, stats }: StudentModalProps) {
+function StudentModal({ draft, setDraft, onClose, classes, parents, stats }: StudentModalProps) {
   const { t } = useLang();
+  const isNew = !draft.id;
+  const { fetcher, codes, busy } = useCreateFetcher(isNew, onClose);
   const set = <K extends keyof StudentDraft>(k: K, v: StudentDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
   const toggle = (id: string) =>
@@ -428,6 +437,30 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes, stats }: Stud
         ? draft.classIds.filter((x) => x !== id)
         : [...draft.classIds, id],
     );
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('entity', 'student');
+    fd.set('intent', isNew ? 'create' : 'update');
+    if (draft.id) fd.set('id', draft.id);
+    fd.set('name', draft.name.trim() || t('sm_default_name'));
+    if (draft.grade) fd.set('grade', draft.grade);
+    if (draft.guardian) fd.set('guardian', draft.guardian);
+    fd.set('email', draft.email || '');
+    fd.set('color', draft.color || 'blue');
+    fd.set('classIds', JSON.stringify(draft.classIds || []));
+    if (isNew && draft.parentLink === 'existing') {
+      if (draft.parentId) fd.set('parentId', draft.parentId);
+    } else if (isNew && draft.parentName?.trim()) {
+      fd.set('parentName', draft.parentName.trim());
+      fd.set('parentRelation', draft.parentRelation || 'Guardian');
+      if (draft.parentPhone) fd.set('parentPhone', draft.parentPhone);
+    }
+    fetcher.submit(fd, { action: '/people', method: 'post' });
+  };
+
+  if (codes) return <InviteCodesModal invites={codes} onClose={onClose} />;
+
   return (
     <Modal
       open
@@ -439,7 +472,7 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes, stats }: Stud
           <MBtn variant="secondary" onClick={onClose}>
             {t('cancel')}
           </MBtn>
-          <MBtn variant="primary" onClick={() => onSave(draft)}>
+          <MBtn variant="primary" onClick={save} disabled={busy}>
             {t('save')}
           </MBtn>
         </>
@@ -453,25 +486,6 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes, stats }: Stud
             autoFocus
             value={draft.name}
             onChange={(e) => set('name', e.target.value)}
-          />
-        </div>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('sm_grade')}</label>
-          <input
-            className="mochi-input"
-            value={draft.grade ?? ''}
-            onChange={(e) => set('grade', e.target.value)}
-          />
-        </div>
-      </div>
-      <div className="m-grid cols-2" style={{ gap: 14 }}>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('sm_guardian')}</label>
-          <input
-            className="mochi-input"
-            placeholder={t('sm_guardian_ph')}
-            value={draft.guardian ?? ''}
-            onChange={(e) => set('guardian', e.target.value)}
           />
         </div>
         <div className="mochi-field">
@@ -490,16 +504,90 @@ function StudentModal({ draft, setDraft, onClose, onSave, classes, stats }: Stud
         onChange={(v) => set('color', v)}
       />
       <hr className="divider" />
-      <label className="mochi-field__label">{t('sm_enrolled')}</label>
-      <div style={{ marginTop: 8 }}>
-        <TokenSearch
-          items={classes}
-          selectedIds={draft.classIds}
-          onToggle={toggle}
-          placeholder={t('sm_search_classes')}
-          emptyHint={t('sm_all_classes_added')}
-        />
+      {/* Grade and classes are one decision — which year they are in and which of this
+          year's classes they sit in — so they are one section. */}
+      <label className="mochi-field__label">{t('sm_grade_classes')}</label>
+      <div className="m-grid cols-3" style={{ gap: 14, marginTop: 8 }}>
+        <div className="mochi-field">
+          <input
+            className="mochi-input"
+            placeholder={t('sm_grade')}
+            value={draft.grade ?? ''}
+            onChange={(e) => set('grade', e.target.value)}
+          />
+        </div>
+        <div style={{ gridColumn: 'span 2' }}>
+          <TokenSearch
+            items={classes}
+            selectedIds={draft.classIds}
+            onToggle={toggle}
+            placeholder={t('sm_search_classes')}
+            emptyHint={t('sm_all_classes_added')}
+          />
+        </div>
       </div>
+      {isNew && (
+        <>
+          <hr className="divider" />
+          <label className="mochi-field__label">{t('sm_parent_section')}</label>
+          <p className="m-muted" style={{ fontSize: 'var(--text-sm)', margin: '4px 0 8px' }}>
+            {t('sm_parent_hint')}
+          </p>
+          {/* Siblings share a parent, and entering the same mother twice would make two
+              records of her. Offered only when there is somebody to link to. */}
+          {parents.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <MCheck
+                label={t('sm_parent_link_existing')}
+                checked={draft.parentLink === 'existing'}
+                onChange={() =>
+                  set('parentLink', draft.parentLink === 'existing' ? 'new' : 'existing')
+                }
+              />
+            </div>
+          )}
+          {draft.parentLink === 'existing' ? (
+            <MSelect
+              value={draft.parentId ?? ''}
+              onChange={(v: string) => set('parentId', v)}
+              options={[
+                { value: '', label: t('sm_parent_pick') },
+                ...parents.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
+          ) : (
+            <div className="m-grid cols-3" style={{ gap: 14 }}>
+              <div className="mochi-field">
+                <input
+                  className="mochi-input"
+                  placeholder={t('sm_parent_name')}
+                  value={draft.parentName ?? ''}
+                  onChange={(e) => set('parentName', e.target.value)}
+                />
+              </div>
+              <MSelect
+                value={draft.parentRelation ?? 'Guardian'}
+                onChange={(v: string) => set('parentRelation', v)}
+                options={[
+                  { value: 'Mother', label: t('rel_mother') },
+                  { value: 'Father', label: t('rel_father') },
+                  { value: 'Guardian', label: t('rel_guardian') },
+                  { value: 'Other', label: t('rel_other') },
+                ]}
+              />
+              <div className="mochi-field">
+                <input
+                  className="mochi-input"
+                  type="tel"
+                  placeholder={t('prof_phone')}
+                  value={draft.parentPhone ?? ''}
+                  onChange={(e) => set('parentPhone', e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
       {draft.id && (
         <>
           <hr className="divider" />
@@ -547,13 +635,30 @@ interface StaffModalProps {
   draft: StaffDraft;
   setDraft: React.Dispatch<React.SetStateAction<StaffDraft | null>>;
   onClose: () => void;
-  onSave: (f: StaffDraft) => void;
 }
 
-function StaffModal({ draft, setDraft, onClose, onSave }: StaffModalProps) {
+function StaffModal({ draft, setDraft, onClose }: StaffModalProps) {
   const { t } = useLang();
+  const isNew = !draft.id;
+  const { fetcher, codes, busy } = useCreateFetcher(isNew, onClose);
   const set = <K extends keyof StaffDraft>(k: K, v: StaffDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('entity', 'staff');
+    fd.set('intent', isNew ? 'create' : 'update');
+    if (draft.id) fd.set('id', draft.id);
+    fd.set('name', draft.name.trim() || t('stf_default_name'));
+    fd.set('email', draft.email || '');
+    fd.set('role', draft.role || 'Teacher');
+    fd.set('color', draft.color || 'violet');
+    if (draft.phone) fd.set('phone', draft.phone);
+    fetcher.submit(fd, { action: '/people', method: 'post' });
+  };
+
+  if (codes) return <InviteCodesModal invites={codes} onClose={onClose} />;
+
   return (
     <Modal
       open
@@ -565,7 +670,7 @@ function StaffModal({ draft, setDraft, onClose, onSave }: StaffModalProps) {
           <MBtn variant="secondary" onClick={onClose}>
             {t('cancel')}
           </MBtn>
-          <MBtn variant="primary" onClick={() => onSave(draft)}>
+          <MBtn variant="primary" onClick={save} disabled={busy}>
             {t('save')}
           </MBtn>
         </>
@@ -754,12 +859,13 @@ interface ParentModalProps {
   draft: ParentDraft;
   setDraft: React.Dispatch<React.SetStateAction<ParentDraft | null>>;
   onClose: () => void;
-  onSave: (f: ParentDraft) => void;
   students: StudentRow[];
 }
 
-function ParentModal({ draft, setDraft, onClose, onSave, students }: ParentModalProps) {
+function ParentModal({ draft, setDraft, onClose, students }: ParentModalProps) {
   const { t } = useLang();
+  const isNew = !draft.id;
+  const { fetcher, codes, busy } = useCreateFetcher(isNew, onClose);
   const set = <K extends keyof ParentDraft>(k: K, v: ParentDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
   const toggleKid = (id: string) =>
@@ -769,6 +875,23 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }: ParentModal
         ? draft.studentIds.filter((x) => x !== id)
         : [...(draft.studentIds || []), id],
     );
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('entity', 'parent');
+    fd.set('intent', isNew ? 'create' : 'update');
+    if (draft.id) fd.set('id', draft.id);
+    fd.set('name', draft.name.trim() || t('par_default_name'));
+    fd.set('email', draft.email || '');
+    if (draft.phone) fd.set('phone', draft.phone);
+    fd.set('color', draft.color || 'green');
+    if (draft.relation) fd.set('relation', draft.relation);
+    fd.set('studentIds', JSON.stringify(draft.studentIds || []));
+    fetcher.submit(fd, { action: '/people', method: 'post' });
+  };
+
+  if (codes) return <InviteCodesModal invites={codes} onClose={onClose} />;
+
   return (
     <Modal
       open
@@ -780,7 +903,7 @@ function ParentModal({ draft, setDraft, onClose, onSave, students }: ParentModal
           <MBtn variant="secondary" onClick={onClose}>
             {t('cancel')}
           </MBtn>
-          <MBtn variant="primary" onClick={() => onSave(draft)}>
+          <MBtn variant="primary" onClick={save} disabled={busy}>
             {t('save')}
           </MBtn>
         </>
@@ -907,7 +1030,9 @@ function InvitesPanel() {
               {inv.used && <MBadge color="neutral">{t('inv_used')}</MBadge>}
             </div>
             <div className="lrow__meta">
-              {inv.name || t('inv_unassigned')}
+              {/* personName for a linked code; `name` is the free-text label legacy codes
+                  (and the mobile app's) carry instead. */}
+              {inv.personName || inv.name || t('inv_unassigned')}
               {inv.classId && ` · ${classOf(inv.classId)}`}
             </div>
           </div>
@@ -932,65 +1057,43 @@ function InvitesPanel() {
   );
 }
 
-interface InviteModalProps {
-  onClose: () => void;
-  classes: ClassLite[];
-}
-
-function InviteModal({ onClose, classes }: InviteModalProps) {
-  const invFetcher = useFetcher();
+/**
+ * The step a creation modal ends on: the codes the server just minted for the person who
+ * was added, ready to copy. One for a student, two when a parent was entered with them.
+ *
+ * This is the only place a code is shown at full size, and the only moment it is offered
+ * without being hunted for — which is the point of minting it here rather than leaving
+ * staff to remember to generate one afterwards.
+ */
+function InviteCodesModal({ invites, onClose }: { invites: NewInvite[]; onClose: () => void }) {
   const { t } = useLang();
-  const [role, setRole] = React.useState('Student');
-  const [name, setName] = React.useState('');
-  const [classId, setClassId] = React.useState('');
-  const [generated, setGenerated] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState<string | null>(null);
   const roleLabel = (r: string) => t('role_' + String(r || '').toLowerCase());
-
-  const gen = () => {
-    const code = makeCode();
-    const fd = new FormData();
-    fd.set('entity', 'invite');
-    fd.set('intent', 'create');
-    fd.set('code', code);
-    fd.set('role', role);
-    if (name) fd.set('name', name);
-    if (classId) fd.set('classId', classId);
-    fd.set('createdAt', iso(TODAY));
-    fd.set('used', 'false');
-    invFetcher.submit(fd, { action: '/people', method: 'post' });
-    setGenerated(code);
+  const copy = (code: string) => {
+    navigator.clipboard?.writeText(code);
+    setCopied(code);
+    setTimeout(() => setCopied(null), 1500);
   };
-
-  const copy = () => navigator.clipboard?.writeText(generated ?? '');
-
   return (
     <Modal
       open
       onClose={onClose}
-      title={t('invm_title')}
+      title={t('invs_success_title')}
       width={480}
       footer={
-        generated ? (
-          <MBtn variant="primary" onClick={onClose}>
-            {t('done')}
-          </MBtn>
-        ) : (
-          <>
-            <MBtn variant="secondary" onClick={onClose}>
-              {t('cancel')}
-            </MBtn>
-            <MBtn variant="primary" iconLeft={<MIcon name="sparkle" size={16} />} onClick={gen}>
-              {t('invm_generate')}
-            </MBtn>
-          </>
-        )
+        <MBtn variant="primary" onClick={onClose}>
+          {t('done')}
+        </MBtn>
       }
     >
-      {generated ? (
-        <div style={{ textAlign: 'center', padding: '10px 0' }}>
-          <p className="m-muted" style={{ fontSize: 'var(--text-sm)' }}>
-            {t('invm_share', { role: roleLabel(role).toLowerCase() })}
-          </p>
+      <p className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 12 }}>
+        {t('invs_share_hint')}
+      </p>
+      {invites.map((inv) => (
+        <div key={inv.code} style={{ textAlign: 'center', marginBottom: 16 }}>
+          <label className="mochi-field__label">
+            {t('invs_code_for', { role: roleLabel(inv.role) })}
+          </label>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
@@ -1001,49 +1104,20 @@ function InviteModal({ onClose, classes }: InviteModalProps) {
               background: 'var(--orange-100)',
               borderRadius: 'var(--radius-lg)',
               padding: '20px',
-              margin: '12px 0',
+              margin: '8px 0',
             }}
           >
-            {generated}
+            {inv.code}
           </div>
-          <MBtn variant="soft" iconLeft={<MIcon name="copy" size={16} />} onClick={copy}>
-            {t('invm_copy_clip')}
+          <MBtn
+            variant="soft"
+            iconLeft={<MIcon name={copied === inv.code ? 'check' : 'copy'} size={16} />}
+            onClick={() => copy(inv.code)}
+          >
+            {copied === inv.code ? t('copied') : t('invm_copy_clip')}
           </MBtn>
         </div>
-      ) : (
-        <>
-          <div className="mochi-field">
-            <label className="mochi-field__label">{t('invm_invite_as')}</label>
-            <DS.Tabs
-              value={role}
-              onChange={setRole}
-              tabs={[
-                { id: 'Student', label: t('role_student') },
-                { id: 'Staff', label: t('role_staff') },
-                { id: 'Parent', label: t('role_parent') },
-              ]}
-            />
-          </div>
-          <div className="mochi-field">
-            <label className="mochi-field__label">{t('invm_name_opt')}</label>
-            <input
-              className="mochi-input"
-              placeholder={t('invm_name_ph', { role: roleLabel(role) })}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <MSelect
-            label={t('invm_link_class')}
-            value={classId}
-            onChange={setClassId}
-            options={[
-              { value: '', label: t('invm_no_class') },
-              ...classes.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-          />
-        </>
-      )}
+      ))}
     </Modal>
   );
 }
