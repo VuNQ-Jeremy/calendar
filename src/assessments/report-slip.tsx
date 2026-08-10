@@ -179,7 +179,14 @@ const SLIP_CSS = `
 .rslip__sign-rule { margin-top: 42px; border-bottom: 1.5px dotted #A9C3AF; }
 `;
 
-type CopyState = { kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' };
+/**
+ * `error` is the rasterizer — no image exists. `send_failed` is its opposite: the image was fine
+ * and the upload or the Zalo call was not. Kept apart because collapsing them once made a 401
+ * read as a broken renderer; see app/routes/zalo-send-card.tsx.
+ */
+type CopyState = {
+  kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' | 'sent' | 'not_linked' | 'send_failed';
+};
 
 /** The garden mark on the practice tile. Inline, like every other glyph on the slip. */
 function Sprout() {
@@ -191,13 +198,7 @@ function Sprout() {
       aria-hidden="true"
       style={{ verticalAlign: '-2px', marginRight: 4 }}
     >
-      <path
-        d="M12 21v-7"
-        stroke="#4B8B5B"
-        strokeWidth="2"
-        strokeLinecap="round"
-        fill="none"
-      />
+      <path d="M12 21v-7" stroke="#4B8B5B" strokeWidth="2" strokeLinecap="round" fill="none" />
       <path
         d="M12 14C12 10.5 9.5 8 6 8c0 3.5 2.5 6 6 6Zm0 0c0-3.5 2.5-6 6-6 0 3.5-2.5 6-6 6Z"
         fill="#7FB98A"
@@ -268,6 +269,47 @@ export function ReportSlipView() {
     }
   };
 
+  /**
+   * Send the report to the family, replacing copy-open-paste.
+   *
+   * `student:` here, not the fee slip's `parent-of:`. The two carry different things: a bill must
+   * reach an adult, whereas this is the student's own report and a student reading it is fine —
+   * so it goes to every chat linked to them, by parent record or directly, deduped. Nothing else
+   * sends this, unlike the evening preview; a monthly report is posted by hand or not at all.
+   */
+  const sendToZalo = async () => {
+    const node = stageRef.current;
+    if (!node) return;
+    setCopy({ kind: 'busy' });
+
+    let blob: Blob | null;
+    try {
+      const { toBlob } = await import('html-to-image');
+      blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      if (!blob) throw new Error('rasterize failed');
+    } catch {
+      setCopy({ kind: 'error' });
+      return;
+    }
+
+    try {
+      const body = new FormData();
+      body.set('file', blob, fileName);
+      body.set('target', `student:${student.id}`);
+      body.set('caption', `${t('rslip_title')} ${month} · ${student.name}`);
+      // NOT /api/zalo/… — that prefix is bearer-only and this page carries a cookie.
+      const res = await fetch('/zalo-send-card', { method: 'POST', body });
+      if (res.ok) setCopy({ kind: 'sent' });
+      else if (res.status === 409) setCopy({ kind: 'not_linked' });
+      else {
+        console.error('[zalo] send-card failed', { status: res.status });
+        setCopy({ kind: 'send_failed' });
+      }
+    } catch {
+      setCopy({ kind: 'send_failed' });
+    }
+  };
+
   const avgColor = stats.average == null ? null : colorOf(scoreColorId(stats.average));
 
   return (
@@ -283,9 +325,20 @@ export function ReportSlipView() {
         >
           {t('slip_copy_image')}
         </button>
+        <button type="button" onClick={() => void sendToZalo()} disabled={copy.kind === 'busy'}>
+          {t('zalo_send')}
+        </button>
         {copy.kind === 'copied' && <span className="rslip-bar__msg">{t('copied')}</span>}
         {copy.kind === 'downloaded' && (
           <span className="rslip-bar__msg">{t('slip_downloaded')}</span>
+        )}
+        {copy.kind === 'sent' && <span className="rslip-bar__msg">{t('zalo_sent_student')}</span>}
+        {/* Not an error: this family has simply not paired yet, and /config is where that is fixed. */}
+        {copy.kind === 'not_linked' && (
+          <span className="rslip-bar__msg">{t('zalo_not_linked_student')}</span>
+        )}
+        {copy.kind === 'send_failed' && (
+          <span className="rslip-bar__msg rslip-bar__msg--err">{t('zalo_send_failed')}</span>
         )}
         {copy.kind === 'error' && (
           <span className="rslip-bar__msg rslip-bar__msg--err">{t('slip_copy_failed')}</span>

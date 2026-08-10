@@ -41,6 +41,9 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
 
   return {
     date,
+    // The id as well as the name: the card's "send to Zalo" button posts into this class's group
+    // chat, and a name cannot address one.
+    classId: ev.classId,
     className: cls?.name ?? ev.title,
     title: ev.title,
     start: ev.start,

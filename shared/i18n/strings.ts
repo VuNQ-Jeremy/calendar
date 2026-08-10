@@ -419,6 +419,9 @@ const en_strings = {
   zalo_send: 'Send to Zalo',
   zalo_sent: 'Sent to the class group',
   zalo_fee_caption: 'Tuition',
+  zalo_sent_student: "Sent to the student's family",
+  zalo_not_linked_student:
+    'This student has nobody connected on Zalo yet — connect them in Config.',
   zalo_sent_family: "Sent to the parent's Zalo",
   zalo_not_linked_family:
     'No parent connected on Zalo for this student. Fee slips go to a parent only — add the parent on People, then pair them in Config.',
@@ -1627,6 +1630,8 @@ export const STRINGS = {
     zalo_send: 'Gửi Zalo',
     zalo_sent: 'Đã gửi vào nhóm lớp',
     zalo_fee_caption: 'Phiếu thu',
+    zalo_sent_student: 'Đã gửi cho gia đình học sinh',
+    zalo_not_linked_student: 'Học sinh này chưa có ai kết nối Zalo — vào Cấu hình để kết nối.',
     zalo_sent_family: 'Đã gửi vào Zalo của phụ huynh',
     zalo_not_linked_family:
       'Học sinh này chưa có phụ huynh kết nối Zalo. Phiếu thu chỉ gửi cho phụ huynh — thêm phụ huynh ở mục Mọi người rồi kết nối ở Cấu hình.',

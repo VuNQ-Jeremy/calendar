@@ -22,6 +22,8 @@ import type { ComposedPreview } from '../../shared/logic/preview.js';
 
 export type PreviewSlipData = {
   date: string;
+  /** Needed to address the class's Zalo group; a name cannot. */
+  classId: string;
   className: string;
   title: string;
   start: string | null;
@@ -130,7 +132,14 @@ const CARD_CSS = `
 }
 `;
 
-type CopyState = { kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' };
+/**
+ * `error` is the rasterizer — no image exists. `send_failed` is its opposite: the image was fine
+ * and the upload or the Zalo call was not. Kept apart because collapsing them once made a 401
+ * read as a broken renderer; see app/routes/zalo-send-card.tsx.
+ */
+type CopyState = {
+  kind: 'idle' | 'busy' | 'copied' | 'downloaded' | 'error' | 'sent' | 'not_linked' | 'send_failed';
+};
 
 export function PreviewSlipView() {
   const data = useLoaderData() as PreviewSlipData;
@@ -174,6 +183,47 @@ export function PreviewSlipView() {
     }
   };
 
+  /**
+   * Post the card into the class group, replacing copy-open-paste.
+   *
+   * `runEveningPreview` already sends this same content to the group as TEXT at 19:00 ICT. This
+   * is the card, on demand — for a teacher who wants it earlier, later, or looking like
+   * something. The cron cannot send the image: it is drawn from live DOM by html-to-image and a
+   * Worker has no DOM.
+   */
+  const sendToZalo = async () => {
+    const node = stageRef.current;
+    if (!node) return;
+    setCopy({ kind: 'busy' });
+
+    let blob: Blob | null;
+    try {
+      const { toBlob } = await import('html-to-image');
+      blob = await toBlob(node, { pixelRatio: 2, backgroundColor: '#ffffff' });
+      if (!blob) throw new Error('rasterize failed');
+    } catch {
+      setCopy({ kind: 'error' });
+      return;
+    }
+
+    try {
+      const body = new FormData();
+      body.set('file', blob, fileName);
+      body.set('target', `class:${data.classId}`);
+      body.set('caption', `${data.className} · ${formatDmy(data.date)}`);
+      // NOT /api/zalo/… — that prefix is bearer-only and this page carries a cookie.
+      const res = await fetch('/zalo-send-card', { method: 'POST', body });
+      if (res.ok) setCopy({ kind: 'sent' });
+      else if (res.status === 409) setCopy({ kind: 'not_linked' });
+      else {
+        console.error('[zalo] send-card failed', { status: res.status });
+        setCopy({ kind: 'send_failed' });
+      }
+    } catch {
+      setCopy({ kind: 'send_failed' });
+    }
+  };
+
   return (
     <div className="psl-page">
       <style dangerouslySetInnerHTML={{ __html: TOOLBAR_CSS + CARD_CSS }} />
@@ -182,8 +232,17 @@ export function PreviewSlipView() {
         <button type="button" onClick={() => void copyImage()} disabled={copy.kind === 'busy'}>
           {t('slip_copy_image')}
         </button>
+        <button type="button" onClick={() => void sendToZalo()} disabled={copy.kind === 'busy'}>
+          {t('zalo_send')}
+        </button>
         {copy.kind === 'copied' && <span className="psl-bar__msg">{t('copied')}</span>}
         {copy.kind === 'downloaded' && <span className="psl-bar__msg">{t('slip_downloaded')}</span>}
+        {copy.kind === 'sent' && <span className="psl-bar__msg">{t('zalo_sent')}</span>}
+        {/* Not an error: this class has no group linked yet, and /config is where that is fixed. */}
+        {copy.kind === 'not_linked' && <span className="psl-bar__msg">{t('zalo_not_linked')}</span>}
+        {copy.kind === 'send_failed' && (
+          <span className="psl-bar__msg psl-bar__msg--err">{t('zalo_send_failed')}</span>
+        )}
         {copy.kind === 'error' && (
           <span className="psl-bar__msg psl-bar__msg--err">{t('slip_copy_failed')}</span>
         )}
