@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0152 — 2026-08-10
+Classes gain khối + trình độ; rankings scope students to a cohort and add class-vs-class boards.
+
 ## v0.0147 — 2026-08-10
 Documented the Zalo channel: docs/zalo.md covers pairing, the polling relay, config and the traps.
 

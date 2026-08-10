@@ -6,6 +6,8 @@ import { requireStaff } from '../../server/services/auth';
 import * as rankingsSvc from '../../server/services/rankings';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
+import * as levelsSvc from '../../server/services/grade-levels';
+import * as classLevelsSvc from '../../server/services/class-levels';
 import { TuitionMonth } from '../../shared/schemas';
 import { ictDateOf } from '../../shared/logic/tests';
 import { K, rankingsMonthKey, swrLoad } from '../../src/lib/route-cache.js';
@@ -31,7 +33,19 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   await requireStaff(request, env);
   const db = createDb(env);
   const month = requireMonth(params.month);
-  const [attendance, scores, behavior, remarks, students, classes, weights] = await Promise.all([
+  // classesSvc.listLite carries each class's (gradeLevelId, classLevelId); the two level lists
+  // are only needed to label the cohorts. Ranking itself is still computed on the client.
+  const [
+    attendance,
+    scores,
+    behavior,
+    remarks,
+    students,
+    classes,
+    weights,
+    gradeLevels,
+    classLevels,
+  ] = await Promise.all([
     rankingsSvc.listMonthAttendance(db, month),
     rankingsSvc.listMonthScores(db, month),
     rankingsSvc.listMonthBehavior(db, month),
@@ -39,8 +53,21 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
     rankingsSvc.getRankingWeights(db),
+    levelsSvc.list(db),
+    classLevelsSvc.list(db),
   ]);
-  return { month, attendance, scores, behavior, remarks, students, classes, weights };
+  return {
+    month,
+    attendance,
+    scores,
+    behavior,
+    remarks,
+    students,
+    classes,
+    weights,
+    gradeLevels,
+    classLevels,
+  };
 }
 
 export async function clientLoader({ params, serverLoader }: ClientLoaderFunctionArgs) {

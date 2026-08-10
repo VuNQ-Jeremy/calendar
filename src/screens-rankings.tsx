@@ -6,11 +6,16 @@ import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { scoreColorId } from './lib/assess.js';
 import { monthLabel, shiftMonth } from '../shared/logic/month.js';
-import { computeMonthRankings } from '../shared/logic/rankings.js';
+import {
+  computeMonthRankings,
+  computeClassRankings,
+  groupByCohort,
+} from '../shared/logic/rankings.js';
 import type {
   RankRowInput,
   RankingWeights,
   StudentRanking,
+  ClassRankingInput,
 } from '../shared/logic/rankings.js';
 import type {
   RankAttendanceRow,
@@ -20,8 +25,10 @@ import type {
 } from '../server/services/rankings.js';
 import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
+import type { GradeLevelRow } from '../server/services/grade-levels.js';
+import type { ClassLevelRow } from '../server/services/class-levels.js';
 
-const { Card, Avatar } = DS;
+const { Card, Avatar, Tabs } = DS;
 
 /** Months either side of the viewed one offered in the picker — a school year's worth each way. */
 const MONTH_WINDOW = 12;
@@ -35,6 +42,8 @@ interface RankingsLoaderData {
   students: StudentRow[];
   classes: ClassLite[];
   weights: RankingWeights;
+  gradeLevels: GradeLevelRow[];
+  classLevels: ClassLevelRow[];
 }
 
 /** A labelled score chip. `null` shows an em dash rather than a misleading zero. */
@@ -53,27 +62,91 @@ function ScoreChip({ label, value }: { label: string; value: number | null }) {
   );
 }
 
+/**
+ * Group month records by class, then by student. Records with no class of their own are dropped:
+ * the class board attributes everything to exactly one class, and an ad-hoc record belongs to none.
+ */
+function bucketByClass<T, V>(
+  rows: T[],
+  classIdOf: (r: T) => string | null,
+  studentIdOf: (r: T) => string,
+  valueOf: (r: T) => V,
+): Map<string, Map<string, V[]>> {
+  const out = new Map<string, Map<string, V[]>>();
+  for (const r of rows) {
+    const classId = classIdOf(r);
+    if (!classId) continue;
+    let byStudent = out.get(classId);
+    if (!byStudent) {
+      byStudent = new Map<string, V[]>();
+      out.set(classId, byStudent);
+    }
+    const studentId = studentIdOf(r);
+    const list = byStudent.get(studentId);
+    if (list) list.push(valueOf(r));
+    else byStudent.set(studentId, [valueOf(r)]);
+  }
+  return out;
+}
+
 export function RankingsScreen() {
-  const { month, attendance, scores, behavior, remarks, students, classes, weights } =
-    useLoaderData() as RankingsLoaderData;
+  const {
+    month,
+    attendance,
+    scores,
+    behavior,
+    remarks,
+    students,
+    classes,
+    weights,
+    gradeLevels,
+    classLevels,
+  } = useLoaderData() as RankingsLoaderData;
   const { t, lang } = useLang();
   const navigate = useNavigate();
-  const [classFilter, setClassFilter] = React.useState('all');
+  const [tab, setTab] = React.useState<'students' | 'classes'>('students');
+  /** 'all' | `class:<id>` | `cohort:<gradeLevelId>::<classLevelId>` */
+  const [scope, setScope] = React.useState('all');
+
+  const cohorts = React.useMemo(() => groupByCohort(classes), [classes]);
+
+  const cohortLabel = React.useCallback(
+    (key: string) => {
+      const [gradeId, levelId] = key.split('::');
+      // Labels are resolved without checking `active`: a cohort keeps its name on the board even
+      // after the level is retired from the pickers. '?' only shows if the row was deleted.
+      const grade = gradeLevels.find((g) => g.id === gradeId)?.name ?? '?';
+      const level = classLevels.find((c) => c.id === levelId)?.name ?? '?';
+      return `${grade} · ${level}`;
+    },
+    [gradeLevels, classLevels],
+  );
+
+  const cohortKeys = React.useMemo(
+    () => [...cohorts.keys()].sort((a, b) => cohortLabel(a).localeCompare(cohortLabel(b))),
+    [cohorts, cohortLabel],
+  );
 
   const { ranked, unranked, byId } = React.useMemo(() => {
+    // 'all' keeps every record, including those with no class. Under a class or cohort scope a
+    // record without a class of its own is dropped: it cannot be attributed to the scope.
+    const scopeClassIds: Set<string> | null =
+      scope === 'all'
+        ? null
+        : scope.startsWith('class:')
+          ? new Set([scope.slice('class:'.length)])
+          : new Set((cohorts.get(scope.slice('cohort:'.length)) ?? []).map((c) => c.id));
+    const inScope = (rowClassId: string | null) =>
+      scopeClassIds === null || (rowClassId != null && scopeClassIds.has(rowClassId));
+
     const roster = students
-      .filter((s) => classFilter === 'all' || s.classIds.includes(classFilter))
+      .filter((s) => scopeClassIds === null || s.classIds.some((id) => scopeClassIds.has(id)))
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    // Under a class filter, a record with no class of its own is dropped: it cannot be
-    // attributed to this class. Remarks are the exception below.
-    const inClass = (rowClassId: string | null) =>
-      classFilter === 'all' || rowClassId === classFilter;
-
     const attendanceBy = new Map<string, string[]>();
     for (const r of attendance) {
-      if (!inClass(r.classId)) continue;
+      if (!inScope(r.classId)) continue;
       const list = attendanceBy.get(r.studentId);
       if (list) list.push(r.status);
       else attendanceBy.set(r.studentId, [r.status]);
@@ -81,7 +154,7 @@ export function RankingsScreen() {
 
     const behaviorBy = new Map<string, string[]>();
     for (const r of behavior) {
-      if (!inClass(r.classId)) continue;
+      if (!inScope(r.classId)) continue;
       const list = behaviorBy.get(r.studentId);
       if (list) list.push(r.type);
       else behaviorBy.set(r.studentId, [r.type]);
@@ -89,7 +162,7 @@ export function RankingsScreen() {
 
     const scoresBy = new Map<string, number[]>();
     for (const r of scores) {
-      if (!inClass(r.classId)) continue;
+      if (!inScope(r.classId)) continue;
       const list = scoresBy.get(r.studentId);
       if (list) list.push(r.score);
       else scoresBy.set(r.studentId, [r.score]);
@@ -114,7 +187,68 @@ export function RankingsScreen() {
       unranked: result.filter((s) => s.rank == null),
       byId: new Map(students.map((s) => [s.id, s])),
     };
-  }, [attendance, behavior, scores, remarks, students, weights, classFilter]);
+  }, [attendance, behavior, scores, remarks, students, weights, scope, cohorts]);
+
+  /**
+   * One board per cohort. Each class's score is the mean of its students' totals computed under
+   * THAT class's filter — the same number the per-class student board shows — so a student in two
+   * classes contributes to both. Classes whose students have no data this month stay unranked.
+   */
+  const classBoards = React.useMemo(() => {
+    const attendanceBy = bucketByClass(
+      attendance,
+      (r) => r.classId,
+      (r) => r.studentId,
+      (r) => r.status,
+    );
+    const behaviorBy = bucketByClass(
+      behavior,
+      (r) => r.classId,
+      (r) => r.studentId,
+      (r) => r.type,
+    );
+    const scoresBy = bucketByClass(
+      scores,
+      (r) => r.classId,
+      (r) => r.studentId,
+      (r) => r.score,
+    );
+    const remarksBy = new Map(remarks.map((r) => [r.studentId, r.ratings]));
+
+    return cohortKeys.map((key) => {
+      const cohortClasses = (cohorts.get(key) ?? [])
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name)); // tie-break order for equal averages
+      const rosterSize = new Map<string, number>();
+
+      const inputs: ClassRankingInput[] = cohortClasses.map((cls) => {
+        const roster = students
+          .filter((s) => s.classIds.includes(cls.id))
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name));
+        rosterSize.set(cls.id, roster.length);
+        const rows: RankRowInput[] = roster.map((s) => ({
+          studentId: s.id,
+          attendanceStatuses: attendanceBy.get(cls.id)?.get(s.id) ?? [],
+          behaviorTypes: behaviorBy.get(cls.id)?.get(s.id) ?? [],
+          scores: scoresBy.get(cls.id)?.get(s.id) ?? [],
+          remarkRatings: remarksBy.get(s.id) ?? null,
+        }));
+        return {
+          classId: cls.id,
+          totals: computeMonthRankings(rows, weights).map((r) => r.total),
+        };
+      });
+
+      return {
+        key,
+        label: cohortLabel(key),
+        rosterSize,
+        byId: new Map(cohortClasses.map((c) => [c.id, c])),
+        rows: computeClassRankings(inputs),
+      };
+    });
+  }, [attendance, behavior, scores, remarks, students, weights, cohorts, cohortKeys, cohortLabel]);
 
   /**
    * A rolling window centred on the month being viewed. The loader only ever fetches one month,
@@ -139,14 +273,15 @@ export function RankingsScreen() {
     return parts.join(' · ');
   };
 
+  const rankNumClass = (rank: number | null) =>
+    'rank-num' + (rank != null && rank <= 3 ? ` rank-num--${rank}` : '');
+
   const row = (s: StudentRanking) => {
     const student = byId.get(s.studentId);
     if (!student) return null;
     return (
       <div key={s.studentId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
-        <span className={'rank-num' + (s.rank != null && s.rank <= 3 ? ` rank-num--${s.rank}` : '')}>
-          {s.rank ?? '—'}
-        </span>
+        <span className={rankNumClass(s.rank)}>{s.rank ?? '—'}</span>
         <Avatar name={student.name} color={student.color} size="sm" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{student.name}</div>
@@ -171,16 +306,29 @@ export function RankingsScreen() {
       <PageHeader title={t('rank_title')} subtitle={t('rank_sub')} />
 
       <Card style={{ padding: 14 }}>
-        <div className="assess-filters rank-filters">
-          <MSelect
-            label={t('assess_class')}
-            value={classFilter}
-            onChange={setClassFilter}
-            options={[
-              { value: 'all', label: t('assess_all_classes') },
-              ...classes.map((c) => ({ value: c.id, label: c.name })),
+        <div style={{ marginBottom: 12 }}>
+          <Tabs
+            value={tab}
+            onChange={(v: string) => setTab(v as 'students' | 'classes')}
+            tabs={[
+              { id: 'students', label: t('rank_tab_students') },
+              { id: 'classes', label: t('rank_tab_classes') },
             ]}
           />
+        </div>
+        <div className="assess-filters rank-filters">
+          {tab === 'students' && (
+            <MSelect
+              label={t('assess_class')}
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: 'all', label: t('assess_all_classes') },
+                ...cohortKeys.map((key) => ({ value: `cohort:${key}`, label: cohortLabel(key) })),
+                ...classes.map((c) => ({ value: `class:${c.id}`, label: c.name })),
+              ]}
+            />
+          )}
           <MSelect
             label={t('assess_month')}
             value={month}
@@ -193,22 +341,76 @@ export function RankingsScreen() {
         </div>
       </Card>
 
-      {!hasStudents ? (
+      {tab === 'students' ? (
+        !hasStudents ? (
+          <Card style={{ padding: 18 }}>
+            <Empty icon="grad" title={t('rank_empty_title')} sub={t('rank_empty_sub')} />
+          </Card>
+        ) : (
+          <Card style={{ padding: 18 }}>
+            <div className="m-stack" style={{ gap: 8 }}>
+              {ranked.map(row)}
+              {unranked.length > 0 && (
+                <>
+                  <div className="rank-section-head">{t('rank_no_data_section')}</div>
+                  {unranked.map(row)}
+                </>
+              )}
+            </div>
+          </Card>
+        )
+      ) : classBoards.length === 0 ? (
         <Card style={{ padding: 18 }}>
-          <Empty icon="grad" title={t('rank_empty_title')} sub={t('rank_empty_sub')} />
+          <Empty icon="grad" title={t('rank_class_empty_title')} sub={t('rank_class_empty_sub')} />
         </Card>
       ) : (
-        <Card style={{ padding: 18 }}>
-          <div className="m-stack" style={{ gap: 8 }}>
-            {ranked.map(row)}
-            {unranked.length > 0 && (
-              <>
-                <div className="rank-section-head">{t('rank_no_data_section')}</div>
-                {unranked.map(row)}
-              </>
-            )}
-          </div>
-        </Card>
+        classBoards.map((board) => {
+          const rankedClasses = board.rows.filter((c) => c.rank != null);
+          const unrankedClasses = board.rows.filter((c) => c.rank == null);
+          const classRow = (c: (typeof board.rows)[number]) => {
+            const cls = board.byId.get(c.classId);
+            if (!cls) return null;
+            return (
+              <div key={c.classId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
+                <span className={rankNumClass(c.rank)}>{c.rank ?? '—'}</span>
+                <Avatar name={cls.name} color={cls.color} size="sm" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{cls.name}</div>
+                  <div className="lrow__meta rank-breakdown">
+                    {t('rank_class_students_n', {
+                      a: c.rankedCount,
+                      b: board.rosterSize.get(c.classId) ?? 0,
+                    })}
+                  </div>
+                </div>
+                <span
+                  className="rank-total"
+                  style={
+                    c.average != null ? { color: colorOf(scoreColorId(c.average)).ink } : undefined
+                  }
+                >
+                  {c.average ?? '—'}
+                </span>
+              </div>
+            );
+          };
+          return (
+            <Card key={board.key} style={{ padding: 18, marginTop: 16 }}>
+              <div className="mochi-eyebrow" style={{ marginBottom: 10 }}>
+                {board.label}
+              </div>
+              <div className="m-stack" style={{ gap: 8 }}>
+                {rankedClasses.map(classRow)}
+                {unrankedClasses.length > 0 && (
+                  <>
+                    <div className="rank-section-head">{t('rank_no_data_section')}</div>
+                    {unrankedClasses.map(classRow)}
+                  </>
+                )}
+              </div>
+            </Card>
+          );
+        })
       )}
     </div>
   );

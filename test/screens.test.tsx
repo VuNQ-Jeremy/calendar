@@ -79,7 +79,10 @@ describe('CalendarScreen', () => {
 
 describe('ClassesScreen', () => {
   it('renders Classes heading', async () => {
-    const Stub = makeStub({ classes: [], students: [], materials: [] }, ClassesScreen);
+    const Stub = makeStub(
+      { classes: [], students: [], materials: [], gradeLevels: [], classLevels: [] },
+      ClassesScreen,
+    );
     await renderStub(Stub);
     expect(screen.getByText('Classes')).toBeInTheDocument();
   });
