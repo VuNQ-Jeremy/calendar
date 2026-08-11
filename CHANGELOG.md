@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0183 — 2026-08-11
+Batched client-side page-view beacon: every navigation posts to /track (not /api/, which is bearer-only), landing in the activity log even for routes the SWR cache serves without a server round trip. Fixes a real /logs/activity route-cache collision along the way.
+
 ## v0.0182 — 2026-08-11
 Every mutation now writes a precise before/after row to the activity log: people, events, classes, materials, tuition, tests/questions, config enums (subjects/grade/class levels/assessment types/remark criteria), assessments, feedback, flashcard topics, invites, Zalo pairing, and the settings modules; anything not yet precisely covered still gets a coarse row via the existing action wrappers, so no write path is invisible.
 

@@ -257,7 +257,9 @@ export type FlashcardTopicInput = z.infer<typeof FlashcardTopicInput>;
  */
 export const FlashcardImageKey = z
   .string()
-  .regex(/^flashcards\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/);
+  .regex(
+    /^flashcards\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/,
+  );
 export type FlashcardImageKey = z.infer<typeof FlashcardImageKey>;
 
 export const FlashcardWordInput = z.object({
@@ -1125,3 +1127,21 @@ export const MonthlyRemarkInput = z.object({
   comment: z.string().max(4000).nullish(),
 });
 export type MonthlyRemarkInput = z.infer<typeof MonthlyRemarkInput>;
+
+/**
+ * The page-view beacon (`/track`, see app/routes/track.tsx and src/lib/track.ts). Web-only for
+ * now — there is no mobile beacon in v1 — but schemas live here regardless of client, same as
+ * everything else in this file.
+ */
+export const TrackEvent = z.object({
+  path: z.string().min(1).max(512),
+  screen: z.string().max(64).nullish(),
+  at: z.string().datetime({ offset: true }).optional(),
+});
+export type TrackEvent = z.infer<typeof TrackEvent>;
+
+export const TrackBeaconInput = z.object({
+  events: z.array(TrackEvent).max(50),
+  appVersion: z.string().max(200).optional(),
+});
+export type TrackBeaconInput = z.infer<typeof TrackBeaconInput>;

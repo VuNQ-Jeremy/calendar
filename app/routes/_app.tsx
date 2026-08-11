@@ -30,6 +30,7 @@ import { DevInspector } from '../../src/dev-inspector.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { VersionStamp } from '../../src/components/version-stamp.jsx';
 import { BUILD_ID } from '../../src/lib/build-id.js';
+import { useTrackNavigation } from '../../src/lib/track.js';
 import { createDb } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as invitesSvc from '../../server/services/invites';
@@ -373,6 +374,7 @@ export type AppContext = {
 export default function AppLayout() {
   useStaleRouteRefresh();
   useLiveUpdates();
+  useTrackNavigation();
   const { user, uiPrefs } = useLoaderData<typeof loader>();
   const feedbackFetcher = useFetcher();
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<

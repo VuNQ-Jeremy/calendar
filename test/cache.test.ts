@@ -209,6 +209,15 @@ describe('cacheKeyForPath', () => {
     expect(cacheKeyForPath('/flashcards/animals')).toBeNull();
   });
 
+  it('/logs/activity is never cached, and is not misread as a student filter', () => {
+    // Without the early return, the /^\/logs\/([^/]+)\/?$/ branch below would treat 'activity'
+    // as a student id and hand the diagnostics page a bogus per-student cache key.
+    expect(cacheKeyForPath('/logs/activity')).toBeNull();
+    expect(cacheKeyForPath('/logs/activity/')).toBeNull();
+    // A real student filter still works.
+    expect(cacheKeyForPath('/logs/some-student-id')).toBe('route:logs:some-student-id');
+  });
+
   it('tolerates trailing slashes and encoded slugs', () => {
     expect(cacheKeyForPath('/dashboard/')).toBe(K.dashboard);
     expect(cacheKeyForPath('/vocabulary/animals/')).toBe('route:flashcards:animals');

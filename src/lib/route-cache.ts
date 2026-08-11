@@ -322,6 +322,14 @@ export function cacheKeyForPath(pathname: string): string | null {
   if (pathname === '/logs/notifications' || pathname === '/logs/notifications/') {
     return K.logsNotifications;
   }
+  // Same trap as /logs/notifications above, and the reason it must be checked here too:
+  // /^\/logs\/([^/]+)\/?$/ below would otherwise read 'activity' as a student id and hand the
+  // diagnostics page a bogus per-student cache key. Unlike every other admin page this route has
+  // NO cache at all — it deliberately always hits the server (see app/routes/logs.activity.tsx) —
+  // so the answer is `null`, not a key, and the shell's stale-refresh hook never subscribes to it.
+  if (pathname === '/logs/activity' || pathname === '/logs/activity/') {
+    return null;
+  }
   // The student filter lives in the path for the same reason the leaderboard's month does: this
   // function only ever sees a pathname, so a `?student=` would give every student one cache entry.
   const lg = pathname.match(/^\/logs\/([^/]+)\/?$/);

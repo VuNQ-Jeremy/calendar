@@ -8,6 +8,9 @@ export default [
   route('attendance', 'routes/attendance.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
   route('event-previews', 'routes/event-previews.tsx'),
+  // Page-view beacon (src/lib/track.ts). NOT under api/: that prefix is bearer-only, and the
+  // beacon is a browser fetch/sendBeacon carrying a session cookie, same split as zalo-send-card.
+  route('track', 'routes/track.tsx'),
   // Cookie-authed twin of api/garden/month/:id for the assessments report card. /api/* is
   // bearer-only, so a browser fetcher there gets a 401 — see routes/garden-month.tsx.
   route('garden-month', 'routes/garden-month.tsx'),
