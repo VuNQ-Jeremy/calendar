@@ -66,15 +66,20 @@
   env: `npm run test:env:setup` (needs the ngqv0712 wrangler login; the env is
   selected at BUILD time via `CLOUDFLARE_ENV=test` — never `wrangler deploy
   --env test`, which silently ships prod config).
-- **The staging suite is manual-trigger only — never run it on your own.** `npm
-  run test:e2e:staging` (and the `npm run test:env:setup` deploy it depends on)
-  runs ONLY when I explicitly ask for it in that session. It is not a
-  definition-of-done gate, not part of the commit/push routine, and not
-  something to run "to be safe" before reporting a task finished. It costs ~4
-  min and redeploys calendar-test, so an unasked-for run is a real cost, not a
-  free precaution. Write and commit the specs as required above; leave running
-  them to me. When a change plausibly affects behaviour the suite covers, say so
-  in one line and let me decide — don't run it and don't wait on an answer.
+- **Test suites are manual-trigger only — never run one on your own.** That means
+  `npm test` / `npm run test:watch` / `npm run test:worker` (unit) and `npm run
+  test:e2e` / `npm run test:e2e:staging` (plus the `npm run test:env:setup`
+  deploy it depends on). They run ONLY when I explicitly ask for them in that
+  session. A suite is not a definition-of-done gate, not part of the commit/push
+  routine, and not something to run "to be safe" before reporting a task
+  finished — the unit suite is slow to come back and the staging one costs ~4 min
+  and redeploys calendar-test, so an unasked-for run is a real cost, not a free
+  precaution. Write and commit the specs as required above; leave running them to
+  me. When a change plausibly affects behaviour a suite covers, say so in one
+  line and let me decide — don't run it and don't wait on an answer.
+- **What you may run freely** is the fast static checks: `npx tsc --noEmit -p
+  tsconfig.json` (or `npm run typecheck`), `npm run lint`, `npm run check:i18n`,
+  `npm run format`. Those are the checks to lean on before a commit.
 - **Use the helper kit in `e2e/crud-helpers.ts`** — it encodes the app's UI
   contract: no `<form>`/`name=` attributes (locate inputs structurally by their
   `.mochi-field` label), combobox/date menus portalled to `document.body` (locate

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0168 — 2026-08-11
+CLAUDE.md: widen the manual-trigger test rule from the staging e2e suite to every test suite, including npm test, and name the fast static checks that are free to run.
+
 ## v0.0167 — 2026-08-11
 Word editor is two columns: fields on the left, a 3x3 picture picker with a refresh button on the right. Dropped the picture hint line and the draw-with-AI button.
 Word list is a grid of cards, each led by a big 4:3 picture with the speaker/edit/delete icons in a rail beside it, then the word + IPA, then the meaning.
