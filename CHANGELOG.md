@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0181 — 2026-08-11
+Fix the notification-forecast garden tests: they seeded a student with no plant, and applyDeadlineCheck takes nothing from an empty pot, so no penalty was ever produced. Worker suite green.
+
 ## v0.0180 — 2026-08-11
 Logs notifications: Send is now on every forecast row, including garden alerts. A penalty charges the stage it announces before sending, so the message is true on arrival; rows that cannot be sent show a disabled button with the reason instead of no button.
 

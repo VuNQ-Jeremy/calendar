@@ -102,6 +102,25 @@ async function seedStudentWithDevice(d, name, token) {
   return student;
 }
 
+/**
+ * A living plant for `studentId`.
+ *
+ * Required for any penalty test: `applyDeadlineCheck` returns null for an empty pot — "nothing to
+ * lose" — so a student with no `garden_plants` row is never penalized, by the forecast or the sweep.
+ * `lastCareDay` is today so the plant is not also wilting, keeping the assertion on the penalty.
+ */
+async function seedPlant(d, studentId, at = new Date()) {
+  const vnToday = new Date(at.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+  await d.insert(gardenPlants).values({
+    studentId,
+    potColor: 'orange',
+    stage: 3,
+    isDead: false,
+    lastCareDay: vnToday,
+    updatedAt: at.toISOString(),
+  });
+}
+
 async function countRows(d, table) {
   const rows = await d.select({ n: sql`count(*)` }).from(table);
   return Number(rows[0]?.n ?? 0);
@@ -482,6 +501,7 @@ describe('forecastGardenSweep()', () => {
     const topic = (await flashcardsSvc.listTopics(d)).find((t) => t.name === name);
 
     const now = new Date();
+    await seedPlant(d, student.id, now);
     const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
     const assignmentId = crypto.randomUUID();
     await d.insert(vocabAssignments).values({
@@ -535,6 +555,7 @@ describe('forecastGardenSweep()', () => {
     await flashcardsSvc.createTopic(d, { name, color: 'green' });
     const topic = (await flashcardsSvc.listTopics(d)).find((t) => t.name === name);
     const now = new Date();
+    await seedPlant(d, student.id, now);
     const assignmentId = crypto.randomUUID();
     await d.insert(vocabAssignments).values({
       id: assignmentId,
@@ -737,6 +758,7 @@ describe('sendPlannedNotification()', () => {
     await flashcardsSvc.createTopic(d, { name, color: 'green' });
     const topic = (await flashcardsSvc.listTopics(d)).find((t) => t.name === name);
     const now = new Date();
+    await seedPlant(d, student.id, now);
     const assignmentId = crypto.randomUUID();
     await d.insert(vocabAssignments).values({
       id: assignmentId,
