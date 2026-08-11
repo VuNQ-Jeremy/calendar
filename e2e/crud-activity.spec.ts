@@ -15,10 +15,13 @@ test.describe('CRUD: activity log', () => {
     await signInStaff(page);
     await page.goto('/logs/activity?view=security');
     await expect(page.getByText('Recent sign-ins')).toBeVisible();
-    // The staff seed account's display name — see seed.sql.
-    const authRows = page.locator('details', { hasText: 'Signed in' });
-    await expect(authRows.first()).toBeVisible();
-    await expect(authRows.first().getByText('Dev')).toBeVisible();
+    // login rows are attributed to actor_kind 'anon' by design (server/services/audit.ts's
+    // attributeAccount) — the SessionUser is not resolved until the NEXT request. The email
+    // lives in meta_json, so it only shows once the row is expanded.
+    const loginRow = page.locator('details', { hasText: 'Signed in' }).first();
+    await expect(loginRow).toBeVisible();
+    await loginRow.locator('summary').click();
+    await expect(loginRow).toContainText('dev@mochi.edu');
   });
 
   test('a student create/edit/delete produces precise rows, readable in the stream and the entity view', async ({
@@ -59,23 +62,27 @@ test.describe('CRUD: activity log', () => {
 
     const updateRow = page
       .locator('details', { hasText: `${name} v2` })
-      .filter({ hasText: 'Updated' });
-    await expect(updateRow.first()).toBeVisible();
-    await updateRow.first().locator('summary').click();
-    // The diff shows the old name struck through and the new one in place.
-    await expect(updateRow.first().getByText(name, { exact: false })).toBeVisible();
-    await expect(updateRow.first().getByText(`${name} v2`, { exact: false })).toBeVisible();
+      .filter({ hasText: 'Updated' })
+      .first();
+    await expect(updateRow).toBeVisible();
+    await updateRow.locator('summary').click();
+    // The diff shows the old name struck through and the new one in place. toContainText on the
+    // row itself (not a getByText sub-locator) — "name" is a substring of "name v2", and a
+    // sub-locator search would ambiguously match both the before and after cells.
+    await expect(updateRow).toContainText(name);
+    await expect(updateRow).toContainText(`${name} v2`);
 
     const deleteRow = page
       .locator('details', { hasText: `${name} v2` })
-      .filter({ hasText: 'Deleted' });
-    await expect(deleteRow.first()).toBeVisible();
-    await deleteRow.first().locator('summary').click();
+      .filter({ hasText: 'Deleted' })
+      .first();
+    await expect(deleteRow).toBeVisible();
+    await deleteRow.locator('summary').click();
     // A delete's before_json is the full record — the name survives the row being gone.
-    await expect(deleteRow.first().getByText(`${name} v2`, { exact: false })).toBeVisible();
+    await expect(deleteRow).toContainText(`${name} v2`);
 
     // ---- Entity view: deep-link from the delete row, see all three events for this one id. ----
-    await deleteRow.first().getByRole('button').first().click();
+    await deleteRow.getByRole('button').first().click();
     await expect(page).toHaveURL(/view=entity&entityType=student&entityId=/);
     const historyRows = page.locator('details');
     await expect(historyRows).toHaveCount(3);
@@ -99,7 +106,12 @@ test.describe('CRUD: activity log', () => {
 
   test('a non-admin is denied', async ({ page }) => {
     await signInStudent(page);
-    const res = await page.goto('/logs/activity');
-    expect(res?.status()).toBe(403);
+    // requireAdmin = requireStaff (redirects any NON-staff actor away — a 302, before any role
+    // check runs) + a 403 role check that only staff ever reach. A student is turned away by the
+    // first half, so the literal status a browser sees is the redirect's landing page, not a bare
+    // 403 — asserting on the redirect (Playwright follows it) is what actually proves "denied".
+    await page.goto('/logs/activity');
+    await expect(page).not.toHaveURL(/\/logs\/activity/);
+    await expect(page.getByRole('heading', { name: 'Activity log' })).toHaveCount(0);
   });
 });

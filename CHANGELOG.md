@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0185 — 2026-08-11
+crud-activity.spec.ts: fix three e2e assertions found wrong against a real run — a login row's actor is anon by design (email lives in meta, not the visible summary), a before/after diff needs scoped text assertions to avoid ambiguous substring matches, and requireAdmin denies a student via redirect, not a literal 403 (only a non-admin STAFF member reaches that branch).
+
 ## v0.0184 — 2026-08-11
 New admin-only /logs/activity page: a live stream of every mutation/view/login with expandable before-after diffs, per-account session timelines, per-record history, and a security view (active sessions, new-IP sign-ins, failed logins). Strictly read-only — no revert, no restore.
 
