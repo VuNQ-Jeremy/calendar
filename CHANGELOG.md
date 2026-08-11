@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0170 — 2026-08-11
+Assignment class chips on /flashcards now use the class's own colour from /classes instead of a hardcoded blue.
+
 ## v0.0169 — 2026-08-11
 Word editor: the word's own picture keeps its cell in the picker, so trying a candidate no longer takes it off screen and one tap goes back to it. The picker also searches on open for a word that already has a picture.
 

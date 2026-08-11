@@ -217,6 +217,8 @@ export type VocabAssignmentRow = {
   id: string;
   classId: string;
   className: string;
+  /** The class's palette key from /classes, so its chip reads the same colour everywhere. */
+  classColor: string;
   topicId: string;
   topicName: string;
   topicSlug: string | null;
@@ -242,6 +244,7 @@ export async function listAssignments(
       id: vocabAssignments.id,
       classId: vocabAssignments.classId,
       className: classes.name,
+      classColor: classes.color,
       topicId: vocabAssignments.topicId,
       topicName: flashcardTopics.name,
       topicSlug: flashcardTopics.slug,
@@ -266,6 +269,7 @@ export async function getAssignment(db: Db, id: string): Promise<VocabAssignment
       id: vocabAssignments.id,
       classId: vocabAssignments.classId,
       className: classes.name,
+      classColor: classes.color,
       topicId: vocabAssignments.topicId,
       topicName: flashcardTopics.name,
       topicSlug: flashcardTopics.slug,

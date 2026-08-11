@@ -437,7 +437,7 @@ function AssignmentsPanel({
                     <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>
                       {a.topicName}
                     </span>
-                    <Tag color="blue" dot={false}>
+                    <Tag color={a.classColor} dot={false}>
                       {a.className}
                     </Tag>
                     {(parseModes(a.modes) ?? []).map((m) => (
