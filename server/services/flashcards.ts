@@ -12,6 +12,7 @@ import {
 import type { Db } from '../db/index';
 import * as gardenSvc from './garden';
 import type { GardenOutcome } from './garden';
+import { record, recordCreate, recordDelete } from './audit';
 import {
   DEFAULT_REVIEW_SETTINGS,
   foldAnswers,
@@ -27,6 +28,14 @@ import type {
   FlashcardResultInput,
   ReviewSettingsInput,
 } from '../../shared/schemas';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type FlashcardTopicRow = {
   id: string;
@@ -173,15 +182,17 @@ export async function getTopicBySlug(db: Db, slugOrId: string): Promise<TopicInf
 }
 
 export async function createTopic(db: Db, input: FlashcardTopicInput): Promise<void> {
+  const id = crypto.randomUUID();
   const slug = await uniqueSlug(db, slugify(input.name));
   await db.insert(flashcardTopics).values({
-    id: crypto.randomUUID(),
+    id,
     name: input.name,
     slug,
     description: input.description ?? null,
     color: input.color,
     createdAt: new Date().toISOString(),
   });
+  recordCreate('flashcard', id, { name: input.name, slug, color: input.color });
 }
 
 /**
@@ -208,7 +219,15 @@ export async function createTopicWithWords(
     createdAt: new Date().toISOString(),
   });
   await importWords(db, id, words);
-  return { id, name: input.name, slug, description: input.description ?? null, color: input.color };
+  const row = {
+    id,
+    name: input.name,
+    slug,
+    description: input.description ?? null,
+    color: input.color,
+  };
+  recordCreate('flashcard', id, { ...row, wordCount: words.length });
+  return row;
 }
 
 export async function updateTopic(
@@ -216,6 +235,8 @@ export async function updateTopic(
   id: string,
   patch: Partial<FlashcardTopicInput>,
 ): Promise<void> {
+  const beforeRows = await db.select().from(flashcardTopics).where(eq(flashcardTopics.id, id));
+  const before = beforeRows[0];
   const set: Partial<typeof flashcardTopics.$inferInsert> = {};
   if (patch.name !== undefined) {
     set.name = patch.name;
@@ -226,10 +247,16 @@ export async function updateTopic(
   if (Object.keys(set).length) {
     await db.update(flashcardTopics).set(set).where(eq(flashcardTopics.id, id));
   }
+  const afterRows = await db.select().from(flashcardTopics).where(eq(flashcardTopics.id, id));
+  const after = afterRows[0];
+  if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'flashcard', entityId: id, before, after });
+  }
 }
 
 export async function removeTopic(db: Db, id: string): Promise<void> {
   // FK cascade clears words, results, and mastery rows.
+  await recordDelete(db, 'flashcard', flashcardTopics, id);
   await db.delete(flashcardTopics).where(eq(flashcardTopics.id, id));
 }
 
@@ -551,13 +578,24 @@ export async function setReviewSettings(
   db: Db,
   input: ReviewSettingsInput,
 ): Promise<ReviewSettings> {
+  const before = await getReviewSettings(db);
   const intervals = [...input.intervals];
-  const value = JSON.stringify({ intervals });
+  const after = { intervals };
+  const value = JSON.stringify(after);
   await db
     .insert(settings)
     .values({ key: REVIEW_SETTINGS_KEY, value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
-  return { intervals };
+  if (!sameJson(before, after)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: REVIEW_SETTINGS_KEY,
+      before,
+      after,
+    });
+  }
+  return after;
 }
 
 /** One topic with the words the student owes a review on today. */

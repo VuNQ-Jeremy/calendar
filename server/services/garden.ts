@@ -50,6 +50,7 @@ import {
 } from '../../shared/logic/garden';
 import { composeUtcFromIct, ictDateOf } from '../../shared/logic/tests';
 import { modeAllowed, parseModes } from '../../shared/logic/flashcards';
+import { record } from './audit';
 
 /**
  * Vườn cây từ vựng — the garden's data layer.
@@ -100,11 +101,15 @@ export async function setGardenSettings(
   db: Db,
   input: GardenSettingsInput,
 ): Promise<GardenSettings> {
+  const before = await getGardenSettings(db);
   const value = JSON.stringify(input);
   await db
     .insert(settings)
     .values({ key: SETTINGS_KEY, value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
+  // Replaces rather than merges, unlike the other settings modules — before/after can therefore
+  // genuinely differ in shape if a stored blob had drifted from the current defaults.
+  record({ action: 'update', entityType: 'setting', entityId: SETTINGS_KEY, before, after: input });
   return input;
 }
 
@@ -429,7 +434,13 @@ export async function activeAssignmentsFor(
   topicId: string,
   vnToday: string,
 ): Promise<
-  { id: string; minScorePct: number; requiredCount: number; deadline: string; modes: string | null }[]
+  {
+    id: string;
+    minScorePct: number;
+    requiredCount: number;
+    deadline: string;
+    modes: string | null;
+  }[]
 > {
   return db
     .select({

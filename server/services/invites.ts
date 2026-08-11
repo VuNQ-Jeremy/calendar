@@ -3,6 +3,7 @@ import { invites, students, staff, parents, accounts } from '../db/schema';
 import type { Db } from '../db/index';
 import type { InviteInput } from '../../shared/schemas';
 import { makeInviteCode } from '../../shared/logic/invite-code';
+import { recordCreate, recordDelete } from './audit';
 
 export type InviteRow = {
   id: string;
@@ -155,7 +156,9 @@ export async function createLinked(db: Db, targets: LinkedTarget[]): Promise<Inv
         ),
       );
     const byId = new Map(rows.map((r) => [r.id, r]));
-    return values.map((v) => map(byId.get(v.id) ?? (v as typeof invites.$inferSelect)));
+    const created = values.map((v) => map(byId.get(v.id) ?? (v as typeof invites.$inferSelect)));
+    for (const row of created) recordCreate('invite', row.id, row);
+    return created;
   }
   throw new Error('could not generate a unique invite code');
 }
@@ -176,10 +179,13 @@ export async function create(db: Db, input: InviteInput): Promise<InviteRow> {
     used: input.used,
   });
   const rows = await db.select().from(invites).where(eq(invites.id, id));
-  return map(rows[0]);
+  const row = map(rows[0]);
+  recordCreate('invite', id, row);
+  return row;
 }
 
 export async function remove(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'invite', invites, id);
   await db.delete(invites).where(eq(invites.id, id));
 }
 

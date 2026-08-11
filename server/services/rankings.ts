@@ -9,6 +9,15 @@ import {
 } from '../db/schema';
 import type { Db } from '../db/index';
 import { DEFAULT_RANKING_WEIGHTS, type RankingWeights } from '../../shared/logic/rankings';
+import { record } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Rankings (bảng xếp hạng): one month's raw material for the leaderboard, plus the weights setting.
@@ -51,15 +60,22 @@ export async function getRankingWeights(db: Db): Promise<RankingWeights> {
   }
 }
 
-export async function setRankingWeights(
-  db: Db,
-  input: RankingWeights,
-): Promise<RankingWeights> {
+export async function setRankingWeights(db: Db, input: RankingWeights): Promise<RankingWeights> {
+  const before = await getRankingWeights(db);
   const value = JSON.stringify(input);
   await db
     .insert(settings)
     .values({ key: SETTINGS_KEY, value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
+  if (!sameJson(before, input)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: SETTINGS_KEY,
+      before,
+      after: input,
+    });
+  }
   return input;
 }
 

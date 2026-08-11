@@ -2,6 +2,15 @@ import { eq, desc, sql, inArray } from 'drizzle-orm';
 import { questions, testQuestions, testAttempts } from '../db/schema';
 import { chunk, rowsPerStatement, D1_MAX_BOUND_PARAMS, type Db } from '../db/index';
 import { QuestionInput, type QuestionInputBase } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type QuestionRow = {
   id: string;
@@ -98,7 +107,9 @@ export async function create(db: Db, input: QuestionInput): Promise<QuestionRow>
     updatedAt: now,
   });
   const rows = await db.select().from(questions).where(eq(questions.id, id));
-  return map(rows[0]);
+  const row = map(rows[0]);
+  recordCreate('question', id, row);
+  return row;
 }
 
 /** The columns `createMany` binds per row — see `rowsPerStatement`. */
@@ -151,10 +162,17 @@ export async function createMany(db: Db, inputs: QuestionInput[]): Promise<Quest
   ).flat();
   // A SELECT ... IN gives no ordering guarantee, so re-index by id to restore submitted order.
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return ids.flatMap((id) => {
+  const created = ids.flatMap((id) => {
     const row = byId.get(id);
     return row ? [map(row)] : [];
   });
+  // One event for the whole import, not N per-row creates — same "reorder" precedent.
+  record({
+    action: 'create',
+    entityType: 'question',
+    meta: { imported: created.map((r) => r.id) },
+  });
+  return created;
 }
 
 /** The fields whose change would invalidate already-graded attempts. */
@@ -212,7 +230,11 @@ export async function update(
     .where(eq(questions.id, id));
 
   const rows = await db.select().from(questions).where(eq(questions.id, id));
-  return map(rows[0]);
+  const after = map(rows[0]);
+  if (!sameJson(current, after)) {
+    record({ action: 'update', entityType: 'question', entityId: id, before: current, after });
+  }
+  return after;
 }
 
 /**
@@ -226,6 +248,7 @@ export async function remove(db: Db, id: string): Promise<void> {
     .where(eq(testQuestions.questionId, id))
     .limit(1);
   if (used.length) throw Response.json({ error: 'question_in_use' }, { status: 409 });
+  await recordDelete(db, 'question', questions, id);
   await db.delete(questions).where(eq(questions.id, id));
 }
 
@@ -282,6 +305,13 @@ export async function removeMany(
       db.delete(questions).where(inArray(questions.id, part)),
     ),
   );
+  if (deletable.length) {
+    record({
+      action: 'delete',
+      entityType: 'question',
+      meta: { deleted: deletable, skippedInUse: unique.length - deletable.length },
+    });
+  }
   return { deleted: deletable.length, skippedInUse: unique.length - deletable.length };
 }
 
@@ -323,6 +353,11 @@ export async function bulkSetMeta(
       db.update(questions).set(set).where(inArray(questions.id, part)),
     ),
   );
+  record({
+    action: 'update',
+    entityType: 'question',
+    meta: { bulkMeta: unique, gradeLevelId: patch.gradeLevelId, difficulty: patch.difficulty },
+  });
   return unique.length;
 }
 
@@ -369,6 +404,13 @@ export async function bulkAddTags(db: Db, ids: string[], tags: string[]): Promis
     );
   }
   await runBatch(db, updates);
+  if (updates.length) {
+    record({
+      action: 'update',
+      entityType: 'question',
+      meta: { bulkTagsAdded: adding, count: updates.length },
+    });
+  }
   return updates.length;
 }
 
@@ -393,5 +435,11 @@ export async function wipe(db: Db): Promise<{ deleted: number; detachedFromTests
   const deleted = Number(questionCount?.n ?? 0);
   if (!deleted) return { deleted: 0, detachedFromTests: 0 };
   await db.batch([db.delete(testQuestions), db.delete(questions)]);
-  return { deleted, detachedFromTests: Number(linkCount?.n ?? 0) };
+  const detachedFromTests = Number(linkCount?.n ?? 0);
+  record({
+    action: 'delete',
+    entityType: 'question',
+    meta: { wipedAll: true, deleted, detachedFromTests },
+  });
+  return { deleted, detachedFromTests };
 }

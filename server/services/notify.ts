@@ -13,6 +13,7 @@ import * as push from './push';
 import type { ExpoPushMessage } from './push';
 import * as zalo from './zalo';
 import * as vocabImages from './vocab-images';
+import { record } from './audit';
 
 /**
  * The scheduled notification jobs. Called from `scheduled()` in workers/app.ts, and from the
@@ -624,5 +625,10 @@ export async function runScheduled(cron: string, env: Env, at: Date = new Date()
         : await runClassReminders(db, at, env);
   let garden = 0;
   if (cron === '0 1 * * *') garden = await runGardenAlerts(db, at);
-  console.log('[cron]', { cron, sent, garden, ms: Date.now() - started });
+  const ms = Date.now() - started;
+  console.log('[cron]', { cron, sent, garden, ms });
+  // One summary row per cron run — not per bookkeeping write (markSent/pruneTokens/pruneLedger/
+  // pruneCodes/pruneImages are pure noise at this granularity; runGardenAlerts already writes its
+  // own garden_events audit). The system-store actor (workers/app.ts's scheduled()) attributes it.
+  record({ action: 'mutation', meta: { sent, garden, ms } });
 }

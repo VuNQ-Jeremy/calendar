@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { createDb } from '../server/db/index';
 import * as zalo from '../server/services/zalo';
+import { auditALS, flush, newSystemStore } from '../server/services/audit';
 
 /**
  * Durable Object that pulls Zalo messages instead of waiting to be pushed them.
@@ -125,7 +126,14 @@ export class ZaloPoller extends DurableObject<Env> {
           gotMessage = true;
           stats.messages++;
           stats.lastMessageAt = new Date().toISOString();
-          await zalo.handleUpdate(createDb(this.env), this.env, update);
+          const db = createDb(this.env);
+          // No HTTP request here at all — this is the case AsyncLocalStorage exists for (see
+          // server/services/audit.ts). No ctx.waitUntil on a Durable Object method either, so the
+          // flush is a plain await inside the alarm's own promise chain rather than off to the side.
+          const chatId = update.message.chat?.id ?? 'unknown';
+          const zaloStore = newSystemStore('zalo', chatId);
+          await auditALS.run(zaloStore, () => zalo.handleUpdate(db, this.env, update));
+          if (zaloStore.entries.length) await flush(db, zaloStore);
         }
       } else if (res.error_code && res.error_code !== 408) {
         stats.errors++;

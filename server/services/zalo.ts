@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { accounts, parentStudents, zaloChats, zaloPairCodes } from '../db/schema';
 import type { Db } from '../db/index';
+import { record } from './audit';
 
 /**
  * Zalo Bot channel — the conversation registry, the sender, and the pairing flow.
@@ -193,6 +194,9 @@ export async function unlink(db: Db, id: string): Promise<void> {
 }
 
 export async function unlinkByChatId(db: Db, chatId: string): Promise<void> {
+  const rows = await db.select().from(zaloChats).where(eq(zaloChats.chatId, chatId));
+  if (rows[0])
+    record({ action: 'delete', entityType: 'zalo_link', entityId: rows[0].id, before: rows[0] });
   await db.delete(zaloChats).where(eq(zaloChats.chatId, chatId));
 }
 
@@ -416,6 +420,18 @@ export async function redeemCode(
     .update(zaloPairCodes)
     .set({ usedAt: new Date().toISOString() })
     .where(eq(zaloPairCodes.code, normalized));
+  record({
+    action: 'create',
+    entityType: 'zalo_link',
+    entityId: chat.chatId,
+    after: {
+      ...chat,
+      accountId: row.accountId,
+      parentId: row.parentId,
+      studentId: row.studentId,
+      classId: row.classId,
+    },
+  });
   return 'ok';
 }
 

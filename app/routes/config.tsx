@@ -130,7 +130,7 @@ function preprocessRaw(raw: Record<string, unknown>) {
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
+  const admin = await requireAdmin(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
@@ -155,7 +155,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
               : null;
       const value = target && (target.parentId || target.studentId || target.classId);
       if (!target || !value) return Response.json({ error: 'missing target' }, { status: 400 });
-      const code = await zaloSvc.createPairCode(db, target);
+      const code = await zaloSvc.createPairCode(db, target, admin.user.id);
       return { ok: true, code: code.code };
     }
 

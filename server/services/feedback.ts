@@ -2,6 +2,15 @@ import { eq, ne, desc } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import type { Db } from '../db/index';
 import type { FeedbackInput } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type FeedbackRow = {
   id: string;
@@ -46,7 +55,9 @@ export async function create(db: Db, input: FeedbackInput): Promise<FeedbackRow>
     appVersion: input.appVersion ?? null,
   });
   const rows = await db.select().from(feedback).where(eq(feedback.id, id));
-  return map(rows[0]);
+  const row = map(rows[0]);
+  recordCreate('feedback', id, row);
+  return row;
 }
 
 export async function update(
@@ -54,6 +65,8 @@ export async function update(
   id: string,
   patch: Partial<FeedbackInput>,
 ): Promise<FeedbackRow> {
+  const beforeRows = await db.select().from(feedback).where(eq(feedback.id, id));
+  const before = beforeRows[0] ? map(beforeRows[0]) : undefined;
   const set: Partial<typeof feedback.$inferInsert> = {};
   if (patch.message !== undefined) set.message = patch.message;
   if (patch.category !== undefined) set.category = patch.category;
@@ -63,10 +76,15 @@ export async function update(
     await db.update(feedback).set(set).where(eq(feedback.id, id));
   }
   const rows = await db.select().from(feedback).where(eq(feedback.id, id));
-  return map(rows[0]);
+  const after = map(rows[0]);
+  if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'feedback', entityId: id, before, after });
+  }
+  return after;
 }
 
 export async function remove(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'feedback', feedback, id);
   await db.delete(feedback).where(eq(feedback.id, id));
 }
 

@@ -11,8 +11,18 @@ import {
   requireApiStaff,
   requireApiAdmin,
 } from './auth';
+import { eq } from 'drizzle-orm';
 import { notifyLive } from '../live';
 import type { MutationDomain } from '../../shared/live';
+import { hasCrudEntry, noteAction, record, recordCreate, recordDelete } from '../services/audit';
+import type { TableWithId } from '../services/audit';
+
+/** POST/PATCH/DELETE map onto the activity log's own vocabulary for the coarse withAuth fallback. */
+const COARSE_ACTION_FOR_METHOD: Record<string, 'create' | 'update' | 'delete'> = {
+  POST: 'create',
+  PATCH: 'update',
+  DELETE: 'delete',
+};
 
 /**
  * Plumbing for the JSON API. Contains NO business logic — every route calls the same
@@ -114,13 +124,16 @@ export function withAuth<T, L extends AuthLevel>(
         params: params as Record<string, string | undefined>,
       });
       const response = result instanceof Response ? result : ok(result);
-      if (
-        opts?.live &&
-        request.method !== 'GET' &&
-        request.method !== 'HEAD' &&
-        response.status < 400
-      ) {
-        notifyLive(env, execCtx, opts.live);
+      const isWrite = request.method !== 'GET' && request.method !== 'HEAD';
+      if (isWrite && response.status < 400) {
+        // Coarse activity-log fallback (server/services/audit.ts): entityType is unknown at this
+        // generic layer, so this is only ever a `mutation` row — `crud()`'s `entity` option, or a
+        // service's own precise `record()` call, is what upgrades a route past this.
+        noteAction(request.method, opts?.live ?? null, response.status);
+        if (!hasCrudEntry()) {
+          record({ action: COARSE_ACTION_FOR_METHOD[request.method] ?? 'mutation' });
+        }
+        if (opts?.live) notifyLive(env, execCtx, opts.live);
       }
       return response;
     } catch (err) {
@@ -211,11 +224,29 @@ type CrudCfg<S extends z.ZodObject<z.ZodRawShape>> = {
   schema: S;
   /** Domain broadcast to web clients after a successful write (see server/live.ts). */
   live?: MutationDomain;
+  /**
+   * Activity-log entity for this collection (server/services/audit.ts). When set, PATCH/DELETE
+   * pre-read the row by id for a `before` snapshot and POST/PATCH use the handler's return value
+   * as `after` — full before/after for the mobile API with zero changes to the service functions
+   * themselves. Omit for a service that already calls `recordCreate`/`record`/`recordDelete`
+   * itself (people/events/classes/materials) — `hasCrudEntry()` below makes this a no-op there
+   * anyway, but the extra pre-read is a needless D1 read.
+   */
+  entity?: { type: string; table: TableWithId };
   list: (ctx: ApiCtx) => Promise<unknown>;
   create?: (input: z.infer<S>, ctx: ApiCtx) => Promise<unknown>;
   update?: (id: string, patch: Partial<z.infer<S>>, ctx: ApiCtx) => Promise<unknown>;
   remove?: (id: string, ctx: ApiCtx) => Promise<unknown>;
 };
+
+async function readByIdOrUndefined(
+  db: ApiCtx['db'],
+  table: TableWithId,
+  id: string,
+): Promise<Record<string, unknown> | undefined> {
+  const rows = await db.select().from(table).where(eq(table.id, id)).limit(1);
+  return rows[0] as Record<string, unknown> | undefined;
+}
 
 /**
  * Build the standard collection route: GET list, POST create, PATCH update, DELETE remove.
@@ -231,16 +262,40 @@ export function crud<S extends z.ZodObject<z.ZodRawShape>>(cfg: CrudCfg<S>) {
       switch (ctx.request.method) {
         case 'POST': {
           if (!cfg.create) throw fail('method_not_allowed', 405);
-          return cfg.create(await parseBody(ctx.request, cfg.schema), ctx);
+          const result = await cfg.create(await parseBody(ctx.request, cfg.schema), ctx);
+          if (cfg.entity && !hasCrudEntry()) {
+            const row = result as { id?: string } | undefined;
+            if (row?.id) recordCreate(cfg.entity.type, row.id, row);
+          }
+          return result;
         }
         case 'PATCH': {
           if (!cfg.update) throw fail('method_not_allowed', 405);
           const id = requireId(ctx);
-          return cfg.update(id, await parsePatchBody(ctx.request, cfg.schema), ctx);
+          const before =
+            cfg.entity && !hasCrudEntry()
+              ? await readByIdOrUndefined(ctx.db, cfg.entity.table, id)
+              : undefined;
+          const patch = await parsePatchBody(ctx.request, cfg.schema);
+          const result = await cfg.update(id, patch, ctx);
+          if (cfg.entity && before !== undefined && !hasCrudEntry()) {
+            record({
+              action: 'update',
+              entityType: cfg.entity.type,
+              entityId: id,
+              before,
+              after: result,
+            });
+          }
+          return result;
         }
         case 'DELETE': {
           if (!cfg.remove) throw fail('method_not_allowed', 405);
-          return cfg.remove(requireId(ctx), ctx);
+          const id = requireId(ctx);
+          if (cfg.entity && !hasCrudEntry()) {
+            await recordDelete(ctx.db, cfg.entity.type, cfg.entity.table, id);
+          }
+          return cfg.remove(id, ctx);
         }
         default:
           throw fail('method_not_allowed', 405);

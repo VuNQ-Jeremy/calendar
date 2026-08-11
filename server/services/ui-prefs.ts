@@ -2,6 +2,15 @@ import { eq } from 'drizzle-orm';
 import { settings } from '../db/schema';
 import type { Db } from '../db/index';
 import type { ScrollbarStyle, TabBarStyle } from '../../shared/schemas';
+import { record } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type UiPrefs = { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
 
@@ -25,5 +34,14 @@ export async function setUiPrefs(db: Db, patch: Partial<UiPrefs>): Promise<UiPre
     .insert(settings)
     .values({ key: 'ui-prefs', value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  if (!sameJson(current, next)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: 'ui-prefs',
+      before: current,
+      after: next,
+    });
+  }
   return next;
 }

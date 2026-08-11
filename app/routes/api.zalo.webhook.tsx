@@ -1,5 +1,6 @@
 import { fail, withPublic } from '../../server/api/handler';
 import * as zalo from '../../server/services/zalo';
+import { auditALS, flush, newSystemStore } from '../../server/services/audit';
 
 /**
  * Zalo Bot webhook — every message anyone sends the bot arrives here.
@@ -28,7 +29,7 @@ function secretMatches(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export const action = withPublic(async ({ request, db, env }) => {
+export const action = withPublic(async ({ request, db, env, ctx }) => {
   // Trimmed for the same reason as the bot token: `wrangler secret put` fed from a pipe stores
   // the trailing newline, and Zalo echoes back exactly the secret `setWebhook` was given — clean.
   // Comparing against the trimmed value is strictly more forgiving, never less.
@@ -57,10 +58,17 @@ export const action = withPublic(async ({ request, db, env }) => {
     return { ok: true };
   }
 
+  // A fresh 'zalo' system store, nested inside the request-level one workers/app.ts already
+  // opened — attributing this to the chat rather than to the generic anon/api caller the outer
+  // store would otherwise show, since Zalo's webhook has no session of its own.
+  const chatId = update.message?.chat?.id ?? 'unknown';
+  const zaloStore = newSystemStore('zalo', chatId);
   try {
-    await zalo.handleUpdate(db, env, update);
+    await auditALS.run(zaloStore, () => zalo.handleUpdate(db, env, update));
   } catch (err) {
     console.error('[zalo] webhook handler threw', { err: String(err) });
+  } finally {
+    if (zaloStore.entries.length) ctx.waitUntil(flush(db, zaloStore));
   }
   return { ok: true };
 });

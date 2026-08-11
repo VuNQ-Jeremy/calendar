@@ -1,7 +1,16 @@
 import { eq, and, gte, lte, or, ne } from 'drizzle-orm';
-import { events } from '../db/schema';
+import { events, eventMaterials } from '../db/schema';
 import type { Db } from '../db/index';
 import type { EventInput } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type EventRow = {
   id: string;
@@ -65,10 +74,15 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
     notes: input.notes || null,
   });
   const rows = await db.select().from(events).where(eq(events.id, id));
-  return map(rows[0]);
+  const row = map(rows[0]);
+  recordCreate('event', id, row);
+  return row;
 }
 
 export async function update(db: Db, id: string, patch: Partial<EventInput>): Promise<EventRow> {
+  const beforeRows = await db.select().from(events).where(eq(events.id, id));
+  const before = beforeRows[0] ? map(beforeRows[0]) : undefined;
+
   const set: Partial<typeof events.$inferInsert> = {};
   if (patch.title !== undefined) set.title = patch.title;
   if (patch.date !== undefined) set.date = patch.date;
@@ -79,14 +93,27 @@ export async function update(db: Db, id: string, patch: Partial<EventInput>): Pr
   if (patch.location !== undefined) set.location = patch.location ?? null;
   if (patch.recurrence !== undefined) set.recurrence = patch.recurrence;
   if (patch.notes !== undefined) set.notes = patch.notes || null;
+  // A real no-op path: an empty set means nothing on the row actually changed, so skip the DB
+  // write AND the audit row for it (the activity log must not log a patch that changed nothing).
   if (Object.keys(set).length) {
     await db.update(events).set(set).where(eq(events.id, id));
   }
   const rows = await db.select().from(events).where(eq(events.id, id));
-  return map(rows[0]);
+  const after = map(rows[0]);
+  if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'event', entityId: id, before, after });
+  }
+  return after;
 }
 
 export async function remove(db: Db, id: string): Promise<void> {
+  // event_materials rows cascade with the event (ON DELETE CASCADE) — folded into `extra` so
+  // which materials were attached survives into before_json.
+  const linked = await db
+    .select({ materialId: eventMaterials.materialId })
+    .from(eventMaterials)
+    .where(eq(eventMaterials.eventId, id));
+  await recordDelete(db, 'event', events, id, { materialIds: linked.map((r) => r.materialId) });
   await db.delete(events).where(eq(events.id, id));
 }
 

@@ -3,6 +3,7 @@ import { cloudflareCtx } from '../load-context';
 import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import { VocabImageCommitInput } from '../../shared/schemas';
 import { commitImage } from '../../server/services/vocab-images';
+import { record } from '../../server/services/audit';
 
 /**
  * Copy a chosen stock picture into our bucket and return its key. Staff only, outside `_app`.
@@ -34,6 +35,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   try {
     const imageKey = await commitImage(env, parsed.data.provider, parsed.data.id);
+    // R2-only write — same bespoke-route reasoning as /vocab-image-generate.
+    record({
+      action: 'mutation',
+      meta: { kind: 'vocab_image_commit', provider: parsed.data.provider, imageKey },
+    });
     return Response.json({ data: { imageKey } });
   } catch {
     return Response.json({ error: 'commit_failed' }, { status: 502 });

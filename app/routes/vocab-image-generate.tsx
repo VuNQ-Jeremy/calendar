@@ -3,6 +3,7 @@ import { cloudflareCtx } from '../load-context';
 import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import { VocabImageGenerateInput } from '../../shared/schemas';
 import { generateImage } from '../../server/services/vocab-images';
+import { record } from '../../server/services/audit';
 
 /**
  * Draw an illustration for a word with Workers AI, store it, and return its key. Staff only, and
@@ -34,6 +35,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   try {
     const imageKey = await generateImage(env, parsed.data.prompt);
+    // R2-only write (no D1 row until the word is saved) — a bespoke resource route outside
+    // withLiveAction/withAuth, so it records its own coarse row.
+    record({ action: 'mutation', meta: { kind: 'vocab_image_generate', imageKey } });
     return Response.json({ data: { imageKey } });
   } catch {
     return Response.json({ error: 'generate_failed' }, { status: 502 });

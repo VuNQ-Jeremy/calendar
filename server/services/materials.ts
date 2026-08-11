@@ -2,6 +2,15 @@ import { eq } from 'drizzle-orm';
 import { materials, eventMaterials } from '../db/schema';
 import type { Db } from '../db/index';
 import type { MaterialInput } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type MaterialRow = {
   id: string;
@@ -76,7 +85,9 @@ export async function create(
   }
 
   const rows = await db.select().from(materials).where(eq(materials.id, id));
-  return map(rows[0]);
+  const row = map(rows[0]);
+  recordCreate('material', id, row);
+  return row;
 }
 
 export async function update(
@@ -88,6 +99,7 @@ export async function update(
 ): Promise<MaterialRow> {
   const existing = await db.select().from(materials).where(eq(materials.id, id));
   const current = existing[0];
+  const before = current ? map(current) : undefined;
 
   const set: Partial<typeof materials.$inferInsert> = {};
   if (patch.title !== undefined) set.title = patch.title;
@@ -129,14 +141,35 @@ export async function update(
   }
 
   const rows = await db.select().from(materials).where(eq(materials.id, id));
-  return map(rows[0]);
+  const after = map(rows[0]);
+  if (!sameJson(before, after)) {
+    // Fold in the scope-change/superseded-file side effects so a diff shows the whole picture,
+    // not just the columns `set` touched.
+    record({
+      action: 'update',
+      entityType: 'material',
+      entityId: id,
+      before,
+      after,
+      meta: {
+        eventMaterialsCleared:
+          patch.scope !== undefined && current && patch.scope !== current.scope,
+        supersededFileKey:
+          newFileKey && current?.fileKey !== newFileKey ? (current?.fileKey ?? null) : null,
+      },
+    });
+  }
+  return after;
 }
 
 export async function remove(db: Db, id: string, files?: R2Bucket): Promise<void> {
-  if (files) {
-    const rows = await db.select().from(materials).where(eq(materials.id, id));
-    const row = rows[0];
-    if (row?.fileKey) await files.delete(row.fileKey);
-  }
+  const rows = await db.select().from(materials).where(eq(materials.id, id));
+  const row = rows[0];
+  const linked = await db
+    .select({ eventId: eventMaterials.eventId })
+    .from(eventMaterials)
+    .where(eq(eventMaterials.materialId, id));
+  await recordDelete(db, 'material', materials, id, { eventIds: linked.map((r) => r.eventId) });
+  if (files && row?.fileKey) await files.delete(row.fileKey);
   await db.delete(materials).where(eq(materials.id, id));
 }

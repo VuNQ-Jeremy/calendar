@@ -17,6 +17,15 @@ import type {
   TuitionPaymentInfoInput,
   TuitionPaymentInput,
 } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 /**
  * Tuition (học phí): turn attendance into a monthly fee.
  *
@@ -72,6 +81,15 @@ export async function setTuitionSettings(
     .insert(settings)
     .values({ key: SETTINGS_KEY, value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  if (!sameJson(current, next)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: SETTINGS_KEY,
+      before: current,
+      after: next,
+    });
+  }
   return next;
 }
 
@@ -124,6 +142,15 @@ export async function setPaymentInfo(
     .insert(settings)
     .values({ key: PAYMENT_INFO_KEY, value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  if (!sameJson(current, next)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: PAYMENT_INFO_KEY,
+      before: current,
+      after: next,
+    });
+  }
   return next;
 }
 
@@ -158,6 +185,17 @@ export async function listPrices(db: Db): Promise<ClassPriceRow[]> {
  * is one fact, so saving it twice must correct the amount rather than fail on the unique index.
  */
 export async function setPrice(db: Db, input: ClassPriceInput): Promise<ClassPriceRow> {
+  const beforeRows = await db
+    .select()
+    .from(classPrices)
+    .where(
+      and(
+        eq(classPrices.classId, input.classId),
+        eq(classPrices.effectiveFrom, input.effectiveFrom),
+      ),
+    );
+  const before = beforeRows[0] ? mapPrice(beforeRows[0]) : undefined;
+
   await db
     .insert(classPrices)
     .values({
@@ -180,11 +218,17 @@ export async function setPrice(db: Db, input: ClassPriceInput): Promise<ClassPri
         eq(classPrices.effectiveFrom, input.effectiveFrom),
       ),
     );
-  return mapPrice(rows[0]);
+  const after = mapPrice(rows[0]);
+  if (!before) recordCreate('tuition', after.id, after);
+  else if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'tuition', entityId: after.id, before, after });
+  }
+  return after;
 }
 
 /** Changing an existing row's date is a delete plus a `setPrice`, so there is no updatePrice. */
 export async function removePrice(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'tuition', classPrices, id);
   await db.delete(classPrices).where(eq(classPrices.id, id));
 }
 
@@ -484,6 +528,12 @@ export async function closeMonth(db: Db, month: string, closedBy: string): Promi
   );
 
   await db.batch([markClosed, del, ...inserts]);
+  record({
+    action: 'update',
+    entityType: 'tuition',
+    entityId: month,
+    meta: { closed: true, closedBy, lineCount: values.length },
+  });
 }
 
 /** Back to live compute. Payments and adjustments survive — they are not part of the snapshot. */
@@ -492,6 +542,7 @@ export async function reopenMonth(db: Db, month: string): Promise<void> {
     db.delete(tuitionLines).where(eq(tuitionLines.month, month)),
     db.update(tuitionMonths).set({ status: 'open' }).where(eq(tuitionMonths.month, month)),
   ]);
+  record({ action: 'update', entityType: 'tuition', entityId: month, meta: { closed: false } });
 }
 
 /* ── Payments and adjustments ───────────────────────────────────────────────────────────── */
@@ -502,6 +553,14 @@ export async function saveStudentMonth(
   studentId: string,
   patch: Partial<TuitionPaymentInput & TuitionAdjustmentInput>,
 ): Promise<StudentMonthRow> {
+  const beforeRows = await db
+    .select()
+    .from(tuitionStudentMonths)
+    .where(
+      and(eq(tuitionStudentMonths.month, month), eq(tuitionStudentMonths.studentId, studentId)),
+    );
+  const before = beforeRows[0] ? mapStudentMonth(beforeRows[0]) : undefined;
+
   const set: Partial<typeof tuitionStudentMonths.$inferInsert> = {};
   if (patch.paidVnd !== undefined) set.paidVnd = patch.paidVnd;
   if (patch.paidAt !== undefined) set.paidAt = patch.paidAt ?? null;
@@ -523,5 +582,11 @@ export async function saveStudentMonth(
     .where(
       and(eq(tuitionStudentMonths.month, month), eq(tuitionStudentMonths.studentId, studentId)),
     );
-  return mapStudentMonth(rows[0]);
+  const after = mapStudentMonth(rows[0]);
+  const entityId = `${month}:${studentId}`;
+  if (!before) recordCreate('tuition', entityId, after);
+  else if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'tuition', entityId, before, after });
+  }
+  return after;
 }

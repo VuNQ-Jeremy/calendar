@@ -4,6 +4,15 @@ import { classes, classStudents } from '../db/schema';
 import * as subjectsSvc from './subjects';
 import type { Db } from '../db/index';
 import type { ClassInput } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Which subject row a write means.
@@ -123,10 +132,12 @@ export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
 
   if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const result = await get(db, id);
+  recordCreate('class', id, result);
   return result!;
 }
 
 export async function update(db: Db, id: string, input: Partial<ClassInput>): Promise<ClassRow> {
+  const before = await get(db, id);
   const ops: BatchItem<'sqlite'>[] = [];
 
   const scalarSet: Partial<typeof classes.$inferInsert> = {};
@@ -153,12 +164,17 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
 
   if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
   const result = await get(db, id);
+  if (!sameJson(before, result)) {
+    record({ action: 'update', entityType: 'class', entityId: id, before, after: result });
+  }
   return result!;
 }
 
 export async function remove(db: Db, id: string): Promise<void> {
-  // ON DELETE CASCADE handles class_schedule and class_students rows.
-  // The events and tests FKs are ON DELETE SET NULL (handled by D1 FK or explicitly).
+  // ON DELETE CASCADE handles class_schedule and class_students rows (folded into `extra` via
+  // the roster already on `before`). The events and tests FKs are ON DELETE SET NULL.
+  const before = await get(db, id);
+  await recordDelete(db, 'class', classes, id, { studentIds: before?.studentIds ?? [] });
   await db.delete(classes).where(eq(classes.id, id));
 }
 

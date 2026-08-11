@@ -3,6 +3,15 @@ import { tests, testQuestions, testAttempts, questions, scoreRecords } from '../
 import { chunk, rowsPerStatement, D1_MAX_BOUND_PARAMS, type Db } from '../db/index';
 import type { TestInput } from '../../shared/schemas';
 import { ictDateOf } from '../../shared/logic/tests';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Tests domain service. Paper-mode score entry syncs a gradebook row per attempt so the
@@ -161,10 +170,13 @@ export async function create(db: Db, input: TestInput): Promise<TestRow> {
     color: input.color ?? null,
     createdAt: new Date().toISOString(),
   });
-  return get(db, id);
+  const row = await get(db, id);
+  recordCreate('test', id, row);
+  return row;
 }
 
 export async function update(db: Db, id: string, patch: Partial<TestInput>): Promise<TestRow> {
+  const before = await get(db, id);
   // Switching mode once anyone has sat the test would strand their attempts in a mode that
   // cannot display them: an online attempt is invisible to the paper score grid, which then
   // silently discards whatever the teacher types for that student. Close the door instead.
@@ -217,6 +229,9 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
     }
   }
 
+  if (!sameJson(before, row)) {
+    record({ action: 'update', entityType: 'test', entityId: id, before, after: row });
+  }
   return row;
 }
 
@@ -226,7 +241,13 @@ export async function remove(db: Db, id: string): Promise<void> {
   if (scoreRecordIds.length) {
     await db.delete(scoreRecords).where(inArray(scoreRecords.id, scoreRecordIds));
   }
-  // ON DELETE CASCADE removes test_questions, test_attempts and test_answers.
+  // ON DELETE CASCADE removes test_questions, test_attempts and test_answers — folded into
+  // `extra` so the linked question ids survive into before_json.
+  const links = await db
+    .select({ questionId: testQuestions.questionId })
+    .from(testQuestions)
+    .where(eq(testQuestions.testId, id));
+  await recordDelete(db, 'test', tests, id, { questionIds: links.map((l) => l.questionId) });
   await db.delete(tests).where(eq(tests.id, id));
 }
 
@@ -320,16 +341,20 @@ export async function publish(db: Db, id: string): Promise<TestRow> {
     throw Response.json({ error: 'test_no_close' }, { status: 400 });
   }
   await db.update(tests).set({ status: 'published' }).where(eq(tests.id, id));
-  return get(db, id);
+  const after = await get(db, id);
+  record({ action: 'update', entityType: 'test', entityId: id, before: test, after });
+  return after;
 }
 
 export async function unpublish(db: Db, id: string): Promise<TestRow> {
-  await get(db, id);
+  const before = await get(db, id);
   if (await hasAttempts(db, id)) {
     throw Response.json({ error: 'test_has_attempts' }, { status: 409 });
   }
   await db.update(tests).set({ status: 'draft' }).where(eq(tests.id, id));
-  return get(db, id);
+  const after = await get(db, id);
+  record({ action: 'update', entityType: 'test', entityId: id, before, after });
+  return after;
 }
 
 export async function totalPoints(db: Db, testId: string): Promise<number> {

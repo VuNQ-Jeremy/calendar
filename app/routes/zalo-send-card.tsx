@@ -5,6 +5,7 @@ import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import * as zalo from '../../server/services/zalo';
 import * as assessSvc from '../../server/services/assessments';
 import { notifyLive } from '../../server/live';
+import { record } from '../../server/services/audit';
 
 /**
  * Post a share card into Zalo. **Staff only.**
@@ -113,6 +114,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
   }
 
+  // Outside withLiveAction/withAuth (this route is a bespoke document-cookie-authed resource
+  // route, not one of those wrappers), so it records its own coarse row rather than getting one
+  // for free.
+  record({
+    action: 'mutation',
+    meta: {
+      kind: 'zalo_send_card',
+      target,
+      sent,
+      total: results.length,
+      remarkId: remarkId || null,
+    },
+  });
   return Response.json({ sent, total: results.length, results }, { status: sent ? 200 : 502 });
 }
 

@@ -3,6 +3,17 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import { staff, students, parents, classStudents, parentStudents } from '../db/schema';
 import type { Db } from '../db/index';
 import type { StudentInput, StaffInput, ParentInput } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+/** JSON-shape equality — good enough for these plain assembled rows, and how audit.ts itself
+ *  decides an update was a real no-op. */
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 // ---- Staff ----
 
@@ -35,7 +46,9 @@ export async function createStaff(db: Db, input: StaffInput): Promise<StaffRow> 
     phone: input.phone ?? null,
   });
   const rows = await db.select().from(staff).where(eq(staff.id, id));
-  return mapStaff(rows[0]);
+  const row = mapStaff(rows[0]);
+  recordCreate('staff', id, row);
+  return row;
 }
 
 export async function updateStaff(
@@ -43,6 +56,9 @@ export async function updateStaff(
   id: string,
   patch: Partial<StaffInput>,
 ): Promise<StaffRow> {
+  const beforeRows = await db.select().from(staff).where(eq(staff.id, id));
+  const before = beforeRows[0] ? mapStaff(beforeRows[0]) : undefined;
+
   const set: Partial<typeof staff.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.email !== undefined) set.email = patch.email ?? null;
@@ -51,10 +67,15 @@ export async function updateStaff(
   if (patch.phone !== undefined) set.phone = patch.phone ?? null;
   if (Object.keys(set).length) await db.update(staff).set(set).where(eq(staff.id, id));
   const rows = await db.select().from(staff).where(eq(staff.id, id));
-  return mapStaff(rows[0]);
+  const after = mapStaff(rows[0]);
+  if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'staff', entityId: id, before, after });
+  }
+  return after;
 }
 
 export async function removeStaff(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'staff', staff, id);
   await db.delete(staff).where(eq(staff.id, id));
 }
 
@@ -117,7 +138,9 @@ export async function createStudent(db: Db, input: StudentInput): Promise<Studen
     db.select().from(students).where(eq(students.id, id)),
     db.select().from(classStudents).where(eq(classStudents.studentId, id)),
   ]);
-  return assembleStudent(sRows[0], csRows);
+  const row = assembleStudent(sRows[0], csRows);
+  recordCreate('student', id, row);
+  return row;
 }
 
 export async function updateStudent(
@@ -125,6 +148,12 @@ export async function updateStudent(
   id: string,
   patch: Partial<StudentInput>,
 ): Promise<StudentRow> {
+  const [beforeSRows, beforeCsRows] = await db.batch([
+    db.select().from(students).where(eq(students.id, id)),
+    db.select().from(classStudents).where(eq(classStudents.studentId, id)),
+  ]);
+  const before = beforeSRows[0] ? assembleStudent(beforeSRows[0], beforeCsRows) : undefined;
+
   const ops: BatchItem<'sqlite'>[] = [];
   const set: Partial<typeof students.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
@@ -148,12 +177,30 @@ export async function updateStudent(
     db.select().from(students).where(eq(students.id, id)),
     db.select().from(classStudents).where(eq(classStudents.studentId, id)),
   ]);
-  return assembleStudent(sRows[0], csRows);
+  const after = assembleStudent(sRows[0], csRows);
+  if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'student', entityId: id, before, after });
+  }
+  return after;
 }
 
 export async function removeStudent(db: Db, id: string): Promise<void> {
-  // ON DELETE CASCADE on class_students.student_id and parent_students.student_id
-  // handles join-table cleanup automatically.
+  // ON DELETE CASCADE on class_students.student_id and parent_students.student_id handles
+  // join-table cleanup automatically — folded into `extra` here so it survives into before_json.
+  const [classRows, parentRows] = await db.batch([
+    db
+      .select({ classId: classStudents.classId })
+      .from(classStudents)
+      .where(eq(classStudents.studentId, id)),
+    db
+      .select({ parentId: parentStudents.parentId })
+      .from(parentStudents)
+      .where(eq(parentStudents.studentId, id)),
+  ]);
+  await recordDelete(db, 'student', students, id, {
+    classIds: classRows.map((r) => r.classId),
+    parentIds: parentRows.map((r) => r.parentId),
+  });
   await db.delete(students).where(eq(students.id, id));
 }
 
@@ -216,7 +263,9 @@ export async function createParent(db: Db, input: ParentInput): Promise<ParentRo
     db.select().from(parents).where(eq(parents.id, id)),
     db.select().from(parentStudents).where(eq(parentStudents.parentId, id)),
   ]);
-  return assembleParent(pRows[0], psRows);
+  const row = assembleParent(pRows[0], psRows);
+  recordCreate('parent', id, row);
+  return row;
 }
 
 export async function updateParent(
@@ -224,6 +273,12 @@ export async function updateParent(
   id: string,
   patch: Partial<ParentInput>,
 ): Promise<ParentRow> {
+  const [beforePRows, beforePsRows] = await db.batch([
+    db.select().from(parents).where(eq(parents.id, id)),
+    db.select().from(parentStudents).where(eq(parentStudents.parentId, id)),
+  ]);
+  const before = beforePRows[0] ? assembleParent(beforePRows[0], beforePsRows) : undefined;
+
   const ops: BatchItem<'sqlite'>[] = [];
   const set: Partial<typeof parents.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
@@ -247,11 +302,21 @@ export async function updateParent(
     db.select().from(parents).where(eq(parents.id, id)),
     db.select().from(parentStudents).where(eq(parentStudents.parentId, id)),
   ]);
-  return assembleParent(pRows[0], psRows);
+  const after = assembleParent(pRows[0], psRows);
+  if (!sameJson(before, after)) {
+    record({ action: 'update', entityType: 'parent', entityId: id, before, after });
+  }
+  return after;
 }
 
 export async function removeParent(db: Db, id: string): Promise<void> {
-  // ON DELETE CASCADE on parent_students.parent_id handles join-table cleanup.
+  // ON DELETE CASCADE on parent_students.parent_id handles join-table cleanup — folded into
+  // `extra` here so the linked children survive into before_json.
+  const linkRows = await db
+    .select({ studentId: parentStudents.studentId })
+    .from(parentStudents)
+    .where(eq(parentStudents.parentId, id));
+  await recordDelete(db, 'parent', parents, id, { studentIds: linkRows.map((r) => r.studentId) });
   await db.delete(parents).where(eq(parents.id, id));
 }
 
@@ -289,4 +354,12 @@ export async function linkParentToStudent(
   studentId: string,
 ): Promise<void> {
   await db.insert(parentStudents).values({ parentId, studentId }).onConflictDoNothing();
+  // An unaudited write before this — meta'd rather than a full before/after snapshot, since the
+  // join has no independent identity beyond the two ids it connects.
+  record({
+    action: 'update',
+    entityType: 'parent',
+    entityId: parentId,
+    meta: { linkedStudentId: studentId },
+  });
 }

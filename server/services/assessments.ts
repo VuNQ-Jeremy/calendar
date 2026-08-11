@@ -6,6 +6,15 @@ import type {
   BehaviorRecordInput,
   MonthlyRemarkInput,
 } from '../../shared/schemas';
+import { record, recordCreate, recordDelete } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export type ScoreRow = {
   id: string;
@@ -66,7 +75,9 @@ export async function createScore(db: Db, input: ScoreRecordInput): Promise<Scor
     notes: input.notes ?? null,
   });
   const rows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
-  return mapScore(rows[0]);
+  const row = mapScore(rows[0]);
+  recordCreate('assessment', id, { kind: 'score', ...row });
+  return row;
 }
 
 export async function updateScore(
@@ -74,6 +85,8 @@ export async function updateScore(
   id: string,
   patch: Partial<ScoreRecordInput>,
 ): Promise<ScoreRow> {
+  const beforeRows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
+  const before = beforeRows[0] ? mapScore(beforeRows[0]) : undefined;
   const set: Partial<typeof scoreRecords.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
   if (patch.classId !== undefined) set.classId = patch.classId ?? null;
@@ -85,10 +98,22 @@ export async function updateScore(
     await db.update(scoreRecords).set(set).where(eq(scoreRecords.id, id));
   }
   const rows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
-  return mapScore(rows[0]);
+  const after = mapScore(rows[0]);
+  if (!sameJson(before, after)) {
+    record({
+      action: 'update',
+      entityType: 'assessment',
+      entityId: id,
+      before,
+      after,
+      meta: { kind: 'score' },
+    });
+  }
+  return after;
 }
 
 export async function removeScore(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'assessment', scoreRecords, id, { kind: 'score' });
   await db.delete(scoreRecords).where(eq(scoreRecords.id, id));
 }
 
@@ -108,7 +133,9 @@ export async function createBehavior(db: Db, input: BehaviorRecordInput): Promis
     notes: input.notes ?? null,
   });
   const rows = await db.select().from(behaviorRecords).where(eq(behaviorRecords.id, id));
-  return mapBehavior(rows[0]);
+  const row = mapBehavior(rows[0]);
+  recordCreate('assessment', id, { kind: 'behavior', ...row });
+  return row;
 }
 
 export async function updateBehavior(
@@ -116,6 +143,8 @@ export async function updateBehavior(
   id: string,
   patch: Partial<BehaviorRecordInput>,
 ): Promise<BehaviorRow> {
+  const beforeRows = await db.select().from(behaviorRecords).where(eq(behaviorRecords.id, id));
+  const before = beforeRows[0] ? mapBehavior(beforeRows[0]) : undefined;
   const set: Partial<typeof behaviorRecords.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
   if (patch.classId !== undefined) set.classId = patch.classId ?? null;
@@ -126,10 +155,22 @@ export async function updateBehavior(
     await db.update(behaviorRecords).set(set).where(eq(behaviorRecords.id, id));
   }
   const rows = await db.select().from(behaviorRecords).where(eq(behaviorRecords.id, id));
-  return mapBehavior(rows[0]);
+  const after = mapBehavior(rows[0]);
+  if (!sameJson(before, after)) {
+    record({
+      action: 'update',
+      entityType: 'assessment',
+      entityId: id,
+      before,
+      after,
+      meta: { kind: 'behavior' },
+    });
+  }
+  return after;
 }
 
 export async function removeBehavior(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'assessment', behaviorRecords, id, { kind: 'behavior' });
   await db.delete(behaviorRecords).where(eq(behaviorRecords.id, id));
 }
 
@@ -195,6 +236,7 @@ export async function createRemark(
   input: MonthlyRemarkInput,
   staffId: string | null,
 ): Promise<RemarkRow> {
+  const before = await getRemark(db, input.studentId, input.month);
   const now = new Date().toISOString();
   const fields = {
     ratings: JSON.stringify(input.ratings),
@@ -217,7 +259,19 @@ export async function createRemark(
       // historical facts a re-save must not rewrite.
       set: fields,
     });
-  return (await getRemark(db, input.studentId, input.month))!;
+  const after = (await getRemark(db, input.studentId, input.month))!;
+  if (!before) recordCreate('assessment', after.id, { kind: 'remark', ...after });
+  else if (!sameJson(before, after)) {
+    record({
+      action: 'update',
+      entityType: 'assessment',
+      entityId: after.id,
+      before,
+      after,
+      meta: { kind: 'remark' },
+    });
+  }
+  return after;
 }
 
 export async function updateRemark(
@@ -226,6 +280,8 @@ export async function updateRemark(
   patch: Partial<MonthlyRemarkInput>,
   staffId: string | null,
 ): Promise<RemarkRow> {
+  const beforeRows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.id, id));
+  const before = beforeRows[0] ? mapRemark(beforeRows[0]) : undefined;
   const set: Partial<typeof monthlyRemarks.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
   if (patch.month !== undefined) set.month = patch.month;
@@ -237,10 +293,22 @@ export async function updateRemark(
     await db.update(monthlyRemarks).set(set).where(eq(monthlyRemarks.id, id));
   }
   const rows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.id, id));
-  return mapRemark(rows[0]);
+  const after = mapRemark(rows[0]);
+  if (!sameJson(before, after)) {
+    record({
+      action: 'update',
+      entityType: 'assessment',
+      entityId: id,
+      before,
+      after,
+      meta: { kind: 'remark' },
+    });
+  }
+  return after;
 }
 
 export async function removeRemark(db: Db, id: string): Promise<void> {
+  await recordDelete(db, 'assessment', monthlyRemarks, id, { kind: 'remark' });
   await db.delete(monthlyRemarks).where(eq(monthlyRemarks.id, id));
 }
 

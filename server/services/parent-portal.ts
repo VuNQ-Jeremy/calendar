@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { settings } from '../db/schema';
 import type { Db } from '../db/index';
 import { studentIdsOfParent } from './people';
+import { record } from './audit';
 
 /**
  * The parent portal: whether a signed-in parent gets anything beyond /profile.
@@ -39,11 +40,23 @@ export async function setParentPortal(
   db: Db,
   patch: Partial<ParentPortalSettings>,
 ): Promise<ParentPortalSettings> {
-  const next = { ...(await getParentPortal(db)), ...patch };
+  const current = await getParentPortal(db);
+  const next = { ...current, ...patch };
   await db
     .insert(settings)
     .values({ key: KEY, value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  // A toggle that gates a whole family's access to their children's data — worth a full row
+  // even though it's a one-boolean setting.
+  if (current.enabled !== next.enabled) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: KEY,
+      before: current,
+      after: next,
+    });
+  }
   return next;
 }
 

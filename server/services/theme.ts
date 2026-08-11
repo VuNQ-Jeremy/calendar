@@ -1,6 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { settings } from '../db/schema';
 import type { Db } from '../db/index';
+import { record } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 export const DEFAULT_THEME = {
   bg: '#FFFCF8',
@@ -31,5 +40,14 @@ export async function setTheme(db: Db, patch: Partial<Theme>): Promise<Theme> {
     .insert(settings)
     .values({ key: 'theme', value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  if (!sameJson(current, next)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: 'theme',
+      before: current,
+      after: next,
+    });
+  }
   return next;
 }

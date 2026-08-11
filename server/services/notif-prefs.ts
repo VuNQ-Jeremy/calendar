@@ -2,6 +2,15 @@ import { eq } from 'drizzle-orm';
 import { settings } from '../db/schema';
 import type { Db } from '../db/index';
 import type { NotifPrefsInput } from '../../shared/schemas';
+import { record } from './audit';
+
+function sameJson(a: unknown, b: unknown): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Notification preferences, in the same `settings` k/v table that holds the calendar theme and
@@ -38,10 +47,20 @@ export async function getNotifPrefs(db: Db): Promise<NotifPrefs> {
 }
 
 export async function setNotifPrefs(db: Db, patch: Partial<NotifPrefs>): Promise<NotifPrefs> {
-  const next = { ...(await getNotifPrefs(db)), ...patch };
+  const current = await getNotifPrefs(db);
+  const next = { ...current, ...patch };
   await db
     .insert(settings)
     .values({ key: KEY, value: JSON.stringify(next) })
     .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  if (!sameJson(current, next)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: KEY,
+      before: current,
+      after: next,
+    });
+  }
   return next;
 }
