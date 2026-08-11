@@ -539,14 +539,27 @@ function WordModal({
   }, [draft.word]);
 
   /**
+   * Serialises the commits below. Copying a stock picture is a multi-hop round trip — ask the
+   * provider for the real URL, fetch the bytes, write them to R2 — so two picks made a moment apart
+   * can answer out of order, and the loser used to win: pick a picture, hit refresh, pick another,
+   * and whichever copy finished last decided what the word was saved with.
+   */
+  const commitSeq = React.useRef(0);
+
+  /**
    * Apply a picker change. Editing one word, so a stock pick is committed to our bucket right away:
    * the teacher leaves the dialog with a real stored picture rather than a provider thumbnail that
    * might not survive the copy. The highlight moves first so the tap feels instant, and is rolled
    * back if the copy fails.
+   *
+   * Every pick — including clearing one — takes a ticket, and a commit that comes back holding a
+   * stale ticket is dropped on the floor. `imageKey` therefore always describes the LAST cell the
+   * teacher tapped, which is the only thing the save button can honestly write.
    */
   const applyChoice = async (patch: Partial<ImageChoice>) => {
     setChoice((c) => ({ ...c, ...patch }));
     if (!('picked' in patch)) return;
+    const ticket = ++commitSeq.current;
     const next = patch.picked;
     if (!next) {
       set('imageKey', '');
@@ -557,8 +570,15 @@ function WordModal({
       return;
     }
     const key = await resolvePickedImageKey(next);
+    // Superseded while the bytes were in flight: the newer pick owns the draft now.
+    if (ticket !== commitSeq.current) return;
     if (key) set('imageKey', key);
-    else setChoice((c) => ({ ...c, picked: null, status: 'failed' }));
+    else {
+      // A copy that failed leaves the word with NO picture. Leaving the previous key in place is
+      // what let a failed pick save the picture chosen before it, with nothing outlined to say so.
+      set('imageKey', '');
+      setChoice((c) => ({ ...c, picked: null, status: 'failed' }));
+    }
   };
 
   // Manual retry — an explicit user action, so it overwrites the meaning. The other two fields

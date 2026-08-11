@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { crudGuard, signInStaff, ui } from './crud-helpers';
 
 /**
@@ -150,5 +150,173 @@ test.describe('CRUD: vocabulary word pictures', () => {
     await confirm.locator('.mochi-btn.is-danger, .mochi-btn.is-primary').last().click();
     await post;
     await expect(page.locator('.mochi-card.is-interactive', { hasText: topic })).toHaveCount(0);
+  });
+
+  /**
+   * Refreshing the picker mid-pick used to poison the save.
+   *
+   * Copying a stock photo into R2 is a multi-hop round trip, so a teacher who taps a cell, hits
+   * "Show different pictures", and taps another has two copies in flight at once. Whichever answered
+   * last decided what the word was saved with — usually the FIRST one, because it had a head start —
+   * so the word came out holding the picture from before the refresh. The two specs below pin the
+   * invariant that broke: `imageKey` describes the last cell tapped, and nothing else.
+   */
+
+  /** A cell that is not the current selection — tapping the selected one clears it instead. */
+  const UNPICKED = 'button[aria-pressed="false"]:has(> img)';
+
+  /** Throwaway topic with its "Add word" dialog open. Returns the topic's slug and its picker. */
+  async function wordDialogOnFreshTopic(page: Page, word: string) {
+    const k = ui(page);
+    const topic = `E2E image topic ${Date.now()}`;
+    await signInStaff(page);
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: 'New topic' }).click();
+    await page.getByLabel('Topic name').fill(topic);
+    const post = k.posted('/vocabulary');
+    await k.submit().click();
+    await post;
+    await page.locator('.mochi-card', { hasText: topic }).getByText(topic).click();
+    await page.waitForURL(/\/vocabulary\/.+/);
+    const slug = new URL(page.url()).pathname;
+
+    await page.getByRole('button', { name: 'Add word' }).click();
+    const dlg = k.dlgOf('Add word');
+    const f = k.on(dlg);
+    await f.textIn('Word').fill(word);
+    await f.textIn('Meaning (Vietnamese)').fill('nghĩa');
+    const strip = dlg.locator('.mochi-field:has(> label:text-is("Picture"))');
+    // A live third-party search, so wait for the batch rather than a fixed timeout.
+    await expect(strip.locator(TILE).first()).toBeVisible({ timeout: 45_000 });
+    return { k, topic, slug, strip };
+  }
+
+  /** Walk to the next batch and hand back a cell that is not the current pick. */
+  async function refreshPicker(page: Page, strip: Locator) {
+    const searched = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === '/vocab-image-search' && r.ok(),
+      { timeout: 45_000 },
+    );
+    await strip.getByRole('button', { name: 'Show different pictures' }).click();
+    await searched;
+    const fresh = strip.locator(UNPICKED).first();
+    await expect(fresh).toBeVisible({ timeout: 45_000 });
+    return fresh;
+  }
+
+  async function deleteTopic(page: Page, k: ReturnType<typeof ui>, topic: string) {
+    await page.goto('/vocabulary');
+    await page
+      .locator('.mochi-card.is-interactive', { hasText: topic })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    const confirm = page.locator('.m-dialog:has-text("Delete")').last();
+    const post = k.posted('/vocabulary');
+    await confirm.locator('.mochi-btn.is-danger, .mochi-btn.is-primary').last().click();
+    await post;
+  }
+
+  const fileOf = (imageKey: string) => imageKey.slice(imageKey.indexOf('/') + 1);
+
+  test('word picture: a pick made after refreshing wins, even if the earlier copy lands last', async ({
+    page,
+  }) => {
+    // Keyed by REQUEST order, not completion order — the point of the spec is that the two answers
+    // come back in the wrong order, so which one finished first must not decide the bookkeeping.
+    const committed: Record<number, string> = {};
+    let seen = 0;
+    let staleLanded = false;
+    // Hold the first copy back so it answers AFTER the second — the out-of-order case, forced.
+    // Without the delay the race is real but rarely lost, and the spec would pass on both codepaths.
+    await page.route('**/vocab-image-commit', async (route) => {
+      const n = ++seen;
+      const res = await route.fetch();
+      const body = await res.text();
+      committed[n] = JSON.parse(body).data.imageKey as string;
+      if (n === 1) {
+        await new Promise((r) => setTimeout(r, 8_000));
+        await route.fulfill({ response: res, body });
+        staleLanded = true;
+        return;
+      }
+      await route.fulfill({ response: res, body });
+    });
+
+    const { k, topic, slug, strip } = await wordDialogOnFreshTopic(page, 'harbour');
+
+    // ---- First pick, then refresh and pick again while its copy is still in flight ----
+    await strip.locator(TILE).first().click();
+    await expect.poll(() => committed[1], { timeout: 60_000 }).toBeTruthy();
+    const fresh = await refreshPicker(page, strip);
+    await fresh.click();
+    await expect.poll(() => committed[2], { timeout: 60_000 }).toBeTruthy();
+    // Save only once the held-back first answer has reached the page: applying it late is the bug,
+    // and saving before it arrives would let a broken build pass.
+    await expect.poll(() => staleLanded, { timeout: 30_000 }).toBe(true);
+    expect(committed[1]).not.toBe(committed[2]);
+
+    const post = k.posted(slug);
+    await k.submit().click();
+    await post;
+
+    // ---- The word holds the SECOND picture ----
+    const thumb = page
+      .locator('.fc-wcard', { hasText: 'harbour' })
+      .locator('img[src^="/flashcard-"]');
+    await expect(thumb).toBeVisible();
+    await expect(thumb).toHaveAttribute('src', `/flashcard-images/${fileOf(committed[2])}`);
+    // naturalWidth > 0 proves the key serves real bytes, not a 404.
+    await expect
+      .poll(async () => thumb.evaluate((el: HTMLImageElement) => el.naturalWidth), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+
+    await deleteTopic(page, k, topic);
+  });
+
+  test('word picture: a copy that fails leaves no picture, not the previous one', async ({
+    page,
+  }) => {
+    let commits = 0;
+    let firstKey = '';
+    // The second copy fails outright. A 502 is exactly what the commit route returns when the
+    // provider hands back something unstorable, which is common enough on live stock search.
+    await page.route('**/vocab-image-commit', async (route) => {
+      if (++commits === 1) {
+        const res = await route.fetch();
+        const body = await res.text();
+        firstKey = JSON.parse(body).data.imageKey as string;
+        await route.fulfill({ response: res, body });
+        return;
+      }
+      await route.fulfill({ status: 502, body: JSON.stringify({ error: 'commit_failed' }) });
+    });
+
+    const { k, topic, slug, strip } = await wordDialogOnFreshTopic(page, 'lantern');
+
+    await strip.locator(TILE).first().click();
+    await expect.poll(() => firstKey, { timeout: 60_000 }).not.toBe('');
+    await expect(strip.locator(`${TILE}[aria-pressed="true"]`)).toHaveCount(1);
+
+    const fresh = await refreshPicker(page, strip);
+    await fresh.click();
+
+    // The failed copy reports itself and drops the selection — so nothing is attached any more.
+    await expect(
+      strip.getByText('Could not load pictures. The word saves fine without one.'),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(strip.locator(`${TILE}[aria-pressed="true"]`)).toHaveCount(0);
+
+    const post = k.posted(slug);
+    await k.submit().click();
+    await post;
+
+    // ---- The word saves with no picture. It must NOT fall back to the pre-refresh one. ----
+    const row = page.locator('.fc-wcard', { hasText: 'lantern' });
+    await expect(row).toBeVisible();
+    await expect(row.locator('img[src^="/flashcard-images/"]')).toHaveCount(0);
+
+    await deleteTopic(page, k, topic);
   });
 });
