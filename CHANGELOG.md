@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0184 — 2026-08-11
+New admin-only /logs/activity page: a live stream of every mutation/view/login with expandable before-after diffs, per-account session timelines, per-record history, and a security view (active sessions, new-IP sign-ins, failed logins). Strictly read-only — no revert, no restore.
+
 ## v0.0183 — 2026-08-11
 Batched client-side page-view beacon: every navigation posts to /track (not /api/, which is bearer-only), landing in the activity log even for routes the SWR cache serves without a server round trip. Fixes a real /logs/activity route-cache collision along the way.
 

@@ -13,6 +13,11 @@
 -- rows are deleted in-test; the accounts have no UI delete path).
 DELETE FROM accounts WHERE email LIKE 'e2e-redeem-%';
 
+-- Activity log (migration 0035). Append-only and unrelated to any spec's own assertions, but a
+-- leaked prior run's rows would make crud-activity.spec.ts's row-count-based checks (e.g. "exactly
+-- 3 events for this entity id") fragile across reruns against the same test database.
+DELETE FROM activity_log;
+
 -- seed.sql predates these tables and never clears them; without this, a
 -- failed e2e run leaks questions/tests/flashcards into the next reset.
 DELETE FROM test_answers;

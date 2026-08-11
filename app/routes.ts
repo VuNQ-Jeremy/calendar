@@ -156,6 +156,10 @@ export default [
     // `:studentId` below and be treated as a student filter. React Router ranks static segments
     // above dynamic ones regardless of order, but the order documents the intent.
     route('logs/notifications', 'routes/logs.notifications.tsx'),
+    // Same static-segment-before-dynamic reasoning as logs/notifications above: without this,
+    // /logs/activity would match :studentId and be treated as a student filter. See the
+    // cacheKeyForPath early-return in src/lib/route-cache.ts for the other half of that fix.
+    route('logs/activity', 'routes/logs.activity.tsx'),
     route('logs/:studentId?', 'routes/logs.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),

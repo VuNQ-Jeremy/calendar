@@ -42,17 +42,24 @@ const ALL = 'all';
  * not pay for it — so switching tabs is a route change. Exported so both screens render the same
  * strip and neither can drift out of step with the other.
  */
-export function LogsTabs({ value }: { value: 'schedule' | 'notifications' }) {
+const LOGS_TAB_PATH: Record<'schedule' | 'notifications' | 'activity', string> = {
+  schedule: '/logs',
+  notifications: '/logs/notifications',
+  activity: '/logs/activity',
+};
+
+export function LogsTabs({ value }: { value: 'schedule' | 'notifications' | 'activity' }) {
   const navigate = useNavigate();
   const { t } = useLang();
   return (
     <div style={{ marginBottom: 16 }}>
       <DS.Tabs
         value={value}
-        onChange={(id) => navigate(id === 'notifications' ? '/logs/notifications' : '/logs')}
+        onChange={(id) => navigate(LOGS_TAB_PATH[id as keyof typeof LOGS_TAB_PATH] ?? '/logs')}
         tabs={[
           { id: 'schedule', label: t('logs_tab_schedule') },
           { id: 'notifications', label: t('logs_tab_notifications') },
+          { id: 'activity', label: t('logs_tab_activity') },
         ]}
       />
     </div>
