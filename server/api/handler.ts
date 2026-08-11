@@ -47,6 +47,7 @@ export type ApiCtx<L extends AuthLevel = AuthLevel> = {
   user: UserFor<L>;
   db: Db;
   env: Env;
+  ctx: ExecutionContext;
   request: Request;
   params: Record<string, string | undefined>;
 };
@@ -108,6 +109,7 @@ export function withAuth<T, L extends AuthLevel>(
         user: user as UserFor<L>,
         db: createDb(env),
         env,
+        ctx: execCtx,
         request,
         params: params as Record<string, string | undefined>,
       });
@@ -135,11 +137,12 @@ export function withPublic<T>(
 ): (args: LoaderFunctionArgs | ActionFunctionArgs) => Promise<Response> {
   return async ({ request, params, context }) => {
     if (request.method === 'OPTIONS') return corsPreflight();
-    const env = context.get(cloudflareCtx).env;
+    const { env, ctx: execCtx } = context.get(cloudflareCtx);
     try {
       const result = await handler({
         db: createDb(env),
         env,
+        ctx: execCtx,
         request,
         params: params as Record<string, string | undefined>,
       });

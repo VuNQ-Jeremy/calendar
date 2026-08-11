@@ -11,6 +11,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
+import { notifyFeedbackIssue } from '../../server/services/github';
 import { FeedbackInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -29,7 +30,7 @@ export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
 clientLoader.hydrate = true as const;
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
-  const env = context.get(cloudflareCtx).env;
+  const { env, ctx } = context.get(cloudflareCtx);
   await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
@@ -47,7 +48,8 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   if (intent === 'create') {
     const parsed = FeedbackInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await feedbackSvc.create(db, parsed.data);
+    const row = await feedbackSvc.create(db, parsed.data);
+    notifyFeedbackIssue(env, ctx, row);
     return { ok: true };
   }
 

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0177 — 2026-08-11
+Feedback submissions now open a GitHub issue, which fires a claude.ai brainstorm session on the report
+
 ## v0.0176 — 2026-08-11
 Logs gains a Notifications tab: a 7-day forecast of every message the cron will send, across all four jobs and both channels, with who it reaches, whether anyone is actually reachable, and whether it has already gone. Plus the 30-day sent ledger and a run-now trigger per job.
 

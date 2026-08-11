@@ -18,12 +18,17 @@
  * token means every send no-ops, no secret means the webhook rejects everything.
  * calendar-test deliberately carries only the secret, so e2e can exercise the
  * webhook while nothing is ever delivered to a real person's Zalo.
+ *
+ * GITHUB_FEEDBACK_TOKEN opens a GitHub issue for every new feedback row
+ * (server/services/github.ts), which in turn fires a claude.ai brainstorm
+ * routine. Optional and fails safe: unset means the issue post silently no-ops.
  */
 interface Env {
   ANTHROPIC_API_KEY?: string;
   PIXABAY_API_KEY?: string;
   ZALO_BOT_TOKEN?: string;
   ZALO_WEBHOOK_SECRET?: string;
+  GITHUB_FEEDBACK_TOKEN?: string;
 }
 
 /** Injected by vite `define` — see vite.config.ts. e.g. "v0.0042" */
