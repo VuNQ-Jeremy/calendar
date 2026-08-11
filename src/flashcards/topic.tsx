@@ -15,7 +15,8 @@ import {
   typeEligible,
   wordsWithImages,
 } from '../../shared/logic/flashcards';
-import { ImagePicker, resolvePickedImageKey } from './image-picker.js';
+import { ImageStrip, emptyChoice, loadChoice, resolvePickedImageKey } from './image-strip.js';
+import type { ImageChoice } from './image-strip.js';
 import { isDue } from '../../shared/logic/review';
 import { FlipGame } from './game-flip.jsx';
 import { QuizGame } from './game-quiz.jsx';
@@ -487,8 +488,12 @@ function WordModal({
 }) {
   const { t } = useLang();
   const [status, setStatus] = React.useState<'idle' | 'busy' | 'failed'>('idle');
-  const [picking, setPicking] = React.useState(false);
   const [committing, setCommitting] = React.useState(false);
+  // A word being edited already has its picture stored, so it seeds the strip as the selection.
+  const [choice, setChoice] = React.useState<ImageChoice>(() => ({
+    ...emptyChoice,
+    picked: draft.imageKey ? { kind: 'stored', imageKey: draft.imageKey } : null,
+  }));
   const lastFilled = React.useRef<string>(draft.id ? draft.word.trim().toLowerCase() : '');
   // Latest draft, readable inside the async debounce without re-triggering the
   // effect — lets us leave fields alone that the user has already filled in.
@@ -531,6 +536,57 @@ function WordModal({
     }, 500);
     return () => clearTimeout(handle);
   }, [draft.word, canUseAi, setDraft]);
+
+  /** What the strip searches for: the word, narrowed by whatever definition is on screen. */
+  const imageQuery = `${draft.word} ${draft.definitionEn}`.trim();
+
+  // First batch once the word settles, so the strip is populated without the teacher asking. Only
+  // for a word with no picture yet — an edit keeps showing what it was saved with until a search
+  // is asked for, rather than jumping to a grid of alternatives.
+  //
+  // The query is read through a ref and the effect depends on the WORD alone. Depending on the
+  // query itself meant the AI auto-fill landing a definition mid-debounce cleared the pending
+  // timeout, so the search could be postponed indefinitely while the fields settled — the strip
+  // just sat empty.
+  const queryRef = React.useRef(imageQuery);
+  queryRef.current = imageQuery;
+  const searchedFor = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const w = draft.word.trim();
+    if (!w || draft.imageKey || searchedFor.current === w) return;
+    const handle = setTimeout(async () => {
+      searchedFor.current = w;
+      setChoice((c) => ({ ...c, status: 'loading' }));
+      const patch = await loadChoice(queryRef.current || w);
+      setChoice((c) => ({ ...c, ...patch }));
+    }, 600);
+    return () => clearTimeout(handle);
+  }, [draft.word, draft.imageKey]);
+
+  /**
+   * Apply a strip change. Editing one word, so a stock pick is committed to our bucket right away:
+   * the teacher leaves the dialog with a real stored picture rather than a provider thumbnail that
+   * might not survive the copy. The highlight moves first so the tap feels instant, and is rolled
+   * back if the copy fails.
+   */
+  const applyChoice = async (patch: Partial<ImageChoice>) => {
+    setChoice((c) => ({ ...c, ...patch }));
+    if (!('picked' in patch)) return;
+    const next = patch.picked;
+    if (!next) {
+      set('imageKey', '');
+      return;
+    }
+    if (next.kind === 'stored') {
+      set('imageKey', next.imageKey);
+      return;
+    }
+    setCommitting(true);
+    const key = await resolvePickedImageKey(next);
+    setCommitting(false);
+    if (key) set('imageKey', key);
+    else setChoice((c) => ({ ...c, picked: null, status: 'failed' }));
+  };
 
   // Manual retry — an explicit user action, so it overwrites the meaning. The other two fields
   // are still only filled when blank: they are what the user would have edited by hand.
@@ -634,62 +690,16 @@ function WordModal({
         </div>
         <div className="mochi-field">
           <label className="mochi-field__label">{t('fc_img_label')}</label>
-          <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
-            {draft.imageKey ? (
-              <img
-                src={flashcardImagePath(draft.imageKey) ?? undefined}
-                alt=""
-                style={{
-                  width: 84,
-                  height: 63,
-                  flex: 'none',
-                  objectFit: 'cover',
-                  borderRadius: 8,
-                  display: 'block',
-                }}
-              />
-            ) : (
-              <span className="mochi-field__hint" style={{ flex: 1 }}>
-                {t('fc_img_none')}
-              </span>
-            )}
-            <FBtn
-              variant="secondary"
-              disabled={!draft.word.trim() || committing}
-              onClick={() => setPicking(true)}
-            >
-              {committing
-                ? t('fc_img_saving')
-                : draft.imageKey
-                  ? t('fc_img_change')
-                  : t('fc_img_find')}
-            </FBtn>
-            {draft.imageKey && (
-              <FIB label={t('fc_img_remove')} size="md" onClick={() => set('imageKey', '')}>
-                <MIcon name="trash" size={16} />
-              </FIB>
-            )}
-          </div>
+          <ImageStrip query={imageQuery} choice={choice} onChange={applyChoice} />
+          <span className="mochi-field__hint">
+            {committing
+              ? t('fc_img_saving')
+              : choice.picked
+                ? t('fc_img_hint_selected')
+                : t('fc_img_hint_none')}
+          </span>
         </div>
       </Modal>
-      {/* A sibling of the dialog, never a child: `.m-overlay` sets a backdrop-filter, which makes
-          it the containing block for fixed-position descendants, so a picker nested inside this
-          dialog's scrollable body could be clipped by it. */}
-      {picking && (
-        <ImagePicker
-          initialQuery={`${draft.word} ${draft.definitionEn}`.trim()}
-          onClose={() => setPicking(false)}
-          onPick={async (picked) => {
-            setPicking(false);
-            // Editing one word, so commit right away: the teacher sees the real stored picture
-            // rather than a provider thumbnail that might not survive the copy.
-            setCommitting(true);
-            const key = await resolvePickedImageKey(picked);
-            setCommitting(false);
-            if (key) set('imageKey', key);
-          }}
-        />
-      )}
     </>
   );
 }

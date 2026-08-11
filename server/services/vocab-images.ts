@@ -49,7 +49,8 @@ const UA = 'MochiFlashcards/1.0 (+https://calendar.ngqv0712.workers.dev)';
 // ---- Search ----
 
 /**
- * Candidates for one search phrase, best source first.
+ * Candidates for one search phrase, best source first. `page` walks to a different batch for the
+ * same phrase, which is what the strip's retry button does.
  *
  * Never throws for want of results: an empty array means "nothing found", which the picker shows
  * as an empty state. It throws only when every configured source failed outright, so the caller
@@ -58,19 +59,24 @@ const UA = 'MochiFlashcards/1.0 (+https://calendar.ngqv0712.workers.dev)';
 export async function searchImages(
   env: Env,
   query: string,
+  page = 1,
 ): Promise<{ candidates: VocabImageCandidate[]; provider: VocabImageProvider }> {
   if (env.PIXABAY_API_KEY) {
     try {
-      const candidates = await searchPixabay(env.PIXABAY_API_KEY, query);
+      const candidates = await searchPixabay(env.PIXABAY_API_KEY, query, page);
       if (candidates.length) return { candidates, provider: 'pixabay' };
     } catch {
       // Bot check, rate limit, or an outage — Openverse below is the whole point of the fallback.
     }
   }
-  return { candidates: await searchOpenverse(query), provider: 'openverse' };
+  return { candidates: await searchOpenverse(query, page), provider: 'openverse' };
 }
 
-async function searchPixabay(apiKey: string, query: string): Promise<VocabImageCandidate[]> {
+async function searchPixabay(
+  apiKey: string,
+  query: string,
+  page: number,
+): Promise<VocabImageCandidate[]> {
   const url = new URL('https://pixabay.com/api/');
   url.searchParams.set('key', apiKey);
   url.searchParams.set('q', query.slice(0, 100));
@@ -79,6 +85,7 @@ async function searchPixabay(apiKey: string, query: string): Promise<VocabImageC
   // The audience is children; this is not optional.
   url.searchParams.set('safesearch', 'true');
   url.searchParams.set('per_page', String(CANDIDATES));
+  url.searchParams.set('page', String(page));
   url.searchParams.set('lang', 'en');
 
   const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': UA } });
@@ -106,11 +113,12 @@ async function searchPixabay(apiKey: string, query: string): Promise<VocabImageC
  * nothing we return nothing rather than quietly widening to licences that would require
  * attribution the UI has nowhere to show.
  */
-async function searchOpenverse(query: string): Promise<VocabImageCandidate[]> {
+async function searchOpenverse(query: string, page: number): Promise<VocabImageCandidate[]> {
   const url = new URL('https://api.openverse.org/v1/images/');
   url.searchParams.set('q', query.slice(0, 100));
   url.searchParams.set('license', 'cc0,pdm');
   url.searchParams.set('page_size', String(CANDIDATES));
+  url.searchParams.set('page', String(page));
   // Wildly tall or wide pictures look broken in a 3:2 card.
   url.searchParams.set('aspect_ratio', 'wide,square');
 

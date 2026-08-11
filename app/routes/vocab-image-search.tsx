@@ -34,7 +34,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
 
   try {
-    const { candidates, provider } = await searchImages(env, parsed.data.query);
+    const { candidates, provider } = await searchImages(env, parsed.data.query, parsed.data.page);
     return Response.json({ data: { candidates, provider } });
   } catch {
     return Response.json({ error: 'search_failed' }, { status: 502 });

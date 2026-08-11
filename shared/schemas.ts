@@ -359,6 +359,12 @@ export type VocabImageProvider = z.infer<typeof VocabImageProvider>;
 
 export const VocabImageSearchInput = z.object({
   query: z.string().trim().min(1).max(200),
+  /**
+   * Which batch of results to return. The picker's retry button walks this forward to show a
+   * different set for the same phrase; past the last page the provider returns nothing, which the
+   * caller reads as "wrap back to 1".
+   */
+  page: z.coerce.number().int().min(1).max(20).default(1),
 });
 export type VocabImageSearchInput = z.infer<typeof VocabImageSearchInput>;
 

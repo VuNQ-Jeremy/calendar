@@ -13,11 +13,14 @@ export type SearchResult =
   | { ok: true; candidates: VocabImageCandidate[]; provider: VocabImageProvider }
   | { ok: false };
 
-/** Candidates for one phrase. `ok: true` with an empty list means "nothing matched". */
-export async function searchVocabImages(query: string): Promise<SearchResult> {
+/**
+ * Candidates for one phrase. `ok: true` with an empty list means "nothing matched" — which is also
+ * what a `page` past the end of the results returns, so a caller walking pages knows to wrap.
+ */
+export async function searchVocabImages(query: string, page = 1): Promise<SearchResult> {
   try {
     const fd = new FormData();
-    fd.set('payload', JSON.stringify({ query }));
+    fd.set('payload', JSON.stringify({ query, page }));
     const res = await fetch('/vocab-image-search', { method: 'POST', body: fd });
     if (!res.ok) return { ok: false };
     const json = (await res.json()) as {

@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * The generated-topic review list finds a picture for every word on its own.
+ * The generated-topic review list finds pictures for every word on its own, and offers each row a
+ * strip of alternatives with one already chosen.
  *
  * This is the one image path that cannot run on calendar-test: word generation needs
  * ANTHROPIC_API_KEY, which that environment deliberately does not have (the AI buttons are hidden
@@ -65,11 +66,21 @@ test.describe('vocabulary: generated topics arrive with pictures', () => {
       })
       .toBeGreaterThan(0);
 
-    // Swapping a picture opens the picker seeded from the model's own search keywords.
-    await rows.first().locator('button:has(img), button:has(svg)').first().click();
-    const picker = page.locator('.m-dialog:has(.m-dialog__title:text-is("Choose a picture"))');
-    await expect(picker).toBeVisible({ timeout: 20_000 });
-    await picker.getByRole('button', { name: 'Cancel' }).click();
+    // Each row offers a strip of alternatives with the auto-attached one already outlined, so the
+    // teacher can change a picture in one tap without leaving the list.
+    const firstRow = rows.first();
+    const tiles = firstRow.locator('button:has(> img)');
+    expect(await tiles.count()).toBeGreaterThan(1);
+    await expect(firstRow.locator('button[aria-pressed="true"]:has(> img)')).toHaveCount(1);
+
+    // Picking a different tile moves the outline, and nothing is committed until save.
+    await tiles.nth(1).click();
+    await expect(tiles.nth(1)).toHaveAttribute('aria-pressed', 'true');
+    await expect(firstRow.locator('button[aria-pressed="true"]:has(> img)')).toHaveCount(1);
+
+    // Tapping the outlined tile again clears it — a word can be saved with no picture.
+    await tiles.nth(1).click();
+    await expect(firstRow.locator('button[aria-pressed="true"]:has(> img)')).toHaveCount(0);
 
     // Leave without saving — nothing is written, which is what makes this safe on production.
     // Escape, not the footer's "Cancel": in the review step that button steps back to the setup
