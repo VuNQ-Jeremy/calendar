@@ -720,7 +720,7 @@ describe('sendPlannedNotification()', () => {
     expect(await push.alreadySent(d, [key])).toEqual(new Set());
   });
 
-  it('refuses a garden penalty: only the sweep can actually charge the stage', async () => {
+  it('charges the stage before announcing it, so a garden penalty is not a lie', async () => {
     const d = db();
     await setNotifPrefs(d, { gardenAlerts: true });
     const student = await seedStudentWithDevice(
@@ -749,12 +749,28 @@ describe('sendPlannedNotification()', () => {
     });
     const key = ledgerKey.gardenPenalty(assignmentId, student.id);
 
-    expect(await sendPlannedNotification(d, undefined, key, now)).toEqual({
-      ok: false,
-      reason: 'not_sendable',
-    });
-    expect(sent).toEqual([]);
-    expect(await push.alreadySent(d, [key])).toEqual(new Set());
+    // Nothing is charged until the button is pressed.
+    const chargedBefore = await d
+      .select()
+      .from(gardenEvents)
+      .where(eq(gardenEvents.refId, assignmentId));
+    expect(chargedBefore).toHaveLength(0);
+
+    const result = await sendPlannedNotification(d, undefined, key, now);
+    expect(result).toMatchObject({ ok: true, channel: 'push' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body).toContain('quá hạn');
+
+    // The stage the message announces has actually been taken, so the student's own screen agrees.
+    const chargedAfter = await d
+      .select()
+      .from(gardenEvents)
+      .where(eq(gardenEvents.refId, assignmentId));
+    expect(chargedAfter).toHaveLength(1);
+    expect(chargedAfter[0].type).toBe('deadline_drop');
+
+    // And the ledger key stops the cron re-announcing it at 08:00.
+    expect(await push.alreadySent(d, [key])).toEqual(new Set([key]));
   });
 
   it('sends a Zalo row over Zalo, not over push', async () => {

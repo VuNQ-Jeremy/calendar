@@ -307,32 +307,39 @@ function PlannedRow({ row, showTime }: { row: PlannedNotification; showTime: boo
 /**
  * Send this one row now, rather than its whole job.
  *
- * Only offered where it can honestly be done: a row already sent has nothing to send, a row with no
- * recipients would burn its key on nobody, and a garden penalty announces a stage loss that only the
- * sweep actually charges — so that one is left to the job button, which sweeps first.
+ * Always rendered, even where it cannot be pressed. A missing button reads as a missing feature —
+ * the reason a particular row cannot be sent (nobody to send to, already gone) is information the
+ * admin came here for, so it is shown on a disabled control rather than by absence.
  */
 function SendOneButton({ row }: { row: PlannedNotification }) {
   const fetcher = useFetcher<{ ok?: boolean; sent?: number; reason?: string }>();
   const { t } = useLang();
   const [confirm, confirmNode] = useConfirm();
 
-  if (row.alreadySent || !row.deliverable || row.jobKind === 'garden-penalty') {
-    return <span style={{ minWidth: 96 }} />;
-  }
+  const blocked = row.alreadySent
+    ? 'already_sent'
+    : !row.deliverable
+      ? 'no_recipients'
+      : row.target.count === 0
+        ? 'no_recipients'
+        : null;
 
   const send = async () => {
     // Sending early is the normal case for this button — it also marks the key, so the scheduled
     // run will skip it. Say so plainly rather than surprising an admin with a silent cancellation.
+    // A penalty additionally charges the stage it announces, which is a write worth naming.
     const ok = await confirm({
       title: t('logs_notif_send_one'),
-      message: t('logs_notif_send_one_confirm', {
-        who:
-          row.target.kind === 'group-chat'
-            ? t('logs_notif_target_group')
-            : String(row.target.count),
-        when: fmtStamp(row.fireAtIct),
-      }),
+      message:
+        t('logs_notif_send_one_confirm', {
+          who:
+            row.target.kind === 'group-chat'
+              ? t('logs_notif_target_group')
+              : String(row.target.count),
+          when: fmtStamp(row.fireAtIct),
+        }) + (row.jobKind === 'garden-penalty' ? ` ${t('logs_notif_send_penalty_note')}` : ''),
       confirmLabel: t('logs_notif_send_one'),
+      danger: row.jobKind === 'garden-penalty',
     });
     if (!ok) return;
     const fd = new FormData();
@@ -350,7 +357,12 @@ function SendOneButton({ row }: { row: PlannedNotification }) {
           {t(`logs_notif_send_fail_${fetcher.data?.reason ?? 'not_found'}`)}
         </span>
       )}
-      <NBtn variant="ghost" disabled={busy} onClick={send}>
+      <NBtn
+        variant="ghost"
+        disabled={busy || blocked !== null}
+        title={blocked ? t(`logs_notif_send_fail_${blocked}`) : undefined}
+        onClick={send}
+      >
         {busy ? t('logs_notif_sending') : t('logs_notif_send_one')}
       </NBtn>
       {confirmNode}

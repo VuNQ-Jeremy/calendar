@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0180 — 2026-08-11
+Logs notifications: Send is now on every forecast row, including garden alerts. A penalty charges the stage it announces before sending, so the message is true on arrival; rows that cannot be sent show a disabled button with the reason instead of no button.
+
 ## v0.0179 — 2026-08-11
 New activity_log table (append-only, 90-day-purged) captures logins/failed-logins/logouts/password changes/invite redemptions, with an AsyncLocalStorage collector wired through every request and cron tick so services can log later stages' mutations without threading a logger through every call.
 

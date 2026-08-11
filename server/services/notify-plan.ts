@@ -747,20 +747,9 @@ async function gardenRows(
 
 // ---- Sending one planned row ----
 
-/**
- * A garden penalty announces something the SWEEP does, not something the plant already shows.
- *
- * Every other alert in the system reports state a reader could derive for themselves — a wilting
- * plant is wilting whether or not anyone was told. `garden-penalty` is the exception: the stage is
- * only actually lost when `runGardenSweep` writes the transition, so sending that message on its own
- * would tell a child their plant dropped a stage while their own screen still shows it intact.
- * Sending it individually is therefore refused; the job button beside it sweeps first, then sends.
- */
-const NOT_INDIVIDUALLY_SENDABLE: ReadonlySet<JobKind> = new Set(['garden-penalty']);
-
 export type SendOneResult =
   | { ok: true; key: string; channel: Channel; sent: number }
-  | { ok: false; reason: 'not_found' | 'already_sent' | 'no_recipients' | 'not_sendable' };
+  | { ok: false; reason: 'not_found' | 'already_sent' | 'no_recipients' };
 
 /**
  * Send exactly one planned notification now, and mark its key.
@@ -773,6 +762,15 @@ export type SendOneResult =
  * The key is marked sent exactly as the cron would mark it, so the scheduled run will skip this row.
  * That is the intended meaning of the button — "send this one now instead of later" — and it is why
  * the UI confirms before firing a row whose time has not come.
+ *
+ * **Garden penalties sweep first.** Every other alert reports state a reader could derive for
+ * themselves — a wilting plant is wilting whether or not anyone was told. A penalty is the one that
+ * announces something only the sweep performs, so sending it alone would tell a child their plant
+ * dropped a stage while their own screen still shows it intact. `runGardenSweep` therefore runs
+ * before the send, which charges the stage and makes the message true. It charges every other
+ * penalty due at the same moment, which is not a side effect worth avoiding: that is precisely the
+ * work the 08:00 run would do, and it sends nothing and marks no keys, so everyone else still gets
+ * their own notification on schedule.
  */
 export async function sendPlannedNotification(
   db: Db,
@@ -784,9 +782,14 @@ export async function sendPlannedNotification(
   const row = plan.planned.find((p) => p.key === key);
   if (!row) return { ok: false, reason: 'not_found' };
   if (row.alreadySent) return { ok: false, reason: 'already_sent' };
-  if (NOT_INDIVIDUALLY_SENDABLE.has(row.jobKind)) return { ok: false, reason: 'not_sendable' };
 
   const to = recipients.get(key) ?? { tokens: [], chatIds: [] };
+  // Before the send, not after: the sweep is what makes the penalty real, and a failed send must
+  // not leave a charged stage nobody was told about... but an uncharged message would be a lie,
+  // and the ledger key below is what stops a retry from charging twice.
+  if (row.jobKind === 'garden-penalty' && to.tokens.length) {
+    await gardenSvc.runGardenSweep(db, at.toISOString());
+  }
   let sent = 0;
   if (row.channel === 'push') {
     if (!to.tokens.length) return { ok: false, reason: 'no_recipients' };

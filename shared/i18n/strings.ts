@@ -1444,7 +1444,8 @@ const en_strings = {
   logs_notif_send_fail_not_found: 'no longer scheduled',
   logs_notif_send_fail_already_sent: 'already sent',
   logs_notif_send_fail_no_recipients: 'nobody to send to',
-  logs_notif_send_fail_not_sendable: 'use Run now',
+  logs_notif_send_penalty_note:
+    'This one also charges the stage it announces, so the message is true when it arrives — along with any other penalty due at the same moment, which is the work the 08:00 run would have done anyway.',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -2806,7 +2807,8 @@ export const STRINGS = {
     logs_notif_send_fail_not_found: 'không còn trong lịch',
     logs_notif_send_fail_already_sent: 'đã gửi rồi',
     logs_notif_send_fail_no_recipients: 'không có ai để gửi',
-    logs_notif_send_fail_not_sendable: 'dùng nút Chạy ngay',
+    logs_notif_send_penalty_note:
+      'Tin này còn trừ luôn bậc cây mà nó thông báo, để lời nhắn là đúng khi tới nơi — cùng với mọi hình phạt khác đến hạn cùng lúc, vốn là phần việc lần chạy 08:00 sẽ làm.',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 
