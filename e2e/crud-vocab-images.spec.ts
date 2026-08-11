@@ -275,6 +275,46 @@ test.describe('CRUD: vocabulary word pictures', () => {
     await deleteTopic(page, k, topic);
   });
 
+  test('word picture: saving while the second copy is still in flight waits for it', async ({
+    page,
+  }) => {
+    // The first copy goes through untouched; the SECOND is held so the teacher's Save lands while
+    // it is still in flight. That is the real click cadence — tap, refresh, tap, Save — and the
+    // draft used to be posted with whatever key had already landed, i.e. the pre-refresh picture.
+    const committed: Record<number, string> = {};
+    let seen = 0;
+    await page.route('**/vocab-image-commit', async (route) => {
+      const n = ++seen;
+      const res = await route.fetch();
+      const body = await res.text();
+      committed[n] = JSON.parse(body).data.imageKey as string;
+      if (n === 2) await new Promise((r) => setTimeout(r, 4_000));
+      await route.fulfill({ response: res, body });
+    });
+
+    const { k, topic, slug, strip } = await wordDialogOnFreshTopic(page, 'compass');
+
+    await strip.locator(TILE).first().click();
+    await expect.poll(() => committed[1], { timeout: 60_000 }).toBeTruthy();
+    const fresh = await refreshPicker(page, strip);
+    // Tap the new picture and save IMMEDIATELY — no waiting for its copy to finish.
+    await fresh.click();
+    const post = k.posted(slug);
+    await k.submit().click();
+    await post;
+    expect(committed[2]).toBeTruthy();
+    expect(committed[1]).not.toBe(committed[2]);
+
+    // ---- The word holds the picture that was tapped last, not the one that had already landed ----
+    const thumb = page
+      .locator('.fc-wcard', { hasText: 'compass' })
+      .locator('img[src^="/flashcard-"]');
+    await expect(thumb).toBeVisible();
+    await expect(thumb).toHaveAttribute('src', `/flashcard-images/${fileOf(committed[2])}`);
+
+    await deleteTopic(page, k, topic);
+  });
+
   test('word picture: a copy that fails leaves no picture, not the previous one', async ({
     page,
   }) => {

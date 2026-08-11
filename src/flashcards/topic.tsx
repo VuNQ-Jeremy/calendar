@@ -545,6 +545,20 @@ function WordModal({
    * and whichever copy finished last decided what the word was saved with.
    */
   const commitSeq = React.useRef(0);
+  /** The copy currently in flight, if any. Save awaits this rather than racing it. */
+  const pendingCommit = React.useRef<Promise<void> | null>(null);
+  /**
+   * `draft.imageKey`, readable synchronously. The commit below finishes inside an awaited promise,
+   * and the React re-render that would refresh `draftRef` hasn't happened yet at that moment — so
+   * a Save that just awaited the commit would still post the OLD draft. This ref is written in the
+   * same breath as `set('imageKey', …)` and is what Save actually sends.
+   */
+  const imageKeyRef = React.useRef(draft.imageKey);
+  const setImageKey = (k: string) => {
+    imageKeyRef.current = k;
+    set('imageKey', k);
+  };
+  const [saving, setSaving] = React.useState(false);
 
   /**
    * Apply a picker change. Editing one word, so a stock pick is committed to our bucket right away:
@@ -554,31 +568,47 @@ function WordModal({
    *
    * Every pick — including clearing one — takes a ticket, and a commit that comes back holding a
    * stale ticket is dropped on the floor. `imageKey` therefore always describes the LAST cell the
-   * teacher tapped, which is the only thing the save button can honestly write.
+   * teacher tapped, which is the only thing Save can honestly write.
    */
-  const applyChoice = async (patch: Partial<ImageChoice>) => {
+  const applyChoice = (patch: Partial<ImageChoice>) => {
     setChoice((c) => ({ ...c, ...patch }));
     if (!('picked' in patch)) return;
     const ticket = ++commitSeq.current;
     const next = patch.picked;
     if (!next) {
-      set('imageKey', '');
+      setImageKey('');
       return;
     }
     if (next.kind === 'stored') {
-      set('imageKey', next.imageKey);
+      setImageKey(next.imageKey);
       return;
     }
-    const key = await resolvePickedImageKey(next);
-    // Superseded while the bytes were in flight: the newer pick owns the draft now.
-    if (ticket !== commitSeq.current) return;
-    if (key) set('imageKey', key);
-    else {
-      // A copy that failed leaves the word with NO picture. Leaving the previous key in place is
-      // what let a failed pick save the picture chosen before it, with nothing outlined to say so.
-      set('imageKey', '');
-      setChoice((c) => ({ ...c, picked: null, status: 'failed' }));
-    }
+    // Stored in the ref BEFORE the first await, so a Save clicked in the very next tick already
+    // has something to wait on.
+    pendingCommit.current = (async () => {
+      const key = await resolvePickedImageKey(next);
+      // Superseded while the bytes were in flight: the newer pick owns the draft now.
+      if (ticket !== commitSeq.current) return;
+      if (key) setImageKey(key);
+      else {
+        // A copy that failed leaves the word with NO picture. Leaving the previous key in place is
+        // what let a failed pick save the picture chosen before it, with nothing outlined to say so.
+        setImageKey('');
+        setChoice((c) => ({ ...c, picked: null, status: 'failed' }));
+      }
+    })();
+  };
+
+  /**
+   * Save, but never mid-copy. Tapping a picture and hitting Save inside the second or two its copy
+   * takes used to post the draft with whatever key had landed EARLIER — the pre-refresh picture,
+   * outlined nowhere. Waiting costs at most that same second or two, with the button disabled so
+   * the pause is visible rather than mysterious.
+   */
+  const save = async () => {
+    setSaving(true);
+    await pendingCommit.current;
+    onSave({ ...draftRef.current, imageKey: imageKeyRef.current });
   };
 
   // Manual retry — an explicit user action, so it overwrites the meaning. The other two fields
@@ -619,8 +649,8 @@ function WordModal({
             <FBtn variant="secondary" onClick={onClose}>
               {t('cancel')}
             </FBtn>
-            <FBtn variant="primary" onClick={() => onSave(draft)}>
-              {t('save')}
+            <FBtn variant="primary" disabled={saving} onClick={save}>
+              {saving ? t('fc_img_saving') : t('save')}
             </FBtn>
           </>
         }
