@@ -465,6 +465,9 @@ function WordModal({
     ...emptyChoice,
     picked: draft.imageKey ? { kind: 'stored', imageKey: draft.imageKey } : null,
   }));
+  // The picture the word came in with — read once, since a pick overwrites `draft.imageKey`
+  // immediately. The picker keeps a cell for it, so trying a candidate is undoable until save.
+  const originalImageKey = React.useRef(draft.imageKey || null).current;
   const lastFilled = React.useRef<string>(draft.id ? draft.word.trim().toLowerCase() : '');
   // Latest draft, readable inside the async debounce without re-triggering the
   // effect — lets us leave fields alone that the user has already filled in.
@@ -511,20 +514,21 @@ function WordModal({
   /** What the strip searches for: the word, narrowed by whatever definition is on screen. */
   const imageQuery = `${draft.word} ${draft.definitionEn}`.trim();
 
-  // First batch once the word settles, so the strip is populated without the teacher asking. Only
-  // for a word with no picture yet — an edit keeps showing what it was saved with until a search
-  // is asked for, rather than jumping to a grid of alternatives.
+  // First batch once the word settles, so the picker is populated without the teacher asking. A
+  // word that already has a picture searches too: its own picture holds the first cell whatever
+  // comes back, so alternatives beside it cost nothing — and the other eight cells would otherwise
+  // sit empty for a teacher who opened the dialog precisely to change the picture.
   //
   // The query is read through a ref and the effect depends on the WORD alone. Depending on the
   // query itself meant the AI auto-fill landing a definition mid-debounce cleared the pending
-  // timeout, so the search could be postponed indefinitely while the fields settled — the strip
+  // timeout, so the search could be postponed indefinitely while the fields settled — the picker
   // just sat empty.
   const queryRef = React.useRef(imageQuery);
   queryRef.current = imageQuery;
   const searchedFor = React.useRef<string | null>(null);
   React.useEffect(() => {
     const w = draft.word.trim();
-    if (!w || draft.imageKey || searchedFor.current === w) return;
+    if (!w || searchedFor.current === w) return;
     const handle = setTimeout(async () => {
       searchedFor.current = w;
       setChoice((c) => ({ ...c, status: 'loading' }));
@@ -532,7 +536,7 @@ function WordModal({
       setChoice((c) => ({ ...c, ...patch }));
     }, 600);
     return () => clearTimeout(handle);
-  }, [draft.word, draft.imageKey]);
+  }, [draft.word]);
 
   /**
    * Apply a picker change. Editing one word, so a stock pick is committed to our bucket right away:
@@ -664,7 +668,13 @@ function WordModal({
           </div>
           <div className="mochi-field fc-word-split__pics">
             <label className="mochi-field__label">{t('fc_img_label')}</label>
-            <ImageStrip query={imageQuery} choice={choice} onChange={applyChoice} layout="grid" />
+            <ImageStrip
+              query={imageQuery}
+              choice={choice}
+              onChange={applyChoice}
+              layout="grid"
+              originalImageKey={originalImageKey}
+            />
           </div>
         </div>
       </Modal>

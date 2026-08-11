@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0169 — 2026-08-11
+Word editor: the word's own picture keeps its cell in the picker, so trying a candidate no longer takes it off screen and one tap goes back to it. The picker also searches on open for a word that already has a picture.
+
 ## v0.0168 — 2026-08-11
 CLAUDE.md: widen the manual-trigger test rule from the staging e2e suite to every test suite, including npm test, and name the fast static checks that are free to run.
 

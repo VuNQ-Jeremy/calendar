@@ -102,17 +102,37 @@ test.describe('CRUD: vocabulary word pictures', () => {
     await expect(page.getByText('kitchen', { exact: true }).first()).toBeVisible();
     await page.getByRole('button', { name: 'Exit' }).click();
 
-    // ---- Remove it by tapping the outlined tile; the word stays ----
+    // ---- The saved picture survives trying a candidate, and comes off on a second tap ----
     await row.getByRole('button', { name: 'Edit' }).click();
     const edit = k.dlgOf('Edit word');
     const editStrip = edit.locator('.mochi-field:has(> label:text-is("Picture"))');
     // An edit seeds the picker with the stored picture as the selection, so it is already outlined.
     const stored = editStrip.locator('button:has(> img[src^="/flashcard-images/"])');
+    await expect(stored).toHaveAttribute('aria-pressed', 'true');
+
+    // The dialog searches on open even though the word has a picture, so alternatives arrive beside
+    // it. Trying one moves the outline but must NOT take the word's own picture off screen — the
+    // switch stays undoable until save.
+    const alt = editStrip.locator(`${TILE}:not(:has(img[src^="/flashcard-images/"]))`).first();
+    await expect(alt).toBeVisible({ timeout: 45_000 });
+    const recommitted = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === '/vocab-image-commit' && r.ok(),
+      { timeout: 60_000 },
+    );
+    await alt.click();
+    await recommitted;
     await expect(stored).toBeVisible();
+    await expect(stored).toHaveAttribute('aria-pressed', 'false');
+    await expect(editStrip.locator(`${TILE}[aria-pressed="true"]`)).toHaveCount(1);
+
+    // One tap goes back to it...
     await stored.click();
-    // Its tile goes with it, leaving nothing selected — the word can now be saved with no picture.
-    await expect(stored).toHaveCount(0);
+    await expect(stored).toHaveAttribute('aria-pressed', 'true');
+    // ...and tapping the outlined picture clears it, leaving nothing selected. The tile stays put,
+    // so the teacher can still change their mind before saving.
+    await stored.click();
     await expect(editStrip.locator(`${TILE}[aria-pressed="true"]`)).toHaveCount(0);
+    await expect(stored).toBeVisible();
     post = k.posted(slug);
     await edit.locator('.m-dialog__foot .mochi-btn.is-primary').click();
     await post;

@@ -33,9 +33,17 @@ export type ImageChoice = {
   page: number;
   picked: PickedImage | null;
   status: 'idle' | 'loading' | 'failed';
+  /** A search has come back at least once — tells "nothing matched" from "nobody has asked yet". */
+  searched: boolean;
 };
 
-export const emptyChoice: ImageChoice = { candidates: [], page: 1, picked: null, status: 'idle' };
+export const emptyChoice: ImageChoice = {
+  candidates: [],
+  page: 1,
+  picked: null,
+  status: 'idle',
+  searched: false,
+};
 
 /** Fetch one batch. Exported so callers can pre-fill a list of strips without mounting them. */
 export async function loadChoice(query: string, page = 1): Promise<Partial<ImageChoice>> {
@@ -45,10 +53,10 @@ export async function loadChoice(query: string, page = 1): Promise<Partial<Image
   if (res.candidates.length === 0 && page > 1) {
     const first = await searchVocabImages(query, 1);
     return first.ok
-      ? { candidates: first.candidates, page: 1, status: 'idle' }
+      ? { candidates: first.candidates, page: 1, status: 'idle', searched: true }
       : { status: 'failed' };
   }
-  return { candidates: res.candidates, page, status: 'idle' };
+  return { candidates: res.candidates, page, status: 'idle', searched: true };
 }
 
 const TILE_W = 76;
@@ -79,6 +87,7 @@ export function ImageStrip({
   onChange,
   compact = false,
   layout = 'strip',
+  originalImageKey = null,
 }: {
   /** What to search for — the model's own keywords, or the word itself. */
   query: string;
@@ -87,6 +96,12 @@ export function ImageStrip({
   /** Smaller tiles for a dense list. Ignored by the `grid` layout, whose tiles size themselves. */
   compact?: boolean;
   layout?: 'strip' | 'grid';
+  /**
+   * The picture the word is *saved* with, if any. It holds its own cell for as long as the picker
+   * is open, whether or not it is the current pick, so trying a candidate never takes the picture
+   * the word actually has off screen and one tap puts it back.
+   */
+  originalImageKey?: string | null;
 }) {
   const { t } = useLang();
   const grid = layout === 'grid';
@@ -128,26 +143,33 @@ export function ImageStrip({
     placeItems: 'center',
   });
 
-  const stored = choice.picked?.kind === 'stored' ? choice.picked : null;
-  // A stored tile takes one of the nine cells, so the batch beside it is trimmed by one rather
+  // The word's own picture keeps a cell of its own; without one, a stored *pick* still needs a
+  // leading tile, since nothing already in our bucket comes back from a search.
+  const storedKey =
+    originalImageKey ?? (choice.picked?.kind === 'stored' ? choice.picked.imageKey : null);
+  const storedPicked = choice.picked?.kind === 'stored' && choice.picked.imageKey === storedKey;
+  // The stored tile takes one of the nine cells, so the batch beside it is trimmed by one rather
   // than spilling onto a fourth row.
   const candidates = grid
-    ? choice.candidates.slice(0, CELLS - (stored ? 1 : 0))
+    ? choice.candidates.slice(0, CELLS - (storedKey ? 1 : 0))
     : choice.candidates;
 
   const tiles = (
     <>
-      {/* A stored picture — the one this word was saved with — is not among the search results, so
-          it gets its own leading tile: already selected, and cleared by tapping it. */}
-      {stored && (
+      {/* Outlined while it is the pick, and then tapping it clears the picture; unoutlined once a
+          candidate has taken over, where tapping it goes back to what the word already had. */}
+      {storedKey && (
         <button
           type="button"
-          title={t('fc_img_remove')}
-          onClick={() => onChange({ picked: null })}
-          style={tile(true)}
+          title={storedPicked ? t('fc_img_remove') : t('fc_img_keep')}
+          aria-pressed={storedPicked}
+          onClick={() =>
+            onChange({ picked: storedPicked ? null : { kind: 'stored', imageKey: storedKey } })
+          }
+          style={tile(storedPicked)}
         >
           <img
-            src={flashcardImagePath(stored.imageKey) ?? undefined}
+            src={flashcardImagePath(storedKey) ?? undefined}
             alt=""
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
@@ -179,7 +201,8 @@ export function ImageStrip({
       ? t('fc_img_searching')
       : choice.status === 'failed'
         ? t('fc_img_failed')
-        : candidates.length === 0 && !stored
+        : // Only once a search has actually come back — an untouched picker is empty, not empty-handed.
+          choice.searched && candidates.length === 0
           ? t('fc_img_no_results')
           : null;
 
@@ -197,7 +220,7 @@ export function ImageStrip({
   );
 
   if (grid) {
-    const blanks = Math.max(0, CELLS - candidates.length - (stored ? 1 : 0));
+    const blanks = Math.max(0, CELLS - candidates.length - (storedKey ? 1 : 0));
     return (
       <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
