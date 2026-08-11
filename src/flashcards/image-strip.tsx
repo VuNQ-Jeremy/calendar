@@ -3,6 +3,7 @@ import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { searchVocabImages, commitVocabImage } from '../lib/vocab-image-client.js';
 import { flashcardImagePath } from '../../shared/logic/flashcards';
+import { VOCAB_IMAGE_MAX_PAGE } from '../../shared/schemas';
 import type { VocabImageCandidate } from '../../shared/schemas';
 
 /**
@@ -108,10 +109,10 @@ export function ImageStrip({
   const w = compact ? TILE_W * 0.8 : TILE_W;
   const h = compact ? TILE_H * 0.8 : TILE_H;
 
-  /** Next batch for the same phrase. */
+  /** Next batch for the same phrase, wrapping at the cap the server would reject anyway. */
   const retry = async () => {
     onChange({ status: 'loading' });
-    onChange(await loadChoice(query, choice.page + 1));
+    onChange(await loadChoice(query, choice.page >= VOCAB_IMAGE_MAX_PAGE ? 1 : choice.page + 1));
   };
 
   const isPicked = (c: VocabImageCandidate) =>

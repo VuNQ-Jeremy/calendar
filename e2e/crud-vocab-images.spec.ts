@@ -44,6 +44,9 @@ test.describe('CRUD: vocabulary word pictures', () => {
     const f = k.on(dlg);
     await f.textIn('Word').fill('kitchen');
     await f.textIn('Meaning (Vietnamese)').fill('nhà bếp');
+    // Filled BEFORE the refresh below, to pin that the definition stays out of the search: sending
+    // it along starved Pixabay into fuzzy per-word matching — teacups for "teacher".
+    await f.textIn('English definition').fill('a room where food is cooked');
 
     const strip = dlg.locator('.mochi-field:has(> label:text-is("Picture"))');
     // Wait for the batch rather than a fixed timeout: this is a live third-party search.
@@ -65,7 +68,9 @@ test.describe('CRUD: vocabulary word pictures', () => {
       { timeout: 45_000 },
     );
     await strip.getByRole('button', { name: 'Show different pictures' }).click();
-    await refreshed;
+    const refreshReq = (await refreshed).request().postData() ?? '';
+    // The search is the WORD, not the word plus the definition on screen.
+    expect(refreshReq).toContain('"query":"kitchen"');
     await expect(strip.locator(TILE).first()).toBeVisible({ timeout: 45_000 });
 
     // Picking commits the picture to R2 straight away, so the response is the thing to await.
@@ -312,6 +317,44 @@ test.describe('CRUD: vocabulary word pictures', () => {
     await expect(thumb).toBeVisible();
     await expect(thumb).toHaveAttribute('src', `/flashcard-images/${fileOf(committed[2])}`);
 
+    await deleteTopic(page, k, topic);
+  });
+
+  test('word picture: running off the end of the results wraps back to the first page', async ({
+    page,
+  }) => {
+    // Serve page 2 as empty — what the providers answer past their last page — and let everything
+    // else through live. Refreshing used to strand the picker here: the page number only ever
+    // grew, so once any page came back empty or rejected, every later refresh failed too and the
+    // teacher stared at "could not load pictures" over a grid of stale tiles.
+    const pagesAsked: number[] = [];
+    await page.route('**/vocab-image-search', async (route) => {
+      const m = (route.request().postData() ?? '').match(/"page":(\d+)/);
+      const pageNo = m ? Number(m[1]) : 1;
+      pagesAsked.push(pageNo);
+      if (pageNo === 2) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { candidates: [], provider: 'openverse' } }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    const { k, topic, strip } = await wordDialogOnFreshTopic(page, 'meadow');
+
+    await strip.getByRole('button', { name: 'Show different pictures' }).click();
+    // The empty page 2 wraps straight back to page 1: pictures stay on screen, no error shown.
+    await expect(strip.locator(TILE).first()).toBeVisible({ timeout: 45_000 });
+    await expect(strip.getByText('Could not load pictures', { exact: false })).toHaveCount(0);
+    await expect.poll(() => pagesAsked, { timeout: 30_000 }).toEqual([1, 2, 1]);
+
+    // And the walk is not stuck: the NEXT refresh asks page 2 again, not page 3.
+    await strip.getByRole('button', { name: 'Show different pictures' }).click();
+    await expect.poll(() => pagesAsked.slice(3), { timeout: 30_000 }).toEqual([2, 1]);
+
+    await k.dlgOf('Add word').getByRole('button', { name: 'Close' }).click();
     await deleteTopic(page, k, topic);
   });
 

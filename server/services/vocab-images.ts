@@ -123,6 +123,11 @@ async function searchOpenverse(query: string, page: number): Promise<VocabImageC
   url.searchParams.set('aspect_ratio', 'wide,square');
 
   const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': UA } });
+  // Walking past the last page is not an outage. Openverse answers a page beyond the results with
+  // a 404 — or, past the depth anonymous clients may read at all, a 400/401 — and the picker's
+  // retry button will eventually get there on any query. An empty batch is what the client reads
+  // as "wrap back to page 1"; the throw below is reserved for genuine failures.
+  if (res.status === 400 || res.status === 401 || res.status === 404) return [];
   if (!res.ok) throw new Error(`openverse ${res.status}`);
 
   const json = (await res.json()) as {

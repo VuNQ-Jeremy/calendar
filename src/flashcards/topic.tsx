@@ -511,20 +511,21 @@ function WordModal({
     return () => clearTimeout(handle);
   }, [draft.word, canUseAi, setDraft]);
 
-  /** What the strip searches for: the word, narrowed by whatever definition is on screen. */
-  const imageQuery = `${draft.word} ${draft.definitionEn}`.trim();
+  /**
+   * What the picker searches for: the word, and ONLY the word.
+   *
+   * It used to append the English definition to "narrow" the search, and that did the opposite.
+   * Pixabay finds nearly nothing matching a whole sentence, so it switches to fuzzy per-word
+   * matching — "teacher a person who teaches students in a school" came back as teacups and
+   * garden photos, where bare "teacher" returns exactly what it says. Disambiguating a homograph
+   * is what the grid of nine alternatives is for.
+   */
+  const imageQuery = draft.word.trim();
 
   // First batch once the word settles, so the picker is populated without the teacher asking. A
   // word that already has a picture searches too: its own picture holds the first cell whatever
   // comes back, so alternatives beside it cost nothing — and the other eight cells would otherwise
   // sit empty for a teacher who opened the dialog precisely to change the picture.
-  //
-  // The query is read through a ref and the effect depends on the WORD alone. Depending on the
-  // query itself meant the AI auto-fill landing a definition mid-debounce cleared the pending
-  // timeout, so the search could be postponed indefinitely while the fields settled — the picker
-  // just sat empty.
-  const queryRef = React.useRef(imageQuery);
-  queryRef.current = imageQuery;
   const searchedFor = React.useRef<string | null>(null);
   React.useEffect(() => {
     const w = draft.word.trim();
@@ -532,7 +533,7 @@ function WordModal({
     const handle = setTimeout(async () => {
       searchedFor.current = w;
       setChoice((c) => ({ ...c, status: 'loading' }));
-      const patch = await loadChoice(queryRef.current || w);
+      const patch = await loadChoice(w);
       setChoice((c) => ({ ...c, ...patch }));
     }, 600);
     return () => clearTimeout(handle);
