@@ -3,7 +3,7 @@ import { flashcardResults, staff, students } from '../db/schema';
 import { createDb, type Db } from '../db/index';
 import { expandEvents } from '../../shared/logic/recurrence';
 import { iso, parseISO, toMin } from '../../shared/logic/dates';
-import { previewLine } from '../../shared/logic/preview';
+import { previewLine, type ComposedPreview } from '../../shared/logic/preview';
 import * as classesSvc from './classes';
 import * as eventsSvc from './events';
 import * as gardenSvc from './garden';
@@ -39,8 +39,8 @@ import * as vocabImages from './vocab-images';
 /** Indochina Time. UTC+7, no daylight saving. */
 const ICT_OFFSET_MIN = 7 * 60;
 
-/** "Now", as the school experiences it. */
-function ictNow(at: Date): { dateIso: string; minutes: number } {
+/** "Now", as the school experiences it. Exported for the forecast in ./notify-plan.ts. */
+export function ictNow(at: Date): { dateIso: string; minutes: number } {
   const shifted = new Date(at.getTime() + ICT_OFFSET_MIN * 60_000);
   return {
     dateIso: shifted.toISOString().slice(0, 10),
@@ -48,10 +48,208 @@ function ictNow(at: Date): { dateIso: string; minutes: number } {
   };
 }
 
-function addDaysIso(dateIso: string, days: number): string {
+export function addDaysIso(dateIso: string, days: number): string {
   const d = parseISO(dateIso);
   d.setDate(d.getDate() + days);
   return iso(d);
+}
+
+/** For an occurrence nobody wrote a preview for. previewLine returns '' for it. */
+export const EMPTY_PREVIEW: ComposedPreview = { focusText: '', vocabTopic: null, tests: [] };
+
+/* ── The shared vocabulary: keys, buckets, message texts ─────────────────────────────────────
+ *
+ * Everything in this section was lifted verbatim out of the four jobs below so that a SECOND
+ * reader of the same rules exists: `server/services/notify-plan.ts` forecasts what these jobs will
+ * send, and the /logs Notifications tab shows that forecast to an admin. A forecast that composes
+ * its own keys or its own wording would drift the first time a string here is reworded, and it
+ * would drift silently — the whole value of the tab is that it cannot lie about what will be sent.
+ *
+ * So: the jobs own WHEN and WHO. This section owns WHAT and under WHICH KEY. Both callers share it.
+ */
+
+/** Every idempotency key format in the system, in one place. See migrations/0015_notifications.sql. */
+export const ledgerKey = {
+  class: (eventId: string, date: string) => `class:${eventId}:${date}`,
+  zaloClass: (eventId: string, date: string) => `zalo-class:${eventId}:${date}`,
+  study: (studentId: string, bucket: string) => `study:${studentId}:${bucket}`,
+  preview: (eventId: string, date: string) => `preview:${eventId}:${date}`,
+  previewStaff: (date: string) => `preview-staff:${date}`,
+  zaloPreview: (eventId: string, date: string) => `zalo-preview:${eventId}:${date}`,
+  zaloPreviewStaff: (date: string) => `zalo-preview-staff:${date}`,
+  gardenPenalty: (assignmentId: string, studentId: string) =>
+    `garden-penalty:${assignmentId}:${studentId}`,
+  gardenWilt: (studentId: string, dateIso: string) => `garden-wilt:${studentId}:${dateIso}`,
+  gardenDrop: (studentId: string, nextDropDate: string) =>
+    `garden-drop:${studentId}:${nextDropDate}`,
+} as const;
+
+/**
+ * The study nudge's bucket: `YYYY-MM-A` for the 1st-14th, `YYYY-MM-B` from the 15th.
+ *
+ * Called a "week" key where it is used, but it is halves of a month — so the real guarantee is at
+ * most two nudges per student per month, not one per seven days. Named honestly here.
+ */
+export function studyBucket(dateIso: string): string {
+  return dateIso.slice(0, 8) + (Number(dateIso.slice(8, 10)) < 15 ? 'A' : 'B');
+}
+
+/** The fields the composers below read off an occurrence. */
+type OccLike = {
+  id: string;
+  title: string;
+  date: string;
+  start?: string | null;
+  location?: string | null;
+  classId?: string | null;
+};
+
+/** A composed push message minus `to` — the caller fans one body out over its tokens. */
+export type PushBody = Omit<ExpoPushMessage, 'to'>;
+
+export function classReminderPush(
+  cls: { name: string },
+  ev: OccLike,
+  focus: string | undefined,
+): PushBody {
+  return {
+    title: cls.name,
+    // The event's own "Room or place", not the class's — `classes.room` is gone from the
+    // product. Same information for anyone who filled the field in, and it is per-occurrence.
+    //
+    // Only the teacher's own words go in this body, not the whole preview: a notification arriving
+    // 30 minutes ahead is a nudge out the door, and the tests are already on the schedule screen.
+    body:
+      `${ev.title} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}` +
+      (focus ? ` · ${focus.slice(0, 90)}` : ''),
+    // Deep link straight to the occurrence, not the app's home screen.
+    data: { url: `/event/${ev.id}`, kind: 'class' },
+    channelId: 'reminders',
+  };
+}
+
+/**
+ * Longer than the push body on purpose. A push is a glanceable nudge for someone who is already
+ * going; this is the message a parent reads to decide whether their child is ready.
+ */
+export function classReminderZaloText(
+  cls: { name: string },
+  ev: OccLike,
+  focus: string | undefined,
+): string {
+  return (
+    `🔔 ${cls.name} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}` +
+    (focus ? `\n${focus.slice(0, 300)}` : '')
+  );
+}
+
+export function studyNudgePush(): PushBody {
+  return {
+    title: 'Mochi',
+    body: 'A few minutes of vocabulary?',
+    // Deliberately still `/flashcards`, even though the screen now lives at /vocabulary.
+    // The Worker deploys the moment we push, but phones only pick up the matching JS on
+    // their second launch after an OTA publish — sending the new path immediately would
+    // dead-end notification taps on every not-yet-updated install. Installed builds
+    // handle this path natively and updated ones remap it (mobile/lib/push.ts). Safe to
+    // switch to /vocabulary once no pre-rename build is in the wild.
+    data: { url: '/flashcards', kind: 'study' },
+    channelId: 'study',
+  };
+}
+
+export function previewPush(cls: { name: string }, ev: OccLike, line: string): PushBody {
+  return {
+    title: `Ngày mai: ${cls.name}${ev.start ? ` · ${ev.start}` : ''}`,
+    // A session with nothing written about it still deserves the reminder that it exists.
+    body: line || 'Chuẩn bị cho buổi học ngày mai nhé!',
+    // `/schedule` only exists in builds carrying the student-schedule OTA. Do not ship this job
+    // before that update has propagated, or taps dead-end on not-found — the same hazard the
+    // digest's `/flashcards` comment above describes.
+    data: { url: '/schedule', kind: 'preview' },
+    channelId: 'reminders',
+  };
+}
+
+export function previewZaloText(cls: { name: string }, ev: OccLike, line: string): string {
+  return (
+    `📚 Ngày mai: ${cls.name}${ev.start ? ` · ${ev.start}` : ''}\n` +
+    (line || 'Chuẩn bị cho buổi học ngày mai nhé!')
+  );
+}
+
+/**
+ * The whole-day list a teacher gets. One composer, two consumers: the push body caps it at 400
+ * characters and the Zalo text at 1500. Before this was hoisted the same `.map().join()` existed
+ * twice in `runEveningPreview`, which is exactly the kind of duplication that drifts.
+ */
+export function staffDaySummary(
+  occs: OccLike[],
+  classes: { id: string; name: string }[],
+  previews: Map<string, ComposedPreview>,
+): string {
+  return occs
+    .map((ev) => {
+      const cls = classes.find((c) => c.id === ev.classId);
+      const line = previewLine(
+        previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW,
+        60,
+      );
+      return `${ev.start ?? '--:--'} ${cls?.name ?? ev.title}${line ? ` — ${line}` : ''}`;
+    })
+    .join('\n');
+}
+
+export function staffPreviewPush(count: number, summary: string): PushBody {
+  return {
+    title: `Ngày mai có ${count} buổi dạy`,
+    // Expo truncates long bodies itself; cap it so the notification tray stays readable.
+    body: summary.slice(0, 400),
+    data: { url: '/calendar', kind: 'preview' },
+    channelId: 'reminders',
+  };
+}
+
+export function staffPreviewZaloText(count: number, summary: string): string {
+  return `Ngày mai có ${count} buổi dạy\n${summary.slice(0, 1500)}`;
+}
+
+/** One garden alert: which student, under which key, saying what. */
+export type GardenAlert = { studentId: string; key: string; body: string };
+
+/**
+ * Turn a sweep's findings into alerts. Pure, so the forecast can run it over
+ * `gardenSvc.forecastGardenSweep`'s output and get the same rows the cron would send.
+ */
+export function gardenAlertsFrom(sweep: gardenSvc.SweepResult, dateIso: string): GardenAlert[] {
+  return [
+    ...sweep.penalties.map((p) => ({
+      studentId: p.studentId,
+      key: ledgerKey.gardenPenalty(p.assignmentId, p.studentId),
+      body: `Bài "${p.topicName}" đã quá hạn — cây tụt 1 bậc 😢. Cố lên bài sau nhé!`,
+    })),
+    ...sweep.wiltingToday.map((w) => ({
+      studentId: w.studentId,
+      key: ledgerKey.gardenWilt(w.studentId, dateIso),
+      body: 'Cây của em đang héo 🥀 Học 1 bài từ vựng để cứu cây nhé!',
+    })),
+    ...sweep.droppingTomorrow.map((d) => ({
+      studentId: d.studentId,
+      key: ledgerKey.gardenDrop(d.studentId, d.nextDropDate),
+      body: 'Mai cây sẽ tụt 1 bậc ⚠️ Học ngay 1 bài để giữ cây nào!',
+    })),
+  ];
+}
+
+export function gardenAlertPush(body: string): PushBody {
+  return {
+    title: 'Vườn cây của em',
+    body,
+    // `/flashcards`, not `/vocabulary`, for the same reason as the study nudge above: a phone
+    // running a pre-rename bundle would dead-end on the new path.
+    data: { url: '/flashcards', kind: 'garden' },
+    channelId: 'study',
+  };
 }
 
 /**
@@ -90,9 +288,9 @@ export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env
 
   // Idempotency FIRST: with a 15-minute cron and a 30-minute window every occurrence is seen
   // two or three times, and duplicate class alerts are how an app gets muted.
-  const keys = upcoming.map((e) => `class:${e.id}:${e.date}`);
+  const keys = upcoming.map((e) => ledgerKey.class(e.id, e.date));
   const sent = await push.alreadySent(db, keys);
-  const todo = upcoming.filter((e) => !sent.has(`class:${e.id}:${e.date}`));
+  const todo = upcoming.filter((e) => !sent.has(ledgerKey.class(e.id, e.date)));
 
   const classes = await classesSvc.list(db);
   // What the teacher said this occurrence covers, so the reminder is about the lesson and not just
@@ -116,36 +314,18 @@ export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env
     const tokens = await push.tokensForAccounts(db, accountIds);
     // The key is marked done even when nobody is registered: the occurrence HAS been processed,
     // and re-processing it on the next tick would just re-find nobody.
-    doneKeys.push(`class:${ev.id}:${ev.date}`);
+    doneKeys.push(ledgerKey.class(ev.id, ev.date));
     if (!tokens.length) continue;
 
-    // Only the teacher's own words go in this body, not the whole preview: a notification arriving
-    // 30 minutes ahead is a nudge out the door, and the tests are already on the schedule screen.
     const focus = previews.get(previewSvc.previewKey(ev.id, ev.date))?.focusText.trim();
-
-    for (const to of tokens) {
-      messages.push({
-        to,
-        title: cls.name,
-        // The event's own "Room or place", not the class's — `classes.room` is gone from the
-        // product. Same information for anyone who filled the field in, and it is per-occurrence.
-        body:
-          `${ev.title} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}` +
-          (focus ? ` · ${focus.slice(0, 90)}` : ''),
-        // Deep link straight to the occurrence, not the app's home screen.
-        data: { url: `/event/${ev.id}`, kind: 'class' },
-        channelId: 'reminders',
-      });
-    }
+    const body = classReminderPush(cls, ev, focus);
+    for (const to of tokens) messages.push({ to, ...body });
   }
 
   await deliver(db, messages);
   await push.markSent(db, doneKeys);
 
   // ---- Zalo: the same reminder, to the parents of the students in each class ----
-  //
-  // Longer than the push body on purpose. A push is a glanceable nudge for someone who is
-  // already going; this is the message a parent reads to decide whether their child is ready.
   await zaloDeliver(
     db,
     env,
@@ -155,11 +335,9 @@ export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env
       const focus = previews.get(previewSvc.previewKey(ev.id, ev.date))?.focusText.trim();
       return [
         {
-          key: `zalo-class:${ev.id}:${ev.date}`,
+          key: ledgerKey.zaloClass(ev.id, ev.date),
           chatIds: () => zalo.chatsForParentsOfStudents(db, cls.studentIds),
-          text:
-            `🔔 ${cls.name} · ${ev.start}${ev.location ? ` · ${ev.location}` : ''}` +
-            (focus ? `\n${focus.slice(0, 300)}` : ''),
+          text: classReminderZaloText(cls, ev, focus),
         },
       ];
     }),
@@ -190,31 +368,20 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
     const all = await db.select({ id: students.id, name: students.name }).from(students);
     const quiet = all.filter((s) => !active.has(s.id));
 
-    // Weekly key: the ISO week-ish bucket keeps this to one nudge per student per 7 days even
-    // though the digest runs daily.
-    const weekKey = dateIso.slice(0, 8) + (Number(dateIso.slice(8, 10)) < 15 ? 'A' : 'B');
-    const keys = quiet.map((s) => `study:${s.id}:${weekKey}`);
+    // Half-month bucket: keeps this to at most two nudges per student per month even though the
+    // digest runs daily. See `studyBucket`.
+    const weekKey = studyBucket(dateIso);
+    const keys = quiet.map((s) => ledgerKey.study(s.id, weekKey));
     const sent = await push.alreadySent(db, keys);
 
     for (const s of quiet) {
-      const key = `study:${s.id}:${weekKey}`;
+      const key = ledgerKey.study(s.id, weekKey);
       if (sent.has(key)) continue;
       doneKeys.push(key);
       const accountIds = await push.accountIdsForStudents(db, [s.id]);
+      const body = studyNudgePush();
       for (const to of await push.tokensForAccounts(db, accountIds)) {
-        messages.push({
-          to,
-          title: 'Mochi',
-          body: 'A few minutes of vocabulary?',
-          // Deliberately still `/flashcards`, even though the screen now lives at /vocabulary.
-          // The Worker deploys the moment we push, but phones only pick up the matching JS on
-          // their second launch after an OTA publish — sending the new path immediately would
-          // dead-end notification taps on every not-yet-updated install. Installed builds
-          // handle this path natively and updated ones remap it (mobile/lib/push.ts). Safe to
-          // switch to /vocabulary once no pre-rename build is in the wild.
-          data: { url: '/flashcards', kind: 'study' },
-          channelId: 'study',
-        });
+        messages.push({ to, ...body });
       }
     }
   }
@@ -269,11 +436,11 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
   const doneKeys: string[] = [];
 
   // ---- Students: one message per occurrence, idempotent per (event, date) ----
-  const studentKeys = occs.map((e) => `preview:${e.id}:${e.date}`);
+  const studentKeys = occs.map((e) => ledgerKey.preview(e.id, e.date));
   const sentStudent = await push.alreadySent(db, studentKeys);
 
   for (const ev of occs) {
-    const key = `preview:${ev.id}:${ev.date}`;
+    const key = ledgerKey.preview(ev.id, ev.date);
     if (sentStudent.has(key)) continue;
     const cls = classes.find((c) => c.id === ev.classId);
     if (!cls) continue;
@@ -287,51 +454,22 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
     if (!tokens.length) continue;
 
     const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW);
-    for (const to of tokens) {
-      messages.push({
-        to,
-        title: `Ngày mai: ${cls.name}${ev.start ? ` · ${ev.start}` : ''}`,
-        // A session with nothing written about it still deserves the reminder that it exists.
-        body: line || 'Chuẩn bị cho buổi học ngày mai nhé!',
-        // `/schedule` only exists in builds carrying the student-schedule OTA. Do not ship this job
-        // before that update has propagated, or taps dead-end on not-found — the same hazard the
-        // digest's `/flashcards` comment above describes.
-        data: { url: '/schedule', kind: 'preview' },
-        channelId: 'reminders',
-      });
-    }
+    const body = previewPush(cls, ev, line);
+    for (const to of tokens) messages.push({ to, ...body });
   }
 
   // ---- Staff: one summary for the day ----
   //
   // Every staff account gets it. There is no class_staff table (a deliberate absence — the school
   // has one or two teachers), so "the teachers of this class" is not a query that exists yet.
-  const staffKey = `preview-staff:${tomorrow}`;
+  const staffKey = ledgerKey.previewStaff(tomorrow);
   if (!(await push.alreadySent(db, [staffKey])).has(staffKey)) {
     doneKeys.push(staffKey);
     const staffIds = (await db.select({ id: staff.id }).from(staff)).map((r) => r.id);
     const tokens = await push.tokensForAccounts(db, await push.accountIdsForStaff(db, staffIds));
     if (tokens.length) {
-      const summary = occs
-        .map((ev) => {
-          const cls = classes.find((c) => c.id === ev.classId);
-          const line = previewLine(
-            previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW,
-            60,
-          );
-          return `${ev.start ?? '--:--'} ${cls?.name ?? ev.title}${line ? ` — ${line}` : ''}`;
-        })
-        .join('\n');
-      for (const to of tokens) {
-        messages.push({
-          to,
-          title: `Ngày mai có ${occs.length} buổi dạy`,
-          // Expo truncates long bodies itself; cap it so the notification tray stays readable.
-          body: summary.slice(0, 400),
-          data: { url: '/calendar', kind: 'preview' },
-          channelId: 'reminders',
-        });
-      }
+      const body = staffPreviewPush(occs.length, staffDaySummary(occs, classes, previews));
+      for (const to of tokens) messages.push({ to, ...body });
     }
   }
 
@@ -344,18 +482,6 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
   // class's own preview — in the class group chat if one is linked, otherwise privately to each
   // parent, never both, or a parent with a child in the group gets it twice. Staff get the same
   // whole-day summary they get on push.
-  const staffSummary = () =>
-    occs
-      .map((ev) => {
-        const cls = classes.find((c) => c.id === ev.classId);
-        const line = previewLine(
-          previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW,
-          60,
-        );
-        return `${ev.start ?? '--:--'} ${cls?.name ?? ev.title}${line ? ` — ${line}` : ''}`;
-      })
-      .join('\n');
-
   const zaloJobs: ZaloJob[] = [];
   for (const ev of occs) {
     const cls = classes.find((c) => c.id === ev.classId);
@@ -363,16 +489,14 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
     const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW);
     const groupChat = await zalo.chatForClass(db, cls.id);
     zaloJobs.push({
-      key: `zalo-preview:${ev.id}:${ev.date}`,
+      key: ledgerKey.zaloPreview(ev.id, ev.date),
       chatIds: async () =>
         groupChat ? [groupChat] : zalo.chatsForParentsOfStudents(db, cls.studentIds),
-      text:
-        `📚 Ngày mai: ${cls.name}${ev.start ? ` · ${ev.start}` : ''}\n` +
-        (line || 'Chuẩn bị cho buổi học ngày mai nhé!'),
+      text: previewZaloText(cls, ev, line),
     });
   }
   zaloJobs.push({
-    key: `zalo-preview-staff:${tomorrow}`,
+    key: ledgerKey.zaloPreviewStaff(tomorrow),
     chatIds: async () =>
       zalo.chatsForAccounts(
         db,
@@ -381,7 +505,7 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
           (await db.select({ id: staff.id }).from(staff)).map((r) => r.id),
         ),
       ),
-    text: `Ngày mai có ${occs.length} buổi dạy\n${staffSummary().slice(0, 1500)}`,
+    text: staffPreviewZaloText(occs.length, staffDaySummary(occs, classes, previews)),
   });
   await zaloDeliver(db, env, zaloJobs);
 
@@ -408,24 +532,7 @@ export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<nu
   const messages: ExpoPushMessage[] = [];
   const doneKeys: string[] = [];
 
-  type Alert = { studentId: string; key: string; body: string };
-  const alerts: Alert[] = [
-    ...sweep.penalties.map((p) => ({
-      studentId: p.studentId,
-      key: `garden-penalty:${p.assignmentId}:${p.studentId}`,
-      body: `Bài "${p.topicName}" đã quá hạn — cây tụt 1 bậc 😢. Cố lên bài sau nhé!`,
-    })),
-    ...sweep.wiltingToday.map((w) => ({
-      studentId: w.studentId,
-      key: `garden-wilt:${w.studentId}:${dateIso}`,
-      body: 'Cây của em đang héo 🥀 Học 1 bài từ vựng để cứu cây nhé!',
-    })),
-    ...sweep.droppingTomorrow.map((d) => ({
-      studentId: d.studentId,
-      key: `garden-drop:${d.studentId}:${d.nextDropDate}`,
-      body: 'Mai cây sẽ tụt 1 bậc ⚠️ Học ngay 1 bài để giữ cây nào!',
-    })),
-  ];
+  const alerts = gardenAlertsFrom(sweep, dateIso);
 
   const sent = await push.alreadySent(
     db,
@@ -438,16 +545,9 @@ export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<nu
     // processed, exactly as in the class sweep above.
     doneKeys.push(alert.key);
     const accountIds = await push.accountIdsForStudents(db, [alert.studentId]);
+    const body = gardenAlertPush(alert.body);
     for (const to of await push.tokensForAccounts(db, accountIds)) {
-      messages.push({
-        to,
-        title: 'Vườn cây của em',
-        body: alert.body,
-        // `/flashcards`, not `/vocabulary`, for the same reason as the study nudge above: a phone
-        // running a pre-rename bundle would dead-end on the new path.
-        data: { url: '/flashcards', kind: 'garden' },
-        channelId: 'study',
-      });
+      messages.push({ to, ...body });
     }
   }
 
@@ -455,9 +555,6 @@ export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<nu
   await push.markSent(db, doneKeys);
   return messages.length;
 }
-
-/** For an occurrence nobody wrote a preview for. previewLine returns '' for it. */
-const EMPTY_PREVIEW = { focusText: '', vocabTopic: null, tests: [] };
 
 /**
  * One Zalo message, to whoever `chatIds` resolves to, once per `key` ever.

@@ -59,6 +59,8 @@ test.describe('logs: admin diagnostics', () => {
     // ---- Admin: the row is in the sidebar's admin group and the word is listed. ----
     await page.goto('/logs');
     await expect(page.getByRole('heading', { name: 'Logs' })).toBeVisible();
+    // The tab strip sits above the cards; the Notifications tab has its own spec.
+    await expect(page.getByRole('tab', { name: 'Review schedule' })).toBeVisible();
     const section = page.locator('.mochi-card', { hasText: 'Scheduled words' });
     await expect(section).toContainText('ephemeral');
     await expect(section).toContainText(topic);

@@ -6,6 +6,12 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0176 — 2026-08-11
+Logs gains a Notifications tab: a 7-day forecast of every message the cron will send, across all four jobs and both channels, with who it reaches, whether anyone is actually reachable, and whether it has already gone. Plus the 30-day sent ledger and a run-now trigger per job.
+
+## v0.0176 — 2026-08-11
+Logs: a second tab forecasts what the next cron run will actually send (and to whom), plus a manual trigger per job; recently-sent ledger rows are decoded back into readable labels.
+
 ## v0.0175 — 2026-08-11
 Logs: an admin-only diagnostics page. First section lists every word on the review ladder — most overdue first, with its step, due date and lifetime tally — filterable by student. Read-only, and gated by requireAdmin rather than just a hidden nav row.
 

@@ -45,6 +45,20 @@ This table used to carry a `/homework` row. That module was dropped in favour of
 
 ## Deliberate omissions, with reasons
 
+**Admin diagnostics: /logs, both tabs** (the review schedule, added 2026-08; the notification
+forecast, added 2026-08-11).
+
+Web-admin-only on purpose, and unlikely to change. The page exists to answer "what does the database
+actually say?" — it reads every student's review schedule and every family's Zalo pairing at once, and
+the notification tab additionally offers a trigger per cron job. That is a desk activity: it is looked
+at while fixing something, next to a terminal, not on a phone between classes. Porting it would mean
+rebuilding two dense tables and four job cards in React Native for an audience of one admin who has a
+laptop.
+
+Nothing is blocked if that judgement changes: the forecast is `server/services/notify-plan.ts`
+returning plain JSON (`planNotifications` / `listSentLog`), so a mobile version is one `/api/logs/...`
+resource route plus a screen, with no logic to reimplement.
+
 **Ôn tập / spaced-repetition review** (web: the "Ôn tập hôm nay" card on `/vocabulary`, the
 `?review=1` deck on a topic, and the sidebar badge — added 2026-08).
 

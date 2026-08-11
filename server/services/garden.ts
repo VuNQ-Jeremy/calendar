@@ -1171,6 +1171,29 @@ export interface SweepResult {
  * correctness.
  */
 export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResult> {
+  return sweepCore(db, nowIso, true);
+}
+
+/**
+ * The same enumeration, writing nothing — what the /logs notification forecast needs.
+ *
+ * Garden alerts are the one job whose subjects cannot be learned by asking: the cron discovers them
+ * as a by-product of charging penalties and persisting decay. So the sweep takes a `persist` flag
+ * and the forecast runs it with `false`: identical queries, identical `applyDeadlineCheck` /
+ * `plantView` derivation, zero `writeTransition` and zero `snapshotMonth`.
+ *
+ * **One known divergence.** If a student misses TWO deadlines the same morning, the real sweep's
+ * second `applyDeadlineCheck` sees the state its own first penalty already wrote, while the forecast
+ * evaluates both against the untouched plant — so the forecast can predict one penalty the real run
+ * will decline to charge. Rare (it needs two assignments expiring on the same day for one student)
+ * and it only ever over-reports, which is why the UI labels this section a forecast rather than a
+ * schedule.
+ */
+export async function forecastGardenSweep(db: Db, nowIso: string): Promise<SweepResult> {
+  return sweepCore(db, nowIso, false);
+}
+
+async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<SweepResult> {
   const vnToday = ictDateOf(nowIso);
   const settings = await getGardenSettings(db);
   const out: SweepResult = {
@@ -1232,6 +1255,10 @@ export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResul
       const plant = await getPlant(db, m.studentId);
       const t = applyDeadlineCheck(plant?.state ?? null, settings, nowIso, a.id);
       if (!t) continue;
+      if (!persist) {
+        out.penalties.push({ studentId: m.studentId, assignmentId: a.id, topicName: a.topicName });
+        continue;
+      }
       try {
         await writeTransition(db, m.studentId, t, nowIso);
         out.penalties.push({ studentId: m.studentId, assignmentId: a.id, topicName: a.topicName });
@@ -1257,13 +1284,15 @@ export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResul
   for (const row of stale) {
     const state = rowToState(row);
     const t = settlePlant(state, settings, vnToday);
-    if (t.events.length) {
+    if (persist && t.events.length) {
       try {
         await writeTransition(db, row.studentId, t, nowIso);
       } catch (err) {
         if (!String(err).includes('UNIQUE')) throw err;
       }
     }
+    // Derived from the UNSETTLED state either way, so the reported wilt/drop days are the same
+    // whether or not the decay above was persisted.
     const view = plantView(state, settings, vnToday);
     if (view.wiltStartDate === vnToday) {
       out.wiltingToday.push({ studentId: row.studentId, nextDropDate: view.nextDropDate });
@@ -1274,8 +1303,8 @@ export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResul
   }
 
   // 3. Month rollover. Checked every day rather than only on the 1st, so a cron that missed the
-  // rollover heals itself the next morning.
-  out.snapshotsWritten = await snapshotMonth(db, previousMonth(vnToday));
+  // rollover heals itself the next morning. Nothing to forecast: an album is not a notification.
+  out.snapshotsWritten = persist ? await snapshotMonth(db, previousMonth(vnToday)) : 0;
 
   return out;
 }

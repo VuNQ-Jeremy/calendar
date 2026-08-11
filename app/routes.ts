@@ -148,6 +148,11 @@ export default [
     route('config', 'routes/config.tsx'),
     // Admin diagnostics. The student filter sits in the PATH for the same cache reason as the
     // months above: cacheKeyForPath only sees pathnames.
+    //
+    // The static segment MUST be declared: without it `/logs/notifications` would match
+    // `:studentId` below and be treated as a student filter. React Router ranks static segments
+    // above dynamic ones regardless of order, but the order documents the intent.
+    route('logs/notifications', 'routes/logs.notifications.tsx'),
     route('logs/:studentId?', 'routes/logs.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),

@@ -1,4 +1,4 @@
-import { eq, inArray, lt } from 'drizzle-orm';
+import { desc, eq, inArray, lt } from 'drizzle-orm';
 import { accounts, pushTokens, sentNotifications } from '../db/schema';
 import type { Db } from '../db/index';
 
@@ -196,6 +196,26 @@ export async function markSent(db: Db, keys: string[]): Promise<void> {
     .insert(sentNotifications)
     .values(keys.map((key) => ({ key, sentAt })))
     .onConflictDoNothing();
+}
+
+/**
+ * The tail of the ledger, newest first — what the /logs Notifications tab shows as "recently sent".
+ *
+ * Two caveats the caller must surface, both structural rather than fixable here. The table holds
+ * only `(key, sent_at)`, so the kind and subject have to be parsed back out of the key
+ * (`parseLedgerKey` in ./notify-plan.ts); and a row means the job PROCESSED that key, not that
+ * anybody received anything — every job marks its keys done even when zero devices or zero chats
+ * resolved. Retention is whatever `pruneLedger` leaves behind: 30 days.
+ */
+export async function listRecentSent(
+  db: Db,
+  limit = 100,
+): Promise<{ key: string; sentAt: string }[]> {
+  return db
+    .select({ key: sentNotifications.key, sentAt: sentNotifications.sentAt })
+    .from(sentNotifications)
+    .orderBy(desc(sentNotifications.sentAt))
+    .limit(limit);
 }
 
 /**

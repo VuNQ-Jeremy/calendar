@@ -41,6 +41,12 @@ export const K = {
   rankings: 'route:rankings',
   garden: 'route:garden',
   logs: 'route:logs',
+  /**
+   * The /logs Notifications tab. Deliberately UNDER the 'route:logs' prefix: invalidate/markStale
+   * match by prefix, so anything that already stales K.logs stales this too — which is what the
+   * flashcards domain needs, since a finished round changes the digest and garden forecasts.
+   */
+  logsNotifications: 'route:logs:notifications',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -139,14 +145,35 @@ export type { MutationDomain };
  * So each domain must mark the other stale.
  */
 const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[] }> = {
-  calendar: { hard: [K.calendar], stale: [K.dashboard] },
+  // K.logsNotifications here and in the five domains below: the /logs notification forecast is
+  // built from events, class rosters, accounts/devices, session previews, Zalo pairings and garden
+  // state, so any of them changes what the cron is going to send. Stale-only — it is an admin
+  // diagnostics page served through SWR, and correct on the next visit is correct enough.
+  calendar: { hard: [K.calendar], stale: [K.dashboard, K.logsNotifications] },
   classes: {
     hard: [K.classes],
-    stale: [K.dashboard, K.calendar, K.people, K.materials, K.assessments, K.rankings, K.garden],
+    stale: [
+      K.dashboard,
+      K.calendar,
+      K.people,
+      K.materials,
+      K.assessments,
+      K.rankings,
+      K.garden,
+      K.logsNotifications,
+    ],
   },
   people: {
     hard: [K.people],
-    stale: [K.dashboard, K.calendar, K.classes, K.assessments, K.rankings, K.garden],
+    stale: [
+      K.dashboard,
+      K.calendar,
+      K.classes,
+      K.assessments,
+      K.rankings,
+      K.garden,
+      K.logsNotifications,
+    ],
   },
   // routes/materials patches its own cache in its clientAction; 'evmat:' rows
   // (event-material joins shown in the calendar event modal) must be hard.
@@ -159,7 +186,9 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // topic CRUD also drops all cached topic pages (slug may have changed).
   // K.garden goes stale too, and not only for topic edits: finishing a round is a
   // 'flashcards' mutation, and a round is exactly what grows the plant. K.logs for the same
-  // reason — a round reschedules the words it covered, which is what that log reports.
+  // reason — a round reschedules the words it covered, which is what that log reports. K.logs is
+  // a PREFIX of K.logsNotifications, so the notification forecast is covered by that same entry
+  // (a round is what silences a study nudge and waters a wilting plant).
   flashcards: { hard: [K.flashcards], stale: [K.people, K.garden, K.logs] },
   // Editing a question changes what the test builder lists, so /tests goes stale.
   questions: { hard: [K.questions], stale: [K.tests] },
@@ -177,7 +206,17 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
     hard: [K.config],
     // K.classes: renaming or deactivating a grade/class level changes the cohort tags on the
     // class cards and the options in the class form's dropdowns, both fed by the classes loader.
-    stale: [K.assessments, K.questions, K.tests, K.tuition, K.rankings, K.classes],
+    // K.logsNotifications: Zalo pairing and unlinking are /config actions, and who is linked is
+    // exactly what decides whether a forecast row can reach anybody.
+    stale: [
+      K.assessments,
+      K.questions,
+      K.tests,
+      K.tuition,
+      K.rankings,
+      K.classes,
+      K.logsNotifications,
+    ],
   },
   feedback: { hard: [K.feedback], stale: [] },
   // profile edits change name/color which surface in many lists; profile has
@@ -198,11 +237,15 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // stale for the same reason: the modal is usually open on the very key being
   // marked, and deleting it would blank the textarea mid-edit. Nothing else
   // caches previews; the student schedule screens skip the cache entirely.
-  previews: { hard: [], stale: ['prev:'] },
+  // K.logsNotifications: the focus text a preview carries is quoted verbatim in both the class
+  // reminder and the evening preview, so editing it changes what those messages will say.
+  previews: { hard: [], stale: ['prev:', K.logsNotifications] },
   // K.garden is a prefix of every 'route:garden:<classId>' and album key, so watering one
   // student, assigning vocabulary or writing an album drops them all. K.flashcards goes with
   // it because the student's own plant is rendered at the top of /vocabulary.
-  garden: { hard: [K.garden], stale: [K.flashcards] },
+  // K.logsNotifications: watering rescues a plant from tomorrow's stage drop, and a new
+  // assignment deadline is a future penalty — both are garden alert rows in the forecast.
+  garden: { hard: [K.garden], stale: [K.flashcards, K.logsNotifications] },
 };
 
 /**
@@ -272,6 +315,13 @@ export function cacheKeyForPath(pathname: string): string | null {
   // month lives in the path: a `?month=` would give every month the same cache entry.
   const rm = pathname.match(/^\/rankings\/(\d{4}-\d{2})\/?$/);
   if (rm) return rankingsMonthKey(rm[1]);
+  // The notifications tab is a sibling PAGE, not a student filter — it must be matched before the
+  // filter regex below, which would otherwise read 'notifications' as a student id. (The string it
+  // would produce happens to be the same, but relying on that coincidence is how it breaks the day
+  // the key changes.)
+  if (pathname === '/logs/notifications' || pathname === '/logs/notifications/') {
+    return K.logsNotifications;
+  }
   // The student filter lives in the path for the same reason the leaderboard's month does: this
   // function only ever sees a pathname, so a `?student=` would give every student one cache entry.
   const lg = pathname.match(/^\/logs\/([^/]+)\/?$/);

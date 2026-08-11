@@ -33,6 +33,32 @@ type LoaderData = {
 /** The filter's "everyone" option. Not a student id, so it cannot collide with one. */
 const ALL = 'all';
 
+/**
+ * The two /logs tabs, as navigation rather than local state.
+ *
+ * Every other DS.Tabs in this app holds its value in `useState`, because those tabs switch between
+ * views of data one loader already fetched. These two are separate pages with separate loaders and
+ * separate cache keys — the notification forecast is expensive enough that the schedule tab should
+ * not pay for it — so switching tabs is a route change. Exported so both screens render the same
+ * strip and neither can drift out of step with the other.
+ */
+export function LogsTabs({ value }: { value: 'schedule' | 'notifications' }) {
+  const navigate = useNavigate();
+  const { t } = useLang();
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <DS.Tabs
+        value={value}
+        onChange={(id) => navigate(id === 'notifications' ? '/logs/notifications' : '/logs')}
+        tabs={[
+          { id: 'schedule', label: t('logs_tab_schedule') },
+          { id: 'notifications', label: t('logs_tab_notifications') },
+        ]}
+      />
+    </div>
+  );
+}
+
 export function LogsScreen() {
   const { studentId, students, scheduledWords, limit, today } = useLoaderData() as LoaderData;
   const navigate = useNavigate();
@@ -53,6 +79,7 @@ export function LogsScreen() {
   return (
     <div className="content">
       <PageHeader title={t('logs_title')} subtitle={t('logs_subtitle')} />
+      <LogsTabs value="schedule" />
 
       <LCard style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="m-row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
