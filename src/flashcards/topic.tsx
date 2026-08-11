@@ -365,7 +365,14 @@ function WordsTab({
       )}
 
       {words.length ? (
-        <div className="m-stack">
+        <div
+          style={{
+            display: 'grid',
+            // two columns where there's room, one below ~700px of list width
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: 'var(--space-3)',
+          }}
+        >
           {words.map((w) => (
             <div key={w.id} className="lrow" style={{ alignItems: 'flex-start' }}>
               {w.imageKey && (
@@ -374,11 +381,11 @@ function WordsTab({
                   alt=""
                   loading="lazy"
                   style={{
-                    width: 44,
-                    height: 33,
+                    width: 88,
+                    height: 66,
                     flex: 'none',
                     objectFit: 'cover',
-                    borderRadius: 6,
+                    borderRadius: 8,
                     display: 'block',
                   }}
                 />
