@@ -270,7 +270,7 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
   };
 
   return (
-    <div className="content">
+    <div className={'content' + (list.length ? ' content--fill' : '')}>
       <PageHeader
         title={t('fb_title')}
         subtitle={t('fb_sub')}
@@ -323,81 +323,87 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                   <span className="m-board__title">{t(st.tk)}</span>
                   <span className="m-board__count">{cards.length}</span>
                 </div>
-                {cards.map((f) => {
-                  const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
-                  const done = statusOf(f) === 'done';
-                  return (
-                    <div
-                      key={f.id}
-                      className={'kcard' + (dragId === f.id ? ' is-dragging' : '')}
-                      draggable
-                      onDragStart={(e) => {
-                        setDragId(f.id);
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/plain', f.id);
-                      }}
-                      onDragEnd={() => {
-                        setDragId(null);
-                        setOverCol(null);
-                      }}
-                    >
-                      <div className="kcard__top">
-                        <div
-                          className="iconwrap"
-                          style={{ width: 32, height: 32, ...ICON_TINT(cat.color) }}
-                        >
-                          <MIcon name={cat.icon} size={16} />
-                        </div>
-                        <div className="kcard__msg">{f.message}</div>
-                        <span className="lrow__grip" title={t('fb_drag_status')} aria-hidden="true">
-                          <MIcon name="grip" size={16} />
-                        </span>
-                      </div>
-                      <div className="lrow__meta">
-                        {f.author && (
-                          <span className="m-row" style={{ gap: 5 }}>
-                            <MIcon name="users" size={13} />
-                            {f.author}
-                          </span>
-                        )}
-                        {f.createdAt && (
-                          <span className="m-row" style={{ gap: 5 }}>
-                            <MIcon name="clock" size={13} />
-                            {fmtStamp(f.createdAt, locale(lang))}
-                          </span>
-                        )}
-                        {f.appVersion && (
+                <div className="m-board__body">
+                  {cards.map((f) => {
+                    const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
+                    const done = statusOf(f) === 'done';
+                    return (
+                      <div
+                        key={f.id}
+                        className={'kcard' + (dragId === f.id ? ' is-dragging' : '')}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragId(f.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', f.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragId(null);
+                          setOverCol(null);
+                        }}
+                      >
+                        <div className="kcard__top">
+                          <div
+                            className="iconwrap"
+                            style={{ width: 32, height: 32, ...ICON_TINT(cat.color) }}
+                          >
+                            <MIcon name={cat.icon} size={16} />
+                          </div>
+                          <div className="kcard__msg">{f.message}</div>
                           <span
-                            className="m-row"
-                            style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
-                            title="Build the report came from"
+                            className="lrow__grip"
+                            title={t('fb_drag_status')}
+                            aria-hidden="true"
                           >
-                            {f.appVersion}
+                            <MIcon name="grip" size={16} />
                           </span>
-                        )}
-                      </div>
-                      <div className="kcard__foot">
-                        <FTag color={cat.color as 'blue'}>{t(cat.tk)}</FTag>
-                        <div className="lrow__actions">
-                          <FIB
-                            label={done ? t('fb_reopen') : t('fb_resolve')}
-                            size="sm"
-                            onClick={() => toggleDone(f)}
-                          >
-                            <MIcon name="check" size={16} />
-                          </FIB>
-                          <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
-                            <MIcon name="edit" size={16} />
-                          </FIB>
-                          <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
-                            <MIcon name="trash" size={16} />
-                          </FIB>
+                        </div>
+                        <div className="lrow__meta">
+                          {f.author && (
+                            <span className="m-row" style={{ gap: 5 }}>
+                              <MIcon name="users" size={13} />
+                              {f.author}
+                            </span>
+                          )}
+                          {f.createdAt && (
+                            <span className="m-row" style={{ gap: 5 }}>
+                              <MIcon name="clock" size={13} />
+                              {fmtStamp(f.createdAt, locale(lang))}
+                            </span>
+                          )}
+                          {f.appVersion && (
+                            <span
+                              className="m-row"
+                              style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                              title="Build the report came from"
+                            >
+                              {f.appVersion}
+                            </span>
+                          )}
+                        </div>
+                        <div className="kcard__foot">
+                          <FTag color={cat.color as 'blue'}>{t(cat.tk)}</FTag>
+                          <div className="lrow__actions">
+                            <FIB
+                              label={done ? t('fb_reopen') : t('fb_resolve')}
+                              size="sm"
+                              onClick={() => toggleDone(f)}
+                            >
+                              <MIcon name="check" size={16} />
+                            </FIB>
+                            <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
+                              <MIcon name="edit" size={16} />
+                            </FIB>
+                            <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
+                              <MIcon name="trash" size={16} />
+                            </FIB>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {!cards.length && <div className="m-board__empty">{t('fb_col_empty')}</div>}
+                    );
+                  })}
+                  {!cards.length && <div className="m-board__empty">{t('fb_col_empty')}</div>}
+                </div>
               </div>
             );
           })}

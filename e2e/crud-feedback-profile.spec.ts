@@ -32,6 +32,16 @@ test.describe('CRUD: feedback and profile', () => {
     await post;
     await expect(column('New').locator('.kcard', { hasText: msg })).toBeVisible();
 
+    // A long column scrolls inside itself: the card list is the scroll box and the
+    // page around it stays put, so every column's drop target keeps its place.
+    const overflow = await column('New')
+      .locator('.m-board__body')
+      .evaluate((el) => getComputedStyle(el).overflowY);
+    expect(overflow).toBe('auto');
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
+    ).toBe(true);
+
     // Status toggle moves the card to the Resolved column.
     post = k.posted('/feedback');
     await card(msg).getByRole('button', { name: 'Mark resolved' }).click();

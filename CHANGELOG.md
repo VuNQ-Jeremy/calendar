@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0165 — 2026-08-11
+Feedback board: each status column now scrolls its own card list inside a bounded page, so a long column no longer scrolls the whole page away from the other drop targets.
+
 ## v0.0161 — 2026-08-11
 Vocabulary: 4 new game modes (Unscramble, Fill letters, Type it, Picture quiz) on web and mobile; assignments can now require specific modes
 

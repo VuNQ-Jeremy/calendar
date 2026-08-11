@@ -1839,15 +1839,23 @@ body {
 }
 
 /* kanban board — one column per status, cards drag between them */
+/* kanban: the columns fill the bounded page height and each one scrolls its own
+   card list, so a long column never pushes the page (and the other columns' drop
+   targets) out of view. Requires `.content--fill` on the page. */
 .m-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 @media (max-width: 920px) {
   .m-board {
     grid-template-columns: 1fr;
+    /* stacked, three columns can't share one viewport height: let the board
+       scroll as a whole and each column keep its natural height */
+    overflow-y: auto;
   }
 }
 .m-board__col {
@@ -1873,6 +1881,22 @@ body {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
+  flex: none;
+}
+.m-board__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* the card hover/drag shadows would otherwise be clipped by the scroll box */
+  padding: 2px 4px;
+}
+@media (max-width: 920px) {
+  .m-board__body {
+    overflow-y: visible;
+  }
 }
 .m-board__dot {
   width: 8px;
