@@ -65,7 +65,7 @@ test.describe('CRUD: vocabulary', () => {
     post = k.posted(topicPath);
     await k.submit().click();
     await post;
-    const row = page.locator('.lrow', { hasText: 'ephemeral' });
+    const row = page.locator('.fc-wcard', { hasText: 'ephemeral' });
     await expect(row).toBeVisible();
 
     await row.getByRole('button', { name: 'Edit' }).click();
@@ -85,7 +85,10 @@ test.describe('CRUD: vocabulary', () => {
 
     // Cleanup: remove the topic again.
     await page.goto('/vocabulary');
-    await page.locator('.mochi-card', { hasText: topic }).getByRole('button', { name: 'Delete' }).click();
+    await page
+      .locator('.mochi-card', { hasText: topic })
+      .getByRole('button', { name: 'Delete' })
+      .click();
     post = k.posted('/vocabulary');
     await k.dlgOf('Delete topic').locator('.mochi-btn.is-danger').click();
     await post;

@@ -365,89 +365,54 @@ function WordsTab({
       )}
 
       {words.length ? (
-        <div
-          style={{
-            display: 'grid',
-            // two columns where there's room, one below ~700px of list width
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: 'var(--space-3)',
-          }}
-        >
+        <div className="fc-wgrid">
           {words.map((w) => (
-            <div key={w.id} className="lrow" style={{ alignItems: 'flex-start' }}>
-              {w.imageKey && (
-                <img
-                  src={flashcardImagePath(w.imageKey) ?? undefined}
-                  alt=""
-                  loading="lazy"
-                  style={{
-                    width: 88,
-                    height: 66,
-                    flex: 'none',
-                    objectFit: 'cover',
-                    borderRadius: 8,
-                    display: 'block',
-                  }}
-                />
-              )}
-              <FIB label={t('fc_play_audio')} size="sm" onClick={() => playWord(w.word)}>
-                <MIcon name="volume" size={18} />
-              </FIB>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="m-row" style={{ gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                  <span
-                    style={{
-                      fontWeight: 700,
-                      color: 'var(--text-strong)',
-                      fontSize: 'var(--text-md)',
-                    }}
-                  >
-                    {w.word}
-                  </span>
-                  {w.ipa && (
-                    <span
-                      style={{
-                        color: 'var(--text-muted)',
-                        fontFamily: 'var(--font-mono, monospace)',
-                        fontSize: 'var(--text-sm)',
-                      }}
-                    >
-                      {w.ipa}
-                    </span>
+            <div key={w.id} className="fc-wcard">
+              <div className="fc-wcard__top">
+                <div className="fc-wcard__pic">
+                  {w.imageKey ? (
+                    <img src={flashcardImagePath(w.imageKey) ?? undefined} alt="" loading="lazy" />
+                  ) : (
+                    <MIcon name="image" size={28} />
                   )}
                 </div>
-                {w.meaningVi && (
-                  <div style={{ color: 'var(--text-body)', fontSize: 'var(--text-sm)' }}>
-                    {w.meaningVi}
-                  </div>
-                )}
-                {w.definitionEn && (
-                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                    {w.definitionEn}
-                  </div>
-                )}
+                <div className="fc-wcard__tools">
+                  <FIB label={t('fc_play_audio')} size="sm" onClick={() => playWord(w.word)}>
+                    <MIcon name="volume" size={18} />
+                  </FIB>
+                  {isStaff && (
+                    <>
+                      <FIB
+                        label={t('edit')}
+                        size="sm"
+                        onClick={() =>
+                          setModal({
+                            id: w.id,
+                            word: w.word,
+                            meaningVi: w.meaningVi,
+                            definitionEn: w.definitionEn ?? '',
+                            ipa: w.ipa ?? '',
+                            imageKey: w.imageKey ?? '',
+                          })
+                        }
+                      >
+                        <MIcon name="edit" size={16} />
+                      </FIB>
+                      <FIB label={t('delete')} size="sm" onClick={() => del(w)}>
+                        <MIcon name="trash" size={16} />
+                      </FIB>
+                    </>
+                  )}
+                </div>
               </div>
-              {isStaff && (
-                <div className="lrow__actions">
-                  <FIB
-                    label={t('edit')}
-                    size="sm"
-                    onClick={() =>
-                      setModal({
-                        id: w.id,
-                        word: w.word,
-                        meaningVi: w.meaningVi,
-                        definitionEn: w.definitionEn ?? '',
-                        ipa: w.ipa ?? '',
-                        imageKey: w.imageKey ?? '',
-                      })
-                    }
-                  >
-                    <MIcon name="edit" size={16} />
-                  </FIB>
-                  <FIB label={t('delete')} size="sm" onClick={() => del(w)}>
-                    <MIcon name="trash" size={16} />
-                  </FIB>
+              <div className="fc-wcard__head">
+                <span className="fc-wcard__word">{w.word}</span>
+                {w.ipa && <span className="fc-wcard__ipa">{w.ipa}</span>}
+              </div>
+              {(w.meaningVi || w.definitionEn) && (
+                <div>
+                  {w.meaningVi && <div className="fc-wcard__vi">{w.meaningVi}</div>}
+                  {w.definitionEn && <div className="fc-wcard__en">{w.definitionEn}</div>}
                 </div>
               )}
             </div>
@@ -495,8 +460,7 @@ function WordModal({
 }) {
   const { t } = useLang();
   const [status, setStatus] = React.useState<'idle' | 'busy' | 'failed'>('idle');
-  const [committing, setCommitting] = React.useState(false);
-  // A word being edited already has its picture stored, so it seeds the strip as the selection.
+  // A word being edited already has its picture stored, so it seeds the picker as the selection.
   const [choice, setChoice] = React.useState<ImageChoice>(() => ({
     ...emptyChoice,
     picked: draft.imageKey ? { kind: 'stored', imageKey: draft.imageKey } : null,
@@ -571,7 +535,7 @@ function WordModal({
   }, [draft.word, draft.imageKey]);
 
   /**
-   * Apply a strip change. Editing one word, so a stock pick is committed to our bucket right away:
+   * Apply a picker change. Editing one word, so a stock pick is committed to our bucket right away:
    * the teacher leaves the dialog with a real stored picture rather than a provider thumbnail that
    * might not survive the copy. The highlight moves first so the tap feels instant, and is rolled
    * back if the copy fails.
@@ -588,9 +552,7 @@ function WordModal({
       set('imageKey', next.imageKey);
       return;
     }
-    setCommitting(true);
     const key = await resolvePickedImageKey(next);
-    setCommitting(false);
     if (key) set('imageKey', key);
     else setChoice((c) => ({ ...c, picked: null, status: 'failed' }));
   };
@@ -627,7 +589,7 @@ function WordModal({
         open={true}
         onClose={onClose}
         title={draft.id ? t('fc_edit_word') : t('fc_add_word')}
-        width={520}
+        width={760}
         footer={
           <>
             <FBtn variant="secondary" onClick={onClose}>
@@ -639,72 +601,71 @@ function WordModal({
           </>
         }
       >
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('fc_word')}</label>
-          <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
-            <input
-              className="mochi-input"
-              autoFocus={true}
-              style={{ flex: 1 }}
-              value={draft.word}
-              onChange={(e) => set('word', e.target.value)}
+        {/* Fields on the left, the picture picker on the right: the 3×3 batch is worth its own
+            column, and the word it belongs to stays on screen while the teacher scans it. */}
+        <div className="fc-word-split">
+          <div className="fc-word-split__fields">
+            <div className="mochi-field">
+              <label className="mochi-field__label">{t('fc_word')}</label>
+              <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
+                <input
+                  className="mochi-input"
+                  autoFocus={true}
+                  style={{ flex: 1 }}
+                  value={draft.word}
+                  onChange={(e) => set('word', e.target.value)}
+                />
+                <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(draft.word)}>
+                  <MIcon name="volume" size={18} />
+                </FIB>
+              </div>
+              {status !== 'idle' && (
+                <span className="mochi-field__hint">
+                  {status === 'busy' ? t('fc_enriching') : t('fc_enrich_failed')}
+                </span>
+              )}
+            </div>
+            <div className="mochi-field">
+              <label className="mochi-field__label">{t('fc_meaning_vi')}</label>
+              <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
+                <input
+                  className="mochi-input"
+                  style={{ flex: 1 }}
+                  value={draft.meaningVi}
+                  onChange={(e) => set('meaningVi', e.target.value)}
+                />
+                {canUseAi && (
+                  <FIB
+                    label={t('fc_enrich')}
+                    size="md"
+                    disabled={!draft.word.trim() || status === 'busy'}
+                    onClick={retryEnrich}
+                  >
+                    <MIcon name="sparkle" size={18} />
+                  </FIB>
+                )}
+              </div>
+            </div>
+            <FInput
+              label={t('fc_ipa')}
+              value={draft.ipa}
+              onChange={(e) => set('ipa', e.target.value)}
             />
-            <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(draft.word)}>
-              <MIcon name="volume" size={18} />
-            </FIB>
+            <div className="mochi-field">
+              <label className="mochi-field__label">{t('fc_definition_en')}</label>
+              <textarea
+                className="mochi-input"
+                rows={2}
+                style={{ resize: 'vertical', minHeight: 56, paddingTop: 10 }}
+                value={draft.definitionEn}
+                onChange={(e) => set('definitionEn', e.target.value)}
+              />
+            </div>
           </div>
-          {status !== 'idle' && (
-            <span className="mochi-field__hint">
-              {status === 'busy' ? t('fc_enriching') : t('fc_enrich_failed')}
-            </span>
-          )}
-        </div>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('fc_meaning_vi')}</label>
-          <div className="m-row" style={{ gap: 8, alignItems: 'stretch' }}>
-            <input
-              className="mochi-input"
-              style={{ flex: 1 }}
-              value={draft.meaningVi}
-              onChange={(e) => set('meaningVi', e.target.value)}
-            />
-            {canUseAi && (
-              <FIB
-                label={t('fc_enrich')}
-                size="md"
-                disabled={!draft.word.trim() || status === 'busy'}
-                onClick={retryEnrich}
-              >
-                <MIcon name="sparkle" size={18} />
-              </FIB>
-            )}
+          <div className="mochi-field fc-word-split__pics">
+            <label className="mochi-field__label">{t('fc_img_label')}</label>
+            <ImageStrip query={imageQuery} choice={choice} onChange={applyChoice} layout="grid" />
           </div>
-        </div>
-        <FInput
-          label={t('fc_ipa')}
-          value={draft.ipa}
-          onChange={(e) => set('ipa', e.target.value)}
-        />
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('fc_definition_en')}</label>
-          <textarea
-            className="mochi-input"
-            rows={2}
-            style={{ resize: 'vertical', minHeight: 56, paddingTop: 10 }}
-            value={draft.definitionEn}
-            onChange={(e) => set('definitionEn', e.target.value)}
-          />
-        </div>
-        <div className="mochi-field">
-          <label className="mochi-field__label">{t('fc_img_label')}</label>
-          <ImageStrip query={imageQuery} choice={choice} onChange={applyChoice} />
-          <span className="mochi-field__hint">
-            {committing
-              ? t('fc_img_saving')
-              : choice.picked
-                ? t('fc_img_hint_selected')
-                : t('fc_img_hint_none')}
-          </span>
         </div>
       </Modal>
     </>

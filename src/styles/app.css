@@ -1154,6 +1154,108 @@ body {
   min-height: 0;
   overflow-y: auto;
 }
+/* word editor (vocabulary): the fields on the left, the 3x3 picture picker on the right. The
+   picker column is a fixed width rather than a fraction — its tiles are a 3-up grid, and a fluid
+   column would resize all nine of them as the dialog breathes. Below the two-column width it
+   stacks, picker last, which is the mobile-web shape. */
+.fc-word-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 288px;
+  gap: var(--space-5);
+  align-items: start;
+}
+/* The last field in either column would otherwise push the dialog body's bottom padding open. */
+.fc-word-split__fields > .mochi-field:last-child,
+.fc-word-split__pics {
+  margin-bottom: 0;
+}
+@media (max-width: 700px) {
+  .fc-word-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* vocabulary word list: one card per word, two abreast where there's room and one below
+   ~640px of list width. The picture is the card's headline — it is what a child recognises
+   the word by — with the speaker (and, for staff, edit/delete) in a rail beside it, then the
+   word and its IPA on one line and the meaning as a full-width block underneath. */
+.fc-wgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+.fc-wcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: var(--border-width) solid var(--border-subtle);
+  background: var(--surface-card);
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.fc-wcard:hover {
+  box-shadow: var(--shadow-sm);
+}
+.fc-wcard__top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+/* takes every pixel the icon rail leaves, at the 4:3 the pictures are generated in — so the
+   art fills the frame exactly and `cover` never actually has anything to crop */
+.fc-wcard__pic {
+  flex: 1;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-sunken);
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+.fc-wcard__pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.fc-wcard__tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: none;
+}
+.fc-wcard__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.fc-wcard__word {
+  font-weight: 800;
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+  /* a long compound word must not widen the card out of its grid track */
+  overflow-wrap: anywhere;
+}
+.fc-wcard__ipa {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.fc-wcard__vi {
+  font-size: var(--text-sm);
+  color: var(--text-body);
+  text-wrap: pretty;
+}
+.fc-wcard__en {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-wrap: pretty;
+  margin-top: 2px;
+}
 /* grading row: MSelect is used inline without a label, so drop the
    form-field bottom margin that would otherwise offset the score
    dropdown upward from the comment input within the centered row */

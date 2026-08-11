@@ -2,19 +2,17 @@ import { test, expect } from '@playwright/test';
 import { crudGuard, signInStaff, ui } from './crud-helpers';
 
 /**
- * Pictures on vocabulary words: choose one from the inline strip, see it on the word list and on
- * the flip card, then take it off again.
+ * Pictures on vocabulary words: choose one from the editor's 3×3 picker, see it on the word list
+ * and on the flip card, then take it off again.
  *
  * Everything hangs off a throwaway topic so the seeded topics — which other specs and the seeded
  * results depend on — are never touched.
  *
- * The strip works here even though calendar-test has no ANTHROPIC_API_KEY: image search falls back
- * to Openverse, which needs no credentials at all. The draw-one button does need Workers AI and
- * takes several seconds, so it is deliberately not exercised — the deploy check covers that path,
- * and a spec that waits on a diffusion model would be the slowest thing in the suite.
+ * The picker works here even though calendar-test has no ANTHROPIC_API_KEY: image search falls back
+ * to Openverse, which needs no credentials at all.
  */
 
-/** A tile in the strip: a bare button wrapping an image. */
+/** A tile in the picker: a bare button wrapping an image. Blank cells are divs, so they miss. */
 const TILE = 'button:has(> img)';
 
 test.describe('CRUD: vocabulary word pictures', () => {
@@ -51,8 +49,24 @@ test.describe('CRUD: vocabulary word pictures', () => {
     // Wait for the batch rather than a fixed timeout: this is a live third-party search.
     await expect(strip.locator(TILE).first()).toBeVisible({ timeout: 45_000 });
     const tileCount = await strip.locator(TILE).count();
-    // A strip, not a single thumbnail — the point of the change is having alternatives on screen.
+    // A grid of alternatives, not a single thumbnail, and never more than the nine cells it draws.
     expect(tileCount).toBeGreaterThan(1);
+    expect(tileCount).toBeLessThanOrEqual(9);
+    // The picker sits beside the fields, not under them: same column of the dialog as its label,
+    // to the right of the word input.
+    const wordBox = (await f.textIn('Word').boundingBox())!;
+    const picsBox = (await strip.boundingBox())!;
+    expect(picsBox.x).toBeGreaterThan(wordBox.x + wordBox.width);
+
+    // The refresh button walks to the next batch. Awaited on the search response, since the
+    // pictures that come back may legitimately look the same as the ones that went out.
+    const refreshed = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === '/vocab-image-search' && r.ok(),
+      { timeout: 45_000 },
+    );
+    await strip.getByRole('button', { name: 'Show different pictures' }).click();
+    await refreshed;
+    await expect(strip.locator(TILE).first()).toBeVisible({ timeout: 45_000 });
 
     // Picking commits the picture to R2 straight away, so the response is the thing to await.
     const committed = page.waitForResponse(
@@ -64,14 +78,13 @@ test.describe('CRUD: vocabulary word pictures', () => {
 
     // The chosen tile is outlined, and it is the only one that is.
     await expect(strip.locator(`${TILE}[aria-pressed="true"]`)).toHaveCount(1);
-    await expect(strip.getByText('Tap the outlined picture to remove it.')).toBeVisible();
 
     post = k.posted(slug);
     await k.submit().click();
     await post;
 
     // ---- The word list shows a thumbnail, and it actually loads ----
-    const row = page.locator('.lrow', { hasText: 'kitchen' });
+    const row = page.locator('.fc-wcard', { hasText: 'kitchen' });
     const thumb = row.locator('img[src^="/flashcard-images/"]');
     await expect(thumb).toBeVisible();
     // naturalWidth > 0 proves the capability URL served real bytes, not a 404.
@@ -93,17 +106,19 @@ test.describe('CRUD: vocabulary word pictures', () => {
     await row.getByRole('button', { name: 'Edit' }).click();
     const edit = k.dlgOf('Edit word');
     const editStrip = edit.locator('.mochi-field:has(> label:text-is("Picture"))');
-    // An edit seeds the strip with the stored picture as the selection, so it is already outlined.
+    // An edit seeds the picker with the stored picture as the selection, so it is already outlined.
     const stored = editStrip.locator('button:has(> img[src^="/flashcard-images/"])');
     await expect(stored).toBeVisible();
     await stored.click();
-    await expect(editStrip.getByText('Tap a picture to use it, or draw one.')).toBeVisible();
+    // Its tile goes with it, leaving nothing selected — the word can now be saved with no picture.
+    await expect(stored).toHaveCount(0);
+    await expect(editStrip.locator(`${TILE}[aria-pressed="true"]`)).toHaveCount(0);
     post = k.posted(slug);
     await edit.locator('.m-dialog__foot .mochi-btn.is-primary').click();
     await post;
-    await expect(page.locator('.lrow', { hasText: 'kitchen' })).toBeVisible();
+    await expect(page.locator('.fc-wcard', { hasText: 'kitchen' })).toBeVisible();
     await expect(
-      page.locator('.lrow', { hasText: 'kitchen' }).locator('img[src^="/flashcard-images/"]'),
+      page.locator('.fc-wcard', { hasText: 'kitchen' }).locator('img[src^="/flashcard-images/"]'),
     ).toHaveCount(0);
 
     // ---- Clean up the throwaway topic ----

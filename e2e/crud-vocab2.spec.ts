@@ -50,13 +50,15 @@ test.describe('CRUD: vocabulary imports and game results', () => {
     // With no ANTHROPIC_API_KEY the modal's first step is a plain "Review".
     await page.getByRole('button', { name: 'Import' }).click();
     const dlg = k.dlgOf('Import words');
-    await dlg.locator('textarea').fill('serendipity - sự tình cờ may mắn\nresilience - sự kiên cường');
+    await dlg
+      .locator('textarea')
+      .fill('serendipity - sự tình cờ may mắn\nresilience - sự kiên cường');
     await dlg.getByRole('button', { name: 'Review' }).click();
     const post = k.posted(path);
     await dlg.getByRole('button', { name: /Import 2 words/ }).click();
     await post;
-    await expect(page.locator('.lrow', { hasText: 'serendipity' })).toBeVisible();
-    await expect(page.locator('.lrow', { hasText: 'resilience' })).toBeVisible();
+    await expect(page.locator('.fc-wcard', { hasText: 'serendipity' })).toBeVisible();
+    await expect(page.locator('.fc-wcard', { hasText: 'resilience' })).toBeVisible();
 
     await deleteTopic(page, topic);
   });
@@ -73,7 +75,7 @@ test.describe('CRUD: vocabulary imports and game results', () => {
     let post = k.posted(path);
     await k.submit().click();
     await post;
-    await expect(page.locator('.lrow', { hasText: 'ephemeral' })).toBeVisible();
+    await expect(page.locator('.fc-wcard', { hasText: 'ephemeral' })).toBeVisible();
 
     // Play: mark the single card known. The result posts as the end screen
     // mounts (not on Exit), so arm the wait before the final click.
@@ -104,7 +106,7 @@ test.describe('CRUD: vocabulary imports and game results', () => {
     let post = k.posted(path);
     await k.submit().click();
     await post;
-    await expect(page.locator('.lrow', { hasText: 'ephemeral' })).toBeVisible();
+    await expect(page.locator('.fc-wcard', { hasText: 'ephemeral' })).toBeVisible();
 
     // Type it: the meaning prompts, the word is the answer — fully deterministic. The result
     // posts as the end screen mounts, so arm the wait before the graded submit.

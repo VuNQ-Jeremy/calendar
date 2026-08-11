@@ -1,11 +1,7 @@
 import React from 'react';
 import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
-import {
-  searchVocabImages,
-  generateVocabImage,
-  commitVocabImage,
-} from '../lib/vocab-image-client.js';
+import { searchVocabImages, commitVocabImage } from '../lib/vocab-image-client.js';
 import { flashcardImagePath } from '../../shared/logic/flashcards';
 import type { VocabImageCandidate } from '../../shared/schemas';
 
@@ -36,7 +32,7 @@ export type ImageChoice = {
   /** Which batch is on screen. Retry walks this forward, wrapping when a page comes back empty. */
   page: number;
   picked: PickedImage | null;
-  status: 'idle' | 'loading' | 'drawing' | 'failed';
+  status: 'idle' | 'loading' | 'failed';
 };
 
 export const emptyChoice: ImageChoice = { candidates: [], page: 1, picked: null, status: 'idle' };
@@ -57,14 +53,22 @@ export async function loadChoice(query: string, page = 1): Promise<Partial<Image
 
 const TILE_W = 76;
 const TILE_H = 57; // 4:3-ish, close enough to the card's 3:2 to read as the same picture
+/** Cells in the `grid` layout — three rows of three, which is exactly what one search returns. */
+const CELLS = 9;
 
 /**
- * A horizontal strip of candidate pictures for one word, with the chosen one outlined.
+ * Candidate pictures for one word, with the chosen one outlined.
  *
  * This replaced a modal picker. Choosing a picture is a glance-and-tap decision made while reading
  * the word it belongs to, and a dialog put the word out of sight to do it — worse, in the generated
  * review it meant opening a dialog on top of a dialog, once per word, fifty times over. Inline the
  * whole list stays scannable and the teacher can work straight down it.
+ *
+ * Two layouts, same behaviour:
+ * - `strip` — one scrolling row, for a list where every word's row has to stay one row tall.
+ * - `grid` — a 3×3 block filling its column, for the word editor, where the picker owns a column
+ *   of the dialog and the whole batch should be on screen at once. Kept to nine cells whatever
+ *   arrives, padded with blanks, so the column never changes height under the teacher.
  *
  * Stateless by design: the caller owns the `ImageChoice` (a list of these lives in a list of rows),
  * so this renders and reports, and never fetches behind the caller's back.
@@ -74,18 +78,20 @@ export function ImageStrip({
   choice,
   onChange,
   compact = false,
+  layout = 'strip',
 }: {
   /** What to search for — the model's own keywords, or the word itself. */
   query: string;
   choice: ImageChoice;
   onChange: (patch: Partial<ImageChoice>) => void;
-  /** Smaller tiles for a dense list. */
+  /** Smaller tiles for a dense list. Ignored by the `grid` layout, whose tiles size themselves. */
   compact?: boolean;
+  layout?: 'strip' | 'grid';
 }) {
   const { t } = useLang();
+  const grid = layout === 'grid';
   const w = compact ? TILE_W * 0.8 : TILE_W;
   const h = compact ? TILE_H * 0.8 : TILE_H;
-  const busy = choice.status === 'loading' || choice.status === 'drawing';
 
   /** Next batch for the same phrase. */
   const retry = async () => {
@@ -93,27 +99,22 @@ export function ImageStrip({
     onChange(await loadChoice(query, choice.page + 1));
   };
 
-  const draw = async () => {
-    onChange({ status: 'drawing' });
-    const res = await generateVocabImage(query);
-    onChange(
-      res.ok
-        ? { status: 'idle', picked: { kind: 'stored', imageKey: res.imageKey } }
-        : { status: 'failed' },
-    );
-  };
-
   const isPicked = (c: VocabImageCandidate) =>
     choice.picked?.kind === 'stock' && choice.picked.id === c.id;
 
+  const cell: React.CSSProperties = grid
+    ? // The column is fluid, so a grid tile takes the width it is given and keeps the strip's
+      // 4:3 shape from its own aspect ratio rather than a fixed height.
+      { width: '100%', aspectRatio: '4 / 3' }
+    : { width: w, height: h };
+
   const tile = (selected: boolean): React.CSSProperties => ({
-    width: w,
-    height: h,
+    ...cell,
     flex: 'none',
     padding: 0,
     overflow: 'hidden',
     borderRadius: 8,
-    // The selection is the whole point of the strip, so it is a real 2px brand outline plus a ring
+    // The selection is the whole point of the picker, so it is a real 2px brand outline plus a ring
     // rather than a tint — it has to be obvious at a glance down a list of fifty rows. The ring is
     // mixed from --brand rather than written as a literal: the brand is orange here, and a
     // hardcoded colour would sit wrong against it (and wrong again under a re-theme).
@@ -126,6 +127,107 @@ export function ImageStrip({
     display: 'grid',
     placeItems: 'center',
   });
+
+  const stored = choice.picked?.kind === 'stored' ? choice.picked : null;
+  // A stored tile takes one of the nine cells, so the batch beside it is trimmed by one rather
+  // than spilling onto a fourth row.
+  const candidates = grid
+    ? choice.candidates.slice(0, CELLS - (stored ? 1 : 0))
+    : choice.candidates;
+
+  const tiles = (
+    <>
+      {/* A stored picture — the one this word was saved with — is not among the search results, so
+          it gets its own leading tile: already selected, and cleared by tapping it. */}
+      {stored && (
+        <button
+          type="button"
+          title={t('fc_img_remove')}
+          onClick={() => onChange({ picked: null })}
+          style={tile(true)}
+        >
+          <img
+            src={flashcardImagePath(stored.imageKey) ?? undefined}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </button>
+      )}
+
+      {candidates.map((c) => (
+        <button
+          key={`${c.provider}:${c.id}`}
+          type="button"
+          title={c.credit || undefined}
+          aria-pressed={isPicked(c)}
+          onClick={() => onChange({ picked: isPicked(c) ? null : { kind: 'stock', ...c } })}
+          style={tile(isPicked(c))}
+        >
+          <img
+            src={c.thumbUrl}
+            alt=""
+            loading="lazy"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </button>
+      ))}
+    </>
+  );
+
+  const message =
+    choice.status === 'loading'
+      ? t('fc_img_searching')
+      : choice.status === 'failed'
+        ? t('fc_img_failed')
+        : candidates.length === 0 && !stored
+          ? t('fc_img_no_results')
+          : null;
+
+  const messageNode = message && (
+    <span
+      className="mochi-field__hint"
+      style={{
+        alignSelf: 'center',
+        whiteSpace: grid ? 'normal' : 'nowrap',
+        color: choice.status === 'failed' ? 'var(--red-600, #c0392b)' : undefined,
+      }}
+    >
+      {message}
+    </span>
+  );
+
+  if (grid) {
+    const blanks = Math.max(0, CELLS - candidates.length - (stored ? 1 : 0));
+    return (
+      <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+          {tiles}
+          {Array.from({ length: blanks }, (_, i) => (
+            <div
+              key={`blank-${i}`}
+              style={{
+                ...cell,
+                borderRadius: 8,
+                border: '1px dashed var(--border-subtle, rgba(0,0,0,0.10))',
+                background: 'var(--surface-muted, rgba(0,0,0,0.03))',
+              }}
+            />
+          ))}
+        </div>
+        {messageNode}
+        <button
+          type="button"
+          className="mochi-btn is-ghost"
+          disabled={choice.status === 'loading'}
+          onClick={retry}
+          style={{ justifySelf: 'start', gap: 6 }}
+        >
+          <MIcon name="repeat" size={16} />
+          {t('fc_img_retry')}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="m-row" style={{ gap: 6, alignItems: 'center', minWidth: 0 }}>
@@ -142,89 +244,20 @@ export function ImageStrip({
           minWidth: 0,
         }}
       >
-        {/* A stored picture — drawn just now, or the one this word was saved with — is not among
-            the search results, so it gets its own leading tile: already selected, and cleared by
-            tapping it. */}
-        {choice.picked?.kind === 'stored' && (
-          <button
-            type="button"
-            title={t('fc_img_remove')}
-            onClick={() => onChange({ picked: null })}
-            style={tile(true)}
-          >
-            <img
-              src={flashcardImagePath(choice.picked.imageKey) ?? undefined}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          </button>
-        )}
-
-        {choice.candidates.map((c) => (
-          <button
-            key={`${c.provider}:${c.id}`}
-            type="button"
-            title={c.credit || undefined}
-            aria-pressed={isPicked(c)}
-            onClick={() => onChange({ picked: isPicked(c) ? null : { kind: 'stock', ...c } })}
-            style={tile(isPicked(c))}
-          >
-            <img
-              src={c.thumbUrl}
-              alt=""
-              loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          </button>
-        ))}
-
-        {choice.status === 'loading' && (
-          <span className="mochi-field__hint" style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}>
-            {t('fc_img_searching')}
-          </span>
-        )}
-        {choice.status === 'drawing' && (
-          <span className="mochi-field__hint" style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}>
-            {t('fc_img_drawing')}
-          </span>
-        )}
-        {choice.status === 'idle' && choice.candidates.length === 0 && !choice.picked && (
-          <span className="mochi-field__hint" style={{ alignSelf: 'center', whiteSpace: 'nowrap' }}>
-            {t('fc_img_no_results')}
-          </span>
-        )}
-        {choice.status === 'failed' && (
-          <span
-            className="mochi-field__hint"
-            style={{ alignSelf: 'center', whiteSpace: 'nowrap', color: 'var(--red-600, #c0392b)' }}
-          >
-            {t('fc_img_failed')}
-          </span>
-        )}
+        {tiles}
+        {messageNode}
       </div>
 
-      {/* Fresh batch, and draw-one — the two things the old dialog offered, as icons. */}
       <button
         type="button"
         className="mochi-btn is-ghost"
         title={t('fc_img_retry')}
         aria-label={t('fc_img_retry')}
-        disabled={busy}
+        disabled={choice.status === 'loading'}
         onClick={retry}
         style={iconBtn}
       >
         <MIcon name="repeat" size={16} />
-      </button>
-      <button
-        type="button"
-        className="mochi-btn is-ghost"
-        title={t('fc_img_generate_ai')}
-        aria-label={t('fc_img_generate_ai')}
-        disabled={busy}
-        onClick={draw}
-        style={iconBtn}
-      >
-        <MIcon name="sparkle" size={16} />
       </button>
     </div>
   );
