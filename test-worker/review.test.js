@@ -258,13 +258,7 @@ describe('review settings', () => {
 
   it('round-trips a saved ladder, and the write path schedules on it', async () => {
     const d = db();
-    await flashcardsSvc.setReviewSettings(d, {
-      interval1: 1,
-      interval2: 2,
-      interval3: 4,
-      interval4: 8,
-      interval5: 16,
-    });
+    await flashcardsSvc.setReviewSettings(d, { intervals: [1, 2, 4, 8, 16] });
     try {
       expect((await flashcardsSvc.getReviewSettings(d)).intervals).toEqual([1, 2, 4, 8, 16]);
 
@@ -276,13 +270,24 @@ describe('review settings', () => {
       expect(row.dueDay).toBe(addDaysVn(today(), 1));
     } finally {
       // School-wide row: put it back, or every later test in this file schedules on 1/2/4/8/16.
-      await flashcardsSvc.setReviewSettings(d, {
-        interval1: 3,
-        interval2: 5,
-        interval3: 7,
-        interval4: 14,
-        interval5: 30,
-      });
+      await flashcardsSvc.setReviewSettings(d, { intervals: [3, 5, 7, 14, 30] });
+    }
+  });
+
+  it('stores a ladder of any length the admin builds', async () => {
+    const d = db();
+    await flashcardsSvc.setReviewSettings(d, { intervals: [2, 4, 6, 9, 12, 20, 45] });
+    try {
+      expect((await flashcardsSvc.getReviewSettings(d)).intervals).toEqual([
+        2, 4, 6, 9, 12, 20, 45,
+      ]);
+
+      // And a shorter one: rows parked above the new top are not orphaned — they clamp on the next
+      // answer rather than being rewritten here.
+      await flashcardsSvc.setReviewSettings(d, { intervals: [5] });
+      expect((await flashcardsSvc.getReviewSettings(d)).intervals).toEqual([5]);
+    } finally {
+      await flashcardsSvc.setReviewSettings(d, { intervals: [3, 5, 7, 14, 30] });
     }
   });
 });

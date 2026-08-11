@@ -25,8 +25,14 @@ export interface ReviewSettings {
   intervals: number[];
 }
 
-/** The ladder is a fixed five rungs: the admin form has five fields, and `level` indexes into it. */
-export const REVIEW_LADDER_LENGTH = 5;
+/**
+ * How many rungs a ladder may have. The admin builds the ladder row by row, so the length is data,
+ * not a constant — `level` indexes into whatever the admin saved, and every transition clamps.
+ *
+ * The floor is 1 because a ladder with no rungs has nothing to schedule from; the ceiling is a
+ * sanity bound on a form field, not a pedagogical claim.
+ */
+export const REVIEW_LADDER_BOUNDS: readonly [number, number] = [1, 12];
 
 export const DEFAULT_REVIEW_SETTINGS: ReviewSettings = { intervals: [3, 5, 7, 14, 30] };
 
@@ -41,7 +47,9 @@ export const REVIEW_INTERVAL_BOUNDS: readonly [number, number] = [0, 365];
 
 /** Is this a ladder we are willing to schedule the whole school on? */
 export function isValidLadder(intervals: unknown): intervals is number[] {
-  if (!Array.isArray(intervals) || intervals.length !== REVIEW_LADDER_LENGTH) return false;
+  if (!Array.isArray(intervals)) return false;
+  const [minRungs, maxRungs] = REVIEW_LADDER_BOUNDS;
+  if (intervals.length < minRungs || intervals.length > maxRungs) return false;
   const [min, max] = REVIEW_INTERVAL_BOUNDS;
   for (let i = 0; i < intervals.length; i++) {
     const n = intervals[i];

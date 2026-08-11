@@ -8,6 +8,7 @@ import {
   NotifPrefsInput,
   QuestionInput,
   QuestionInputBase,
+  ReviewSettingsInput,
   TestInput,
   parsePatch,
 } from '../shared/schemas';
@@ -244,5 +245,41 @@ describe('TestInput', () => {
   it('rejects a zero or out-of-range time limit', () => {
     expect(TestInput.safeParse({ title: 'T', timeLimitMinutes: 0 }).success).toBe(false);
     expect(TestInput.safeParse({ title: 'T', timeLimitMinutes: 301 }).success).toBe(false);
+  });
+});
+
+describe('ReviewSettingsInput', () => {
+  // The admin builds the ladder row by row, so the form posts one comma-separated field: a
+  // FormData's repeated keys would collapse to a single value on the way into the route.
+  it('reads the ladder out of one comma-separated field', () => {
+    expect(ReviewSettingsInput.parse({ intervals: '3,5,7,14,30' })).toEqual({
+      intervals: [3, 5, 7, 14, 30],
+    });
+  });
+
+  it('takes a ladder of any length the form can build, including one rung', () => {
+    expect(ReviewSettingsInput.parse({ intervals: '4' })).toEqual({ intervals: [4] });
+    expect(ReviewSettingsInput.parse({ intervals: [1, 2, 3, 4, 5, 6, 7] }).intervals).toHaveLength(
+      7,
+    );
+  });
+
+  it('refuses an empty ladder and one past the length ceiling', () => {
+    expect(ReviewSettingsInput.safeParse({ intervals: '' }).success).toBe(false);
+    expect(ReviewSettingsInput.safeParse({ intervals: '1,1,1,1,1,1,1,1,1,1,1,1,1' }).success).toBe(
+      false,
+    );
+  });
+
+  it('refuses a ladder that shortens as it climbs, whatever its length', () => {
+    expect(ReviewSettingsInput.safeParse({ intervals: '3,5,4' }).success).toBe(false);
+  });
+
+  // Zero is legal on purpose: it means "due again today", the only way to walk a whole cycle
+  // without waiting three real days.
+  it('allows a same-day first rung but no negatives or anything past a year', () => {
+    expect(ReviewSettingsInput.safeParse({ intervals: '0,5,7' }).success).toBe(true);
+    expect(ReviewSettingsInput.safeParse({ intervals: '-1,5,7' }).success).toBe(false);
+    expect(ReviewSettingsInput.safeParse({ intervals: '3,5,366' }).success).toBe(false);
   });
 });

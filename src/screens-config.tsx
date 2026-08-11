@@ -715,9 +715,14 @@ function GardenSettingsSection({ settings }: { settings: GardenSettings }) {
 }
 
 /**
- * Ôn tập: how long the gaps are between reviews of the same word.
+ * Ôn tập: how long the gaps are between reviews of the same word, and how many there are.
  *
- * Five rungs, held in a draft until Save for the same reason the garden's numbers are: the ladder
+ * The ladder is built row by row — the school decides how many reviews a word gets, not this form.
+ * Adding a rung stretches the cycle; dropping one shortens it, and words already parked above the
+ * new top are clamped down by `shared/logic/review.ts` the next time they are answered rather than
+ * rewritten here.
+ *
+ * The whole ladder is held in a draft until Save for the same reason the garden's numbers are: it
  * is read together, and a half-typed field would reschedule the school's whole backlog. The form
  * enforces what `ReviewSettingsInput` enforces, including the non-decreasing rule — a ladder that
  * shortened as it climbed would bring mastered words back sooner than new ones.
@@ -725,33 +730,35 @@ function GardenSettingsSection({ settings }: { settings: GardenSettings }) {
  * A 0 in the first field is legal and useful: it means "due again today", which is how you demo
  * the cycle without waiting three days.
  */
-const REVIEW_FIELDS = [
-  { key: 'interval1', tk: 'cfg_review_interval_1' },
-  { key: 'interval2', tk: 'cfg_review_interval_2' },
-  { key: 'interval3', tk: 'cfg_review_interval_3' },
-  { key: 'interval4', tk: 'cfg_review_interval_4' },
-  { key: 'interval5', tk: 'cfg_review_interval_5' },
-] as const;
+const REVIEW_MIN_STEPS = 1;
+const REVIEW_MAX_STEPS = 12;
 
 function ReviewSettingsSection({ intervals }: { intervals: number[] }) {
   const fetcher = useFetcher();
   const { t } = useLang();
-  const [draft, setDraft] = React.useState<Record<string, string> | null>(null);
+  const [draft, setDraft] = React.useState<string[] | null>(null);
 
-  const current =
-    draft ?? Object.fromEntries(REVIEW_FIELDS.map((f, i) => [f.key, String(intervals[i] ?? 0)]));
-  const numbers = REVIEW_FIELDS.map((f) => Number(current[f.key]));
+  const current = draft ?? intervals.map(String);
+  const numbers = current.map(Number);
   const valid =
-    REVIEW_FIELDS.every((f, i) => {
+    current.length >= REVIEW_MIN_STEPS &&
+    current.length <= REVIEW_MAX_STEPS &&
+    current.every((v, i) => {
       const n = numbers[i];
-      return current[f.key] !== '' && Number.isInteger(n) && n >= 0 && n <= 365;
-    }) && numbers.every((n, i) => i === 0 || n >= numbers[i - 1]);
+      return v !== '' && Number.isInteger(n) && n >= 0 && n <= 365;
+    }) &&
+    numbers.every((n, i) => i === 0 || n >= numbers[i - 1]);
+
+  // A new rung starts at the value of the one below it: always a legal ladder, and the admin only
+  // has to type the number they actually want.
+  const addStep = () => setDraft([...current, current[current.length - 1] ?? '1']);
+  const removeStep = (i: number) => setDraft(current.filter((_, j) => j !== i));
 
   const save = () => {
     if (!valid) return;
     const fd = new FormData();
     fd.set('intent', 'review-settings');
-    for (const f of REVIEW_FIELDS) fd.set(f.key, String(Number(current[f.key])));
+    fd.set('intervals', numbers.join(','));
     fetcher.submit(fd, { action: '/config', method: 'post' });
     setDraft(null);
   };
@@ -759,20 +766,41 @@ function ReviewSettingsSection({ intervals }: { intervals: number[] }) {
   return (
     <>
       <div className="m-row" style={{ gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {REVIEW_FIELDS.map((f) => (
-          <div key={f.key} className="mochi-field" style={{ marginBottom: 0 }}>
-            <label className="mochi-field__label">{t(f.tk)}</label>
-            <input
-              type="number"
-              min={0}
-              max={365}
-              step={1}
-              className="mochi-input"
-              value={current[f.key]}
-              onChange={(e) => setDraft({ ...current, [f.key]: e.target.value })}
-            />
+        {current.map((v, i) => (
+          <div
+            key={i}
+            className="m-row"
+            style={{ gap: 6, alignItems: 'flex-end', flexWrap: 'nowrap' }}
+          >
+            <div className="mochi-field" style={{ marginBottom: 0, width: 150 }}>
+              <label className="mochi-field__label">
+                {i === current.length - 1
+                  ? t('cfg_review_step_last', { n: i + 1 })
+                  : t('cfg_review_step', { n: i + 1 })}
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                step={1}
+                className="mochi-input"
+                value={v}
+                onChange={(e) => setDraft(current.map((x, j) => (j === i ? e.target.value : x)))}
+              />
+            </div>
+            <IconButton
+              label={t('cfg_review_remove_step', { n: i + 1 })}
+              size="sm"
+              disabled={current.length <= REVIEW_MIN_STEPS}
+              onClick={() => removeStep(i)}
+            >
+              <MIcon name="trash" size={16} />
+            </IconButton>
           </div>
         ))}
+        <Button variant="secondary" onClick={addStep} disabled={current.length >= REVIEW_MAX_STEPS}>
+          {t('cfg_review_add_step')}
+        </Button>
         <Button onClick={save} disabled={!valid || !draft}>
           {t('save')}
         </Button>

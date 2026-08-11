@@ -941,28 +941,31 @@ export type GardenSettingsInput = z.infer<typeof GardenSettingsInput>;
 /* ── Ôn tập (spaced-repetition review) ──────────────────────────────────────────────────── */
 
 /**
- * The interval ladder, as the five flat fields the admin form posts; the service folds them into
- * the `{ intervals: [...] }` blob `shared/logic/review.ts` works with. Bounds match
- * `REVIEW_INTERVAL_BOUNDS` — a 0 first rung is legal on purpose (it means "due again today", the
- * only way to walk a full cycle in a test), but a ladder that shortens as it climbs would send
+ * The interval ladder the admin form posts, as one comma-separated field — the ladder's LENGTH is
+ * the admin's to choose (add or drop a review), so it cannot be a fixed set of named fields, and a
+ * `FormData` collapses repeated keys once it reaches the route as an object.
+ *
+ * Per-rung bounds match `REVIEW_INTERVAL_BOUNDS` and the length bounds `REVIEW_LADDER_BOUNDS` (both
+ * in shared/logic/review.ts). A 0 first rung is legal on purpose — it means "due again today", the
+ * only way to walk a full cycle in a test — but a ladder that shortens as it climbs would send
  * mastered words back sooner than new ones.
  */
 export const ReviewSettingsInput = z
   .object({
-    interval1: z.coerce.number().int().min(0).max(365),
-    interval2: z.coerce.number().int().min(0).max(365),
-    interval3: z.coerce.number().int().min(0).max(365),
-    interval4: z.coerce.number().int().min(0).max(365),
-    interval5: z.coerce.number().int().min(0).max(365),
+    intervals: z.preprocess(
+      (v) =>
+        typeof v === 'string'
+          ? v
+              .split(',')
+              .map((s) => s.trim())
+              .filter((s) => s !== '')
+          : v,
+      z.array(z.coerce.number().int().min(0).max(365)).min(1).max(12),
+    ),
   })
-  .refine(
-    (v) =>
-      v.interval1 <= v.interval2 &&
-      v.interval2 <= v.interval3 &&
-      v.interval3 <= v.interval4 &&
-      v.interval4 <= v.interval5,
-    { message: 'Intervals must not decrease' },
-  );
+  .refine((v) => v.intervals.every((n, i) => i === 0 || n >= v.intervals[i - 1]), {
+    message: 'Intervals must not decrease',
+  });
 export type ReviewSettingsInput = z.infer<typeof ReviewSettingsInput>;
 
 /** Giao bài từ vựng: one topic, one class, one deadline. */

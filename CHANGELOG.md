@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0173 — 2026-08-11
+Review schedule is now built row by row: add or remove review steps instead of a fixed ladder of five.
+
 ## v0.0172 — 2026-08-11
 Word pictures: hitting Save while a just-tapped picture is still being copied now waits for the copy — it no longer saves the previously chosen picture.
 

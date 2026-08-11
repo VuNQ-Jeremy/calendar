@@ -13,15 +13,12 @@ import { crudGuard, openConfigEntry, signInStaff, signInStudent, ui } from './cr
  * quietly wreck the other vocabulary specs.
  */
 
-const LADDER = [
-  'First review (days)',
-  'Second review (days)',
-  'Third review (days)',
-  'Fourth review (days)',
-  'Every review after (days)',
-];
 const DEFAULTS = ['3', '5', '7', '14', '30'];
 const SAME_DAY = ['0', '5', '7', '14', '30'];
+
+/** Rungs are numbered, and the last one is marked as the one that repeats forever. */
+const stepLabel = (i: number, total: number) =>
+  i === total - 1 ? `Review ${i + 1} (days, repeats)` : `Review ${i + 1} (days)`;
 
 test.describe('CRUD: spaced-repetition review', () => {
   crudGuard();
@@ -33,26 +30,56 @@ test.describe('CRUD: spaced-repetition review', () => {
 
     await signInStaff(page);
 
-    // ---- Admin: make the first rung same-day, so one round is immediately reviewable. ----
+    // ---- Admin: the ladder's length is the school's to choose, then make the first rung
+    // same-day so one round is immediately reviewable. ----
     await page.goto('/config');
     let card = await openConfigEntry(page, 'Review schedule');
     const textIn = (label: string) => k.on(card).textIn(label);
     const save = () => card.getByRole('button', { name: 'Save' });
+    const fillLadder = async (values: string[]) => {
+      for (const [i, v] of values.entries()) await textIn(stepLabel(i, values.length)).fill(v);
+    };
+    let post: Promise<unknown>;
 
     // Save is disabled until something actually changes.
     await expect(save()).toBeDisabled();
     // A ladder that shortens as it climbs is refused by the form, as by the schema.
-    await textIn(LADDER[1]).fill('1');
+    await textIn(stepLabel(1, 5)).fill('1');
     await expect(save()).toBeDisabled();
+    await fillLadder(DEFAULTS);
 
-    for (const [i, label] of LADDER.entries()) await textIn(label).fill(SAME_DAY[i]);
-    let post = k.posted('/config');
+    // A sixth review can be added, and it survives a round trip. It seeds from the rung below it,
+    // so the ladder is legal the moment it appears; the repeat marker moves to the new last rung.
+    await card.getByRole('button', { name: 'Add a review' }).click();
+    await expect(textIn(stepLabel(5, 6))).toHaveValue('30');
+    await textIn(stepLabel(5, 6)).fill('60');
+    post = k.posted('/config');
     await save().click();
     await post;
 
     await page.reload();
     card = await openConfigEntry(page, 'Review schedule');
-    await expect(textIn(LADDER[0])).toHaveValue('0');
+    await expect(textIn(stepLabel(5, 6))).toHaveValue('60');
+
+    // And removed again — the ladder shortens, and words parked on the dropped rung clamp down.
+    await card.getByRole('button', { name: 'Remove review 6' }).click();
+    post = k.posted('/config');
+    await save().click();
+    await post;
+
+    await page.reload();
+    card = await openConfigEntry(page, 'Review schedule');
+    await expect(textIn(stepLabel(4, 5))).toHaveValue('30');
+    await expect(card.getByRole('button', { name: 'Remove review 6' })).toHaveCount(0);
+
+    await fillLadder(SAME_DAY);
+    post = k.posted('/config');
+    await save().click();
+    await post;
+
+    await page.reload();
+    card = await openConfigEntry(page, 'Review schedule');
+    await expect(textIn(stepLabel(0, 5))).toHaveValue('0');
 
     // ---- Staff: a throwaway topic with one word. 1/1 through Flip is the deterministic round. ----
     await page.goto('/vocabulary');
@@ -126,15 +153,15 @@ test.describe('CRUD: spaced-repetition review', () => {
     // ---- Cleanup: put the school's ladder back. ----
     await page.goto('/config');
     card = await openConfigEntry(page, 'Review schedule');
-    for (const [i, label] of LADDER.entries()) await textIn(label).fill(DEFAULTS[i]);
+    await fillLadder(DEFAULTS);
     post = k.posted('/config');
     await save().click();
     await post;
 
     await page.reload();
     card = await openConfigEntry(page, 'Review schedule');
-    for (const [i, label] of LADDER.entries()) {
-      await expect(textIn(label)).toHaveValue(DEFAULTS[i]);
+    for (const [i, v] of DEFAULTS.entries()) {
+      await expect(textIn(stepLabel(i, DEFAULTS.length))).toHaveValue(v);
     }
   });
 });

@@ -542,18 +542,16 @@ export async function getReviewSettings(db: Db): Promise<ReviewSettings> {
   }
 }
 
-/** The admin form posts five flat fields; the ladder is stored as the array the logic wants. */
+/**
+ * Store the ladder the admin built. Its length is theirs to choose, so a save can shorten it —
+ * words parked on a rung that no longer exists are not rewritten here: `clampLevel` pulls them down
+ * to the new top the next time they are answered, which keeps the write cheap and the read correct.
+ */
 export async function setReviewSettings(
   db: Db,
   input: ReviewSettingsInput,
 ): Promise<ReviewSettings> {
-  const intervals = [
-    input.interval1,
-    input.interval2,
-    input.interval3,
-    input.interval4,
-    input.interval5,
-  ];
+  const intervals = [...input.intervals];
   const value = JSON.stringify({ intervals });
   await db
     .insert(settings)

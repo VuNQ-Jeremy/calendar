@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_REVIEW_SETTINGS,
-  REVIEW_LADDER_LENGTH,
+  REVIEW_LADDER_BOUNDS,
   applyAnswer,
   foldAnswers,
   groupDueByTopic,
@@ -199,10 +199,18 @@ describe('isValidLadder', () => {
     expect(isValidLadder([0, 5, 7, 14, 30])).toBe(true);
   });
 
-  it('rejects a ladder that is the wrong length', () => {
-    expect(isValidLadder([3, 5, 7])).toBe(false);
-    expect(isValidLadder([3, 5, 7, 14, 30, 60])).toBe(false);
-    expect(DEFAULT_REVIEW_SETTINGS.intervals.length).toBe(REVIEW_LADDER_LENGTH);
+  it('accepts any length the admin can build — the ladder is theirs to size', () => {
+    expect(isValidLadder([3])).toBe(true);
+    expect(isValidLadder([3, 5, 7])).toBe(true);
+    expect(isValidLadder([1, 2, 3, 4, 5, 6, 7, 8])).toBe(true);
+  });
+
+  it('rejects an empty ladder and one past the length ceiling', () => {
+    const [minRungs, maxRungs] = REVIEW_LADDER_BOUNDS;
+    expect(isValidLadder([])).toBe(false);
+    expect(isValidLadder(Array.from({ length: minRungs }, () => 3))).toBe(true);
+    expect(isValidLadder(Array.from({ length: maxRungs }, () => 3))).toBe(true);
+    expect(isValidLadder(Array.from({ length: maxRungs + 1 }, () => 3))).toBe(false);
   });
 
   it('rejects non-integers, negatives, and anything past a year', () => {

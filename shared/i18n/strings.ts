@@ -1370,13 +1370,12 @@ const en_strings = {
   fc_review_whole_topic: 'Whole topic',
   cfg_review: 'Review schedule',
   cfg_review_sub: 'How long between reviews of the same word',
-  cfg_review_interval_1: 'First review (days)',
-  cfg_review_interval_2: 'Second review (days)',
-  cfg_review_interval_3: 'Third review (days)',
-  cfg_review_interval_4: 'Fourth review (days)',
-  cfg_review_interval_5: 'Every review after (days)',
+  cfg_review_step: 'Review {n} (days)',
+  cfg_review_step_last: 'Review {n} (days, repeats)',
+  cfg_review_add_step: 'Add a review',
+  cfg_review_remove_step: 'Remove review {n}',
   cfg_review_hint:
-    'Days between reviews of one word. Answer it right when it is due and it moves up a step, so the gaps grow; get it wrong and it drops back a step and returns sooner. The last step repeats forever — a word never leaves the cycle.',
+    'Days between reviews of one word. Answer it right when it is due and it moves up a step, so the gaps grow; get it wrong and it drops back a step and returns sooner. Add or remove steps to make the schedule as long as you want — the last step repeats forever, so a word never leaves the cycle.',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -2665,13 +2664,12 @@ export const STRINGS = {
     fc_review_whole_topic: 'Cả chủ đề',
     cfg_review: 'Lịch ôn tập',
     cfg_review_sub: 'Bao lâu thì một từ quay lại để ôn',
-    cfg_review_interval_1: 'Lần ôn 1 (ngày)',
-    cfg_review_interval_2: 'Lần ôn 2 (ngày)',
-    cfg_review_interval_3: 'Lần ôn 3 (ngày)',
-    cfg_review_interval_4: 'Lần ôn 4 (ngày)',
-    cfg_review_interval_5: 'Các lần sau (ngày)',
+    cfg_review_step: 'Lần ôn {n} (ngày)',
+    cfg_review_step_last: 'Lần ôn {n} (ngày, lặp lại)',
+    cfg_review_add_step: 'Thêm lần ôn',
+    cfg_review_remove_step: 'Xoá lần ôn {n}',
     cfg_review_hint:
-      'Số ngày giữa hai lần ôn một từ. Đến hạn mà trả lời đúng thì từ lên một bậc, khoảng cách giãn dần ra; trả lời sai thì tụt một bậc và quay lại sớm hơn. Bậc cuối lặp mãi — một từ không bao giờ rời khỏi vòng ôn.',
+      'Số ngày giữa hai lần ôn một từ. Đến hạn mà trả lời đúng thì từ lên một bậc, khoảng cách giãn dần ra; trả lời sai thì tụt một bậc và quay lại sớm hơn. Thêm hoặc bớt bậc để lịch ôn dài ngắn tuỳ ý — bậc cuối lặp mãi, một từ không bao giờ rời khỏi vòng ôn.',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 
