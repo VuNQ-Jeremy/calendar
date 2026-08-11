@@ -1376,6 +1376,23 @@ const en_strings = {
   cfg_review_remove_step: 'Remove review {n}',
   cfg_review_hint:
     'Days between reviews of one word. Answer it right when it is due and it moves up a step, so the gaps grow; get it wrong and it drops back a step and returns sooner. Add or remove steps to make the schedule as long as you want — the last step repeats forever, so a word never leaves the cycle.',
+  nav_logs: 'Logs',
+  logs_title: 'Logs',
+  logs_subtitle: 'What the database actually says. Admin only, read-only.',
+  logs_scheduled_title: 'Scheduled words',
+  logs_scheduled_hint:
+    'Every word on the review ladder, most overdue first. Steps are shown as stored, so a word above the last step means the schedule was shortened after it was set.',
+  logs_all_students: 'All students',
+  logs_scheduled_empty: 'Nothing scheduled',
+  logs_scheduled_empty_sub: 'A word joins the ladder the first time a student answers it.',
+  logs_truncated: 'Showing the first {n} rows only — filter by student to see the rest.',
+  logs_level: 'Step {n}',
+  logs_due_today: 'due today',
+  logs_overdue_days: '{n}d overdue',
+  logs_due_in_days: 'in {n}d',
+  logs_right_wrong: '{right} right / {wrong} wrong',
+  logs_scheduled_legend:
+    'Student · word · meaning · topic · ladder step · due date · lifetime tally',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -2670,6 +2687,22 @@ export const STRINGS = {
     cfg_review_remove_step: 'Xoá lần ôn {n}',
     cfg_review_hint:
       'Số ngày giữa hai lần ôn một từ. Đến hạn mà trả lời đúng thì từ lên một bậc, khoảng cách giãn dần ra; trả lời sai thì tụt một bậc và quay lại sớm hơn. Thêm hoặc bớt bậc để lịch ôn dài ngắn tuỳ ý — bậc cuối lặp mãi, một từ không bao giờ rời khỏi vòng ôn.',
+    nav_logs: 'Nhật ký',
+    logs_title: 'Nhật ký',
+    logs_subtitle: 'Dữ liệu thật trong cơ sở dữ liệu. Chỉ quản trị, chỉ xem.',
+    logs_scheduled_title: 'Từ đã lên lịch ôn',
+    logs_scheduled_hint:
+      'Mọi từ đang trong vòng ôn, quá hạn lâu nhất lên đầu. Bậc hiển thị đúng như đã lưu, nên một từ ở bậc cao hơn bậc cuối nghĩa là lịch ôn đã bị rút ngắn sau khi từ đó được xếp bậc.',
+    logs_all_students: 'Tất cả học sinh',
+    logs_scheduled_empty: 'Chưa có từ nào được lên lịch',
+    logs_scheduled_empty_sub: 'Một từ vào vòng ôn ngay lần đầu học sinh trả lời nó.',
+    logs_truncated: 'Chỉ hiện {n} dòng đầu — chọn một học sinh để xem phần còn lại.',
+    logs_level: 'Bậc {n}',
+    logs_due_today: 'đến hạn hôm nay',
+    logs_overdue_days: 'quá hạn {n} ngày',
+    logs_due_in_days: 'còn {n} ngày',
+    logs_right_wrong: '{right} đúng / {wrong} sai',
+    logs_scheduled_legend: 'Học sinh · từ · nghĩa · chủ đề · bậc ôn · ngày đến hạn · tổng đúng/sai',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 

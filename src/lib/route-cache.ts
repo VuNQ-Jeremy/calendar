@@ -40,6 +40,7 @@ export const K = {
   tuition: 'route:tuition',
   rankings: 'route:rankings',
   garden: 'route:garden',
+  logs: 'route:logs',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -56,6 +57,17 @@ export const tuitionMonthKey = (month: string) => `route:tuition:${month}`;
 
 /** And again for the leaderboard: K.rankings stales every cached month in one go. */
 export const rankingsMonthKey = (month: string) => `route:rankings:${month}`;
+
+/**
+ * The admin log, filtered to one student. Same prefix trick: K.logs drops every filter at once,
+ * which is what a vocabulary round needs — it can reschedule any student's words, not just the
+ * one on screen.
+ *
+ * The UNFILTERED view uses K.logs itself, not this. That is not a shortcut: `cacheKeyForPath`
+ * maps a bare `/logs` to K.logs, and useStaleRouteRefresh compares against that, so a clientLoader
+ * caching the same page under a different key would simply never be refreshed.
+ */
+export const logsStudentKey = (studentId: string) => `route:logs:${studentId}`;
 
 /** One more: K.garden stales every class's garden and every album month at once. */
 export const gardenClassKey = (classId: string) => `route:garden:${classId}`;
@@ -146,8 +158,9 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // 'route:flashcards' is a prefix of every 'route:flashcards:<slug>' key, so
   // topic CRUD also drops all cached topic pages (slug may have changed).
   // K.garden goes stale too, and not only for topic edits: finishing a round is a
-  // 'flashcards' mutation, and a round is exactly what grows the plant.
-  flashcards: { hard: [K.flashcards], stale: [K.people, K.garden] },
+  // 'flashcards' mutation, and a round is exactly what grows the plant. K.logs for the same
+  // reason — a round reschedules the words it covered, which is what that log reports.
+  flashcards: { hard: [K.flashcards], stale: [K.people, K.garden, K.logs] },
   // Editing a question changes what the test builder lists, so /tests goes stale.
   questions: { hard: [K.questions], stale: [K.tests] },
   // A test writes score_records when graded, is scoped to a class, appears on the
@@ -259,6 +272,10 @@ export function cacheKeyForPath(pathname: string): string | null {
   // month lives in the path: a `?month=` would give every month the same cache entry.
   const rm = pathname.match(/^\/rankings\/(\d{4}-\d{2})\/?$/);
   if (rm) return rankingsMonthKey(rm[1]);
+  // The student filter lives in the path for the same reason the leaderboard's month does: this
+  // function only ever sees a pathname, so a `?student=` would give every student one cache entry.
+  const lg = pathname.match(/^\/logs\/([^/]+)\/?$/);
+  if (lg) return logsStudentKey(decodeURIComponent(lg[1]));
   // Album first: it is the longer path, and gardenClassKey is a prefix of it.
   const ga = pathname.match(/^\/garden\/([^/]+)\/album\/(\d{4}-\d{2})\/?$/);
   if (ga) return gardenAlbumKey(decodeURIComponent(ga[1]), ga[2]);
@@ -281,6 +298,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/tuition': K.tuition,
     '/rankings': K.rankings,
     '/garden': K.garden,
+    '/logs': K.logs,
   };
   return map[clean] ?? null;
 }

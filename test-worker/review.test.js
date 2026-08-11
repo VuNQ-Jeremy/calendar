@@ -291,3 +291,120 @@ describe('review settings', () => {
     }
   });
 });
+
+/**
+ * The admin log's read (/logs). Shares a database with every other test in this suite, so these
+ * assertions are scoped to the students they create rather than to the whole table.
+ */
+describe('listScheduledWords', () => {
+  it('reports the stored schedule, joined to student, word and topic', async () => {
+    const d = db();
+    const { topic, words } = await seedTopicWithWords(d);
+    const student = await seedStudent(d);
+
+    await play(d, student, topic, [{ wordId: words[0].id, correct: true }]);
+
+    const rows = await flashcardsSvc.listScheduledWords(d, { studentId: student.id });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      studentId: student.id,
+      studentName: 'Reviewer',
+      wordId: words[0].id,
+      word: 'word0',
+      meaningVi: 'từ 0',
+      topicId: topic.id,
+      topicName: topic.name,
+      level: 0,
+      dueDay: addDaysVn(today(), 3),
+      correct: 1,
+      wrong: 0,
+    });
+  });
+
+  it('filters to one student, and unfiltered covers them all', async () => {
+    const d = db();
+    const { topic, words } = await seedTopicWithWords(d, 2);
+    const a = await seedStudent(d);
+    const b = await seedStudent(d);
+
+    await play(d, a, topic, [{ wordId: words[0].id, correct: true }]);
+    await play(d, b, topic, [
+      { wordId: words[0].id, correct: true },
+      { wordId: words[1].id, correct: false },
+    ]);
+
+    expect(await flashcardsSvc.listScheduledWords(d, { studentId: a.id })).toHaveLength(1);
+    expect(await flashcardsSvc.listScheduledWords(d, { studentId: b.id })).toHaveLength(2);
+
+    // Unfiltered is school-wide: it must contain both students' rows. Scoped by id because other
+    // tests in this suite have scheduled words of their own.
+    const all = await flashcardsSvc.listScheduledWords(d, { limit: 500 });
+    const mine = all.filter((r) => r.studentId === a.id || r.studentId === b.id);
+    expect(mine).toHaveLength(3);
+  });
+
+  it('puts the most overdue word first', async () => {
+    const d = db();
+    const { topic, words } = await seedTopicWithWords(d, 3);
+    const student = await seedStudent(d);
+
+    await play(
+      d,
+      student,
+      topic,
+      words.map((w) => ({ wordId: w.id, correct: true })),
+    );
+    await backdate(d, student, words[0], 0, addDaysVn(today(), -1));
+    await backdate(d, student, words[1], 0, addDaysVn(today(), -30));
+    await backdate(d, student, words[2], 0, addDaysVn(today(), 10));
+
+    const rows = await flashcardsSvc.listScheduledWords(d, { studentId: student.id });
+    expect(rows.map((r) => r.wordId)).toEqual([words[1].id, words[0].id, words[2].id]);
+  });
+
+  it('omits a word that is not on the ladder, and every staff play', async () => {
+    const d = db();
+    const { topic, words } = await seedTopicWithWords(d);
+    const student = await seedStudent(d);
+    const teacher = await peopleSvc.createStaff(d, {
+      name: 'Teacher Logs',
+      email: `t${crypto.randomUUID()}@test.com`,
+      role: 'Teacher',
+      color: 'orange',
+    });
+
+    await play(d, student, topic, [{ wordId: words[0].id, correct: true }]);
+    await backdate(d, student, words[0], 0, null);
+    await flashcardsSvc.recordResult(
+      d,
+      { kind: 'staff', id: teacher.id },
+      {
+        topicId: topic.id,
+        mode: 'flip',
+        score: 1,
+        total: 1,
+        answers: [{ wordId: words[0].id, correct: true }],
+      },
+    );
+
+    const rows = await flashcardsSvc.listScheduledWords(d, { studentId: student.id });
+    expect(rows).toEqual([]);
+  });
+
+  it('honours the row limit', async () => {
+    const d = db();
+    const { topic, words } = await seedTopicWithWords(d, 3);
+    const student = await seedStudent(d);
+
+    await play(
+      d,
+      student,
+      topic,
+      words.map((w) => ({ wordId: w.id, correct: true })),
+    );
+
+    expect(
+      await flashcardsSvc.listScheduledWords(d, { studentId: student.id, limit: 2 }),
+    ).toHaveLength(2);
+  });
+});

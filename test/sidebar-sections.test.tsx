@@ -43,6 +43,9 @@ describe('sidebar nav sections', () => {
     expect(activeSectionFor('/my-tests')).toBe('learning');
     expect(activeSectionFor('/dashboard')).toBe('overview');
     expect(activeSectionFor('/config')).toBe('admin');
+    // The log's student filter is a path segment, so a filtered view stays in admin.
+    expect(activeSectionFor('/logs')).toBe('admin');
+    expect(activeSectionFor('/logs/s1')).toBe('admin');
     expect(activeSectionFor('/login')).toBeNull();
   });
 
@@ -114,6 +117,25 @@ describe('sidebar nav sections', () => {
         teacher,
       ).map((n) => n.id),
     ).toEqual(['feedback']);
+  });
+
+  it('shows the diagnostics log to an admin and to nobody else', () => {
+    const admin = NAV.find((s) => s.id === 'admin')!;
+    const seenBy = (user: { kind: string; role: string }) =>
+      visibleItems(admin, user).map((n) => n.id);
+    expect(seenBy({ kind: 'staff', role: 'Admin' })).toContain('logs');
+    for (const user of [
+      { kind: 'staff', role: 'Teacher' },
+      { kind: 'staff', role: 'Assistant' },
+      { kind: 'student', role: 'Student' },
+      { kind: 'parent', role: 'Parent' },
+    ]) {
+      expect(seenBy(user)).not.toContain('logs');
+    }
+    // Opening the parent portal must not leak it either — the row is staff+admin, not parentOk.
+    expect(visibleItems(admin, { kind: 'parent', role: 'Parent' }, { parentPortal: true })).toEqual(
+      [],
+    );
   });
 
   it('starts every section collapsed with nothing stored', async () => {

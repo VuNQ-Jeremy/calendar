@@ -132,6 +132,9 @@ export const NAV: NavSection[] = [
         adminOnly: true,
         staffOnly: true,
       },
+      // Diagnostics, not a report: it reads every student's rows at once, so admin only. The
+      // route enforces it with requireAdmin — this flag only hides the link.
+      { id: 'logs', path: '/logs', tk: 'nav_logs', icon: 'list', adminOnly: true, staffOnly: true },
       { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message', staffOnly: true },
     ],
   },

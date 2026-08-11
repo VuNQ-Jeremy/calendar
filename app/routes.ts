@@ -146,6 +146,9 @@ export default [
     // `?month=` would give every month the same cache entry.
     route('tuition/:month?', 'routes/tuition.tsx'),
     route('config', 'routes/config.tsx'),
+    // Admin diagnostics. The student filter sits in the PATH for the same cache reason as the
+    // months above: cacheKeyForPath only sees pathnames.
+    route('logs/:studentId?', 'routes/logs.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),
     // The parent portal. Gated twice: `parentOk` in sidebar-nav.tsx hides the nav item and

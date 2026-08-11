@@ -625,6 +625,76 @@ export async function countDueForStudent(
   return Number(rows[0]?.n ?? 0);
 }
 
+/** One scheduled word, as the admin log lists it. */
+export type ScheduledWordRow = {
+  studentId: string;
+  studentName: string;
+  studentColor: string;
+  wordId: string;
+  word: string;
+  meaningVi: string;
+  topicId: string;
+  topicName: string;
+  topicColor: string;
+  /** Rung on the ladder — index into the review settings' intervals. */
+  level: number;
+  /** ICT day it next falls due. Never null here: unscheduled rows are excluded. */
+  dueDay: string;
+  correct: number;
+  wrong: number;
+  lastSeen: string | null;
+};
+
+/** Nobody needs to scroll more than this to diagnose a schedule, and D1 has a response ceiling. */
+export const SCHEDULED_WORDS_LIMIT = 500;
+
+/**
+ * Every word currently on the review ladder, most overdue first — the admin log's read.
+ *
+ * A diagnostic view, not a student-facing one: it reports the schedule exactly as stored, so a
+ * row with a `dueDay` far in the past is a real backlog rather than a rendering artefact. Rows
+ * with no `dueDay` are excluded because they are not on the ladder at all; `level` is reported raw
+ * rather than clamped to the current ladder, so shortening the ladder is visible here as a level
+ * past its end instead of being silently hidden.
+ *
+ * Ordering is (dueDay, student, word) and fully deterministic — a log that reshuffles between
+ * reloads is useless for comparing two looks at the same data.
+ */
+export async function listScheduledWords(
+  db: Db,
+  opts: { studentId?: string | null; limit?: number } = {},
+): Promise<ScheduledWordRow[]> {
+  const where = opts.studentId
+    ? and(isNotNull(flashcardMastery.dueDay), eq(flashcardMastery.studentId, opts.studentId))
+    : isNotNull(flashcardMastery.dueDay);
+  const rows = await db
+    .select({
+      studentId: flashcardMastery.studentId,
+      studentName: students.name,
+      studentColor: students.color,
+      wordId: flashcardMastery.wordId,
+      word: flashcardWords.word,
+      meaningVi: flashcardWords.meaningVi,
+      topicId: flashcardTopics.id,
+      topicName: flashcardTopics.name,
+      topicColor: flashcardTopics.color,
+      level: flashcardMastery.level,
+      dueDay: flashcardMastery.dueDay,
+      correct: flashcardMastery.correct,
+      wrong: flashcardMastery.wrong,
+      lastSeen: flashcardMastery.lastSeen,
+    })
+    .from(flashcardMastery)
+    .innerJoin(students, eq(students.id, flashcardMastery.studentId))
+    .innerJoin(flashcardWords, eq(flashcardWords.id, flashcardMastery.wordId))
+    .innerJoin(flashcardTopics, eq(flashcardTopics.id, flashcardWords.topicId))
+    .where(where)
+    .orderBy(flashcardMastery.dueDay, students.name, flashcardWords.word)
+    .limit(opts.limit ?? SCHEDULED_WORDS_LIMIT);
+  // dueDay is nullable on the column but never null in this result — isNotNull is in the WHERE.
+  return rows.map((r) => ({ ...r, dueDay: r.dueDay as string }));
+}
+
 export async function studentFlashcardStats(db: Db): Promise<StudentFlashcardStats[]> {
   const rows = await db
     .select({
