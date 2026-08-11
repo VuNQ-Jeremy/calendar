@@ -11,6 +11,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "calendar",
   "compatibility_date": "2026-06-23",
+  // Enables ONLY AsyncLocalStorage, not the full nodejs_compat surface. New pattern for this
+  // repo — see server/services/audit.ts's header comment for why it's the right call: it lets
+  // services push audit entries without a logger threaded through every function signature, and
+  // there is no Request in scope in services/cron/Zalo to key a WeakMap on instead (the existing
+  // per-request memo idiom, auth.ts's userByRequest, needs one).
+  "compatibility_flags": ["nodejs_als"],
   "main": "./workers/app.ts",
   "assets": {
     "directory": "./build/client",
@@ -76,6 +82,8 @@
   "env": {
     "test": {
       "name": "calendar-test",
+      // env blocks do not inherit top-level compatibility_flags — must be repeated here.
+      "compatibility_flags": ["nodejs_als"],
       "assets": {
         "directory": "./build/client",
         "binding": "ASSETS",

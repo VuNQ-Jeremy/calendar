@@ -20,6 +20,14 @@ import { handleLiveUpgrade } from './live-hub';
 import { pollerStub } from './zalo-poller';
 import { runScheduled } from '../server/services/notify';
 import { isEnabled as zaloEnabled } from '../server/services/zalo';
+import { createDb } from '../server/db/index';
+import {
+  auditALS,
+  flush,
+  newRequestStore,
+  newSystemStore,
+  purgeOldLogs,
+} from '../server/services/audit';
 
 const requestHandler = createRequestHandler(
   () => import('virtual:react-router/server-build'),
@@ -46,8 +54,15 @@ export default {
 
     const context = new RouterContextProvider(new Map([[cloudflareCtx, { env, ctx }]]));
     const start = Date.now();
+    // Ambient collector for the activity log (see server/services/audit.ts). Every mutation,
+    // page-view beacon and auth event pushes into `store.entries` during `requestHandler`; once it
+    // resolves the buffer is fixed, so flushing right after is safe even though the response body
+    // may still be streaming — the flush itself rides `ctx.waitUntil`, off the response path.
+    const store = newRequestStore(request);
     try {
-      const response = await requestHandler(request, context);
+      const response = await auditALS.run(store, () => requestHandler(request, context));
+      store.status ??= response.status;
+      if (store.entries.length) ctx.waitUntil(flush(createDb(env), store));
       console.log('[request]', {
         method: request.method,
         path: url.pathname,
@@ -56,6 +71,12 @@ export default {
       });
       return response;
     } catch (err) {
+      // Whatever ran before the throw may already have pushed entries (e.g. a login_failed
+      // record right before an unrelated downstream error) — flush them rather than drop them.
+      if (store.entries.length) {
+        store.status ??= 500;
+        ctx.waitUntil(flush(createDb(env), store));
+      }
       console.error('[request] unhandled', {
         method: request.method,
         path: url.pathname,
@@ -91,13 +112,31 @@ export default {
       );
     }
 
+    // System-actor store for the activity log — mirrors the request-scoped one in fetch(), but
+    // there is no Request here at all, which is exactly the case ALS exists for (see audit.ts).
+    const cronStore = newSystemStore('cron', event.cron);
     ctx.waitUntil(
-      runScheduled(event.cron, env, new Date(event.scheduledTime)).catch((err) => {
-        // A throwing cron is retried by Cloudflare, which for a notification job means
-        // duplicates. The ledger makes that safe, but logging and swallowing is still the
-        // honest behaviour: there is no user waiting on this.
-        console.error('[cron] failed', { cron: event.cron, err: String(err) });
-      }),
+      auditALS
+        .run(cronStore, () => runScheduled(event.cron, env, new Date(event.scheduledTime)))
+        .catch((err) => {
+          // A throwing cron is retried by Cloudflare, which for a notification job means
+          // duplicates. The ledger makes that safe, but logging and swallowing is still the
+          // honest behaviour: there is no user waiting on this.
+          console.error('[cron] failed', { cron: event.cron, err: String(err) });
+        })
+        .finally(() => {
+          if (cronStore.entries.length) return flush(createDb(env), cronStore);
+        }),
     );
+
+    // Retention purge, on the same daily tick as the digest + garden sweep. Bounded and
+    // self-healing (see purgeOldLogs) so a missed day never needs a manual catch-up.
+    if (event.cron === '0 1 * * *') {
+      ctx.waitUntil(
+        purgeOldLogs(createDb(env), new Date()).catch((err) =>
+          console.error('[audit] purge failed', { err: String(err) }),
+        ),
+      );
+    }
   },
 } satisfies ExportedHandler<Env>;

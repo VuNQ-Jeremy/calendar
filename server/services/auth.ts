@@ -15,6 +15,7 @@ import {
 import { hashPassword, verifyPassword, newToken, hashToken } from './crypto';
 import { normalizeInviteCode } from '../../shared/logic/invite-code';
 import { sessionCookie } from '../session';
+import { attributeAccount, record, requestMeta, setActor } from './audit';
 
 // Static dummy hash for timing-safe login (prevents user-enumeration via timing).
 const DUMMY_HASH =
@@ -55,7 +56,17 @@ export async function createSession(
   const { token, hash } = await newToken();
   const days = ttlDays ?? (remember ? 30 : 1);
   const expiresAt = new Date(Date.now() + days * DAY_MS).toISOString();
-  await db.insert(sessions).values({ token: hash, accountId, expiresAt });
+  // ip/userAgent come from the ambient audit store (see server/services/audit.ts) rather than a
+  // new parameter here — createSession has no Request, and every caller already runs inside one.
+  const { ip, userAgent } = requestMeta();
+  await db.insert(sessions).values({
+    token: hash,
+    accountId,
+    expiresAt,
+    createdAt: new Date().toISOString(),
+    ip,
+    userAgent,
+  });
   return token;
 }
 
@@ -97,55 +108,59 @@ export async function userFromToken(db: Db, rawToken: string): Promise<SessionUs
   }
 
   const { account } = row;
+  let user: SessionUser | null = null;
+
   if (account.staffId) {
-    if (!row.staffRow) return null;
-    return {
-      kind: 'staff',
-      account: { id: account.id, email: account.email },
-      user: {
-        id: row.staffRow.id,
-        name: row.staffRow.name,
-        email: row.staffRow.email ?? null,
-        role: row.staffRow.role,
-        color: row.staffRow.color,
-        phone: row.staffRow.phone ?? null,
-      },
-    };
+    if (row.staffRow) {
+      user = {
+        kind: 'staff',
+        account: { id: account.id, email: account.email },
+        user: {
+          id: row.staffRow.id,
+          name: row.staffRow.name,
+          email: row.staffRow.email ?? null,
+          role: row.staffRow.role,
+          color: row.staffRow.color,
+          phone: row.staffRow.phone ?? null,
+        },
+      };
+    }
+  } else if (account.studentId) {
+    if (row.studentRow) {
+      user = {
+        kind: 'student',
+        account: { id: account.id, email: account.email },
+        user: {
+          id: row.studentRow.id,
+          name: row.studentRow.name,
+          email: row.studentRow.email ?? null,
+          role: 'Student',
+          color: row.studentRow.color,
+          phone: null, // students have no phone column
+        },
+      };
+    }
+  } else if (account.parentId) {
+    if (row.parentRow) {
+      user = {
+        kind: 'parent',
+        account: { id: account.id, email: account.email },
+        user: {
+          id: row.parentRow.id,
+          name: row.parentRow.name,
+          email: row.parentRow.email ?? null,
+          role: 'Parent',
+          color: row.parentRow.color,
+          phone: row.parentRow.phone ?? null,
+        },
+      };
+    }
   }
 
-  if (account.studentId) {
-    if (!row.studentRow) return null;
-    return {
-      kind: 'student',
-      account: { id: account.id, email: account.email },
-      user: {
-        id: row.studentRow.id,
-        name: row.studentRow.name,
-        email: row.studentRow.email ?? null,
-        role: 'Student',
-        color: row.studentRow.color,
-        phone: null, // students have no phone column
-      },
-    };
-  }
-
-  if (account.parentId) {
-    if (!row.parentRow) return null;
-    return {
-      kind: 'parent',
-      account: { id: account.id, email: account.email },
-      user: {
-        id: row.parentRow.id,
-        name: row.parentRow.name,
-        email: row.parentRow.email ?? null,
-        role: 'Parent',
-        color: row.parentRow.color,
-        phone: row.parentRow.phone ?? null,
-      },
-    };
-  }
-
-  return null;
+  // Fires once per request: getUser/requireApiUser memoize per Request (userByRequest below /
+  // server/api/auth.ts), and userFromToken is the one place both paths converge.
+  if (user) setActor(user, tokenHash.slice(0, 16));
+  return user;
 }
 
 // On a cold document load the layout loader and the page loader run in the
@@ -270,10 +285,20 @@ export async function login(
   });
 
   if (!valid || !account) {
+    // The failed-login feature (security view depends on it) is exactly this call — delete it
+    // if it's ever unwanted. accountFound distinguishes "wrong password for a real account" from
+    // "no such account", which is what makes a brute-force-by-guessing-emails pattern visible.
+    if (account) attributeAccount(account.id);
+    record({ action: 'login_failed', meta: { email: normalizedEmail, accountFound: !!account } });
     await new Promise((r) => setTimeout(r, 1000));
     return null;
   }
 
+  // meta carries the full email — a deliberate privacy deviation from the '[auth] login.attempt'
+  // log above, which stores only the domain. Justified: this row is admin-only, 90-day-purged,
+  // and the security view needs to identify the targeted account.
+  attributeAccount(account.id);
+  record({ action: 'login', meta: { email: normalizedEmail } });
   return { accountId: account.id };
 }
 
@@ -282,6 +307,9 @@ export async function logout(db: Db, request: Request): Promise<void> {
   if (!rawToken || typeof rawToken !== 'string') return;
   const tokenHash = await hashToken(rawToken);
   await db.delete(sessions).where(eq(sessions.token, tokenHash));
+  // Attribution needs the caller to have already resolved the session (getUser/userFromToken)
+  // in this request — logout() itself never looks up who is signing out.
+  record({ action: 'logout' });
 }
 
 /**
@@ -374,6 +402,13 @@ export async function redeemInvite(
         .where(eq(invites.id, invite.id)),
     );
     await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+    attributeAccount(accountId);
+    record({
+      action: 'invite_redeem',
+      entityType: 'invite',
+      entityId: invite.id,
+      meta: { role: invite.role, linked: true },
+    });
     return { accountId };
   }
 
@@ -446,6 +481,13 @@ export async function redeemInvite(
     return null;
   }
 
+  attributeAccount(accountId);
+  record({
+    action: 'invite_redeem',
+    entityType: 'invite',
+    entityId: invite.id,
+    meta: { role: invite.role, linked: false },
+  });
   return { accountId };
 }
 
@@ -462,6 +504,8 @@ export async function requestReset(db: Db, email: string): Promise<{ devUrl?: st
   await db
     .insert(passwordResets)
     .values({ tokenHash: hash, accountId: account.id, expiresAt, used: 0 });
+  attributeAccount(account.id);
+  record({ action: 'password_reset', meta: { stage: 'requested', email: normalizedEmail } });
 
   if (import.meta.env.DEV) {
     return { devUrl: `/login?mode=reset&token=${token}` };
@@ -487,6 +531,8 @@ export async function resetPassword(db: Db, token: string, newPassword: string):
     db.update(passwordResets).set({ used: 1 }).where(eq(passwordResets.tokenHash, tokenHash)),
     db.delete(sessions).where(eq(sessions.accountId, resetRow.accountId)),
   ]);
+  attributeAccount(resetRow.accountId);
+  record({ action: 'password_reset', meta: { stage: 'completed' } });
 
   return true;
 }
@@ -522,5 +568,8 @@ export async function changePassword(
       .delete(sessions)
       .where(and(eq(sessions.accountId, accountId), ne(sessions.token, currentTokenHash))),
   ]);
+  // Actor is already resolved here — every caller reaches changePassword through an
+  // authenticated route, so userFromToken has already run setActor for this request.
+  record({ action: 'password_change' });
   return 'ok';
 }

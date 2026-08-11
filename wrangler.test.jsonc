@@ -3,6 +3,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "calendar",
   "compatibility_date": "2026-06-23",
+  // Required for server/services/audit.ts's AsyncLocalStorage import — without it every test
+  // that touches the service layer fails to even load.
+  "compatibility_flags": ["nodejs_als"],
   "main": "worker/index.js",
   "d1_databases": [
     {

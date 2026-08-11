@@ -236,6 +236,12 @@ export const sessions = sqliteTable(
       .notNull()
       .references(() => accounts.id, { onDelete: 'cascade' }),
     expiresAt: text('expires_at').notNull(),
+    // Added in migration 0035, for the activity log's security view. Nullable: rows written
+    // before that migration have none, and the view must render that rather than treat it as
+    // suspicious.
+    createdAt: text('created_at'),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
   },
   (t) => [index('idx_sessions_account').on(t.accountId)],
 );
@@ -912,4 +918,48 @@ export const gardenSnapshots = sqliteTable(
     createdAt: text('created_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.classId, t.month] })],
+);
+
+/**
+ * Append-only audit log — every mutation (with full before/after JSON), page view, and auth event,
+ * across every actor (web sessions, the mobile API, crons, Zalo). See migrations/0035_activity_log.sql
+ * for the full column-by-column rationale and server/services/audit.ts for how rows are built.
+ *
+ * `id` is autoincrement (the `classSchedule.id` precedent) rather than this repo's usual
+ * `crypto.randomUUID()` — a monotonic int is what makes cursor pagination and the retention purge
+ * cheap. No foreign keys: the log must outlive the accounts, sessions and records it describes.
+ */
+export const activityLog = sqliteTable(
+  'activity_log',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    occurredAt: text('occurred_at').notNull(),
+    recordedAt: text('recorded_at').notNull(),
+    /** 'web' | 'api' | 'beacon' | 'cron' | 'zalo' */
+    source: text('source').notNull(),
+    /** 'staff' | 'student' | 'parent' | 'system' | 'anon' */
+    actorKind: text('actor_kind').notNull(),
+    actorId: text('actor_id'),
+    actorName: text('actor_name'),
+    accountId: text('account_id'),
+    sessionRef: text('session_ref'),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    action: text('action').notNull(),
+    domain: text('domain'),
+    entityType: text('entity_type'),
+    entityId: text('entity_id'),
+    route: text('route'),
+    intent: text('intent'),
+    status: integer('status'),
+    beforeJson: text('before_json'),
+    afterJson: text('after_json'),
+    metaJson: text('meta_json'),
+  },
+  (t) => [
+    index('idx_activity_entity').on(t.entityType, t.entityId, t.id),
+    index('idx_activity_account').on(t.accountId, t.id),
+    index('idx_activity_action').on(t.action, t.id),
+    index('idx_activity_time').on(t.recordedAt),
+  ],
 );

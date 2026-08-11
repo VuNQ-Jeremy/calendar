@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0179 — 2026-08-11
+New activity_log table (append-only, 90-day-purged) captures logins/failed-logins/logouts/password changes/invite redemptions, with an AsyncLocalStorage collector wired through every request and cron tick so services can log later stages' mutations without threading a logger through every call.
+
 ## v0.0178 — 2026-08-11
 Logs notifications: each forecast row can be sent on its own, not just the whole job. The browser posts a key and the message is re-derived server-side; sending marks the ledger, so the scheduled run skips it. Garden penalties stay job-only — only the sweep can actually charge the stage.
 
