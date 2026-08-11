@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0178 — 2026-08-11
+Logs notifications: each forecast row can be sent on its own, not just the whole job. The browser posts a key and the message is re-derived server-side; sending marks the ledger, so the scheduled run skips it. Garden penalties stay job-only — only the sweep can actually charge the stage.
+
 ## v0.0177 — 2026-08-11
 Feedback submissions now open a GitHub issue, which fires a claude.ai brainstorm session on the report
 

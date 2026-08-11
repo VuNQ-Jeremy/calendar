@@ -64,7 +64,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
   await requireAdmin(request, env);
   const db = createDb(env);
   const form = await request.formData();
-  if (form.get('intent') !== 'run-job') {
+  const intent = form.get('intent');
+
+  // Send exactly one planned row. The browser posts a KEY and nothing else — the message text is
+  // re-derived server-side from the same planner that drew the screen, so a tab cannot dictate what
+  // the school's families receive.
+  if (intent === 'run-one') {
+    const key = String(form.get('key') ?? '');
+    if (!key) return Response.json({ error: 'bad_key' }, { status: 400 });
+    const result = await notifyPlan.sendPlannedNotification(db, env, key);
+    return result.ok ? result : Response.json(result, { status: 409 });
+  }
+
+  if (intent !== 'run-job') {
     return Response.json({ error: 'bad_intent' }, { status: 400 });
   }
   const job = String(form.get('job') ?? '');

@@ -15,6 +15,7 @@ import {
   ictStamp,
   parseLedgerKey,
   planNotifications,
+  sendPlannedNotification,
 } from '../server/services/notify-plan';
 import {
   accounts,
@@ -41,16 +42,28 @@ function db() {
   return createDb(env);
 }
 
-/** Expo is stubbed so a real run can be compared against a forecast without leaving the process. */
+/**
+ * Both delivery channels are stubbed, so a real run can be compared against a forecast without
+ * leaving the process. They are told apart by URL: Expo takes an array of messages and answers with
+ * a ticket each, Zalo takes one `{chat_id, text}` and answers `{ok:true}`.
+ */
 let sent = [];
+let zaloSent = [];
 beforeEach(() => {
   sent = [];
+  zaloSent = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_url, init) => {
-      const batch = JSON.parse(init.body);
-      sent.push(...batch);
-      return new Response(JSON.stringify({ data: batch.map(() => ({ status: 'ok' })) }), {
+    vi.fn(async (url, init) => {
+      const body = JSON.parse(init.body);
+      if (String(url).includes('exp.host')) {
+        sent.push(...body);
+        return new Response(JSON.stringify({ data: body.map(() => ({ status: 'ok' })) }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      zaloSent.push(body);
+      return new Response(JSON.stringify({ ok: true }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }),
@@ -611,6 +624,182 @@ describe('planNotifications() writes nothing at all', () => {
 
     const still = await d.select().from(sentNotifications).where(eq(sentNotifications.key, stale));
     expect(still).toHaveLength(1);
+  });
+});
+
+describe('sendPlannedNotification()', () => {
+  /** A class one week out, with one enrolled device — one planned push row, not yet due. */
+  async function seedFutureClass(d, label) {
+    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    const student = await seedStudentWithDevice(
+      d,
+      label,
+      `ExponentPushToken[${label}-${Date.now()}]`,
+    );
+    const cls = await classesSvc.create(d, {
+      name: `${label} ${Date.now()}`,
+      color: 'green',
+      studentIds: [student.id],
+    });
+    const ev = await eventsSvc.create(d, {
+      title: label,
+      date: '2026-08-13',
+      start: '09:00',
+      classId: cls.id,
+      recurrence: 'none',
+    });
+    return { student, cls, ev, key: ledgerKey.class(ev.id, '2026-08-13') };
+  }
+
+  it('sends one row, to that row’s devices only, and marks its key', async () => {
+    const d = db();
+    const { key } = await seedFutureClass(d, 'SendOne');
+
+    const at = utcForIct('2026-08-11', 10, 0);
+    const result = await sendPlannedNotification(d, undefined, key, at);
+    expect(result).toMatchObject({ ok: true, channel: 'push', sent: 1 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].title).toContain('SendOne');
+
+    // The key is now in the ledger, so the scheduled run will skip this occurrence...
+    expect(await push.alreadySent(d, [key])).toEqual(new Set([key]));
+    // ...and the forecast says so.
+    const plan = await planNotifications(d, undefined, at);
+    expect(rowsFor(plan, (p) => p.key === key)[0].alreadySent).toBe(true);
+  });
+
+  it('refuses to send the same row twice', async () => {
+    const d = db();
+    const { key } = await seedFutureClass(d, 'Twice');
+    const at = utcForIct('2026-08-11', 10, 0);
+
+    expect((await sendPlannedNotification(d, undefined, key, at)).ok).toBe(true);
+    expect(await sendPlannedNotification(d, undefined, key, at)).toEqual({
+      ok: false,
+      reason: 'already_sent',
+    });
+    // The second attempt must not have reached Expo.
+    expect(sent).toHaveLength(1);
+  });
+
+  it('refuses a key that is not in the plan', async () => {
+    const d = db();
+    expect(
+      await sendPlannedNotification(d, undefined, 'class:no-such-event:2026-08-13', new Date()),
+    ).toEqual({ ok: false, reason: 'not_found' });
+    expect(sent).toEqual([]);
+  });
+
+  it('refuses a row with nobody to send to, and leaves the key unburned', async () => {
+    const d = db();
+    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    const student = await peopleSvc.createStudent(d, {
+      name: 'No device',
+      email: `nd${crypto.randomUUID()}@example.test`,
+      color: 'orange',
+      classIds: [],
+    });
+    const cls = await classesSvc.create(d, {
+      name: `Nobody ${Date.now()}`,
+      color: 'cocoa',
+      studentIds: [student.id],
+    });
+    const ev = await eventsSvc.create(d, {
+      title: 'Nobody',
+      date: '2026-08-13',
+      start: '09:00',
+      classId: cls.id,
+      recurrence: 'none',
+    });
+    const key = ledgerKey.class(ev.id, '2026-08-13');
+
+    expect(
+      await sendPlannedNotification(d, undefined, key, utcForIct('2026-08-11', 10, 0)),
+    ).toEqual({ ok: false, reason: 'no_recipients' });
+    // Refusing must not mark it — the scheduled run should still get its turn.
+    expect(await push.alreadySent(d, [key])).toEqual(new Set());
+  });
+
+  it('refuses a garden penalty: only the sweep can actually charge the stage', async () => {
+    const d = db();
+    await setNotifPrefs(d, { gardenAlerts: true });
+    const student = await seedStudentWithDevice(
+      d,
+      'Penalty',
+      `ExponentPushToken[pen-${Date.now()}]`,
+    );
+    const cls = await classesSvc.create(d, {
+      name: `Penalty class ${Date.now()}`,
+      color: 'green',
+      studentIds: [student.id],
+    });
+    const name = `Penalty topic ${crypto.randomUUID()}`;
+    await flashcardsSvc.createTopic(d, { name, color: 'green' });
+    const topic = (await flashcardsSvc.listTopics(d)).find((t) => t.name === name);
+    const now = new Date();
+    const assignmentId = crypto.randomUUID();
+    await d.insert(vocabAssignments).values({
+      id: assignmentId,
+      classId: cls.id,
+      topicId: topic.id,
+      requiredCount: 3,
+      minScorePct: 70,
+      deadline: new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10),
+      createdAt: new Date(now.getTime() - 7 * 86_400_000).toISOString(),
+    });
+    const key = ledgerKey.gardenPenalty(assignmentId, student.id);
+
+    expect(await sendPlannedNotification(d, undefined, key, now)).toEqual({
+      ok: false,
+      reason: 'not_sendable',
+    });
+    expect(sent).toEqual([]);
+    expect(await push.alreadySent(d, [key])).toEqual(new Set());
+  });
+
+  it('sends a Zalo row over Zalo, not over push', async () => {
+    const d = db();
+    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    const student = await seedStudentWithDevice(
+      d,
+      'ZaloSend',
+      `ExponentPushToken[zs-${Date.now()}]`,
+    );
+    const cls = await classesSvc.create(d, {
+      name: `Zalo send ${Date.now()}`,
+      color: 'rose',
+      studentIds: [student.id],
+    });
+    const ev = await eventsSvc.create(d, {
+      title: 'Zalo send',
+      date: '2026-08-13',
+      start: '09:00',
+      classId: cls.id,
+      recurrence: 'none',
+    });
+    await d.insert(zaloChats).values({
+      id: crypto.randomUUID(),
+      chatId: `chat-${crypto.randomUUID()}`,
+      kind: 'user',
+      studentId: student.id,
+      createdAt: new Date().toISOString(),
+    });
+    const key = ledgerKey.zaloClass(ev.id, '2026-08-13');
+
+    const result = await sendPlannedNotification(
+      d,
+      { ZALO_BOT_TOKEN: 'test-token' },
+      key,
+      utcForIct('2026-08-11', 10, 0),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.channel).toBe('zalo');
+    // It went out over Zalo, carrying the parent-facing text — and no push was built.
+    expect(sent).toEqual([]);
+    expect(zaloSent).toHaveLength(1);
+    expect(zaloSent[0].text).toContain('🔔');
+    // And the push twin of the same occurrence is untouched.
+    expect(await push.alreadySent(d, [ledgerKey.class(ev.id, '2026-08-13')])).toEqual(new Set());
   });
 });
 

@@ -299,7 +299,62 @@ function PlannedRow({ row, showTime }: { row: PlannedNotification; showTime: boo
           </span>
         ) : null}
       </span>
+      <SendOneButton row={row} />
     </div>
+  );
+}
+
+/**
+ * Send this one row now, rather than its whole job.
+ *
+ * Only offered where it can honestly be done: a row already sent has nothing to send, a row with no
+ * recipients would burn its key on nobody, and a garden penalty announces a stage loss that only the
+ * sweep actually charges — so that one is left to the job button, which sweeps first.
+ */
+function SendOneButton({ row }: { row: PlannedNotification }) {
+  const fetcher = useFetcher<{ ok?: boolean; sent?: number; reason?: string }>();
+  const { t } = useLang();
+  const [confirm, confirmNode] = useConfirm();
+
+  if (row.alreadySent || !row.deliverable || row.jobKind === 'garden-penalty') {
+    return <span style={{ minWidth: 96 }} />;
+  }
+
+  const send = async () => {
+    // Sending early is the normal case for this button — it also marks the key, so the scheduled
+    // run will skip it. Say so plainly rather than surprising an admin with a silent cancellation.
+    const ok = await confirm({
+      title: t('logs_notif_send_one'),
+      message: t('logs_notif_send_one_confirm', {
+        who:
+          row.target.kind === 'group-chat'
+            ? t('logs_notif_target_group')
+            : String(row.target.count),
+        when: fmtStamp(row.fireAtIct),
+      }),
+      confirmLabel: t('logs_notif_send_one'),
+    });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'run-one');
+    fd.set('key', row.key);
+    fetcher.submit(fd, { method: 'post' });
+  };
+
+  const busy = fetcher.state !== 'idle';
+  const failed = fetcher.data && fetcher.data.ok === false;
+  return (
+    <span className="m-row" style={{ gap: 8, alignItems: 'center', minWidth: 96 }}>
+      {failed && (
+        <span style={{ color: DANGER.ink, fontSize: 12 }}>
+          {t(`logs_notif_send_fail_${fetcher.data?.reason ?? 'not_found'}`)}
+        </span>
+      )}
+      <NBtn variant="ghost" disabled={busy} onClick={send}>
+        {busy ? t('logs_notif_sending') : t('logs_notif_send_one')}
+      </NBtn>
+      {confirmNode}
+    </span>
   );
 }
 

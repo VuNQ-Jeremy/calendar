@@ -31,6 +31,7 @@ import {
   ledgerKey,
   previewPush,
   previewZaloText,
+  type PushBody,
   staffDaySummary,
   staffPreviewPush,
   staffPreviewZaloText,
@@ -194,8 +195,13 @@ function ictStampToUtc(stamp: string): Date {
  * the maps below answer the rest.
  */
 type AudienceIndex = {
-  devicesByStudentId: Map<string, number>;
-  staffDevices: number;
+  /**
+   * The actual Expo tokens, not just a count. The count is what the forecast displays; the tokens
+   * are what "send this one row" needs, and resolving them twice from two different code paths is
+   * how a preview and its delivery would end up disagreeing about who gets it.
+   */
+  tokensByStudentId: Map<string, string[]>;
+  staffTokens: string[];
   staffNames: string[];
   parentChatsByStudentId: Map<string, string[]>;
   groupChatByClassId: Map<string, string>;
@@ -215,7 +221,9 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
     db
       .select({ id: accounts.id, studentId: accounts.studentId, staffId: accounts.staffId })
       .from(accounts),
-    db.select({ accountId: pushTokens.accountId }).from(pushTokens),
+    db
+      .select({ accountId: pushTokens.accountId, expoToken: pushTokens.expoToken })
+      .from(pushTokens),
     db.select({ id: students.id, name: students.name }).from(students),
     db.select({ id: staff.id, name: staff.name }).from(staff),
     zalo.listLinks(db),
@@ -224,19 +232,23 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
       .from(parentStudents),
   ]);
 
-  const devicesByAccount = new Map<string, number>();
+  const tokensByAccount = new Map<string, string[]>();
   for (const t of tokenRows) {
     if (!t.accountId) continue;
-    devicesByAccount.set(t.accountId, (devicesByAccount.get(t.accountId) ?? 0) + 1);
+    tokensByAccount.set(t.accountId, [...(tokensByAccount.get(t.accountId) ?? []), t.expoToken]);
   }
 
-  const devicesByStudentId = new Map<string, number>();
-  let staffDevices = 0;
+  const tokensByStudentId = new Map<string, string[]>();
+  const staffTokens: string[] = [];
   for (const a of accountRows) {
-    const n = devicesByAccount.get(a.id) ?? 0;
+    const tokens = tokensByAccount.get(a.id) ?? [];
+    if (!tokens.length) continue;
     if (a.studentId)
-      devicesByStudentId.set(a.studentId, (devicesByStudentId.get(a.studentId) ?? 0) + n);
-    else if (a.staffId) staffDevices += n;
+      tokensByStudentId.set(a.studentId, [
+        ...(tokensByStudentId.get(a.studentId) ?? []),
+        ...tokens,
+      ]);
+    else if (a.staffId) staffTokens.push(...tokens);
   }
 
   // The two routes `zalo.chatsForParentsOfStudents` unions: a chat paired to a parent RECORD that
@@ -278,8 +290,8 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
   }
 
   return {
-    devicesByStudentId,
-    staffDevices,
+    tokensByStudentId,
+    staffTokens,
     staffNames: staffRows.map((s) => s.name),
     parentChatsByStudentId,
     groupChatByClassId,
@@ -287,7 +299,7 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
     studentNameById: new Map(studentRows.map((s) => [s.id, s.name])),
     totals: {
       pushTokens: tokenRows.length,
-      pushAccounts: devicesByAccount.size,
+      pushAccounts: tokensByAccount.size,
       zaloLinks: links.length,
       group,
       direct,
@@ -295,28 +307,46 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
   };
 }
 
+/**
+ * Where one planned row would actually be delivered. Server-side only — it never rides out in the
+ * loader payload, so the browser cannot see the school's device tokens or chat ids.
+ */
+export type Recipients = { tokens: string[]; chatIds: string[] };
+
 /** Push target for a class roster: the students who could actually be reached. */
-function studentsTarget(studentIds: string[], idx: AudienceIndex): PlannedTarget {
-  const withDevice = studentIds.filter((id) => (idx.devicesByStudentId.get(id) ?? 0) > 0);
-  const devices = studentIds.reduce((n, id) => n + (idx.devicesByStudentId.get(id) ?? 0), 0);
+function studentsTarget(
+  studentIds: string[],
+  idx: AudienceIndex,
+): { target: PlannedTarget; tokens: string[] } {
+  const withDevice = studentIds.filter((id) => (idx.tokensByStudentId.get(id) ?? []).length > 0);
+  const tokens = studentIds.flatMap((id) => idx.tokensByStudentId.get(id) ?? []);
   return {
-    kind: 'students',
-    count: withDevice.length,
-    devices,
-    names: withDevice.slice(0, NAME_CAP).map((id) => idx.studentNameById.get(id) ?? id),
+    target: {
+      kind: 'students',
+      count: withDevice.length,
+      devices: tokens.length,
+      names: withDevice.slice(0, NAME_CAP).map((id) => idx.studentNameById.get(id) ?? id),
+    },
+    tokens,
   };
 }
 
 /** Zalo target for a class: the group chat if one is linked, else each family privately. */
-function parentsTarget(classId: string, studentIds: string[], idx: AudienceIndex): PlannedTarget {
+function parentsTarget(
+  classId: string,
+  studentIds: string[],
+  idx: AudienceIndex,
+): { target: PlannedTarget; chatIds: string[] } {
   const groupChat = idx.groupChatByClassId.get(classId);
-  if (groupChat) return { kind: 'group-chat', count: 1, names: [] };
-  const chats = new Set(studentIds.flatMap((id) => idx.parentChatsByStudentId.get(id) ?? []));
+  if (groupChat) {
+    return { target: { kind: 'group-chat', count: 1, names: [] }, chatIds: [groupChat] };
+  }
+  const chats = [...new Set(studentIds.flatMap((id) => idx.parentChatsByStudentId.get(id) ?? []))];
   const named = studentIds
     .filter((id) => (idx.parentChatsByStudentId.get(id) ?? []).length > 0)
     .slice(0, NAME_CAP)
     .map((id) => idx.studentNameById.get(id) ?? id);
-  return { kind: 'parents', count: chats.size, names: named };
+  return { target: { kind: 'parents', count: chats.length, names: named }, chatIds: chats };
 }
 
 // ---- The planners ----
@@ -347,12 +377,19 @@ async function horizonOccurrences(db: Db, ctx: PlanCtx) {
     );
 }
 
-export async function planNotifications(
+/**
+ * The plan, plus where each row would actually go.
+ *
+ * `recipients` is keyed by ledger key (unique per row — the Zalo variants carry a `zalo-` prefix)
+ * and is deliberately NOT part of `NotificationsPlan`: it holds device tokens and chat ids, which
+ * have no business in a loader payload. Only `sendPlannedNotification` reads it.
+ */
+async function buildPlan(
   db: Db,
   env: Env | undefined,
-  at: Date = new Date(),
-  horizonDays = 7,
-): Promise<NotificationsPlan> {
+  at: Date,
+  horizonDays: number,
+): Promise<{ plan: NotificationsPlan; recipients: Map<string, Recipients> }> {
   const { dateIso: nowDateIso, minutes: nowMin } = ictNow(at);
   const zaloEnabled = !!env && zalo.isEnabled(env);
 
@@ -362,6 +399,7 @@ export async function planNotifications(
     classesSvc.list(db),
   ]);
   const ctx: PlanCtx = { nowDateIso, nowMin, horizonDays, prefs, idx, zaloEnabled, classes };
+  const recipients = new Map<string, Recipients>();
 
   const occs = await horizonOccurrences(db, ctx);
   const previews = await previewSvc.composeMany(
@@ -377,10 +415,10 @@ export async function planNotifications(
   };
 
   const planned: PlannedNotification[] = [
-    ...classRows(ctx, occs, previews),
-    ...previewRows(ctx, occs, previews),
-    ...(await digestRows(db, ctx, nextRuns.digest)),
-    ...(await gardenRows(db, ctx, nextRuns.garden)),
+    ...classRows(ctx, occs, previews, recipients),
+    ...previewRows(ctx, occs, previews, recipients),
+    ...(await digestRows(db, ctx, nextRuns.digest, recipients)),
+    ...(await gardenRows(db, ctx, nextRuns.garden, recipients)),
   ];
 
   // Cheapest possible truncation point: after composing (strings are free) but before the one
@@ -396,27 +434,44 @@ export async function planNotifications(
   for (const row of kept) row.alreadySent = sent.has(row.key);
 
   return {
-    planned: kept,
-    prefs,
-    channels: {
-      zaloEnabled,
-      pushTokens: idx.totals.pushTokens,
-      pushAccounts: idx.totals.pushAccounts,
-      zaloLinks: idx.totals.zaloLinks,
-      zaloByKind: { group: idx.totals.group, direct: idx.totals.direct },
+    plan: {
+      planned: kept,
+      prefs,
+      channels: {
+        zaloEnabled,
+        pushTokens: idx.totals.pushTokens,
+        pushAccounts: idx.totals.pushAccounts,
+        zaloLinks: idx.totals.zaloLinks,
+        zaloByKind: { group: idx.totals.group, direct: idx.totals.direct },
+      },
+      nextRuns,
+      generatedAtIct: ictStamp(nowDateIso, nowMin),
+      horizonDays,
+      truncated,
     },
-    nextRuns,
-    generatedAtIct: ictStamp(nowDateIso, nowMin),
-    horizonDays,
-    truncated,
+    recipients,
   };
+}
+
+export async function planNotifications(
+  db: Db,
+  env: Env | undefined,
+  at: Date = new Date(),
+  horizonDays = 7,
+): Promise<NotificationsPlan> {
+  return (await buildPlan(db, env, at, horizonDays)).plan;
 }
 
 type Occ = Awaited<ReturnType<typeof horizonOccurrences>>[number];
 type Previews = Awaited<ReturnType<typeof previewSvc.composeMany>>;
 
 /** Job A rows: one push and one Zalo per occurrence whose reminder tick lands in the horizon. */
-function classRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNotification[] {
+function classRows(
+  ctx: PlanCtx,
+  occs: Occ[],
+  previews: Previews,
+  rec: Map<string, Recipients>,
+): PlannedNotification[] {
   if (!ctx.prefs.classReminders) return [];
   const out: PlannedNotification[] = [];
   const horizonEnd = addDaysIso(ctx.nowDateIso, ctx.horizonDays);
@@ -437,32 +492,36 @@ function classRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNotifi
       date: ev.date,
       start: ev.start,
     };
-    const pushTarget = studentsTarget(cls.studentIds, ctx.idx);
+    const { target, tokens } = studentsTarget(cls.studentIds, ctx.idx);
     const composed = classReminderPush(cls, ev, focus);
+    const key = ledgerKey.class(ev.id, ev.date);
+    rec.set(key, { tokens, chatIds: [] });
     out.push({
       jobKind: 'class',
       channel: 'push',
-      key: ledgerKey.class(ev.id, ev.date),
+      key,
       fireAtIct,
       exactFire: true,
       alreadySent: false,
-      deliverable: (pushTarget.devices ?? 0) > 0,
-      target: pushTarget,
+      deliverable: tokens.length > 0,
+      target,
       title: composed.title,
       body: composed.body,
       subject,
     });
     if (ctx.zaloEnabled) {
-      const zaloTarget = parentsTarget(cls.id, cls.studentIds, ctx.idx);
+      const parents = parentsTarget(cls.id, cls.studentIds, ctx.idx);
+      const zaloKey = ledgerKey.zaloClass(ev.id, ev.date);
+      rec.set(zaloKey, { tokens: [], chatIds: parents.chatIds });
       out.push({
         jobKind: 'class',
         channel: 'zalo',
-        key: ledgerKey.zaloClass(ev.id, ev.date),
+        key: zaloKey,
         fireAtIct,
         exactFire: true,
         alreadySent: false,
-        deliverable: zaloTarget.count > 0,
-        target: zaloTarget,
+        deliverable: parents.chatIds.length > 0,
+        target: parents.target,
         body: classReminderZaloText(cls, ev, focus),
         subject,
       });
@@ -477,7 +536,12 @@ function classRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNotifi
  * Fires at 19:00 the day BEFORE each occurrence, which is why an occurrence tomorrow may already
  * have been sent while one next week has not.
  */
-function previewRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNotification[] {
+function previewRows(
+  ctx: PlanCtx,
+  occs: Occ[],
+  previews: Previews,
+  rec: Map<string, Recipients>,
+): PlannedNotification[] {
   if (!ctx.prefs.previewEvening) return [];
   const out: PlannedNotification[] = [];
   const firstTargetDay = addDaysIso(ctx.nowDateIso, ctx.nowMin < PREVIEW_MINUTE ? 1 : 2);
@@ -493,32 +557,36 @@ function previewRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNoti
     const fireAtIct = ictStamp(addDaysIso(ev.date, -1), PREVIEW_MINUTE);
     const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW);
     const subject = { className: cls.name, eventTitle: ev.title, date: ev.date, start: ev.start };
-    const pushTarget = studentsTarget(cls.studentIds, ctx.idx);
+    const { target, tokens } = studentsTarget(cls.studentIds, ctx.idx);
     const composed = previewPush(cls, ev, line);
+    const key = ledgerKey.preview(ev.id, ev.date);
+    rec.set(key, { tokens, chatIds: [] });
     out.push({
       jobKind: 'preview',
       channel: 'push',
-      key: ledgerKey.preview(ev.id, ev.date),
+      key,
       fireAtIct,
       exactFire: true,
       alreadySent: false,
-      deliverable: (pushTarget.devices ?? 0) > 0,
-      target: pushTarget,
+      deliverable: tokens.length > 0,
+      target,
       title: composed.title,
       body: composed.body,
       subject,
     });
     if (ctx.zaloEnabled) {
-      const zaloTarget = parentsTarget(cls.id, cls.studentIds, ctx.idx);
+      const parents = parentsTarget(cls.id, cls.studentIds, ctx.idx);
+      const zaloKey = ledgerKey.zaloPreview(ev.id, ev.date);
+      rec.set(zaloKey, { tokens: [], chatIds: parents.chatIds });
       out.push({
         jobKind: 'preview',
         channel: 'zalo',
-        key: ledgerKey.zaloPreview(ev.id, ev.date),
+        key: zaloKey,
         fireAtIct,
         exactFire: true,
         alreadySent: false,
-        deliverable: zaloTarget.count > 0,
-        target: zaloTarget,
+        deliverable: parents.chatIds.length > 0,
+        target: parents.target,
         body: previewZaloText(cls, ev, line),
         subject,
       });
@@ -532,18 +600,20 @@ function previewRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNoti
     const summary = staffDaySummary(dayOccs, ctx.classes, previews);
     const composed = staffPreviewPush(dayOccs.length, summary);
     const subject = { date };
+    const key = ledgerKey.previewStaff(date);
+    rec.set(key, { tokens: ctx.idx.staffTokens, chatIds: [] });
     out.push({
       jobKind: 'preview-staff',
       channel: 'push',
-      key: ledgerKey.previewStaff(date),
+      key,
       fireAtIct,
       exactFire: true,
       alreadySent: false,
-      deliverable: ctx.idx.staffDevices > 0,
+      deliverable: ctx.idx.staffTokens.length > 0,
       target: {
         kind: 'staff',
         count: ctx.idx.staffNames.length,
-        devices: ctx.idx.staffDevices,
+        devices: ctx.idx.staffTokens.length,
         names: ctx.idx.staffNames.slice(0, NAME_CAP),
       },
       title: composed.title,
@@ -551,10 +621,12 @@ function previewRows(ctx: PlanCtx, occs: Occ[], previews: Previews): PlannedNoti
       subject,
     });
     if (ctx.zaloEnabled) {
+      const zaloKey = ledgerKey.zaloPreviewStaff(date);
+      rec.set(zaloKey, { tokens: [], chatIds: ctx.idx.staffChatIds });
       out.push({
         jobKind: 'preview-staff',
         channel: 'zalo',
-        key: ledgerKey.zaloPreviewStaff(date),
+        key: zaloKey,
         fireAtIct,
         exactFire: true,
         alreadySent: false,
@@ -582,6 +654,7 @@ async function digestRows(
   db: Db,
   ctx: PlanCtx,
   nextRunIct: string,
+  rec: Map<string, Recipients>,
 ): Promise<PlannedNotification[]> {
   if (!ctx.prefs.studyNudges) return [];
   const runAt = ictStampToUtc(nextRunIct);
@@ -599,16 +672,23 @@ async function digestRows(
   const out: PlannedNotification[] = [];
   for (const [studentId, name] of ctx.idx.studentNameById) {
     if (active.has(studentId)) continue;
-    const devices = ctx.idx.devicesByStudentId.get(studentId) ?? 0;
+    const tokens = ctx.idx.tokensByStudentId.get(studentId) ?? [];
+    const key = ledgerKey.study(studentId, bucket);
+    rec.set(key, { tokens, chatIds: [] });
     out.push({
       jobKind: 'digest',
       channel: 'push',
-      key: ledgerKey.study(studentId, bucket),
+      key,
       fireAtIct: nextRunIct,
       exactFire: false,
       alreadySent: false,
-      deliverable: devices > 0,
-      target: { kind: 'student', count: devices > 0 ? 1 : 0, devices, names: [name] },
+      deliverable: tokens.length > 0,
+      target: {
+        kind: 'student',
+        count: tokens.length > 0 ? 1 : 0,
+        devices: tokens.length,
+        names: [name],
+      },
       title: composed.title,
       body: composed.body,
       subject: { studentName: name, date: runDateIso },
@@ -628,6 +708,7 @@ async function gardenRows(
   db: Db,
   ctx: PlanCtx,
   nextRunIct: string,
+  rec: Map<string, Recipients>,
 ): Promise<PlannedNotification[]> {
   if (!ctx.prefs.gardenAlerts) return [];
   const runDateIso = nextRunIct.slice(0, 10);
@@ -635,9 +716,10 @@ async function gardenRows(
   const alerts = gardenAlertsFrom(sweep, runDateIso);
 
   return alerts.map((a) => {
-    const devices = ctx.idx.devicesByStudentId.get(a.studentId) ?? 0;
+    const tokens = ctx.idx.tokensByStudentId.get(a.studentId) ?? [];
     const name = ctx.idx.studentNameById.get(a.studentId) ?? a.studentId;
     const composed = gardenAlertPush(a.body);
+    rec.set(a.key, { tokens, chatIds: [] });
     return {
       jobKind: a.key.startsWith('garden-penalty:')
         ? ('garden-penalty' as const)
@@ -649,11 +731,11 @@ async function gardenRows(
       fireAtIct: nextRunIct,
       exactFire: false,
       alreadySent: false,
-      deliverable: devices > 0,
+      deliverable: tokens.length > 0,
       target: {
         kind: 'student' as const,
-        count: devices > 0 ? 1 : 0,
-        devices,
+        count: tokens.length > 0 ? 1 : 0,
+        devices: tokens.length,
         names: [name],
       },
       title: composed.title,
@@ -661,6 +743,115 @@ async function gardenRows(
       subject: { studentName: name, date: runDateIso },
     };
   });
+}
+
+// ---- Sending one planned row ----
+
+/**
+ * A garden penalty announces something the SWEEP does, not something the plant already shows.
+ *
+ * Every other alert in the system reports state a reader could derive for themselves — a wilting
+ * plant is wilting whether or not anyone was told. `garden-penalty` is the exception: the stage is
+ * only actually lost when `runGardenSweep` writes the transition, so sending that message on its own
+ * would tell a child their plant dropped a stage while their own screen still shows it intact.
+ * Sending it individually is therefore refused; the job button beside it sweeps first, then sends.
+ */
+const NOT_INDIVIDUALLY_SENDABLE: ReadonlySet<JobKind> = new Set(['garden-penalty']);
+
+export type SendOneResult =
+  | { ok: true; key: string; channel: Channel; sent: number }
+  | { ok: false; reason: 'not_found' | 'already_sent' | 'no_recipients' | 'not_sendable' };
+
+/**
+ * Send exactly one planned notification now, and mark its key.
+ *
+ * The caller passes a KEY, never a body. Everything sent is re-derived here from the same planner
+ * the screen rendered, which is what makes this safe to expose: a browser cannot dictate the text of
+ * a message to the school's families, and what goes out is by construction what the admin was
+ * looking at rather than what their tab was showing ten minutes ago.
+ *
+ * The key is marked sent exactly as the cron would mark it, so the scheduled run will skip this row.
+ * That is the intended meaning of the button — "send this one now instead of later" — and it is why
+ * the UI confirms before firing a row whose time has not come.
+ */
+export async function sendPlannedNotification(
+  db: Db,
+  env: Env | undefined,
+  key: string,
+  at: Date = new Date(),
+): Promise<SendOneResult> {
+  const { plan, recipients } = await buildPlan(db, env, at, 7);
+  const row = plan.planned.find((p) => p.key === key);
+  if (!row) return { ok: false, reason: 'not_found' };
+  if (row.alreadySent) return { ok: false, reason: 'already_sent' };
+  if (NOT_INDIVIDUALLY_SENDABLE.has(row.jobKind)) return { ok: false, reason: 'not_sendable' };
+
+  const to = recipients.get(key) ?? { tokens: [], chatIds: [] };
+  let sent = 0;
+  if (row.channel === 'push') {
+    if (!to.tokens.length) return { ok: false, reason: 'no_recipients' };
+    const { dead } = await push.sendPush(
+      to.tokens.map((token) => ({
+        to: token,
+        title: row.title ?? '',
+        body: row.body,
+        // The planner does not carry `data`/`channelId` on the row, so they are recomposed from the
+        // same composers the cron uses — see pushEnvelopeFor.
+        ...pushEnvelopeFor(row),
+      })),
+    );
+    if (dead.length) await push.pruneTokens(db, dead);
+    sent = to.tokens.length - dead.length;
+  } else {
+    if (!env || !zalo.isEnabled(env)) return { ok: false, reason: 'no_recipients' };
+    if (!to.chatIds.length) return { ok: false, reason: 'no_recipients' };
+    sent = await zalo.broadcastText(env, to.chatIds, row.body);
+  }
+
+  await push.markSent(db, [key]);
+  return { ok: true, key, channel: row.channel, sent };
+}
+
+/**
+ * The deep link and Android channel for a row, from the same composers the cron uses.
+ *
+ * Only `data` and `channelId` are taken: the title and body come off the planned row itself, which
+ * is what the admin saw. Recomposing those here would risk the two disagreeing.
+ */
+function pushEnvelopeFor(row: PlannedNotification): Pick<PushBody, 'data' | 'channelId'> {
+  switch (row.jobKind) {
+    case 'class': {
+      const { data, channelId } = classReminderPush({ name: '' }, blankOcc(row), undefined);
+      return { data, channelId };
+    }
+    case 'preview': {
+      const { data, channelId } = previewPush({ name: '' }, blankOcc(row), '');
+      return { data, channelId };
+    }
+    case 'preview-staff': {
+      const { data, channelId } = staffPreviewPush(0, '');
+      return { data, channelId };
+    }
+    case 'digest': {
+      const { data, channelId } = studyNudgePush();
+      return { data, channelId };
+    }
+    default: {
+      const { data, channelId } = gardenAlertPush('');
+      return { data, channelId };
+    }
+  }
+}
+
+/**
+ * The composers read `id` off an occurrence to build the deep link, and nothing else that matters
+ * for the envelope. The class reminder's `/event/:id` is the only id-bearing link, and the planned
+ * row's key ends in the event id it was built from.
+ */
+function blankOcc(row: PlannedNotification): { id: string; title: string; date: string } {
+  const parts = parseLedgerKey(row.key);
+  const id = 'eventId' in parts ? parts.eventId : '';
+  return { id, title: row.subject.eventTitle ?? '', date: row.subject.date };
 }
 
 // ---- The ledger, read backwards ----

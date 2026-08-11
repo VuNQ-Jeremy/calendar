@@ -1437,6 +1437,14 @@ const en_strings = {
     'The ledger keeps 30 days, and only a key and a timestamp. A row means the job processed that key — not that anyone received anything, since keys are marked done even when no device or chat was linked.',
   logs_notif_recent_empty: 'Nothing sent yet',
   logs_notif_deleted: '(subject deleted)',
+  logs_notif_send_one: 'Send',
+  logs_notif_sending: 'Sending…',
+  logs_notif_send_one_confirm:
+    'Send this one message now, to {who}? It was due to go out at {when}; sending it now means the scheduled run will skip it.',
+  logs_notif_send_fail_not_found: 'no longer scheduled',
+  logs_notif_send_fail_already_sent: 'already sent',
+  logs_notif_send_fail_no_recipients: 'nobody to send to',
+  logs_notif_send_fail_not_sendable: 'use Run now',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -2791,6 +2799,14 @@ export const STRINGS = {
       'Sổ ghi chỉ giữ 30 ngày, và chỉ có khoá cùng thời điểm. Một dòng nghĩa là việc đã xử lý khoá đó — không phải là có người nhận được, vì khoá vẫn được đánh dấu ngay cả khi không có thiết bị hay chat nào được liên kết.',
     logs_notif_recent_empty: 'Chưa gửi gì',
     logs_notif_deleted: '(đối tượng đã xoá)',
+    logs_notif_send_one: 'Gửi',
+    logs_notif_sending: 'Đang gửi…',
+    logs_notif_send_one_confirm:
+      'Gửi riêng tin này ngay, tới {who}? Tin này đến lịch lúc {when}; gửi bây giờ thì lần chạy theo lịch sẽ bỏ qua nó.',
+    logs_notif_send_fail_not_found: 'không còn trong lịch',
+    logs_notif_send_fail_already_sent: 'đã gửi rồi',
+    logs_notif_send_fail_no_recipients: 'không có ai để gửi',
+    logs_notif_send_fail_not_sendable: 'dùng nút Chạy ngay',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 

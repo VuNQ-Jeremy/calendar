@@ -80,6 +80,21 @@ test.describe('logs: scheduled notifications', () => {
     await post;
     await expect(previews).toContainText('push messages');
 
+    // ---- A single row can be sent on its own, without running the whole job. ----
+    //
+    // Only rows with a real recipient offer the button, so this asserts what is there rather than
+    // demanding a send: in a freshly seeded environment no device is registered and every row reads
+    // "no recipients", which is itself the behaviour worth seeing.
+    const rowSend = previews.getByRole('button', { name: 'Send', exact: true }).first();
+    if (await rowSend.count()) {
+      await rowSend.click();
+      post = k.posted('/logs/notifications');
+      await page.locator('.m-dialog__foot .mochi-btn.is-primary').first().click();
+      await post;
+    } else {
+      await expect(previews).toContainText('no recipients');
+    }
+
     // ---- Cleanup: delete the event; the forecast row goes with it. ----
     await page.goto('/calendar');
     await page.getByText(title, { exact: false }).first().click();
