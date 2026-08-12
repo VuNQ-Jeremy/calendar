@@ -1,6 +1,12 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { letterSlots, meaningOf, pickRound, scrambleLetters } from '@mochi/shared/logic/flashcards';
+import {
+  letterSlots,
+  meaningOf,
+  pickRound,
+  scrambleLetters,
+  SPELL_ROUND_SIZE,
+} from '@mochi/shared/logic/flashcards';
 import type { LetterSlot } from '@mochi/shared/logic/flashcards';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
@@ -18,19 +24,21 @@ import { GameEnd } from './GameEnd';
 
 type Question = { word: FlashcardWordRow; slots: LetterSlot[]; bank: string[] };
 
-function buildQuestions(words: FlashcardWordRow[]): Question[] {
-  return pickRound(words).map((w) => ({
+function buildQuestions(words: FlashcardWordRow[], roundSize?: number): Question[] {
+  return pickRound(words, roundSize ?? SPELL_ROUND_SIZE).map((w) => ({
     word: w,
     slots: letterSlots(w.word),
     bank: scrambleLetters(w.word),
   }));
 }
 
-export function ScrambleGame({ words, onExit, onFinish, endNote }: GameProps) {
+export function ScrambleGame({ words, roundSize, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
 
-  const [questions, setQuestions] = React.useState<Question[]>(() => buildQuestions(words));
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildQuestions(words, roundSize),
+  );
   const [idx, setIdx] = React.useState(0);
   const [placed, setPlaced] = React.useState<(number | null)[]>(() =>
     Array(questions[0]?.bank.length ?? 0).fill(null),
@@ -58,9 +66,12 @@ export function ScrambleGame({ words, onExit, onFinish, endNote }: GameProps) {
     }
   }, [done, score, questions.length, answers, onFinish]);
 
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const advance = () => {
     setVerdict(null);
@@ -101,7 +112,7 @@ export function ScrambleGame({ words, onExit, onFinish, endNote }: GameProps) {
 
   const replay = () => {
     finished.current = false;
-    const qs = buildQuestions(words);
+    const qs = buildQuestions(words, roundSize);
     setQuestions(qs);
     setAnswers([]);
     setIdx(0);
@@ -247,7 +258,10 @@ export function ScrambleGame({ words, onExit, onFinish, endNote }: GameProps) {
         })}
       </View>
 
-      <Button variant="ghost" onPress={() => !verdict && setPlaced(Array(q.bank.length).fill(null))}>
+      <Button
+        variant="ghost"
+        onPress={() => !verdict && setPlaced(Array(q.bank.length).fill(null))}
+      >
         {t('fc_clear')}
       </Button>
     </View>

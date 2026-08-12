@@ -7,7 +7,7 @@ import { WordAudio } from './audio';
  * The `release()` in the cleanup is what stops a word being read aloud after the screen that
  * started it has gone — a card still talking over the next one reads as a bug.
  */
-export function useWordAudio(): (word: string) => void {
+export function useWordAudio(): (text: string, rate?: number) => void {
   const ref = useRef<WordAudio | null>(null);
   const audio = useMemo(() => {
     ref.current = new WordAudio();
@@ -16,5 +16,5 @@ export function useWordAudio(): (word: string) => void {
 
   useEffect(() => () => audio.release(), [audio]);
 
-  return (word) => audio.play(word);
+  return (text, rate) => audio.play(text, rate);
 }

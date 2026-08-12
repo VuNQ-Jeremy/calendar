@@ -1,6 +1,13 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { decoyLetters, maskWord, meaningOf, pickRound, shuffle } from '@mochi/shared/logic/flashcards';
+import {
+  decoyLetters,
+  maskWord,
+  meaningOf,
+  pickRound,
+  shuffle,
+  SPELL_ROUND_SIZE,
+} from '@mochi/shared/logic/flashcards';
 import type { MaskSlot } from '@mochi/shared/logic/flashcards';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
@@ -17,20 +24,22 @@ import { GameEnd } from './GameEnd';
 
 type Question = { word: FlashcardWordRow; slots: MaskSlot[]; bank: string[] };
 
-function buildQuestions(words: FlashcardWordRow[]): Question[] {
-  return pickRound(words).map((w) => {
+function buildQuestions(words: FlashcardWordRow[], roundSize?: number): Question[] {
+  return pickRound(words, roundSize ?? SPELL_ROUND_SIZE).map((w) => {
     const slots = maskWord(w.word);
     const hidden = slots.filter((s) => s.hidden).map((s) => s.ch);
     return { word: w, slots, bank: shuffle([...hidden, ...decoyLetters(2)]) };
   });
 }
 
-export function FillGame({ words, onExit, onFinish, endNote }: GameProps) {
+export function FillGame({ words, roundSize, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
 
   const gapCount = (q: Question | undefined) => q?.slots.filter((s) => s.hidden).length ?? 0;
-  const [questions, setQuestions] = React.useState<Question[]>(() => buildQuestions(words));
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildQuestions(words, roundSize),
+  );
   const [idx, setIdx] = React.useState(0);
   const [placed, setPlaced] = React.useState<(number | null)[]>(() =>
     Array(gapCount(questions[0])).fill(null),
@@ -58,9 +67,12 @@ export function FillGame({ words, onExit, onFinish, endNote }: GameProps) {
     }
   }, [done, score, questions.length, answers, onFinish]);
 
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const advance = () => {
     setVerdict(null);
@@ -105,7 +117,7 @@ export function FillGame({ words, onExit, onFinish, endNote }: GameProps) {
 
   const replay = () => {
     finished.current = false;
-    const qs = buildQuestions(words);
+    const qs = buildQuestions(words, roundSize);
     setQuestions(qs);
     setAnswers([]);
     setIdx(0);

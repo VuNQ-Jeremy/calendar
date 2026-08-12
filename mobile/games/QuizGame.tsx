@@ -1,7 +1,9 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
-import { meaningOf, shuffle } from '@mochi/shared/logic/flashcards';
+import { buildQuizQuestions, type QuizQuestion } from '@mochi/shared/logic/flashcards';
+import { imageOf } from '@mochi/shared/logic/flashcards';
+import { BASE } from '~/lib/api';
 import { useWordAudio } from '~/lib/use-word-audio';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
@@ -14,40 +16,21 @@ import { GameEnd } from './GameEnd';
  * Port of `src/flashcards/game-quiz.tsx`. Plain taps — no gestures — so this is close to a
  * transliteration: `onClick` becomes `onPress`, the CSS grid becomes a wrapping flex row.
  *
- * The scoring, the 35% audio-prompt chance, the three distractors and the 900ms reveal delay are
- * all unchanged. A student's score must not depend on which client they played on.
+ * The scoring, the 35% audio/image-prompt chance, the three distractors and the 900ms reveal
+ * delay are all unchanged — `buildQuizQuestions` is the exact function the web uses. A student's
+ * score must not depend on which client they played on.
  */
 
-type Question = {
-  word: FlashcardWordRow;
-  prompt: 'text' | 'audio';
-  options: string[];
-  answer: string;
-};
+type Question = QuizQuestion<FlashcardWordRow>;
 
-function buildQuestions(words: FlashcardWordRow[]): Question[] {
-  return shuffle(words).map((w) => {
-    const answer = meaningOf(w);
-    const distractors = shuffle(
-      Array.from(
-        new Set(words.filter((o) => o.id !== w.id).map(meaningOf).filter((m) => m !== answer)),
-      ),
-    ).slice(0, 3);
-    return {
-      word: w,
-      prompt: Math.random() < 0.35 ? 'audio' : 'text',
-      options: shuffle([answer, ...distractors]),
-      answer,
-    };
-  });
-}
-
-export function QuizGame({ words, onExit, onFinish, endNote }: GameProps) {
+export function QuizGame({ words, roundSize, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
   const play = useWordAudio();
 
-  const [questions, setQuestions] = React.useState<Question[]>(() => buildQuestions(words));
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildQuizQuestions(words, roundSize),
+  );
   const [idx, setIdx] = React.useState(0);
   const [picked, setPicked] = React.useState<string | null>(null);
   const [answers, setAnswers] = React.useState<{ wordId: string; correct: boolean }[]>([]);
@@ -65,9 +48,12 @@ export function QuizGame({ words, onExit, onFinish, endNote }: GameProps) {
   }, [done, score, questions.length, answers, onFinish]);
 
   // Leaving mid-question would otherwise advance a screen that is no longer mounted.
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const pick = (opt: string) => {
     if (picked) return;
@@ -82,7 +68,7 @@ export function QuizGame({ words, onExit, onFinish, endNote }: GameProps) {
 
   const replay = () => {
     finished.current = false;
-    setQuestions(buildQuestions(words));
+    setQuestions(buildQuizQuestions(words, roundSize));
     setAnswers([]);
     setIdx(0);
     setPicked(null);
@@ -116,7 +102,25 @@ export function QuizGame({ words, onExit, onFinish, endNote }: GameProps) {
       </Muted>
 
       <View style={{ alignItems: 'center', gap: th.spacing[3] }}>
-        {q.prompt === 'audio' ? (
+        {q.prompt === 'image' ? (
+          <>
+            {imageOf(q.word, BASE) ? (
+              <Image
+                source={{ uri: imageOf(q.word, BASE) as string }}
+                resizeMode="cover"
+                style={{
+                  width: 240,
+                  height: 240,
+                  borderRadius: th.radius.lg,
+                  borderWidth: 1,
+                  borderColor: th.color.borderSubtle,
+                  backgroundColor: th.color.surfaceCard,
+                }}
+              />
+            ) : null}
+            <Muted>{t('fc_pick_word')}</Muted>
+          </>
+        ) : q.prompt === 'audio' ? (
           <>
             <IconButton
               variant="solid"

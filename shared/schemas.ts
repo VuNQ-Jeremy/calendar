@@ -269,6 +269,8 @@ export const FlashcardWordInput = z.object({
   meaningVi: z.string().trim().max(500).default(''),
   definitionEn: z.string().max(1000).nullish(),
   ipa: z.string().max(200).nullish(),
+  exampleEn: z.string().max(300).nullish(),
+  exampleAnswer: z.string().max(100).nullish(),
   audioUrl: z.string().max(2000).nullish(),
   // An R2 object key minted by /vocab-image-generate or /vocab-image-commit, never a
   // client-chosen string. Shape-checking it here means a crafted value cannot address another
@@ -282,6 +284,21 @@ export const FlashcardImportInput = z.object({
   words: z.array(FlashcardWordInput).min(1).max(200),
 });
 export type FlashcardImportInput = z.infer<typeof FlashcardImportInput>;
+
+/** Backfill payload for the "Generate sentences" button: per-word example fields only. */
+export const FlashcardExampleFillInput = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        exampleEn: z.string().trim().min(1).max(300),
+        exampleAnswer: z.string().trim().min(1).max(100),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type FlashcardExampleFillInput = z.infer<typeof FlashcardExampleFillInput>;
 
 /** A new topic plus its first words — what the AI generator saves in one call. */
 export const FlashcardTopicWithWordsInput = FlashcardTopicInput.extend({
@@ -314,6 +331,8 @@ export type EnrichedWord = {
   meaningVi: string;
   definitionEn: string | null;
   ipa: string | null;
+  exampleEn: string | null;
+  exampleAnswer: string | null;
 };
 
 export const VocabLevel = z.enum(['beginner', 'intermediate', 'advanced']);
@@ -344,6 +363,8 @@ export type GeneratedWord = {
   meaningVi: string;
   definitionEn: string | null;
   ipa: string | null;
+  exampleEn: string | null;
+  exampleAnswer: string | null;
   imageQuery: string | null;
 };
 
@@ -409,6 +430,11 @@ export const FlashcardMode = z.enum([
   'fill',
   'type',
   'picture',
+  'ipa',
+  'stress',
+  'cloze',
+  'listen',
+  'mix',
 ]);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
 
@@ -983,6 +1009,8 @@ export const VocabAssignmentInput = z.object({
   topicId: z.string().min(1),
   requiredCount: z.coerce.number().int().min(1).max(20),
   minScorePct: z.coerce.number().int().min(0).max(100),
+  /** Questions per round for every mode but flip; null = default sizes (pre-0036 rows). */
+  questionCount: z.coerce.number().int().min(5).max(30).nullish(),
   /** ICT YYYY-MM-DD, inclusive. */
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   /**

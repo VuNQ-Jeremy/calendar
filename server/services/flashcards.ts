@@ -97,6 +97,8 @@ export type FlashcardWordRow = {
   meaningVi: string;
   definitionEn: string | null;
   ipa: string | null;
+  exampleEn: string | null;
+  exampleAnswer: string | null;
   audioUrl: string | null;
   /** R2 object key for the word's picture, or null. Resolve with `flashcardImagePath`. */
   imageKey: string | null;
@@ -143,6 +145,8 @@ function mapWord(r: typeof flashcardWords.$inferSelect): FlashcardWordRow {
     meaningVi: r.meaningVi,
     definitionEn: r.definitionEn,
     ipa: r.ipa,
+    exampleEn: r.exampleEn,
+    exampleAnswer: r.exampleAnswer,
     audioUrl: r.audioUrl,
     imageKey: r.imageKey,
     createdAt: r.createdAt,
@@ -283,6 +287,8 @@ export async function createWord(
     meaningVi: input.meaningVi,
     definitionEn: input.definitionEn ?? null,
     ipa: input.ipa ?? null,
+    exampleEn: input.exampleEn ?? null,
+    exampleAnswer: input.exampleAnswer ?? null,
     audioUrl: input.audioUrl ?? null,
     imageKey: input.imageKey ?? null,
     createdAt: new Date().toISOString(),
@@ -299,6 +305,8 @@ export async function updateWord(
   if (patch.meaningVi !== undefined) set.meaningVi = patch.meaningVi;
   if (patch.definitionEn !== undefined) set.definitionEn = patch.definitionEn ?? null;
   if (patch.ipa !== undefined) set.ipa = patch.ipa ?? null;
+  if (patch.exampleEn !== undefined) set.exampleEn = patch.exampleEn ?? null;
+  if (patch.exampleAnswer !== undefined) set.exampleAnswer = patch.exampleAnswer ?? null;
   if (patch.audioUrl !== undefined) set.audioUrl = patch.audioUrl ?? null;
   if (patch.imageKey !== undefined) set.imageKey = patch.imageKey ?? null;
   if (Object.keys(set).length) {
@@ -324,10 +332,30 @@ export async function importWords(
       meaningVi: w.meaningVi,
       definitionEn: w.definitionEn ?? null,
       ipa: w.ipa ?? null,
+      exampleEn: w.exampleEn ?? null,
+      exampleAnswer: w.exampleAnswer ?? null,
       audioUrl: w.audioUrl ?? null,
       imageKey: w.imageKey ?? null,
       createdAt: now,
     }),
+  );
+  if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+}
+
+/**
+ * Batch-write AI-backfilled example sentences. Scoped to one topic so a stale id from another
+ * topic (or a crafted one) cannot touch rows this screen does not own.
+ */
+export async function updateWordExamples(
+  db: Db,
+  topicId: string,
+  items: { id: string; exampleEn: string; exampleAnswer: string }[],
+): Promise<void> {
+  const ops: BatchItem<'sqlite'>[] = items.map((it) =>
+    db
+      .update(flashcardWords)
+      .set({ exampleEn: it.exampleEn, exampleAnswer: it.exampleAnswer })
+      .where(and(eq(flashcardWords.id, it.id), eq(flashcardWords.topicId, topicId))),
   );
   if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 }

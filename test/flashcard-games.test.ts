@@ -1,20 +1,29 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   ALL_MODES,
   MIN_WORDS,
   SPELL_ROUND_SIZE,
+  blankExample,
+  buildClozeQuestions,
+  buildIpaQuestions,
+  buildMixItems,
   buildPictureQuestions,
+  buildStressQuestions,
   checkTyped,
   decoyLetters,
+  exampleEligible,
   imageOf,
+  ipaStress,
   isValidModesCsv,
   letterSlots,
   maskWord,
+  mixEligibleModes,
   modeAllowed,
   normalizeModesCsv,
   parseModes,
   pickRound,
   scrambleLetters,
+  stressEligible,
   typeEligible,
   wordsWithImages,
 } from '../shared/logic/flashcards.js';
@@ -40,7 +49,7 @@ describe('letterSlots', () => {
 });
 
 describe('scrambleLetters', () => {
-  it('keeps exactly the word\'s letters, dropping separators', () => {
+  it("keeps exactly the word's letters, dropping separators", () => {
     const tiles = scrambleLetters('ice cream');
     expect([...tiles].sort().join('')).toBe('acceeimr');
   });
@@ -153,9 +162,9 @@ describe('imageOf / wordsWithImages', () => {
   it('reads rows without the column as imageless', () => {
     expect(imageOf({})).toBeNull();
     expect(imageOf({ imageKey: null })).toBeNull();
-    expect(wordsWithImages([{ imageKey: 'flashcards/a.jpg' }, {}, { imageKey: null }])).toHaveLength(
-      1,
-    );
+    expect(
+      wordsWithImages([{ imageKey: 'flashcards/a.jpg' }, {}, { imageKey: null }]),
+    ).toHaveLength(1);
   });
 });
 
@@ -222,5 +231,266 @@ describe('modes CSV', () => {
 describe('mode constants', () => {
   it('every mode has a MIN_WORDS entry', () => {
     for (const m of ALL_MODES) expect(MIN_WORDS[m]).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('ipaStress', () => {
+  it('locates the stressed syllable by counting vowel nuclei up to the ˈ mark', () => {
+    expect(ipaStress('/ˈwɪskər/')).toEqual({ syllables: 2, stressIndex: 0 });
+    expect(ipaStress('/əˈbaʊt/')).toEqual({ syllables: 2, stressIndex: 1 });
+    expect(ipaStress('/aɪˈdiə/')).toEqual({ syllables: 3, stressIndex: 1 });
+  });
+
+  it('treats a diphthong as one nucleus, not two', () => {
+    // "əˈbaʊt" has 4 letters after the stress mark (b,a,ʊ,t) but only 2 syllables: bA-ʊT is one.
+    expect(ipaStress('/əˈbaʊt/')?.syllables).toBe(2);
+  });
+
+  it('counts a syllabic consonant as its own nucleus', () => {
+    expect(ipaStress('/ˈbʌtn̩/')).toEqual({ syllables: 2, stressIndex: 0 });
+  });
+
+  it('defaults a monosyllable with no mark to stress 0', () => {
+    expect(ipaStress('/kæt/')).toEqual({ syllables: 1, stressIndex: 0 });
+  });
+
+  it('refuses to guess a multi-syllable word with no stress mark', () => {
+    expect(ipaStress('/kæmərə/')).toBeNull();
+  });
+
+  it('returns null for missing or empty input', () => {
+    expect(ipaStress(null)).toBeNull();
+    expect(ipaStress(undefined)).toBeNull();
+    expect(ipaStress('')).toBeNull();
+  });
+});
+
+describe('stressEligible', () => {
+  it('requires 2+ syllables and a parseable mark', () => {
+    expect(stressEligible({ ipa: '/ˈwɪskər/' })).toBe(true);
+    expect(stressEligible({ ipa: '/kæt/' })).toBe(false); // monosyllable
+    expect(stressEligible({ ipa: '/kæmərə/' })).toBe(false); // unmarked multisyllable
+    expect(stressEligible({ ipa: null })).toBe(false);
+  });
+});
+
+describe('blankExample / exampleEligible', () => {
+  it('blanks the exact surface form, preserving its casing', () => {
+    const w = { exampleEn: 'Yesterday he ran home.', exampleAnswer: 'ran' };
+    expect(blankExample(w)).toEqual({ blanked: 'Yesterday he _____ home.', answer: 'ran' });
+    expect(exampleEligible(w)).toBe(true);
+  });
+
+  it('is ineligible when the sentence does not contain the answer', () => {
+    const w = { exampleEn: 'He runs fast.', exampleAnswer: 'run' };
+    expect(exampleEligible(w)).toBe(false);
+    expect(blankExample(w)).toBeNull();
+  });
+
+  it('is ineligible with no sentence or no answer', () => {
+    expect(exampleEligible({ exampleEn: null, exampleAnswer: null })).toBe(false);
+    expect(exampleEligible({ exampleEn: 'A cat sat.', exampleAnswer: null })).toBe(false);
+  });
+});
+
+describe('buildClozeQuestions', () => {
+  const words = [
+    { id: '1', word: 'run', exampleEn: 'Yesterday he ran home.', exampleAnswer: 'ran' },
+    { id: '2', word: 'jump', exampleEn: 'She can jump high.', exampleAnswer: 'jump' },
+    { id: '3', word: 'walk', exampleEn: 'They walk to school.', exampleAnswer: 'walk' },
+    { id: '4', word: 'swim', exampleEn: null, exampleAnswer: null }, // no sentence
+    { id: '5', word: 'read', exampleEn: 'He reads books.', exampleAnswer: 'read' }, // mismatched form
+  ];
+
+  it('only asks words with a usable sentence, and the answer is a real option', () => {
+    const qs = buildClozeQuestions(words, 10);
+    expect(qs.map((q) => q.word.id).sort()).toEqual(['1', '2', '3']);
+    for (const q of qs) {
+      expect(q.options).toContain(q.answer);
+      expect(q.blanked).not.toContain(q.answer);
+    }
+  });
+
+  it('distractors are other topic words, never the answer itself', () => {
+    const qs = buildClozeQuestions(words, 10);
+    for (const q of qs) {
+      for (const opt of q.options) {
+        if (opt !== q.answer) expect(opt).not.toBe(q.word.word);
+      }
+    }
+  });
+});
+
+describe('buildIpaQuestions', () => {
+  const words = [
+    { id: '1', word: 'cat', ipa: '/kæt/' },
+    { id: '2', word: 'dog', ipa: '/dɔɡ/' },
+    { id: '3', word: 'fish', ipa: null },
+  ];
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('only asks words with IPA', () => {
+    const qs = buildIpaQuestions(words, 10);
+    expect(qs.map((q) => q.word.id).sort()).toEqual(['1', '2']);
+  });
+
+  it('never runs word-to-ipa without 3 distinct distractor transcriptions', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0); // always try the reverse direction
+    const qs = buildIpaQuestions(words, 10); // only 2 words have IPA -> 1 distractor at most
+    for (const q of qs) expect(q.direction).toBe('ipa-to-word');
+  });
+
+  it('the answer is always among the options', () => {
+    const qs = buildIpaQuestions(words, 10);
+    for (const q of qs) expect(q.options).toContain(q.answer);
+  });
+});
+
+describe('buildStressQuestions', () => {
+  // whisker is the only stress-0 word; about/ago/away all share stress-1 — exactly the 3 peers
+  // an odd-one-out board needs to pick whisker as the odd word out.
+  const words = [
+    { id: '1', word: 'whisker', ipa: '/ˈwɪskər/' }, // stress 0
+    { id: '2', word: 'about', ipa: '/əˈbaʊt/' }, // stress 1
+    { id: '3', word: 'ago', ipa: '/əˈɡoʊ/' }, // stress 1
+    { id: '4', word: 'away', ipa: '/əˈweɪ/' }, // stress 1
+    { id: '5', word: 'cat', ipa: '/kæt/' }, // monosyllable, excluded
+  ];
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('only asks multi-syllable words with a parseable stress mark', () => {
+    const qs = buildStressQuestions(words, 10);
+    const ids = new Set(qs.map((q) => (q.kind === 'odd' ? q.answerId : q.word.id)));
+    for (const id of ids) expect(id).not.toBe('5');
+  });
+
+  it('odd-one-out questions have 4 words and a valid answerId among them', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0); // force the odd-one-out branch when possible
+    const qs = buildStressQuestions(words, 10);
+    const oddQs = qs.filter((q) => q.kind === 'odd');
+    expect(oddQs.length).toBeGreaterThan(0); // whisker must produce one, given the peers above
+    for (const q of oddQs) {
+      expect(q.words).toHaveLength(4);
+      expect(q.words.map((w) => w.id)).toContain(q.answerId);
+    }
+  });
+
+  it("syllable questions answer within the word's syllable count", () => {
+    const qs = buildStressQuestions(words, 10);
+    for (const q of qs) {
+      if (q.kind !== 'syllable') continue;
+      expect(q.answer).toBeGreaterThanOrEqual(0);
+      expect(q.answer).toBeLessThan(q.syllables);
+    }
+  });
+});
+
+describe('mixEligibleModes', () => {
+  const words = [
+    {
+      id: '1',
+      word: 'cat',
+      meaningVi: 'con mèo',
+      ipa: '/kæt/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+    {
+      id: '2',
+      word: 'dog',
+      meaningVi: 'con chó',
+      ipa: '/dɔɡ/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+    {
+      id: '3',
+      word: 'fish',
+      meaningVi: 'con cá',
+      ipa: '/fɪʃ/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+    {
+      id: '4',
+      word: 'bird',
+      meaningVi: 'con chim',
+      ipa: '/bɜrd/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+  ];
+
+  it('with no restriction, returns every mode the deck supports', () => {
+    const modes = mixEligibleModes(words, null);
+    expect(modes).toContain('quiz');
+    expect(modes).toContain('ipa');
+    expect(modes).toContain('type');
+    // No example sentences and no images in this deck.
+    expect(modes).not.toContain('cloze');
+    expect(modes).not.toContain('listen');
+    expect(modes).not.toContain('picture');
+  });
+
+  it('falls back to the full pool when the restriction leaves nothing usable', () => {
+    // "stress" alone: nothing in this deck is stress-eligible (no multi-syllable IPA) -> fall back.
+    const modes = mixEligibleModes(words, ['stress']);
+    expect(modes.length).toBeGreaterThan(0);
+    expect(modes).toContain('quiz');
+  });
+
+  it('intersects with an allowed list that IS usable', () => {
+    const modes = mixEligibleModes(words, ['ipa', 'quiz']);
+    expect(new Set(modes)).toEqual(new Set(['ipa', 'quiz']));
+  });
+});
+
+describe('buildMixItems', () => {
+  const words = [
+    {
+      id: '1',
+      word: 'cat',
+      meaningVi: 'con mèo',
+      ipa: '/kæt/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+    {
+      id: '2',
+      word: 'dog',
+      meaningVi: 'con chó',
+      ipa: '/dɔɡ/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+    {
+      id: '3',
+      word: 'fish',
+      meaningVi: 'con cá',
+      ipa: '/fɪʃ/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+    {
+      id: '4',
+      word: 'bird',
+      meaningVi: 'con chim',
+      ipa: '/bɜrd/',
+      exampleEn: null,
+      exampleAnswer: null,
+    },
+  ];
+
+  it('returns exactly `count` items when the data supports it', () => {
+    const items = buildMixItems(words, ['quiz', 'ipa', 'type'], 6);
+    expect(items).toHaveLength(6);
+    for (const item of items) expect(['quiz', 'ipa', 'type']).toContain(item.mode);
+  });
+
+  it('never asks a mode a word does not support (e.g. cloze with no sentence)', () => {
+    const items = buildMixItems(words, ['quiz', 'cloze'], 8);
+    for (const item of items) expect(item.mode).not.toBe('cloze');
   });
 });

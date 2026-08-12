@@ -3,7 +3,12 @@ import { DS } from '../ds/index.js';
 import { useLang } from '../lib/i18n.jsx';
 import { meaningOf } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
-import { letterSlots, pickRound, scrambleLetters } from '../../shared/logic/flashcards';
+import {
+  letterSlots,
+  pickRound,
+  scrambleLetters,
+  SPELL_ROUND_SIZE,
+} from '../../shared/logic/flashcards';
 import type { LetterSlot } from '../../shared/logic/flashcards';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
@@ -22,17 +27,25 @@ const { Button: FBtn } = DS;
 
 type Question = { word: FlashcardWordRow; slots: LetterSlot[]; bank: string[] };
 
-function buildQuestions(words: FlashcardWordRow[]): Question[] {
-  return pickRound(words).map((w) => ({
+function buildQuestions(words: FlashcardWordRow[], roundSize?: number): Question[] {
+  return pickRound(words, roundSize ?? SPELL_ROUND_SIZE).map((w) => ({
     word: w,
     slots: letterSlots(w.word),
     bank: scrambleLetters(w.word),
   }));
 }
 
-export function ScrambleGame({ words, onExit, onFinish, garden }: GameProps & GardenRoundProps) {
+export function ScrambleGame({
+  words,
+  roundSize,
+  onExit,
+  onFinish,
+  garden,
+}: GameProps & GardenRoundProps) {
   const { t } = useLang();
-  const [questions, setQuestions] = React.useState<Question[]>(() => buildQuestions(words));
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildQuestions(words, roundSize),
+  );
   const [idx, setIdx] = React.useState(0);
   // For each letter slot (in order), the index of the bank tile sitting in it, or null.
   const [placed, setPlaced] = React.useState<(number | null)[]>(() =>
@@ -61,9 +74,12 @@ export function ScrambleGame({ words, onExit, onFinish, garden }: GameProps & Ga
     }
   }, [done, score, questions.length, answers, onFinish]);
 
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const advance = () => {
     setVerdict(null);
@@ -110,7 +126,7 @@ export function ScrambleGame({ words, onExit, onFinish, garden }: GameProps & Ga
 
   const replay = () => {
     finished.current = false;
-    const qs = buildQuestions(words);
+    const qs = buildQuestions(words, roundSize);
     setQuestions(qs);
     setAnswers([]);
     setIdx(0);

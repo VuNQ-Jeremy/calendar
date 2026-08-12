@@ -9,9 +9,11 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
+import * as gardenSvc from '../../server/services/garden';
 import {
   FlashcardWordInput,
   FlashcardImportInput,
+  FlashcardExampleFillInput,
   FlashcardResultInput,
   parsePatch,
 } from '../../shared/schemas';
@@ -33,6 +35,19 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       ? flashcardsSvc.listMasteryForStudent(db, su.user.id, topic.id)
       : Promise.resolve([]),
   ]);
+  // The earliest-deadline open assignment for this topic pins the round size and the mix pool.
+  // Same degrade-to-null contract as the garden on /vocabulary: a deploy racing its migration
+  // must not take the topic page down.
+  let assignment: { questionCount: number | null; modes: string | null } | null = null;
+  if (su.kind === 'student') {
+    try {
+      const all = await gardenSvc.studentAssignments(db, su.user.id, new Date().toISOString());
+      const hit = all.find((a) => a.topicId === topic.id) ?? null; // already deadline-ascending
+      assignment = hit ? { questionCount: hit.questionCount, modes: hit.modes } : null;
+    } catch (err) {
+      console.error('assignment pin unavailable on topic page', err);
+    }
+  }
   return {
     topic,
     words,
@@ -40,6 +55,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     mastery,
     kind: su.kind,
     canUseAi: Boolean(env.ANTHROPIC_API_KEY),
+    assignment,
     // ICT today, from the server, so `?review=1` picks the same due words the vocabulary page
     // counted — a device clock set abroad must not shift the deck by a day.
     today: ictDateOf(new Date().toISOString()),
@@ -58,7 +74,14 @@ function preprocessWord(raw: Record<string, unknown>) {
   const out = { ...raw };
   // A cleared field arrives as '' rather than as a missing key, which every one of these
   // `.nullish()` schemas would reject — imageKey especially, since it is regex-checked.
-  for (const k of ['definitionEn', 'ipa', 'audioUrl', 'imageKey'] as const) {
+  for (const k of [
+    'definitionEn',
+    'ipa',
+    'exampleEn',
+    'exampleAnswer',
+    'audioUrl',
+    'imageKey',
+  ] as const) {
     if (out[k] === '') out[k] = null;
   }
   delete out.intent;
@@ -124,6 +147,21 @@ async function actionImpl({ request, params, context }: ActionFunctionArgs) {
     const parsed = FlashcardImportInput.safeParse(payload);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     await flashcardsSvc.importWords(db, topicId, parsed.data.words);
+    return { ok: true };
+  }
+
+  if (intent === 'words-example-fill') {
+    const forbidden = staffOnly();
+    if (forbidden) return forbidden;
+    let payload: unknown;
+    try {
+      payload = { items: JSON.parse((formData.get('items') as string) ?? '[]') };
+    } catch {
+      return Response.json({ error: 'invalid json' }, { status: 400 });
+    }
+    const parsed = FlashcardExampleFillInput.safeParse(payload);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    await flashcardsSvc.updateWordExamples(db, topicId, parsed.data.items);
     return { ok: true };
   }
 

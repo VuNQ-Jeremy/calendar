@@ -1,31 +1,28 @@
 import React from 'react';
 import { DS } from '../ds/index.js';
+import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
-import { playWord } from './audio.js';
-import { meaningOf } from './game-utils.js';
+import { playSentence } from './audio.js';
 import type { GameProps } from './game-utils.js';
 import {
+  buildListenQuestions,
   checkTyped,
-  pickRound,
-  SPELL_ROUND_SIZE,
-  typeEligible,
+  type ListenQuestion,
 } from '../../shared/logic/flashcards';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 
-const { Button: FBtn } = DS;
+const { Button: FBtn, IconButton: FIB } = DS;
 
 /**
- * Gõ tiếng Anh — the Vietnamese meaning as the prompt, the English word typed from memory. Graded
- * by `checkTyped` (case-, whitespace- and diacritic-insensitive: the school's rules), one attempt
- * per word; a miss shows the correct spelling and plays its audio before moving on.
- *
- * Words whose meaning falls back to the word itself (`typeEligible`) are skipped — they would
- * print the answer as the hint. A deck with no eligible word renders a "nothing to play" panel
- * rather than posting a zero-question result, which the server would reject (total >= 1).
+ * Nghe điền từ — the full example sentence is spoken (auto-play on arrival, plus replay and slow
+ * replay), the screen shows it blanked, and the student types the missing word from memory. One
+ * attempt per word, graded like `type`: case-, whitespace- and diacritic-insensitive.
  */
 
-export function TypeGame({
+type Question = ListenQuestion<FlashcardWordRow>;
+
+export function ListenGame({
   words,
   roundSize,
   onExit,
@@ -33,8 +30,8 @@ export function TypeGame({
   garden,
 }: GameProps & GardenRoundProps) {
   const { t } = useLang();
-  const [round, setRound] = React.useState<FlashcardWordRow[]>(() =>
-    pickRound(words.filter(typeEligible), roundSize ?? SPELL_ROUND_SIZE),
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildListenQuestions(words, roundSize),
   );
   const [idx, setIdx] = React.useState(0);
   const [input, setInput] = React.useState('');
@@ -45,22 +42,22 @@ export function TypeGame({
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const done = round.length > 0 && idx >= round.length;
+  const done = questions.length > 0 && idx >= questions.length;
   const score = answers.filter((a) => a.correct).length;
-  const w = round[idx];
+  const q = questions[idx];
 
   React.useEffect(() => {
     if (done && !finished.current) {
       finished.current = true;
       onFinish({
-        mode: 'type',
+        mode: 'listen',
         score,
-        total: round.length,
+        total: questions.length,
         durationMs: Date.now() - started.current,
         answers,
       });
     }
-  }, [done, score, round.length, answers, onFinish]);
+  }, [done, score, questions.length, answers, onFinish]);
 
   React.useEffect(
     () => () => {
@@ -69,17 +66,18 @@ export function TypeGame({
     [],
   );
 
-  // Refocus for the next word — the reveal disables the input, which drops focus.
+  // Speak the sentence as soon as it is shown, and refocus the input for the next question.
   React.useEffect(() => {
+    if (!done && q) playSentence(q.sentence);
     if (!verdict && !done) inputRef.current?.focus();
-  }, [verdict, done, idx]);
+  }, [idx, verdict, done, q]);
 
   const submit = () => {
-    if (verdict || !input.trim() || !w) return;
-    const correct = checkTyped(input, w.word);
+    if (verdict || !input.trim() || !q) return;
+    const correct = checkTyped(input, q.answer);
     setVerdict(correct ? 'correct' : 'wrong');
-    setAnswers((a) => [...a, { wordId: w.id, correct }]);
-    if (!correct) playWord(w.word);
+    setAnswers((a) => [...a, { wordId: q.word.id, correct }]);
+    if (!correct) playSentence(q.sentence);
     timer.current = setTimeout(
       () => {
         setVerdict(null);
@@ -92,7 +90,7 @@ export function TypeGame({
 
   const replay = () => {
     finished.current = false;
-    setRound(pickRound(words.filter(typeEligible), roundSize ?? SPELL_ROUND_SIZE));
+    setQuestions(buildListenQuestions(words, roundSize));
     setAnswers([]);
     setIdx(0);
     setInput('');
@@ -100,11 +98,10 @@ export function TypeGame({
     started.current = Date.now();
   };
 
-  // Every word's meaning IS the word (imported without translations): nothing askable.
-  if (round.length === 0) {
+  if (questions.length === 0) {
     return (
       <div style={endWrap}>
-        <div style={{ color: 'var(--text-muted)' }}>{t('fc_no_words')}</div>
+        <div style={{ color: 'var(--text-muted)' }}>{t('fc_sentence_none')}</div>
         <FBtn variant="secondary" onClick={onExit}>
           {t('fc_exit')}
         </FBtn>
@@ -119,7 +116,7 @@ export function TypeGame({
           {t('fc_round_done')}
         </div>
         <div style={{ fontSize: 'var(--text-lg, 22px)', color: 'var(--text-strong)' }}>
-          {t('fc_score')}: {score}/{round.length}
+          {t('fc_score')}: {score}/{questions.length}
         </div>
         <RoundGardenNote garden={garden} />
         <div className="m-row" style={{ gap: 10 }}>
@@ -137,14 +134,29 @@ export function TypeGame({
   return (
     <div style={playWrap}>
       <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-        {t('fc_question_of', { i: idx + 1, n: round.length })} · {t('fc_score')}: {score}
+        {t('fc_question_of', { i: idx + 1, n: questions.length })} · {t('fc_score')}: {score}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        <div style={{ fontSize: 'var(--text-xl, 28px)', fontWeight: 800, textAlign: 'center' }}>
-          {meaningOf(w)}
+        <div className="m-row" style={{ gap: 8 }}>
+          <FIB label={t('fc_play_audio')} size="md" onClick={() => playSentence(q.sentence)}>
+            <MIcon name="volume" size={28} />
+          </FIB>
+          <FBtn variant="ghost" onClick={() => playSentence(q.sentence, 0.6)}>
+            {t('fc_listen_slow')}
+          </FBtn>
         </div>
-        <div style={{ color: 'var(--text-muted)' }}>{t('fc_type_prompt')}</div>
+        <div
+          style={{
+            fontSize: 'var(--text-lg, 22px)',
+            fontWeight: 700,
+            textAlign: 'center',
+            maxWidth: 520,
+          }}
+        >
+          {q.blanked}
+        </div>
+        <div style={{ color: 'var(--text-muted)' }}>{t('fc_listen_prompt')}</div>
       </div>
 
       <div className="m-stack" style={{ gap: 10, width: 'min(90vw, 420px)' }}>
@@ -176,7 +188,7 @@ export function TypeGame({
         />
         {verdict === 'wrong' ? (
           <div style={{ color: 'var(--text-strong)', fontWeight: 700, textAlign: 'center' }}>
-            {t('fc_correct_was', { word: w.word })}
+            {t('fc_correct_was', { word: q.answer })}
           </div>
         ) : (
           <FBtn

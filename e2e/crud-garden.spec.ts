@@ -40,6 +40,7 @@ test.describe('CRUD: vocabulary assignments', () => {
     await f.pickSel('Class', CLASS);
     await f.textIn('Rounds required').fill('2');
     await f.textIn('Minimum score (%)').fill('50');
+    await f.textIn('Questions per round').fill('15');
     // The due TIME is optional — it opens on "End of day", the meaning a deadline has always had.
     // Picking one narrows the deadline to that instant. Blocks are 30 minutes apart, so "6:30 pm"
     // is on the list where "6:15 pm" would not be.
@@ -50,6 +51,9 @@ test.describe('CRUD: vocabulary assignments', () => {
     // input behind a styled span, so ticking clicks the LABEL; asserting reads the input, which
     // toBeChecked() accepts hidden.
     await expect(dlg.getByText('Any mode counts')).toBeVisible();
+    // The featured "Mixed round" chip lives in the same checkbox group as the plain modes.
+    await expect(dlg.getByRole('checkbox', { name: 'Mixed round' })).toBeVisible();
+    await expect(dlg.getByText('Recommended')).toBeVisible();
     await dlg.locator('.mochi-check', { hasText: 'Unscramble' }).click();
     await dlg.locator('.mochi-check', { hasText: 'Type it' }).click();
     await expect(dlg.getByRole('checkbox', { name: 'Unscramble' })).toBeChecked();
@@ -90,6 +94,8 @@ test.describe('CRUD: vocabulary assignments', () => {
     await expect(edit.getByRole('checkbox', { name: 'Unscramble' })).toBeChecked();
     await expect(edit.getByRole('checkbox', { name: 'Type it' })).toBeChecked();
     await expect(edit.getByRole('checkbox', { name: 'Quiz', exact: true })).not.toBeChecked();
+    // The question count saved on create comes back unchanged.
+    await expect(k.on(edit).textIn('Questions per round')).toHaveValue('15');
     await edit.locator('.mochi-check', { hasText: 'Unscramble' }).click();
     await edit.locator('.mochi-check', { hasText: 'Type it' }).click();
     await expect(edit.getByRole('checkbox', { name: 'Unscramble' })).not.toBeChecked();

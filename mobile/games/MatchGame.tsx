@@ -19,8 +19,8 @@ import { GameEnd } from './GameEnd';
 
 type Tile = { key: string; wordId: string; kind: 'word' | 'meaning'; label: string };
 
-function buildTiles(words: GameProps['words']) {
-  const pairs = shuffle(words).slice(0, MATCH_ROUND_SIZE);
+function buildTiles(words: GameProps['words'], roundSize?: number) {
+  const pairs = shuffle(words).slice(0, roundSize ?? MATCH_ROUND_SIZE);
   const tiles: Tile[] = [];
   for (const w of pairs) {
     tiles.push({ key: `${w.id}-w`, wordId: w.id, kind: 'word', label: w.word });
@@ -29,11 +29,11 @@ function buildTiles(words: GameProps['words']) {
   return { pairs, tiles: shuffle(tiles) };
 }
 
-export function MatchGame({ words, onExit, onFinish, endNote }: GameProps) {
+export function MatchGame({ words, roundSize, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
 
-  const [{ pairs, tiles }, setBoard] = React.useState(() => buildTiles(words));
+  const [{ pairs, tiles }, setBoard] = React.useState(() => buildTiles(words, roundSize));
   const [selected, setSelected] = React.useState<Tile | null>(null);
   const [matched, setMatched] = React.useState<Set<string>>(new Set());
   const [wrong, setWrong] = React.useState<Set<string>>(new Set());
@@ -101,7 +101,7 @@ export function MatchGame({ words, onExit, onFinish, endNote }: GameProps) {
 
   const replay = () => {
     finished.current = false;
-    setBoard(buildTiles(words));
+    setBoard(buildTiles(words, roundSize));
     setSelected(null);
     setMatched(new Set());
     setWrong(new Set());

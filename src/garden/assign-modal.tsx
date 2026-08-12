@@ -34,6 +34,7 @@ const DEFAULT_DAYS_AHEAD = 7;
 const DEADLINE_TIME_STEP = 30;
 const DEFAULT_REQUIRED = 3;
 const DEFAULT_MIN_SCORE = 70;
+const DEFAULT_QUESTION_COUNT = 10;
 
 export function AssignModal({
   topic,
@@ -63,6 +64,9 @@ export function AssignModal({
   );
   const [minScore, setMinScore] = React.useState(
     String(existing?.minScorePct ?? DEFAULT_MIN_SCORE),
+  );
+  const [questionCount, setQuestionCount] = React.useState(
+    String(existing?.questionCount ?? DEFAULT_QUESTION_COUNT),
   );
   const [note, setNote] = React.useState(existing?.note ?? '');
   // Which game modes count. Empty = any mode, the meaning of a NULL modes column — so the
@@ -95,6 +99,10 @@ export function AssignModal({
     // field posts a usable number instead of a 400.
     fd.set('requiredCount', String(Math.min(Math.max(parseInt(required, 10) || 1, 1), 20)));
     fd.set('minScorePct', String(Math.min(Math.max(parseInt(minScore, 10) || 0, 0), 100)));
+    fd.set(
+      'questionCount',
+      String(Math.min(Math.max(parseInt(questionCount, 10) || DEFAULT_QUESTION_COUNT, 5), 30)),
+    );
     fd.set('note', note.trim());
     // '' reaches the row as NULL ("any mode") through the schema's transform.
     fd.set('modes', normalizeModesCsv([...modes]) ?? '');
@@ -139,7 +147,7 @@ export function AssignModal({
           emptyLabel={t('garden_deadline_end_of_day')}
         />
       </div>
-      <div className="m-grid cols-2" style={{ gap: 14 }}>
+      <div className="m-grid cols-3" style={{ gap: 14 }}>
         <div className="mochi-field">
           <label className="mochi-field__label">{t('garden_required')}</label>
           <input
@@ -162,6 +170,17 @@ export function AssignModal({
             onChange={(e) => setMinScore(e.target.value)}
           />
         </div>
+        <div className="mochi-field">
+          <label className="mochi-field__label">{t('garden_question_count')}</label>
+          <input
+            className="mochi-input"
+            type="number"
+            min={5}
+            max={30}
+            value={questionCount}
+            onChange={(e) => setQuestionCount(e.target.value)}
+          />
+        </div>
       </div>
       <div className="mochi-field">
         <label className="mochi-field__label">{t('garden_modes')}</label>
@@ -170,12 +189,42 @@ export function AssignModal({
           style={{ gap: '6px 14px', flexWrap: 'wrap', alignItems: 'center' }}
           data-testid="assign-modes"
         >
-          {ALL_MODES.map((id) => (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 10px',
+              borderRadius: 10,
+              background: 'var(--brand-soft, #fdeede)',
+              border: '1px solid var(--brand, #f79a4e)',
+            }}
+          >
+            <Checkbox
+              label={t('fc_mode_mix')}
+              checked={modes.has('mix')}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                toggleMode('mix', e.target.checked)
+              }
+            />
+            <span
+              style={{
+                fontSize: 'var(--text-xs, 12px)',
+                fontWeight: 700,
+                color: 'var(--brand, #f79a4e)',
+              }}
+            >
+              {t('fc_mode_mix_reco')}
+            </span>
+          </div>
+          {ALL_MODES.filter((id) => id !== 'mix').map((id) => (
             <Checkbox
               key={id}
               label={t(`fc_mode_${id}`)}
               checked={modes.has(id)}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => toggleMode(id, e.target.checked)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                toggleMode(id, e.target.checked)
+              }
             />
           ))}
         </div>

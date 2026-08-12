@@ -17,6 +17,11 @@ Vietnamese students learning English. For each word you are given, return:
 - "ipa": the General American pronunciation as a broad IPA transcription in
   slashes, with primary stress marked — for example /ˈwɪskər/. Transcribe the
   headword exactly as spelled in "word".
+- "exampleEn": one simple example sentence of 8-14 words that uses the word
+  naturally exactly once, written for learners (match the register of the
+  definition). No quotation marks around the sentence.
+- "exampleAnswer": the exact form of the word as it appears in exampleEn —
+  copy it character for character, including any inflection ("ran" for "run").
 Rules:
 - When an English definition is provided with the word, use THAT sense for both
   the Vietnamese gloss and your own definition. Otherwise pick the most common
@@ -46,9 +51,10 @@ export async function enrichWords(
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
     model: MODEL,
-    // Four fields per word instead of the one the old translate call returned, so ~50 output
-    // tokens per word. Sized for the schema's 200-item ceiling with headroom.
-    max_tokens: 16000,
+    // Six fields per word instead of the one the old translate call returned, so ~100 output
+    // tokens per word (the example sentence roughly doubled it). Sized for the schema's 200-item
+    // ceiling with headroom.
+    max_tokens: 32000,
     system: SYSTEM,
     output_config: {
       format: {
@@ -65,8 +71,17 @@ export async function enrichWords(
                   meaningVi: { type: 'string' },
                   definitionEn: { type: 'string' },
                   ipa: { type: 'string' },
+                  exampleEn: { type: 'string' },
+                  exampleAnswer: { type: 'string' },
                 },
-                required: ['word', 'meaningVi', 'definitionEn', 'ipa'],
+                required: [
+                  'word',
+                  'meaningVi',
+                  'definitionEn',
+                  'ipa',
+                  'exampleEn',
+                  'exampleAnswer',
+                ],
                 additionalProperties: false,
               },
             },
@@ -108,11 +123,21 @@ export function sanitizeEnrichedWords(raw: EnrichedWord[] | undefined): Enriched
     if (!word || word.length > 100) continue;
     const definitionEn = (row.definitionEn ?? '').trim().slice(0, 1000);
     const ipa = (row.ipa ?? '').trim().slice(0, 200);
+    const exampleEn = (row.exampleEn ?? '').trim().slice(0, 300);
+    const exampleAnswer = (row.exampleAnswer ?? '').trim().slice(0, 100);
+    // A sentence that does not actually contain its own answer is unusable by the cloze/listen
+    // games — null BOTH fields rather than save a sentence the games could never blank.
+    const exampleOk =
+      exampleEn !== '' &&
+      exampleAnswer !== '' &&
+      exampleEn.toLowerCase().includes(exampleAnswer.toLowerCase());
     out.push({
       word,
       meaningVi: (row.meaningVi ?? '').trim().slice(0, 500),
       definitionEn: definitionEn || null,
       ipa: ipa || null,
+      exampleEn: exampleOk ? exampleEn : null,
+      exampleAnswer: exampleOk ? exampleAnswer : null,
     });
   }
   return out;

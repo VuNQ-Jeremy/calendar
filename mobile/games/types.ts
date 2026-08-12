@@ -12,6 +12,8 @@ export type GameResult = {
 
 export interface GameProps {
   words: FlashcardWordRow[];
+  /** Questions/items this round (from the round-size picker). Flip ignores it. */
+  roundSize?: number;
   onExit: () => void;
   /**
    * Called exactly once, when the round completes. The play route queues it in the outbox — it

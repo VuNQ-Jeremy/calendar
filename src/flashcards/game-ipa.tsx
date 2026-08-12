@@ -1,19 +1,24 @@
 import React from 'react';
 import { DS } from '../ds/index.js';
-import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
-import { flashcardImagePath } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
-import { buildQuizQuestions, type QuizQuestion } from '../../shared/logic/flashcards';
+import { buildIpaQuestions, type IpaQuestion } from '../../shared/logic/flashcards';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 
-const { Button: FBtn, IconButton: FIB } = DS;
+const { Button: FBtn } = DS;
 
-type Question = QuizQuestion<FlashcardWordRow>;
+/**
+ * Phiên âm IPA — most questions show the transcription and ask for the word; ~35% run the other
+ * way, showing the word and asking for its correct IPA (only when the deck has enough distinct
+ * transcriptions to distract with). Answering plays the word's audio either way, so the round
+ * reinforces the sound as well as the symbol.
+ */
 
-export function QuizGame({
+type Question = IpaQuestion<FlashcardWordRow>;
+
+export function IpaGame({
   words,
   roundSize,
   onExit,
@@ -22,29 +27,45 @@ export function QuizGame({
 }: GameProps & GardenRoundProps) {
   const { t } = useLang();
   const [questions, setQuestions] = React.useState<Question[]>(() =>
-    buildQuizQuestions(words, roundSize),
+    buildIpaQuestions(words, roundSize),
   );
   const [idx, setIdx] = React.useState(0);
   const [picked, setPicked] = React.useState<string | null>(null);
   const [answers, setAnswers] = React.useState<{ wordId: string; correct: boolean }[]>([]);
+  const started = React.useRef(Date.now());
   const finished = React.useRef(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const done = idx >= questions.length;
+  const done = questions.length > 0 && idx >= questions.length;
   const score = answers.filter((a) => a.correct).length;
 
   React.useEffect(() => {
     if (done && !finished.current) {
       finished.current = true;
-      onFinish({ mode: 'quiz', score, total: questions.length, answers });
+      onFinish({
+        mode: 'ipa',
+        score,
+        total: questions.length,
+        durationMs: Date.now() - started.current,
+        answers,
+      });
     }
   }, [done, score, questions.length, answers, onFinish]);
+
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const pick = (opt: string) => {
     if (picked) return;
     const q = questions[idx];
     setPicked(opt);
     setAnswers((a) => [...a, { wordId: q.word.id, correct: opt === q.answer }]);
-    setTimeout(() => {
+    playWord(q.word.word);
+    timer.current = setTimeout(() => {
       setPicked(null);
       setIdx((i) => i + 1);
     }, 900);
@@ -52,11 +73,23 @@ export function QuizGame({
 
   const replay = () => {
     finished.current = false;
-    setQuestions(buildQuizQuestions(words, roundSize));
+    setQuestions(buildIpaQuestions(words, roundSize));
     setAnswers([]);
     setIdx(0);
     setPicked(null);
+    started.current = Date.now();
   };
+
+  if (questions.length === 0) {
+    return (
+      <div style={endWrap}>
+        <div style={{ color: 'var(--text-muted)' }}>{t('fc_ipa_none')}</div>
+        <FBtn variant="secondary" onClick={onExit}>
+          {t('fc_exit')}
+        </FBtn>
+      </div>
+    );
+  }
 
   if (done) {
     return (
@@ -81,41 +114,25 @@ export function QuizGame({
   }
 
   const q = questions[idx];
+  const ipaStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)' };
+
   return (
     <div style={playWrap}>
       <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
         {t('fc_question_of', { i: idx + 1, n: questions.length })} · {t('fc_score')}: {score}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        {q.prompt === 'image' ? (
+        {q.direction === 'ipa-to-word' ? (
           <>
-            {/* The word itself is deliberately not shown — it is one of the four options. */}
-            <img
-              src={flashcardImagePath(q.word.imageKey) ?? undefined}
-              alt=""
-              draggable={false}
-              style={{
-                width: 'min(70vw, 340px)',
-                aspectRatio: '3 / 2',
-                objectFit: 'cover',
-                borderRadius: 14,
-                border: '1px solid var(--line, #e7e0d6)',
-                userSelect: 'none',
-              }}
-            />
-            <div style={{ color: 'var(--text-muted)' }}>{t('fc_pick_word')}</div>
-          </>
-        ) : q.prompt === 'audio' ? (
-          <>
-            <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(q.word.word)}>
-              <MIcon name="volume" size={32} />
-            </FIB>
-            <div style={{ color: 'var(--text-muted)' }}>{t('fc_listen_pick')}</div>
+            <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800, ...ipaStyle }}>
+              {q.word.ipa}
+            </div>
+            <div style={{ color: 'var(--text-muted)' }}>{t('fc_ipa_pick_word')}</div>
           </>
         ) : (
           <>
             <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800 }}>{q.word.word}</div>
-            <div style={{ color: 'var(--text-muted)' }}>{t('fc_pick_meaning')}</div>
+            <div style={{ color: 'var(--text-muted)' }}>{t('fc_ipa_pick_ipa')}</div>
           </>
         )}
       </div>
@@ -134,7 +151,13 @@ export function QuizGame({
             else if (opt === picked) variant = 'danger';
           }
           return (
-            <FBtn key={i} variant={variant} block={true} onClick={() => pick(opt)}>
+            <FBtn
+              key={i}
+              variant={variant}
+              block={true}
+              onClick={() => pick(opt)}
+              style={q.direction === 'word-to-ipa' ? ipaStyle : undefined}
+            >
               {opt}
             </FBtn>
           );

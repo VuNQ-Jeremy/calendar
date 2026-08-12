@@ -9,11 +9,24 @@
 
 import { normalizeText } from './tests';
 
-export type GameMode = 'flip' | 'quiz' | 'match' | 'scramble' | 'fill' | 'type' | 'picture';
+export type GameMode =
+  | 'flip'
+  | 'quiz'
+  | 'match'
+  | 'scramble'
+  | 'fill'
+  | 'type'
+  | 'picture'
+  | 'ipa'
+  | 'stress'
+  | 'cloze'
+  | 'listen'
+  | 'mix';
 
 /**
  * Every mode, in canonical display order. Drives the launcher rows, the assign-modal checkboxes
- * and `normalizeModesCsv` — one ordering, everywhere.
+ * and `normalizeModesCsv` — one ordering, everywhere. Mix sits last: it is the "all of the above"
+ * round, and the assign modal features it separately from the plain modes.
  */
 export const ALL_MODES: readonly GameMode[] = [
   'flip',
@@ -23,11 +36,18 @@ export const ALL_MODES: readonly GameMode[] = [
   'fill',
   'type',
   'picture',
+  'ipa',
+  'stress',
+  'cloze',
+  'listen',
+  'mix',
 ];
 
 /**
- * Minimum words a mode needs to be playable. Quiz and picture need 4 for one answer + three
- * distractors (picture distractors are word strings, so they don't need images of their own).
+ * Minimum words a mode needs to be playable. Quiz, picture, ipa and cloze need 4 for one answer +
+ * three distractors (picture distractors are word strings, so they don't need images of their own;
+ * cloze distractors are other topic words). The floors that data availability sets on top of deck
+ * size — a word with IPA, a word with an example sentence — are checked by the launcher per mode.
  */
 export const MIN_WORDS: Record<GameMode, number> = {
   flip: 1,
@@ -37,6 +57,11 @@ export const MIN_WORDS: Record<GameMode, number> = {
   fill: 1,
   type: 1,
   picture: 4,
+  ipa: 4,
+  stress: 1,
+  cloze: 4,
+  listen: 1,
+  mix: 4,
 };
 
 /** The number of pairs in one round of match. */
@@ -234,28 +259,471 @@ export function wordsWithImages<W extends object>(words: readonly W[]): W[] {
 export type PictureQuestion<W> = { word: W; options: string[]; answer: string };
 
 /**
- * Picture rounds are quiz-shaped: the answer's word string plus up to three distractor word
- * strings from the rest of the topic (deduped; distractors don't need images). Mirrors
- * `buildQuestions` in the quiz game.
+ * One picture question for `w`: the answer's word string plus up to three distractor word strings
+ * from the rest of the topic (deduped; distractors don't need images).
  */
+export function buildPictureQuestion<W extends { id: string; word: string }>(
+  w: W,
+  words: readonly W[],
+): PictureQuestion<W> {
+  const answer = w.word;
+  const distractors = shuffle(
+    Array.from(
+      new Set(
+        words
+          .filter((o) => o.id !== w.id)
+          .map((o) => o.word)
+          .filter((x) => x !== answer),
+      ),
+    ),
+  ).slice(0, 3);
+  return { word: w, options: shuffle([answer, ...distractors]), answer };
+}
+
+/** Picture rounds are quiz-shaped — see `buildPictureQuestion` for one question's shape. */
 export function buildPictureQuestions<W extends { id: string; word: string }>(
   words: readonly W[],
   roundSize: number = SPELL_ROUND_SIZE,
 ): PictureQuestion<W>[] {
-  return pickRound(wordsWithImages(words), roundSize).map((w) => {
-    const answer = w.word;
-    const distractors = shuffle(
-      Array.from(
-        new Set(
-          words
-            .filter((o) => o.id !== w.id)
-            .map((o) => o.word)
-            .filter((x) => x !== answer),
-        ),
+  return pickRound(wordsWithImages(words), roundSize).map((w) => buildPictureQuestion(w, words));
+}
+
+/** Round sizes a student may pick in free study; an assignment's questionCount overrides. */
+export const ROUND_SIZES = [10, 15, 20] as const;
+export const DEFAULT_ROUND_SIZE = 10;
+
+// ---- IPA stress parsing ----
+
+/** GA vowel letters the enrichment prompt produces (broad transcription). */
+const IPA_VOWELS = new Set('iɪyʏeøɛœæaɶɑɒʌɔoʊuɯʉɘɵəɜɞɐɚɝ');
+/** Two-character GA diphthongs counted as ONE nucleus. */
+const IPA_DIPHTHONGS = new Set(['aɪ', 'aʊ', 'eɪ', 'oʊ', 'ɔɪ']);
+/** Combining syllabic-consonant mark ("buttn" -> /ˈbʌtn̩/): the marked consonant is a nucleus. */
+const IPA_SYLLABIC = '̩';
+
+export type IpaStress = { syllables: number; stressIndex: number };
+
+/**
+ * Syllable count and primary-stress position derived from a broad IPA transcription
+ * (/ˈwɪskər/ -> 2 syllables, stress on 0). Nuclei are maximal vowel groups (greedy two-char
+ * diphthong, ː extends) plus syllabic consonants. A multi-syllable word with no ˈ mark returns
+ * null — guessing a stress would grade students against a coin flip.
+ */
+export function ipaStress(ipa: string | null | undefined): IpaStress | null {
+  if (!ipa) return null;
+  const s = ipa.trim().replace(/^[/[]+|[/\]]+$/g, '');
+  let syllables = 0;
+  let stressIndex = -1;
+  let pendingStress = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === 'ˈ') {
+      pendingStress = true;
+      continue;
+    }
+    const syllabicConsonant = !IPA_VOWELS.has(ch) && s[i + 1] === IPA_SYLLABIC;
+    if (!IPA_VOWELS.has(ch) && !syllabicConsonant) continue;
+    if (IPA_VOWELS.has(ch)) {
+      if (s[i + 1] && IPA_DIPHTHONGS.has(ch + s[i + 1])) i++;
+      while (s[i + 1] === 'ː') i++;
+    } else {
+      i++; // consume the syllabic mark
+    }
+    if (pendingStress) {
+      stressIndex = syllables;
+      pendingStress = false;
+    }
+    syllables++;
+  }
+  if (syllables === 0) return null;
+  if (stressIndex < 0) {
+    if (syllables > 1) return null;
+    stressIndex = 0;
+  }
+  return { syllables, stressIndex };
+}
+
+/** Words the stress mode can ask about: multi-syllable with a parseable stress mark. */
+export function stressEligible(w: { ipa?: string | null }): boolean {
+  const st = ipaStress(w.ipa);
+  return st !== null && st.syllables >= 2;
+}
+
+// ---- Example sentences (cloze / listen) ----
+
+export const CLOZE_BLANK = '_____';
+
+export interface ExampleSource {
+  exampleEn?: string | null;
+  exampleAnswer?: string | null;
+}
+
+/** Case-insensitive index of the stored surface form inside the sentence, or -1. */
+export function exampleAnswerIndex(sentence: string, answer: string): number {
+  if (!sentence || !answer) return -1;
+  return sentence.toLowerCase().indexOf(answer.toLowerCase());
+}
+
+/** Words the sentence games can ask: sentence present and it really contains the answer. */
+export function exampleEligible(w: ExampleSource): boolean {
+  return Boolean(
+    w.exampleEn && w.exampleAnswer && exampleAnswerIndex(w.exampleEn, w.exampleAnswer) >= 0,
+  );
+}
+
+/** The subset of a deck the sentence games (cloze / listen) can actually show. */
+export function wordsWithExamples<W extends ExampleSource>(words: readonly W[]): W[] {
+  return words.filter(exampleEligible);
+}
+
+/** The sentence with its target blanked, plus the answer in its original casing, or null. */
+export function blankExample(w: ExampleSource): { blanked: string; answer: string } | null {
+  if (!w.exampleEn || !w.exampleAnswer) return null;
+  const idx = exampleAnswerIndex(w.exampleEn, w.exampleAnswer);
+  if (idx < 0) return null;
+  const answer = w.exampleEn.slice(idx, idx + w.exampleAnswer.length);
+  return {
+    blanked:
+      w.exampleEn.slice(0, idx) + CLOZE_BLANK + w.exampleEn.slice(idx + w.exampleAnswer.length),
+    answer,
+  };
+}
+
+// ---- Quiz questions (moved from src/flashcards/game-quiz.tsx so mix and mobile share it) ----
+
+/**
+ * `text` and `audio` ask which meaning fits the word. `image` runs the other way round — the
+ * picture is the prompt and the options are English words — which is the whole point of putting a
+ * picture on a card: recognising the thing without translating first.
+ */
+export type QuizQuestion<W> = {
+  word: W;
+  prompt: 'text' | 'audio' | 'image';
+  options: string[];
+  answer: string;
+};
+
+/** Roughly how often a word that has a picture is asked as a picture question. */
+export const QUIZ_IMAGE_SHARE = 0.35;
+/** Roughly how often a text-meaning question is asked as audio instead. */
+export const QUIZ_AUDIO_SHARE = 0.35;
+
+type QuizSource = MeaningSource & { id: string; imageKey?: string | null };
+
+/**
+ * One quiz question for `w`, with distractors drawn from `words`. A picture question needs three
+ * other spellings to choose between; a deck of near-duplicates can fall through to a meaning
+ * question even when `w` has a picture.
+ */
+export function buildQuizQuestion<W extends QuizSource>(
+  w: W,
+  words: readonly W[],
+): QuizQuestion<W> {
+  if (imageOf(w) && Math.random() < QUIZ_IMAGE_SHARE) {
+    const wordDistractors = shuffle(
+      Array.from(new Set(words.filter((o) => o.id !== w.id).map((o) => o.word))).filter(
+        (o) => o !== w.word,
       ),
     ).slice(0, 3);
-    return { word: w, options: shuffle([answer, ...distractors]), answer };
-  });
+    if (wordDistractors.length === 3) {
+      return {
+        word: w,
+        prompt: 'image',
+        options: shuffle([w.word, ...wordDistractors]),
+        answer: w.word,
+      };
+    }
+    // Not enough distinct spellings — fall through to the meaning question below.
+  }
+  const answer = meaningOf(w);
+  const distractors = shuffle(
+    Array.from(
+      new Set(
+        words
+          .filter((o) => o.id !== w.id)
+          .map(meaningOf)
+          .filter((m) => m !== answer),
+      ),
+    ),
+  ).slice(0, 3);
+  return {
+    word: w,
+    prompt: Math.random() < QUIZ_AUDIO_SHARE ? 'audio' : 'text',
+    options: shuffle([answer, ...distractors]),
+    answer,
+  };
+}
+
+export function buildQuizQuestions<W extends QuizSource>(
+  words: readonly W[],
+  roundSize?: number,
+): QuizQuestion<W>[] {
+  return shuffle(words)
+    .slice(0, roundSize ?? words.length)
+    .map((w) => buildQuizQuestion(w, words));
+}
+
+// ---- IPA questions ----
+
+export type IpaQuestion<W> = {
+  word: W;
+  direction: 'ipa-to-word' | 'word-to-ipa';
+  options: string[];
+  answer: string;
+};
+
+/** How often an IPA question runs word -> IPA instead of IPA -> word, when enough distractors exist. */
+export const IPA_REVERSE_SHARE = 0.35;
+
+type IpaSource = { id: string; word: string; ipa?: string | null };
+
+/** The subset of a deck the IPA mode can actually show. */
+export function wordsWithIpa<W extends IpaSource>(words: readonly W[]): W[] {
+  return words.filter((w) => Boolean(w.ipa));
+}
+
+/**
+ * One IPA question for `w`. Runs word -> IPA only when three other distinct transcriptions exist
+ * in the deck to distract with; otherwise (and most of the time) it runs IPA -> word.
+ */
+export function buildIpaQuestion<W extends IpaSource>(w: W, words: readonly W[]): IpaQuestion<W> {
+  const pool = wordsWithIpa(words);
+  const ipaDistractors = shuffle(
+    Array.from(new Set(pool.filter((o) => o.id !== w.id).map((o) => o.ipa as string))).filter(
+      (x) => x !== w.ipa,
+    ),
+  ).slice(0, 3);
+  if (ipaDistractors.length === 3 && Math.random() < IPA_REVERSE_SHARE) {
+    return {
+      word: w,
+      direction: 'word-to-ipa',
+      options: shuffle([w.ipa as string, ...ipaDistractors]),
+      answer: w.ipa as string,
+    };
+  }
+  const wordDistractors = shuffle(
+    Array.from(new Set(words.filter((o) => o.id !== w.id).map((o) => o.word))).filter(
+      (x) => x !== w.word,
+    ),
+  ).slice(0, 3);
+  return {
+    word: w,
+    direction: 'ipa-to-word',
+    options: shuffle([w.word, ...wordDistractors]),
+    answer: w.word,
+  };
+}
+
+export function buildIpaQuestions<W extends IpaSource>(
+  words: readonly W[],
+  roundSize: number = SPELL_ROUND_SIZE,
+): IpaQuestion<W>[] {
+  return pickRound(wordsWithIpa(words), roundSize).map((w) => buildIpaQuestion(w, words));
+}
+
+// ---- Word stress questions ----
+
+/**
+ * Either an odd-one-out board (three words share a stress position, one differs — pick the odd
+ * one) or a "which syllable is stressed?" question for one word. The IPA itself is never part of
+ * the rendered question — it IS the answer, so a caller must not print it before grading.
+ */
+export type StressQuestion<W> =
+  | { kind: 'odd'; words: W[]; answerId: string }
+  | { kind: 'syllable'; word: W; syllables: number; answer: number };
+
+type StressSource = { id: string; word: string; ipa?: string | null };
+
+/**
+ * One stress question about `w`. Prefers odd-one-out when at least three other multi-syllable
+ * words in the deck share a stress position different from `w`'s; otherwise (and always for a
+ * word with no such peers) asks which syllable of `w` itself is stressed.
+ */
+export function buildStressQuestion<W extends StressSource>(
+  w: W,
+  words: readonly W[],
+): StressQuestion<W> {
+  const st = ipaStress(w.ipa) as IpaStress; // caller filters the pool with stressEligible first
+  const others = words
+    .map((o) => ({ o, st: ipaStress(o.ipa) }))
+    .filter(
+      (x): x is { o: W; st: IpaStress } => x.o.id !== w.id && x.st !== null && x.st.syllables >= 2,
+    );
+  if (Math.random() < 0.5) {
+    const groups = new Map<number, W[]>();
+    for (const x of others) {
+      if (x.st.stressIndex === st.stressIndex) continue;
+      const g = groups.get(x.st.stressIndex) ?? [];
+      g.push(x.o);
+      groups.set(x.st.stressIndex, g);
+    }
+    const usable = [...groups.values()].filter((g) => g.length >= 3);
+    if (usable.length) {
+      const g = usable[Math.floor(Math.random() * usable.length)];
+      return { kind: 'odd', words: shuffle([w, ...shuffle(g).slice(0, 3)]), answerId: w.id };
+    }
+  }
+  return { kind: 'syllable', word: w, syllables: st.syllables, answer: st.stressIndex };
+}
+
+export function buildStressQuestions<W extends StressSource>(
+  words: readonly W[],
+  roundSize: number = SPELL_ROUND_SIZE,
+): StressQuestion<W>[] {
+  return pickRound(words.filter(stressEligible), roundSize).map((w) =>
+    buildStressQuestion(w, words),
+  );
+}
+
+// ---- Sentence questions (cloze / listen) ----
+
+export type ClozeQuestion<W> = { word: W; blanked: string; options: string[]; answer: string };
+
+type ClozeSource = ExampleSource & { id: string; word: string };
+
+/** One cloze question for `w`: its sentence blanked, distractors are three other topic words. */
+export function buildClozeQuestion<W extends ClozeSource>(
+  w: W,
+  words: readonly W[],
+): ClozeQuestion<W> {
+  const { blanked, answer } = blankExample(w) as { blanked: string; answer: string };
+  const distractors = shuffle(
+    Array.from(new Set(words.filter((o) => o.id !== w.id).map((o) => o.word))).filter(
+      (x) => normalizeText(x) !== normalizeText(answer),
+    ),
+  ).slice(0, 3);
+  return { word: w, blanked, options: shuffle([answer, ...distractors]), answer };
+}
+
+export function buildClozeQuestions<W extends ClozeSource>(
+  words: readonly W[],
+  roundSize: number = SPELL_ROUND_SIZE,
+): ClozeQuestion<W>[] {
+  return pickRound(wordsWithExamples(words), roundSize).map((w) => buildClozeQuestion(w, words));
+}
+
+export type ListenQuestion<W> = { word: W; sentence: string; blanked: string; answer: string };
+
+/** One listen question for `w`: the full sentence to speak, and its blanked form to display. */
+export function buildListenQuestion<W extends ClozeSource>(w: W): ListenQuestion<W> {
+  const { blanked, answer } = blankExample(w) as { blanked: string; answer: string };
+  return { word: w, sentence: w.exampleEn as string, blanked, answer };
+}
+
+export function buildListenQuestions<W extends ClozeSource>(
+  words: readonly W[],
+  roundSize: number = SPELL_ROUND_SIZE,
+): ListenQuestion<W>[] {
+  return pickRound(wordsWithExamples(words), roundSize).map((w) => buildListenQuestion(w));
+}
+
+// ---- Mixed rounds ----
+
+/**
+ * The auto-graded, single-question modes a mixed round can draw from. Scramble and fill are not
+ * included — their letter-tile UI does not compress into a single shared question renderer the
+ * way the others do; the mixed round leans on `type` for spelling recall instead.
+ */
+export const MIX_POOL_MODES: readonly GameMode[] = [
+  'quiz',
+  'type',
+  'picture',
+  'ipa',
+  'stress',
+  'cloze',
+  'listen',
+];
+
+type MixSource = QuizSource & IpaSource & ClozeSource & { imageKey?: string | null };
+
+export type MixItem<W> =
+  | { mode: 'quiz'; question: QuizQuestion<W> }
+  | { mode: 'type'; word: W }
+  | { mode: 'picture'; question: PictureQuestion<W> }
+  | { mode: 'ipa'; question: IpaQuestion<W> }
+  | { mode: 'stress'; question: StressQuestion<W> }
+  | { mode: 'cloze'; question: ClozeQuestion<W> }
+  | { mode: 'listen'; question: ListenQuestion<W> };
+
+/** Can this word be asked in this mode, given the whole deck for distractors? */
+function wordSupportsMode<W extends MixSource>(mode: GameMode, w: W, words: readonly W[]): boolean {
+  switch (mode) {
+    case 'quiz':
+      return words.length >= MIN_WORDS.quiz;
+    case 'type':
+      return typeEligible(w);
+    case 'picture':
+      return imageOf(w) !== null && words.length >= MIN_WORDS.picture;
+    case 'ipa':
+      return Boolean(w.ipa) && words.length >= MIN_WORDS.ipa;
+    case 'stress':
+      return stressEligible(w);
+    case 'cloze':
+      return exampleEligible(w) && words.length >= MIN_WORDS.cloze;
+    case 'listen':
+      return exampleEligible(w);
+    default:
+      return false;
+  }
+}
+
+/**
+ * The modes a mixed round over this deck may use. `allowed` is the assignment's checked modes
+ * (null = unrestricted); an intersection that leaves nothing usable falls back to every
+ * auto-graded mode the deck supports — "only mix checked" must not produce an empty round.
+ */
+export function mixEligibleModes<W extends MixSource>(
+  words: readonly W[],
+  allowed: readonly GameMode[] | null,
+): GameMode[] {
+  const supported = (pool: readonly GameMode[]) =>
+    pool.filter((m) => words.some((w) => wordSupportsMode(m, w, words)));
+  const restricted = allowed ? MIX_POOL_MODES.filter((m) => allowed.includes(m)) : MIX_POOL_MODES;
+  const usable = supported(restricted);
+  return usable.length ? usable : supported(MIX_POOL_MODES);
+}
+
+function buildMixItem<W extends MixSource>(mode: GameMode, w: W, words: readonly W[]): MixItem<W> {
+  switch (mode) {
+    case 'quiz':
+      return { mode, question: buildQuizQuestion(w, words) };
+    case 'picture':
+      return { mode, question: buildPictureQuestion(w, words) };
+    case 'ipa':
+      return { mode, question: buildIpaQuestion(w, words) };
+    case 'stress':
+      return { mode, question: buildStressQuestion(w, words) };
+    case 'cloze':
+      return { mode, question: buildClozeQuestion(w, words) };
+    case 'listen':
+      return { mode, question: buildListenQuestion(w) };
+    default:
+      return { mode: 'type', word: w };
+  }
+}
+
+/**
+ * A mixed round: `count` questions over a shuffled deck, each word asked in a random mode it
+ * supports. The word cycle keeps coverage even; the safety valve stops a deck that supports
+ * nothing from looping forever.
+ */
+export function buildMixItems<W extends MixSource>(
+  words: readonly W[],
+  modes: readonly GameMode[],
+  count: number,
+): MixItem<W>[] {
+  const deck = shuffle(words);
+  const items: MixItem<W>[] = [];
+  let i = 0;
+  let safety = count * 6;
+  while (items.length < count && safety-- > 0 && deck.length > 0) {
+    const w = deck[i % deck.length];
+    i++;
+    const usable = modes.filter((m) => wordSupportsMode(m, w, words));
+    if (!usable.length) continue;
+    items.push(buildMixItem(usable[Math.floor(Math.random() * usable.length)], w, words));
+  }
+  return items;
 }
 
 /**

@@ -22,6 +22,11 @@ import { ScrambleGame } from '~/games/ScrambleGame';
 import { FillGame } from '~/games/FillGame';
 import { TypeGame } from '~/games/TypeGame';
 import { PictureGame } from '~/games/PictureGame';
+import { IpaGame } from '~/games/IpaGame';
+import { StressGame } from '~/games/StressGame';
+import { ClozeGame } from '~/games/ClozeGame';
+import { ListenGame } from '~/games/ListenGame';
+import { MixGame } from '~/games/MixGame';
 import type { GameResult } from '~/games/types';
 
 /**
@@ -31,16 +36,41 @@ import type { GameResult } from '~/games/types';
  * It lives at `app/play/...`, OUTSIDE the `(app)` tab group, which is what removes the tab bar.
  * No CSS, no z-index, no scroll locking: it is simply a different route.
  */
-const MODES: GameMode[] = ['flip', 'quiz', 'match', 'scramble', 'fill', 'type', 'picture'];
+const MODES: GameMode[] = [
+  'flip',
+  'quiz',
+  'match',
+  'scramble',
+  'fill',
+  'type',
+  'picture',
+  'ipa',
+  'stress',
+  'cloze',
+  'listen',
+  'mix',
+];
 
 export default function PlayScreen() {
   const th = useTheme();
   const { t } = useLang();
-  const { slug, mode } = useLocalSearchParams<{ slug: string; mode: string }>();
+  const {
+    slug,
+    mode,
+    roundSize: roundSizeParam,
+  } = useLocalSearchParams<{
+    slug: string;
+    mode: string;
+    roundSize?: string;
+  }>();
   const { bundle, loading, unavailableOffline } = useTopic(slug);
   const { user } = useAuth();
 
   const gameMode = (MODES.includes(mode as GameMode) ? mode : 'flip') as GameMode;
+  const roundSize = roundSizeParam ? parseInt(roundSizeParam, 10) : undefined;
+  // No assignment-pin plumbing on mobile yet (the topic bundle carries no assignment data) — the
+  // mix pool always draws from every auto-graded mode the deck supports. See docs/mobile-parity.md.
+  const allowedModes: GameMode[] | null = null;
   const exit = React.useCallback(() => router.back(), []);
 
   /**
@@ -49,9 +79,7 @@ export default function PlayScreen() {
    */
   const words = React.useMemo(() => {
     if (!bundle) return [];
-    return gameMode === 'flip'
-      ? orderWordsByMastery(bundle.words, bundle.mastery)
-      : bundle.words;
+    return gameMode === 'flip' ? orderWordsByMastery(bundle.words, bundle.mastery) : bundle.words;
   }, [bundle, gameMode]);
 
   /**
@@ -106,13 +134,14 @@ export default function PlayScreen() {
 
   // Staff plays never grow a plant, so there is never a note for them — the server returns null and
   // this keeps the node out of the tree entirely rather than relying on that.
-  const endNote =
-    user?.kind === 'student' ? <RoundGardenNote garden={garden} /> : undefined;
+  const endNote = user?.kind === 'student' ? <RoundGardenNote garden={garden} /> : undefined;
 
   if (unavailableOffline) {
     return (
       <Screen edges={{ top: true, bottom: true }}>
-        <View style={{ flex: 1, justifyContent: 'center', padding: th.spacing[6], gap: th.spacing[3] }}>
+        <View
+          style={{ flex: 1, justifyContent: 'center', padding: th.spacing[6], gap: th.spacing[3] }}
+        >
           <Body>{t('m_not_offline')}</Body>
           <Muted>{t('m_not_offline_sub')}</Muted>
           <Button variant="secondary" onPress={exit}>
@@ -126,7 +155,9 @@ export default function PlayScreen() {
   if (!bundle || words.length === 0) {
     return (
       <Screen edges={{ top: true, bottom: true }}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: th.spacing[4] }}>
+        <View
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: th.spacing[4] }}
+        >
           {loading ? (
             <ActivityIndicator color={th.color.brand} />
           ) : (
@@ -177,17 +208,94 @@ export default function PlayScreen() {
       {gameMode === 'flip' ? (
         <FlipGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
       ) : gameMode === 'quiz' ? (
-        <QuizGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+        <QuizGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
       ) : gameMode === 'scramble' ? (
-        <ScrambleGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+        <ScrambleGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
       ) : gameMode === 'fill' ? (
-        <FillGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+        <FillGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
       ) : gameMode === 'type' ? (
-        <TypeGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+        <TypeGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
       ) : gameMode === 'picture' ? (
-        <PictureGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+        <PictureGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
+      ) : gameMode === 'ipa' ? (
+        <IpaGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
+      ) : gameMode === 'stress' ? (
+        <StressGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
+      ) : gameMode === 'cloze' ? (
+        <ClozeGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
+      ) : gameMode === 'listen' ? (
+        <ListenGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
+      ) : gameMode === 'mix' ? (
+        <MixGame
+          words={words}
+          roundSize={roundSize}
+          allowedModes={allowedModes}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
       ) : (
-        <MatchGame words={words} onExit={exit} onFinish={onFinish} endNote={endNote} />
+        <MatchGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
       )}
     </Screen>
   );

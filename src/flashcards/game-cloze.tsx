@@ -1,19 +1,27 @@
 import React from 'react';
 import { DS } from '../ds/index.js';
-import { MIcon } from '../icons.jsx';
 import { useLang } from '../lib/i18n.jsx';
-import { playWord } from './audio.js';
-import { flashcardImagePath } from './game-utils.js';
+import { playSentence } from './audio.js';
 import type { GameProps } from './game-utils.js';
-import { buildQuizQuestions, type QuizQuestion } from '../../shared/logic/flashcards';
+import {
+  buildClozeQuestions,
+  CLOZE_BLANK,
+  type ClozeQuestion,
+} from '../../shared/logic/flashcards';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
 
-const { Button: FBtn, IconButton: FIB } = DS;
+const { Button: FBtn } = DS;
 
-type Question = QuizQuestion<FlashcardWordRow>;
+/**
+ * Điền vào câu — the word's own example sentence, blanked, four options (the answer plus three
+ * other topic words). Answering reveals the full sentence and speaks it, so the round doubles as
+ * listening practice even though the input is a tap, not a typed word.
+ */
 
-export function QuizGame({
+type Question = ClozeQuestion<FlashcardWordRow>;
+
+export function ClozeGame({
   words,
   roundSize,
   onExit,
@@ -22,41 +30,69 @@ export function QuizGame({
 }: GameProps & GardenRoundProps) {
   const { t } = useLang();
   const [questions, setQuestions] = React.useState<Question[]>(() =>
-    buildQuizQuestions(words, roundSize),
+    buildClozeQuestions(words, roundSize),
   );
   const [idx, setIdx] = React.useState(0);
   const [picked, setPicked] = React.useState<string | null>(null);
   const [answers, setAnswers] = React.useState<{ wordId: string; correct: boolean }[]>([]);
+  const started = React.useRef(Date.now());
   const finished = React.useRef(false);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const done = idx >= questions.length;
+  const done = questions.length > 0 && idx >= questions.length;
   const score = answers.filter((a) => a.correct).length;
 
   React.useEffect(() => {
     if (done && !finished.current) {
       finished.current = true;
-      onFinish({ mode: 'quiz', score, total: questions.length, answers });
+      onFinish({
+        mode: 'cloze',
+        score,
+        total: questions.length,
+        durationMs: Date.now() - started.current,
+        answers,
+      });
     }
   }, [done, score, questions.length, answers, onFinish]);
+
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const pick = (opt: string) => {
     if (picked) return;
     const q = questions[idx];
     setPicked(opt);
     setAnswers((a) => [...a, { wordId: q.word.id, correct: opt === q.answer }]);
-    setTimeout(() => {
+    if (q.word.exampleEn) playSentence(q.word.exampleEn);
+    timer.current = setTimeout(() => {
       setPicked(null);
       setIdx((i) => i + 1);
-    }, 900);
+    }, 1400);
   };
 
   const replay = () => {
     finished.current = false;
-    setQuestions(buildQuizQuestions(words, roundSize));
+    setQuestions(buildClozeQuestions(words, roundSize));
     setAnswers([]);
     setIdx(0);
     setPicked(null);
+    started.current = Date.now();
   };
+
+  if (questions.length === 0) {
+    return (
+      <div style={endWrap}>
+        <div style={{ color: 'var(--text-muted)' }}>{t('fc_sentence_none')}</div>
+        <FBtn variant="secondary" onClick={onExit}>
+          {t('fc_exit')}
+        </FBtn>
+      </div>
+    );
+  }
 
   if (done) {
     return (
@@ -81,43 +117,26 @@ export function QuizGame({
   }
 
   const q = questions[idx];
+
   return (
     <div style={playWrap}>
       <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
         {t('fc_question_of', { i: idx + 1, n: questions.length })} · {t('fc_score')}: {score}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-        {q.prompt === 'image' ? (
-          <>
-            {/* The word itself is deliberately not shown — it is one of the four options. */}
-            <img
-              src={flashcardImagePath(q.word.imageKey) ?? undefined}
-              alt=""
-              draggable={false}
-              style={{
-                width: 'min(70vw, 340px)',
-                aspectRatio: '3 / 2',
-                objectFit: 'cover',
-                borderRadius: 14,
-                border: '1px solid var(--line, #e7e0d6)',
-                userSelect: 'none',
-              }}
-            />
-            <div style={{ color: 'var(--text-muted)' }}>{t('fc_pick_word')}</div>
-          </>
-        ) : q.prompt === 'audio' ? (
-          <>
-            <FIB label={t('fc_play_audio')} size="md" onClick={() => playWord(q.word.word)}>
-              <MIcon name="volume" size={32} />
-            </FIB>
-            <div style={{ color: 'var(--text-muted)' }}>{t('fc_listen_pick')}</div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 'var(--text-xl, 32px)', fontWeight: 800 }}>{q.word.word}</div>
-            <div style={{ color: 'var(--text-muted)' }}>{t('fc_pick_meaning')}</div>
-          </>
-        )}
+        <div
+          style={{
+            fontSize: 'var(--text-lg, 22px)',
+            fontWeight: 700,
+            textAlign: 'center',
+            maxWidth: 520,
+          }}
+        >
+          {picked
+            ? q.blanked.replace(CLOZE_BLANK, picked === q.answer ? q.answer : `[${picked}]`)
+            : q.blanked}
+        </div>
+        <div style={{ color: 'var(--text-muted)' }}>{t('fc_cloze_prompt')}</div>
       </div>
       <div
         style={{

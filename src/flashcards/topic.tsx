@@ -14,6 +14,12 @@ import {
   flashcardImagePath,
   typeEligible,
   wordsWithImages,
+  wordsWithIpa,
+  stressEligible,
+  wordsWithExamples,
+  parseModes,
+  ROUND_SIZES,
+  DEFAULT_ROUND_SIZE,
 } from '../../shared/logic/flashcards';
 import { ImageStrip, emptyChoice, loadChoice, resolvePickedImageKey } from './image-strip.js';
 import type { ImageChoice } from './image-strip.js';
@@ -25,6 +31,11 @@ import { ScrambleGame } from './game-scramble.jsx';
 import { FillGame } from './game-fill.jsx';
 import { TypeGame } from './game-type.jsx';
 import { PictureGame } from './game-picture.jsx';
+import { IpaGame } from './game-ipa.jsx';
+import { StressGame } from './game-stress.jsx';
+import { ClozeGame } from './game-cloze.jsx';
+import { ListenGame } from './game-listen.jsx';
+import { MixGame } from './game-mix.jsx';
 import type { RoundGarden } from '../garden/garden-widget.jsx';
 import type {
   FlashcardWordRow,
@@ -50,6 +61,8 @@ type LoaderData = {
   mastery: MasteryRow[];
   kind: 'staff' | 'student';
   canUseAi: boolean;
+  /** The earliest-deadline open assignment for this topic, or null. Pins the round size and mix pool. */
+  assignment: { questionCount: number | null; modes: string | null } | null;
   /** ICT today, from the server. Decides which words `?review=1` plays. */
   today: string;
 };
@@ -57,7 +70,19 @@ type LoaderData = {
 const MODE_META: {
   id: GameMode;
   tk: string;
-  icon: 'cards' | 'grid' | 'check' | 'shuffle' | 'edit' | 'keyboard' | 'image';
+  icon:
+    | 'cards'
+    | 'grid'
+    | 'check'
+    | 'shuffle'
+    | 'edit'
+    | 'keyboard'
+    | 'image'
+    | 'audioLines'
+    | 'zap'
+    | 'quote'
+    | 'headphones'
+    | 'dices';
 }[] = [
   { id: 'flip', tk: 'fc_mode_flip', icon: 'cards' },
   { id: 'quiz', tk: 'fc_mode_quiz', icon: 'check' },
@@ -66,10 +91,16 @@ const MODE_META: {
   { id: 'fill', tk: 'fc_mode_fill', icon: 'edit' },
   { id: 'type', tk: 'fc_mode_type', icon: 'keyboard' },
   { id: 'picture', tk: 'fc_mode_picture', icon: 'image' },
+  { id: 'ipa', tk: 'fc_mode_ipa', icon: 'audioLines' },
+  { id: 'stress', tk: 'fc_mode_stress', icon: 'zap' },
+  { id: 'cloze', tk: 'fc_mode_cloze', icon: 'quote' },
+  { id: 'listen', tk: 'fc_mode_listen', icon: 'headphones' },
+  { id: 'mix', tk: 'fc_mode_mix', icon: 'dices' },
 ];
 
 export function FlashcardTopicScreen() {
-  const { topic, words, results, mastery, kind, canUseAi, today } = useLoaderData() as LoaderData;
+  const { topic, words, results, mastery, kind, canUseAi, assignment, today } =
+    useLoaderData() as LoaderData;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // The URL segment the student arrived on — slug or id. Leaving review mode must land on the
@@ -86,6 +117,13 @@ export function FlashcardTopicScreen() {
   const [tab, setTab] = React.useState('words');
   const [playing, setPlaying] = React.useState<GameMode | null>(null);
   const isStaff = kind === 'staff';
+
+  // Round size: an open assignment for this topic pins it (and hides the picker); otherwise the
+  // student picks 10/15/20 in free study. Every mode but flip honours it.
+  const pinnedRoundSize = kind === 'student' ? (assignment?.questionCount ?? null) : null;
+  const [pickedRoundSize, setPickedRoundSize] = React.useState<number>(DEFAULT_ROUND_SIZE);
+  const roundSize = pinnedRoundSize ?? pickedRoundSize;
+  const allowedModes = React.useMemo(() => parseModes(assignment?.modes), [assignment]);
 
   /**
    * Ôn tập: `?review=1` narrows every game to the words that have come round again today.
@@ -142,22 +180,104 @@ export function FlashcardTopicScreen() {
           <FlipGame words={orderedWords} onExit={exit} onFinish={finish} garden={roundGarden} />
         )}
         {playing === 'quiz' && (
-          <QuizGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <QuizGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
         )}
         {playing === 'match' && (
-          <MatchGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <MatchGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
         )}
         {playing === 'scramble' && (
-          <ScrambleGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <ScrambleGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
         )}
         {playing === 'fill' && (
-          <FillGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <FillGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
         )}
         {playing === 'type' && (
-          <TypeGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <TypeGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
         )}
         {playing === 'picture' && (
-          <PictureGame words={deck} onExit={exit} onFinish={finish} garden={roundGarden} />
+          <PictureGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
+        )}
+        {playing === 'ipa' && (
+          <IpaGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
+        )}
+        {playing === 'stress' && (
+          <StressGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
+        )}
+        {playing === 'cloze' && (
+          <ClozeGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
+        )}
+        {playing === 'listen' && (
+          <ListenGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
+        )}
+        {playing === 'mix' && (
+          <MixGame
+            words={deck}
+            roundSize={roundSize}
+            allowedModes={allowedModes}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
         )}
       </GameOverlay>
     );
@@ -194,14 +314,38 @@ export function FlashcardTopicScreen() {
         </div>
       )}
 
+      {kind === 'student' && (
+        <div className="m-row" style={{ gap: 10, alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ color: 'var(--text-muted)' }}>{t('fc_round_size')}:</span>
+          {pinnedRoundSize ? (
+            <span className="mochi-field__hint">
+              {t('fc_round_size_assigned', { n: pinnedRoundSize })}
+            </span>
+          ) : (
+            ROUND_SIZES.map((n) => (
+              <FBtn
+                key={n}
+                variant={pickedRoundSize === n ? 'primary' : 'soft'}
+                onClick={() => setPickedRoundSize(n)}
+              >
+                {n}
+              </FBtn>
+            ))
+          )}
+        </div>
+      )}
+
       <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
         {MODE_META.map((m) => {
-          // Beyond the word-count floor: type needs a word whose hint isn't the answer, and
-          // picture needs at least one word that actually has a picture.
+          // Beyond the word-count floor: type needs a word whose hint isn't the answer, picture
+          // needs an imaged word, ipa/stress need IPA data, cloze/listen need example sentences.
           const disabled =
             deck.length < MIN_WORDS[m.id] ||
             (m.id === 'type' && !deck.some(typeEligible)) ||
-            (m.id === 'picture' && wordsWithImages(deck).length === 0);
+            (m.id === 'picture' && wordsWithImages(deck).length === 0) ||
+            (m.id === 'ipa' && wordsWithIpa(deck).length === 0) ||
+            (m.id === 'stress' && !deck.some(stressEligible)) ||
+            ((m.id === 'cloze' || m.id === 'listen') && wordsWithExamples(deck).length === 0);
           return (
             <FBtn
               key={m.id}
@@ -212,7 +356,13 @@ export function FlashcardTopicScreen() {
                 disabled
                   ? m.id === 'picture' && deck.length >= MIN_WORDS.picture
                     ? t('fc_picture_none')
-                    : t('fc_min_words', { n: MIN_WORDS[m.id] })
+                    : m.id === 'ipa' && deck.length >= MIN_WORDS.ipa
+                      ? t('fc_ipa_none')
+                      : m.id === 'stress'
+                        ? t('fc_stress_none')
+                        : (m.id === 'cloze' || m.id === 'listen') && deck.length >= MIN_WORDS[m.id]
+                          ? t('fc_sentence_none')
+                          : t('fc_min_words', { n: MIN_WORDS[m.id] })
                   : undefined
               }
               onClick={() => setPlaying(m.id)}
@@ -292,6 +442,8 @@ interface WordDraft {
   meaningVi: string;
   definitionEn: string;
   ipa: string;
+  exampleEn: string;
+  exampleAnswer: string;
   /** Stored R2 key, or '' for no picture. Already committed by the time it lands here. */
   imageKey: string;
 }
@@ -335,21 +487,55 @@ function WordsTab({
     fd.set('meaningVi', f.meaningVi);
     fd.set('definitionEn', f.definitionEn);
     fd.set('ipa', f.ipa);
+    fd.set('exampleEn', f.exampleEn);
+    fd.set('exampleAnswer', f.exampleAnswer);
     // '' clears the picture: preprocessWord in the route turns it into null.
     fd.set('imageKey', f.imageKey);
     fetcher.submit(fd, { method: 'post' });
     setModal(null);
   };
 
+  const missingExamples = words.filter((w) => !w.exampleEn);
+  const [exProgress, setExProgress] = React.useState<{ done: number; total: number } | null>(null);
+
+  const genExamples = async () => {
+    setExProgress({ done: 0, total: missingExamples.length });
+    const res = await fetchEnrichedWords(
+      missingExamples.map((w) => ({ word: w.word, definitionEn: w.definitionEn })),
+      (done, total) => setExProgress({ done, total }),
+    );
+    setExProgress(null);
+    if (!res.ok) return;
+    const items = missingExamples.flatMap((w) => {
+      const hit = res.map.get(w.word.trim().toLowerCase());
+      return hit?.exampleEn && hit.exampleAnswer
+        ? [{ id: w.id, exampleEn: hit.exampleEn, exampleAnswer: hit.exampleAnswer }]
+        : [];
+    });
+    if (!items.length) return;
+    const fd = new FormData();
+    fd.set('intent', 'words-example-fill');
+    fd.set('items', JSON.stringify(items));
+    fetcher.submit(fd, { method: 'post' });
+  };
+
   return (
     <>
       {isStaff && (
-        <div className="m-row" style={{ gap: 10, margin: '4px 0 14px' }}>
+        <div className="m-row" style={{ gap: 10, margin: '4px 0 14px', flexWrap: 'wrap' }}>
           <FBtn
             variant="primary"
             iconLeft={<MIcon name="plus" size={18} />}
             onClick={() =>
-              setModal({ word: '', meaningVi: '', definitionEn: '', ipa: '', imageKey: '' })
+              setModal({
+                word: '',
+                meaningVi: '',
+                definitionEn: '',
+                ipa: '',
+                exampleEn: '',
+                exampleAnswer: '',
+                imageKey: '',
+              })
             }
           >
             {t('fc_add_word')}
@@ -361,6 +547,16 @@ function WordsTab({
           >
             {t('fc_import')}
           </FBtn>
+          {canUseAi && (
+            <FBtn
+              variant="secondary"
+              iconLeft={<MIcon name="sparkle" size={18} />}
+              disabled={missingExamples.length === 0 || !!exProgress}
+              onClick={genExamples}
+            >
+              {exProgress ? `${exProgress.done}/${exProgress.total}` : t('fc_gen_examples')}
+            </FBtn>
+          )}
         </div>
       )}
 
@@ -392,6 +588,8 @@ function WordsTab({
                             meaningVi: w.meaningVi,
                             definitionEn: w.definitionEn ?? '',
                             ipa: w.ipa ?? '',
+                            exampleEn: w.exampleEn ?? '',
+                            exampleAnswer: w.exampleAnswer ?? '',
                             imageKey: w.imageKey ?? '',
                           })
                         }
@@ -413,6 +611,17 @@ function WordsTab({
                 <div>
                   {w.meaningVi && <div className="fc-wcard__vi">{w.meaningVi}</div>}
                   {w.definitionEn && <div className="fc-wcard__en">{w.definitionEn}</div>}
+                </div>
+              )}
+              {w.exampleEn && (
+                <div
+                  style={{
+                    color: 'var(--text-muted)',
+                    fontSize: 'var(--text-sm)',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {w.exampleEn}
                 </div>
               )}
             </div>
@@ -504,6 +713,8 @@ function WordModal({
               meaningVi: d.meaningVi.trim() ? d.meaningVi : hit.meaningVi,
               ipa: d.ipa || hit.ipa || '',
               definitionEn: d.definitionEn || hit.definitionEn || '',
+              exampleEn: d.exampleEn || hit.exampleEn || '',
+              exampleAnswer: d.exampleAnswer || hit.exampleAnswer || '',
             }
           : d,
       );
@@ -633,10 +844,24 @@ function WordModal({
             meaningVi: hit.meaningVi || d.meaningVi,
             ipa: d.ipa || hit.ipa || '',
             definitionEn: d.definitionEn || hit.definitionEn || '',
+            exampleEn: d.exampleEn || hit.exampleEn || '',
+            exampleAnswer: d.exampleAnswer || hit.exampleAnswer || '',
           }
         : d,
     );
   };
+
+  // Keep the surface form in sync while the sentence contains the plain word; a form the teacher
+  // typed by hand that no longer matches (an inflection, or the word edited away) is left alone.
+  const setExampleEn = (v: string) => {
+    const idx = v.toLowerCase().indexOf(draft.word.trim().toLowerCase());
+    const auto = idx >= 0 ? v.slice(idx, idx + draft.word.trim().length) : draft.exampleAnswer;
+    setDraft((d) => (d ? { ...d, exampleEn: v, exampleAnswer: auto } : d));
+  };
+  const exampleMissing =
+    draft.exampleEn.trim() !== '' &&
+    (draft.exampleAnswer.trim() === '' ||
+      !draft.exampleEn.toLowerCase().includes(draft.exampleAnswer.trim().toLowerCase()));
 
   return (
     <>
@@ -716,6 +941,24 @@ function WordModal({
                 onChange={(e) => set('definitionEn', e.target.value)}
               />
             </div>
+            <div className="mochi-field">
+              <label className="mochi-field__label">{t('fc_example_en')}</label>
+              <textarea
+                className="mochi-input"
+                rows={2}
+                style={{ resize: 'vertical', minHeight: 56, paddingTop: 10 }}
+                value={draft.exampleEn}
+                onChange={(e) => setExampleEn(e.target.value)}
+              />
+              {exampleMissing && (
+                <span className="mochi-field__hint">{t('fc_example_missing')}</span>
+              )}
+            </div>
+            <FInput
+              label={t('fc_example_answer')}
+              value={draft.exampleAnswer}
+              onChange={(e) => set('exampleAnswer', e.target.value)}
+            />
           </div>
           <div className="mochi-field fc-word-split__pics">
             <label className="mochi-field__label">{t('fc_img_label')}</label>
@@ -740,6 +983,8 @@ type ImportRow = {
   meaningVi: string;
   ipa: string;
   definitionEn: string;
+  exampleEn: string;
+  exampleAnswer: string;
   include: boolean;
 };
 
@@ -794,6 +1039,8 @@ function ImportModal({
           meaningVi: p.meaningVi || hit?.meaningVi || '',
           ipa: hit?.ipa ?? '',
           definitionEn: hit?.definitionEn ?? '',
+          exampleEn: hit?.exampleEn ?? '',
+          exampleAnswer: hit?.exampleAnswer ?? '',
           include: true,
         };
       }),
@@ -834,6 +1081,8 @@ function ImportModal({
           meaningVi: hit.meaningVi,
           ipa: r.ipa || hit.ipa || '',
           definitionEn: r.definitionEn || hit.definitionEn || '',
+          exampleEn: r.exampleEn || hit.exampleEn || '',
+          exampleAnswer: r.exampleAnswer || hit.exampleAnswer || '',
         };
       }),
     );
@@ -849,6 +1098,8 @@ function ImportModal({
         meaningVi: r.meaningVi.trim(),
         ipa: r.ipa || null,
         definitionEn: r.definitionEn || null,
+        exampleEn: r.exampleEn || null,
+        exampleAnswer: r.exampleAnswer || null,
       }));
     if (words.length === 0) return;
     const fd = new FormData();

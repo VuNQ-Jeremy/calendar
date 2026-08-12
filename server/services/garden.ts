@@ -229,6 +229,8 @@ export type VocabAssignmentRow = {
   topicSlug: string | null;
   requiredCount: number;
   minScorePct: number;
+  /** Questions per round for every mode but flip; null = default sizes (see 0036). */
+  questionCount: number | null;
   deadline: string;
   /** ICT 'HH:MM' the deadline expires at, or null for end of day (see 0036). */
   deadlineTime: string | null;
@@ -257,6 +259,7 @@ export async function listAssignments(
       topicSlug: flashcardTopics.slug,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
+      questionCount: vocabAssignments.questionCount,
       deadline: vocabAssignments.deadline,
       deadlineTime: vocabAssignments.deadlineTime,
       note: vocabAssignments.note,
@@ -283,6 +286,7 @@ export async function getAssignment(db: Db, id: string): Promise<VocabAssignment
       topicSlug: flashcardTopics.slug,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
+      questionCount: vocabAssignments.questionCount,
       deadline: vocabAssignments.deadline,
       deadlineTime: vocabAssignments.deadlineTime,
       note: vocabAssignments.note,
@@ -309,6 +313,7 @@ export async function createAssignment(
     staffId,
     requiredCount: input.requiredCount,
     minScorePct: input.minScorePct,
+    questionCount: input.questionCount ?? null,
     deadline: input.deadline,
     deadlineTime: input.deadlineTime ?? null,
     note: input.note ?? null,
@@ -328,6 +333,7 @@ export async function updateAssignment(
   if (patch.topicId !== undefined) set.topicId = patch.topicId;
   if (patch.requiredCount !== undefined) set.requiredCount = patch.requiredCount;
   if (patch.minScorePct !== undefined) set.minScorePct = patch.minScorePct;
+  if (patch.questionCount !== undefined) set.questionCount = patch.questionCount ?? null;
   if (patch.deadline !== undefined) set.deadline = patch.deadline;
   if (patch.deadlineTime !== undefined) set.deadlineTime = patch.deadlineTime ?? null;
   if (patch.note !== undefined) set.note = patch.note ?? null;
@@ -507,6 +513,8 @@ export async function studentAssignments(
     deadlineTime: string | null;
     requiredCount: number;
     minScorePct: number;
+    /** Questions per round for every mode but flip; null = default sizes. */
+    questionCount: number | null;
     /** The assignment's modes CSV, for the chip's mode badges. Null = any. */
     modes: string | null;
     done: number;
@@ -524,6 +532,7 @@ export async function studentAssignments(
       deadlineTime: vocabAssignments.deadlineTime,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
+      questionCount: vocabAssignments.questionCount,
       modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })

@@ -10,10 +10,10 @@ import * as Speech from 'expo-speech';
  * audio for every word, including ones no dictionary knows.
  */
 
-function speak(word: string): void {
+function speak(text: string, rate = 0.9): void {
   try {
     Speech.stop();
-    Speech.speak(word, { language: 'en-US', rate: 0.9 });
+    Speech.speak(text, { language: 'en-US', rate });
   } catch {
     /* no speech engine — nothing more we can do */
   }
@@ -26,9 +26,10 @@ function speak(word: string): void {
 export class WordAudio {
   private disposed = false;
 
-  play(word: string): void {
+  /** `rate` defaults to 0.9 (the word-reading pace); the listen game's slow replay passes lower. */
+  play(text: string, rate?: number): void {
     if (this.disposed) return;
-    speak(word);
+    speak(text, rate);
   }
 
   stop(): void {

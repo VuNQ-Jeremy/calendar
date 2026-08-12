@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0188 — 2026-08-12
+5 new vocabulary games (IPA quiz, word stress, sentence cloze, listen & fill, mixed round) with AI-generated example sentences and a per-assignment/free-study question count
+
 ## v0.0187 — 2026-08-12
 Vocabulary assignments can carry a due TIME as well as a due date: a 30-minute-block time picker in the assign dialog, stored in the new vocab_assignments.deadline_time (NULL = end of day, so nothing changes for existing homework). The time bounds the qualifying-round window and closes the assignment on the student's screens the moment it passes.
 

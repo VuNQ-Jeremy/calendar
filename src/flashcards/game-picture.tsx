@@ -19,10 +19,16 @@ const { Button: FBtn } = DS;
  * disabled first, but a `?review=1` deck can narrow to imageless words after the button was drawn.
  */
 
-export function PictureGame({ words, onExit, onFinish, garden }: GameProps & GardenRoundProps) {
+export function PictureGame({
+  words,
+  roundSize,
+  onExit,
+  onFinish,
+  garden,
+}: GameProps & GardenRoundProps) {
   const { t } = useLang();
   const [questions, setQuestions] = React.useState<PictureQuestion<FlashcardWordRow>[]>(() =>
-    buildPictureQuestions(words),
+    buildPictureQuestions(words, roundSize),
   );
   const [idx, setIdx] = React.useState(0);
   const [picked, setPicked] = React.useState<string | null>(null);
@@ -47,9 +53,12 @@ export function PictureGame({ words, onExit, onFinish, garden }: GameProps & Gar
     }
   }, [done, score, questions.length, answers, onFinish]);
 
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const pick = (opt: string) => {
     if (picked) return;
@@ -64,7 +73,7 @@ export function PictureGame({ words, onExit, onFinish, garden }: GameProps & Gar
 
   const replay = () => {
     finished.current = false;
-    setQuestions(buildPictureQuestions(words));
+    setQuestions(buildPictureQuestions(words, roundSize));
     setAnswers([]);
     setIdx(0);
     setPicked(null);

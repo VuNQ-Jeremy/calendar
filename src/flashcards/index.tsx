@@ -616,6 +616,8 @@ type GenRow = {
   meaningVi: string;
   definitionEn: string;
   ipa: string;
+  exampleEn: string;
+  exampleAnswer: string;
   include: boolean;
   /** Stock-search keywords the model proposed; '' falls back to the word itself. */
   imageQuery: string;
@@ -685,6 +687,8 @@ function GenerateTopicModal({
       meaningVi: w.meaningVi,
       definitionEn: w.definitionEn ?? '',
       ipa: w.ipa ?? '',
+      exampleEn: w.exampleEn ?? '',
+      exampleAnswer: w.exampleAnswer ?? '',
       include: true,
       imageQuery: w.imageQuery ?? '',
       choice: { ...emptyChoice, status: 'loading' as const },
@@ -734,6 +738,8 @@ function GenerateTopicModal({
       meaningVi: r.meaningVi.trim(),
       ipa: r.ipa.trim() || null,
       definitionEn: r.definitionEn.trim() || null,
+      exampleEn: r.exampleEn.trim() || null,
+      exampleAnswer: r.exampleAnswer.trim() || null,
       imageKey: imageKeys[i],
     }));
     const fd = new FormData();

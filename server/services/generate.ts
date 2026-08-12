@@ -17,6 +17,11 @@ word return:
 - "ipa": the General American pronunciation as a broad IPA transcription in
   slashes, with primary stress marked — for example /ˈwɪskər/. Transcribe the
   headword exactly as spelled in "word".
+- "exampleEn": one simple example sentence of 8-14 words that uses the word
+  naturally exactly once, written for learners (match the requested level). No
+  quotation marks around the sentence.
+- "exampleAnswer": the exact form of the word as it appears in exampleEn —
+  copy it character for character, including any inflection ("ran" for "run").
 - "imageQuery": 2-4 concrete English keywords for a stock-photo search that would
   return a picture a student instantly recognises as this word — for "whisker",
   "cat whiskers closeup". For abstract words, describe a photographable scene
@@ -45,7 +50,7 @@ export async function generateVocabWords(
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 8000,
+    max_tokens: 16000,
     system: SYSTEM,
     output_config: {
       format: {
@@ -62,9 +67,19 @@ export async function generateVocabWords(
                   meaningVi: { type: 'string' },
                   definitionEn: { type: 'string' },
                   ipa: { type: 'string' },
+                  exampleEn: { type: 'string' },
+                  exampleAnswer: { type: 'string' },
                   imageQuery: { type: 'string' },
                 },
-                required: ['word', 'meaningVi', 'definitionEn', 'ipa', 'imageQuery'],
+                required: [
+                  'word',
+                  'meaningVi',
+                  'definitionEn',
+                  'ipa',
+                  'exampleEn',
+                  'exampleAnswer',
+                  'imageQuery',
+                ],
                 additionalProperties: false,
               },
             },
@@ -118,12 +133,22 @@ export function sanitizeGeneratedWords(
     seen.add(key);
     const definitionEn = (row.definitionEn ?? '').trim().slice(0, 1000);
     const ipa = (row.ipa ?? '').trim().slice(0, 200);
+    const exampleEn = (row.exampleEn ?? '').trim().slice(0, 300);
+    const exampleAnswer = (row.exampleAnswer ?? '').trim().slice(0, 100);
+    // A sentence that does not actually contain its own answer is unusable by the cloze/listen
+    // games — null BOTH fields rather than save a sentence the games could never blank.
+    const exampleOk =
+      exampleEn !== '' &&
+      exampleAnswer !== '' &&
+      exampleEn.toLowerCase().includes(exampleAnswer.toLowerCase());
     const imageQuery = (row.imageQuery ?? '').trim().slice(0, 200);
     out.push({
       word,
       meaningVi: (row.meaningVi ?? '').trim().slice(0, 500),
       definitionEn: definitionEn || null,
       ipa: ipa || null,
+      exampleEn: exampleOk ? exampleEn : null,
+      exampleAnswer: exampleOk ? exampleAnswer : null,
       // Not a card field — search keywords for the review screen's picture lookup. Null when the
       // model skipped it; callers fall back to the word itself.
       imageQuery: imageQuery || null,

@@ -30,6 +30,8 @@ export type GameResult = {
 
 export interface GameProps {
   words: FlashcardWordRow[];
+  /** Questions/items this round (from the free-study picker or the assignment). Flip ignores it. */
+  roundSize?: number;
   onExit: () => void;
   onFinish: (result: GameResult) => void;
 }

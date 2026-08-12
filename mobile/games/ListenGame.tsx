@@ -1,33 +1,31 @@
 import React from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, View } from 'react-native';
-import {
-  checkTyped,
-  meaningOf,
-  pickRound,
-  SPELL_ROUND_SIZE,
-  typeEligible,
-} from '@mochi/shared/logic/flashcards';
+import { Volume2 } from 'lucide-react-native';
+import { buildListenQuestions, checkTyped } from '@mochi/shared/logic/flashcards';
+import type { ListenQuestion } from '@mochi/shared/logic/flashcards';
 import { useWordAudio } from '~/lib/use-word-audio';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
-import { Button, Muted, Title } from '~/ui';
+import { Button, IconButton, Muted, Title } from '~/ui';
 import type { FlashcardWordRow } from '~/lib/types';
 import type { GameProps } from './types';
 import { GameEnd } from './GameEnd';
 
 /**
- * Port of `src/flashcards/game-type.tsx`. The Vietnamese meaning as the prompt, the English word
- * typed from memory, graded by `checkTyped` — the same case/whitespace/diacritic forgiveness as
- * the web and the tests module. A miss shows the correct spelling and plays its audio.
+ * Port of `src/flashcards/game-listen.tsx`. The full example sentence is spoken (auto-play on
+ * arrival, plus replay and slow-replay), the screen shows it blanked, and the student types the
+ * missing word from memory. Graded like `type`: case-, whitespace- and diacritic-insensitive.
  */
 
-export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GameProps) {
+type Question = ListenQuestion<FlashcardWordRow>;
+
+export function ListenGame({ words, roundSize, onExit, onFinish, endNote }: GameProps) {
   const th = useTheme();
   const { t } = useLang();
   const play = useWordAudio();
 
-  const [round, setRound] = React.useState<FlashcardWordRow[]>(() =>
-    pickRound(words.filter(typeEligible), roundSize ?? SPELL_ROUND_SIZE),
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildListenQuestions(words, roundSize),
   );
   const [idx, setIdx] = React.useState(0);
   const [input, setInput] = React.useState('');
@@ -38,22 +36,22 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = React.useRef<TextInput>(null);
 
-  const done = round.length > 0 && idx >= round.length;
+  const done = questions.length > 0 && idx >= questions.length;
   const score = answers.filter((a) => a.correct).length;
-  const w = round[idx];
+  const q = questions[idx];
 
   React.useEffect(() => {
     if (done && !finished.current) {
       finished.current = true;
       onFinish({
-        mode: 'type',
+        mode: 'listen',
         score,
-        total: round.length,
+        total: questions.length,
         durationMs: Date.now() - started.current,
         answers,
       });
     }
-  }, [done, score, round.length, answers, onFinish]);
+  }, [done, score, questions.length, answers, onFinish]);
 
   React.useEffect(
     () => () => {
@@ -62,12 +60,17 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
     [],
   );
 
+  // Speak the sentence as soon as it is shown.
+  React.useEffect(() => {
+    if (!done && q) play(q.sentence);
+  }, [idx, done, q]);
+
   const submit = () => {
-    if (verdict || !input.trim() || !w) return;
-    const correct = checkTyped(input, w.word);
+    if (verdict || !input.trim() || !q) return;
+    const correct = checkTyped(input, q.answer);
     setVerdict(correct ? 'correct' : 'wrong');
-    setAnswers((a) => [...a, { wordId: w.id, correct }]);
-    if (!correct) play(w.word);
+    setAnswers((a) => [...a, { wordId: q.word.id, correct }]);
+    if (!correct) play(q.sentence);
     timer.current = setTimeout(
       () => {
         setVerdict(null);
@@ -81,7 +84,7 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
 
   const replay = () => {
     finished.current = false;
-    setRound(pickRound(words.filter(typeEligible), roundSize ?? SPELL_ROUND_SIZE));
+    setQuestions(buildListenQuestions(words, roundSize));
     setAnswers([]);
     setIdx(0);
     setInput('');
@@ -89,8 +92,7 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
     started.current = Date.now();
   };
 
-  // Every word's meaning IS the word (imported without translations): nothing askable.
-  if (round.length === 0) {
+  if (questions.length === 0) {
     return (
       <View
         style={{
@@ -101,7 +103,7 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
           padding: th.spacing[6],
         }}
       >
-        <Muted>{t('fc_no_words')}</Muted>
+        <Muted>{t('fc_sentence_none')}</Muted>
         <Button variant="secondary" onPress={onExit}>
           {t('fc_exit')}
         </Button>
@@ -112,7 +114,7 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
   if (done) {
     return (
       <GameEnd
-        headline={`${t('fc_score')}: ${score}/${round.length}`}
+        headline={`${t('fc_score')}: ${score}/${questions.length}`}
         onReplay={replay}
         onExit={onExit}
       >
@@ -136,14 +138,29 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
         }}
       >
         <Muted style={{ fontFamily: th.font.bodyBold }}>
-          {t('fc_question_of', { i: idx + 1, n: round.length })} · {t('fc_score')}: {score}
+          {t('fc_question_of', { i: idx + 1, n: questions.length })} · {t('fc_score')}: {score}
         </Muted>
 
-        <View style={{ alignItems: 'center', gap: th.spacing[2] }}>
-          <Title style={{ ...th.text.xxl, fontFamily: th.font.displayBold, textAlign: 'center' }}>
-            {meaningOf(w)}
+        <View style={{ alignItems: 'center', gap: th.spacing[3] }}>
+          <View style={{ flexDirection: 'row', gap: th.spacing[2], alignItems: 'center' }}>
+            <IconButton variant="solid" label={t('fc_play_audio')} onPress={() => play(q.sentence)}>
+              <Volume2 size={24} color={th.color.textOnBrand} />
+            </IconButton>
+            <Button variant="ghost" onPress={() => play(q.sentence, 0.6)}>
+              {t('fc_listen_slow')}
+            </Button>
+          </View>
+          <Title
+            style={{
+              ...th.text.lg,
+              fontFamily: th.font.bodyBold,
+              textAlign: 'center',
+              maxWidth: 520,
+            }}
+          >
+            {q.blanked}
           </Title>
-          <Muted>{t('fc_type_prompt')}</Muted>
+          <Muted>{t('fc_listen_prompt')}</Muted>
         </View>
 
         <View style={{ width: '100%', maxWidth: 420, gap: th.spacing[3] }}>
@@ -188,7 +205,7 @@ export function TypeGame({ words, roundSize, onExit, onFinish, endNote }: GamePr
                 textAlign: 'center',
               }}
             >
-              {t('fc_correct_was', { word: w.word })}
+              {t('fc_correct_was', { word: q.answer })}
             </Text>
           ) : (
             <Button block disabled={!input.trim() || verdict !== null} onPress={submit}>

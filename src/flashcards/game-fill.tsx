@@ -3,7 +3,7 @@ import { DS } from '../ds/index.js';
 import { useLang } from '../lib/i18n.jsx';
 import { meaningOf, shuffle } from './game-utils.js';
 import type { GameProps } from './game-utils.js';
-import { decoyLetters, maskWord, pickRound } from '../../shared/logic/flashcards';
+import { decoyLetters, maskWord, pickRound, SPELL_ROUND_SIZE } from '../../shared/logic/flashcards';
 import type { MaskSlot } from '../../shared/logic/flashcards';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { FlashcardWordRow } from '../../server/services/flashcards.js';
@@ -21,17 +21,25 @@ const { Button: FBtn } = DS;
 
 type Question = { word: FlashcardWordRow; slots: MaskSlot[]; bank: string[] };
 
-function buildQuestions(words: FlashcardWordRow[]): Question[] {
-  return pickRound(words).map((w) => {
+function buildQuestions(words: FlashcardWordRow[], roundSize?: number): Question[] {
+  return pickRound(words, roundSize ?? SPELL_ROUND_SIZE).map((w) => {
     const slots = maskWord(w.word);
     const hidden = slots.filter((s) => s.hidden).map((s) => s.ch);
     return { word: w, slots, bank: shuffle([...hidden, ...decoyLetters(2)]) };
   });
 }
 
-export function FillGame({ words, onExit, onFinish, garden }: GameProps & GardenRoundProps) {
+export function FillGame({
+  words,
+  roundSize,
+  onExit,
+  onFinish,
+  garden,
+}: GameProps & GardenRoundProps) {
   const { t } = useLang();
-  const [questions, setQuestions] = React.useState<Question[]>(() => buildQuestions(words));
+  const [questions, setQuestions] = React.useState<Question[]>(() =>
+    buildQuestions(words, roundSize),
+  );
   const [idx, setIdx] = React.useState(0);
   // For each gap (in order), the bank index filling it, or null.
   const gapCount = (q: Question | undefined) => q?.slots.filter((s) => s.hidden).length ?? 0;
@@ -61,9 +69,12 @@ export function FillGame({ words, onExit, onFinish, garden }: GameProps & Garden
     }
   }, [done, score, questions.length, answers, onFinish]);
 
-  React.useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const advance = () => {
     setVerdict(null);
@@ -108,7 +119,7 @@ export function FillGame({ words, onExit, onFinish, garden }: GameProps & Garden
 
   const replay = () => {
     finished.current = false;
-    const qs = buildQuestions(words);
+    const qs = buildQuestions(words, roundSize);
     setQuestions(qs);
     setAnswers([]);
     setIdx(0);

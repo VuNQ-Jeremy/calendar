@@ -81,6 +81,10 @@ export interface FlashcardWordRow {
   meaningVi: string;
   definitionEn: string | null;
   ipa: string | null;
+  /** One example sentence containing the word, or null. Powers the cloze/listen games. */
+  exampleEn: string | null;
+  /** The exact form of the word as used in exampleEn (may be inflected), or null. */
+  exampleAnswer: string | null;
   audioUrl: string | null;
   createdAt: string | null;
 }

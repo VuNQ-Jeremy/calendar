@@ -75,6 +75,15 @@ test.describe('CRUD: vocabulary', () => {
     await post;
     await expect(row).toContainText('chóng tàn');
 
+    // An example sentence powers the cloze/listen games and shows on the word card.
+    await row.getByRole('button', { name: 'Edit' }).click();
+    await k.textIn('Example sentence').fill('Fame can be ephemeral.');
+    await k.textIn('Word as used in the sentence').fill('ephemeral');
+    post = k.posted(topicPath);
+    await k.submit().click();
+    await post;
+    await expect(row).toContainText('Fame can be ephemeral.');
+
     // Word delete confirms in a dialog quirkily titled "Edit word".
     await row.getByRole('button', { name: 'Delete' }).click();
     post = k.posted(topicPath);

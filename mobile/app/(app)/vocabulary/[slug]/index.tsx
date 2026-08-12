@@ -3,7 +3,10 @@ import { ActivityIndicator, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
+  AudioLines,
+  Dices,
   Grid3x3,
+  Headphones,
   Image as ImageIcon,
   Keyboard,
   Layers,
@@ -11,13 +14,24 @@ import {
   Pencil,
   PencilLine,
   Plus,
+  Quote,
   Shuffle,
   Trash2,
   Upload,
   Volume2,
+  Zap,
 } from 'lucide-react-native';
 import { useMutation } from '@tanstack/react-query';
-import { MIN_WORDS, typeEligible, wordsWithImages } from '@mochi/shared/logic/flashcards';
+import {
+  DEFAULT_ROUND_SIZE,
+  MIN_WORDS,
+  ROUND_SIZES,
+  stressEligible,
+  typeEligible,
+  wordsWithExamples,
+  wordsWithImages,
+  wordsWithIpa,
+} from '@mochi/shared/logic/flashcards';
 import type { GameMode } from '@mochi/shared/logic/flashcards';
 import * as api from '~/lib/endpoints';
 import { useAuth } from '~/lib/auth';
@@ -48,6 +62,11 @@ const MODES: { id: GameMode; tk: string; Icon: typeof Layers }[] = [
   { id: 'fill', tk: 'fc_mode_fill', Icon: PencilLine },
   { id: 'type', tk: 'fc_mode_type', Icon: Keyboard },
   { id: 'picture', tk: 'fc_mode_picture', Icon: ImageIcon },
+  { id: 'ipa', tk: 'fc_mode_ipa', Icon: AudioLines },
+  { id: 'stress', tk: 'fc_mode_stress', Icon: Zap },
+  { id: 'cloze', tk: 'fc_mode_cloze', Icon: Quote },
+  { id: 'listen', tk: 'fc_mode_listen', Icon: Headphones },
+  { id: 'mix', tk: 'fc_mode_mix', Icon: Dices },
 ];
 
 export default function TopicScreen() {
@@ -61,6 +80,9 @@ export default function TopicScreen() {
   const pending = usePendingSync();
   const invalidate = useInvalidateFlashcards();
   const [tab, setTab] = React.useState('words');
+  // No assignment-pin plumbing on mobile yet (the topic bundle carries no assignment data) — every
+  // student picks their own round size. See docs/mobile-parity.md.
+  const [roundSize, setRoundSize] = React.useState<number>(DEFAULT_ROUND_SIZE);
 
   const words = bundle?.words ?? [];
 
@@ -120,15 +142,33 @@ export default function TopicScreen() {
       <OfflineBanner pending={pending} />
 
       <View style={{ padding: th.spacing[4], gap: th.spacing[4] }}>
+        {!isStaff ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
+            <Muted>{t('fc_round_size')}:</Muted>
+            {ROUND_SIZES.map((n) => (
+              <Button
+                key={n}
+                variant={roundSize === n ? 'primary' : 'soft'}
+                onPress={() => setRoundSize(n)}
+              >
+                {String(n)}
+              </Button>
+            ))}
+          </View>
+        ) : null}
+
         {/* Game launchers. Same gating as the web: the word-count floor, plus type needing a
-            word whose hint isn't the answer and picture needing at least one word with a
-            picture. Seven modes now, so the row wraps instead of squeezing. */}
+            word whose hint isn't the answer, picture needing at least one word with a picture,
+            ipa/stress needing IPA data, and cloze/listen needing example sentences. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: th.spacing[2] }}>
           {MODES.map(({ id, tk, Icon }) => {
             const disabled =
               words.length < MIN_WORDS[id] ||
               (id === 'type' && !words.some(typeEligible)) ||
-              (id === 'picture' && wordsWithImages(words).length === 0);
+              (id === 'picture' && wordsWithImages(words).length === 0) ||
+              (id === 'ipa' && wordsWithIpa(words).length === 0) ||
+              (id === 'stress' && !words.some(stressEligible)) ||
+              ((id === 'cloze' || id === 'listen') && wordsWithExamples(words).length === 0);
             return (
               <Button
                 key={id}
@@ -136,7 +176,9 @@ export default function TopicScreen() {
                 style={{ flexGrow: 1, flexBasis: '30%' }}
                 disabled={disabled}
                 iconLeft={<Icon size={16} color={th.color.brandSoftInk} />}
-                onPress={() => router.push(`/play/${encodeURIComponent(slug)}/${id}`)}
+                onPress={() =>
+                  router.push(`/play/${encodeURIComponent(slug)}/${id}?roundSize=${roundSize}`)
+                }
               >
                 {t(tk)}
               </Button>
@@ -248,9 +290,7 @@ function WordsTab({
               <IconButton
                 size="sm"
                 label={t('edit')}
-                onPress={() =>
-                  router.push(`/vocabulary/${encodeURIComponent(slug)}/word/${w.id}`)
-                }
+                onPress={() => router.push(`/vocabulary/${encodeURIComponent(slug)}/word/${w.id}`)}
               >
                 <Pencil size={16} color={th.color.textMuted} />
               </IconButton>
@@ -264,4 +304,3 @@ function WordsTab({
     />
   );
 }
-

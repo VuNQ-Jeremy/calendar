@@ -55,7 +55,17 @@ describe('sanitizeGeneratedWords', () => {
     definitionEn = 'a definition',
     ipa = '/wɜːd/',
     imageQuery = 'a photo subject',
-  ): GeneratedWord => ({ word, meaningVi, definitionEn, ipa, imageQuery });
+    exampleEn = `The ${word} is here.`,
+    exampleAnswer = word,
+  ): GeneratedWord => ({
+    word,
+    meaningVi,
+    definitionEn,
+    ipa,
+    imageQuery,
+    exampleEn,
+    exampleAnswer,
+  });
 
   it('drops words the deck already has, ignoring case', () => {
     const out = sanitizeGeneratedWords([w('Rain'), w('cloud')], ['rain'], 10);
@@ -76,7 +86,11 @@ describe('sanitizeGeneratedWords', () => {
   });
 
   it('clamps a long imageQuery and keeps it off the card fields', () => {
-    const out = sanitizeGeneratedWords([w('sky', 'nghĩa', 'a definition', '/skaɪ/', 'y'.repeat(300))], [], 10);
+    const out = sanitizeGeneratedWords(
+      [w('sky', 'nghĩa', 'a definition', '/skaɪ/', 'y'.repeat(300))],
+      [],
+      10,
+    );
     expect(out[0].imageQuery).toHaveLength(200);
     // The picture keywords are for the review screen's lookup, never shown on the card itself.
     expect(out[0].word).toBe('sky');
@@ -96,5 +110,25 @@ describe('sanitizeGeneratedWords', () => {
   it('survives malformed model output rather than throwing at the UI', () => {
     expect(sanitizeGeneratedWords(undefined, [], 10)).toEqual([]);
     expect(sanitizeGeneratedWords([{} as GeneratedWord], [], 10)).toEqual([]);
+  });
+
+  it('keeps a well-formed example sentence and its answer', () => {
+    const out = sanitizeGeneratedWords(
+      [w('whisk', 'đánh trứng', 'to beat', '/wɪsk/', 'kitchen tool', 'She used a whisk.', 'whisk')],
+      [],
+      10,
+    );
+    expect(out[0].exampleEn).toBe('She used a whisk.');
+    expect(out[0].exampleAnswer).toBe('whisk');
+  });
+
+  it('nulls BOTH example fields when the sentence does not contain the answer', () => {
+    const out = sanitizeGeneratedWords(
+      [w('run', 'chạy', 'to move fast', '/rʌn/', 'a person running', 'He runs fast.', 'run')],
+      [],
+      10,
+    );
+    expect(out[0].exampleEn).toBeNull();
+    expect(out[0].exampleAnswer).toBeNull();
   });
 });

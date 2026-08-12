@@ -406,6 +406,10 @@ export const flashcardWords = sqliteTable(
     meaningVi: text('meaning_vi').notNull(),
     definitionEn: text('definition_en'),
     ipa: text('ipa'),
+    /** One simple example sentence containing the word, or null. See 0036_vocab_examples.sql. */
+    exampleEn: text('example_en'),
+    /** The exact form of the word as used in exampleEn (may be inflected), or null. */
+    exampleAnswer: text('example_answer'),
     audioUrl: text('audio_url'),
     /** R2 object key ("flashcards/<uuid>.<ext>"), not a URL — see 0033_flashcard_word_images.sql. */
     imageKey: text('image_key'),
@@ -872,6 +876,8 @@ export const vocabAssignments = sqliteTable(
     staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
     requiredCount: integer('required_count').notNull().default(3),
     minScorePct: integer('min_score_pct').notNull().default(70),
+    /** Questions per round (5-30) for every mode but flip; NULL = default round sizes. */
+    questionCount: integer('question_count'),
     /** ICT YYYY-MM-DD, inclusive. */
     deadline: text('deadline').notNull(),
     /**

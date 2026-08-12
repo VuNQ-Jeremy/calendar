@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { buildQuestions } from '../src/flashcards/game-quiz.js';
+import { buildQuizQuestions as buildQuestions } from '../shared/logic/flashcards';
 import type { FlashcardWordRow } from '../server/services/flashcards.js';
 
 /**
@@ -18,6 +18,8 @@ function word(id: string, w: string, imageKey: string | null): FlashcardWordRow 
     meaningVi: `nghĩa ${w}`,
     definitionEn: null,
     ipa: null,
+    exampleEn: null,
+    exampleAnswer: null,
     audioUrl: null,
     imageKey,
     createdAt: null,
