@@ -207,7 +207,7 @@ function stringify(v: unknown): string {
   }
 }
 
-/** One activity row, expandable to its raw JSON (before/after/meta) via a native <details>. */
+/** One activity row. Meta rides the row's spare width; a before/after diff sits under it. */
 function ActivityRowView({
   row,
   onOpenEntity,
@@ -216,19 +216,12 @@ function ActivityRowView({
   onOpenEntity?: (entityType: string, entityId: string) => void;
 }) {
   const { t } = useLang();
-  const hasDetail = row.before != null || row.after != null || row.meta != null;
+  const hasDiff = row.before != null || row.after != null;
   return (
-    <details style={{ borderBottom: '1px solid var(--line, #e7e0d6)' }}>
-      <summary
+    <div style={{ borderBottom: '1px solid var(--line, #e7e0d6)' }}>
+      <div
         className="m-row"
-        style={{
-          gap: 12,
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          padding: '8px 0',
-          cursor: 'pointer',
-          listStyle: 'none',
-        }}
+        style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0' }}
       >
         <span style={{ minWidth: 150, fontFamily: 'var(--font-mono)', fontSize: 12 }}>
           <Stamp value={row.recordedAt} />
@@ -248,11 +241,7 @@ function ActivityRowView({
               padding: 0,
               font: 'inherit',
             }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onOpenEntity?.(row.entityType!, row.entityId ?? '');
-            }}
+            onClick={() => onOpenEntity?.(row.entityType!, row.entityId ?? '')}
           >
             {row.entityType}
             {row.entityId ? `:${row.entityId.slice(0, 8)}` : ''}
@@ -261,27 +250,26 @@ function ActivityRowView({
         <span className="m-muted" style={{ flex: 1, minWidth: 120, fontSize: 12 }}>
           {row.route}
           {row.intent ? ` · ${row.intent}` : ''}
+          {row.meta != null && (
+            <span
+              className="m-mono"
+              title={t('logs_activity_meta')}
+              style={{ marginLeft: 8, wordBreak: 'break-word' }}
+            >
+              {stringify(row.meta)}
+            </span>
+          )}
         </span>
         {row.status != null && row.status >= 400 && (
           <span style={{ color: DANGER.ink, fontSize: 12, fontWeight: 600 }}>{row.status}</span>
         )}
-      </summary>
-      {hasDetail && (
-        <div style={{ padding: '4px 0 12px 24px' }}>
-          {(row.before != null || row.after != null) && (
-            <DiffTable before={row.before} after={row.after} />
-          )}
-          {row.meta != null && (
-            <p
-              className="m-mono m-muted"
-              style={{ margin: '6px 0 0', fontSize: 12, wordBreak: 'break-word' }}
-            >
-              {t('logs_activity_meta')}: {stringify(row.meta)}
-            </p>
-          )}
+      </div>
+      {hasDiff && (
+        <div style={{ padding: '0 0 12px 24px' }}>
+          <DiffTable before={row.before} after={row.after} />
         </div>
       )}
-    </details>
+    </div>
   );
 }
 
@@ -602,6 +590,7 @@ function SecurityView({ data }: { data: Extract<LoaderData, { view: 'security' }
                 }}
               >
                 <span style={{ minWidth: 200 }}>{s.accountEmail}</span>
+                <Badge>{s.sessions}</Badge>
                 {s.concurrent && (
                   <Tag color="orange" dot={false}>
                     {t('logs_activity_security_concurrent')}

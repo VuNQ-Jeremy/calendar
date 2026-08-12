@@ -107,21 +107,67 @@ describe('securityOverview', () => {
     return id;
   }
 
-  it('flags an account with more than one live session as concurrent', async () => {
+  it('collapses an account to one row and flags two distinct ips as concurrent', async () => {
     const d = db();
     const accountId = await seedAccount(d);
     const future = new Date(Date.now() + 3600_000).toISOString();
     await d.insert(sessions).values([
-      { token: crypto.randomUUID(), accountId, expiresAt: future, ip: '1.1.1.1' },
-      { token: crypto.randomUUID(), accountId, expiresAt: future, ip: '2.2.2.2' },
+      {
+        token: crypto.randomUUID(),
+        accountId,
+        expiresAt: future,
+        ip: '1.1.1.1',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+      {
+        token: crypto.randomUUID(),
+        accountId,
+        expiresAt: future,
+        ip: '2.2.2.2',
+        createdAt: '2026-08-02T00:00:00.000Z',
+      },
     ]);
 
     const { activeSessions } = await securityOverview(d, new Date());
-    const mine = activeSessions.filter(
-      (s) => s.accountEmail.startsWith('sec-') && ['1.1.1.1', '2.2.2.2'].includes(s.ip),
-    );
-    expect(mine).toHaveLength(2);
-    expect(mine.every((s) => s.concurrent)).toBe(true);
+    // Scope to THIS test's account: storage is isolated per file, not per test.
+    const mine = activeSessions.filter((s) => s.accountEmail === `sec-${accountId}@test.com`);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].sessions).toBe(2);
+    expect(mine[0].concurrent).toBe(true);
+    // Newest session's telemetry represents the account.
+    expect(mine[0].ip).toBe('2.2.2.2');
+  });
+
+  it('does not call an account concurrent on repeat logins from one ip, and keeps known telemetry over legacy nulls', async () => {
+    const d = db();
+    const accountId = await seedAccount(d);
+    const future = new Date(Date.now() + 3600_000).toISOString();
+    await d.insert(sessions).values([
+      // A row predating the ip/user_agent columns — must not blank out what we do know.
+      { token: crypto.randomUUID(), accountId, expiresAt: future },
+      {
+        token: crypto.randomUUID(),
+        accountId,
+        expiresAt: future,
+        ip: '3.3.3.3',
+        createdAt: '2026-08-01T00:00:00.000Z',
+      },
+      {
+        token: crypto.randomUUID(),
+        accountId,
+        expiresAt: future,
+        ip: '3.3.3.3',
+        createdAt: '2026-08-02T00:00:00.000Z',
+      },
+    ]);
+
+    const { activeSessions } = await securityOverview(d, new Date());
+    // Scope to THIS test's account: storage is isolated per file, not per test.
+    const mine = activeSessions.filter((s) => s.accountEmail === `sec-${accountId}@test.com`);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].sessions).toBe(3);
+    expect(mine[0].concurrent).toBe(false);
+    expect(mine[0].ip).toBe('3.3.3.3');
   });
 
   it('flags a login from a genuinely new (account, ip) pair, and not a repeat one', async () => {

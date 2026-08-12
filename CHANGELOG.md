@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0186 — 2026-08-12
+Activity log: collapse the active-sessions panel to one row per account (337 raw rows was one test login repeated), purge expired sessions on the daily cron, and flatten activity rows - meta inline, no expand/collapse.
+
 ## v0.0185 — 2026-08-11
 crud-activity.spec.ts: fix three e2e assertions found wrong against a real run — a login row's actor is anon by design (email lives in meta, not the visible summary), a before/after diff needs scoped text assertions to avoid ambiguous substring matches, and requireAdmin denies a student via redirect, not a literal 403 (only a non-admin STAFF member reaches that branch).
 

@@ -2,7 +2,7 @@ import { asc, eq, inArray, lt } from 'drizzle-orm';
 import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { activityLog } from '../db/schema';
+import { activityLog, sessions } from '../db/schema';
 import { chunk, rowsPerStatement, type Db } from '../db/index';
 import type { SessionUser } from './auth';
 
@@ -297,6 +297,23 @@ export async function purgeOldLogs(db: Db, now: Date): Promise<number> {
   }
   console.log('[audit] purged', { count: total });
   return total;
+}
+
+/**
+ * Delete session rows whose expiry has passed.
+ *
+ * Nothing else ever does: `logout` deletes the one token it holds and `userFromToken` clears a
+ * row only if someone presents that exact expired token again, so abandoned sessions — script
+ * logins, e2e sign-ins, a reinstalled app — sit in the table until something asks for them, which
+ * for an abandoned token is never. They are dead credentials either way (every read checks
+ * `expires_at`); this just stops the table, and the security panel reading it, from filling up
+ * with them.
+ */
+export async function purgeExpiredSessions(db: Db, now: Date): Promise<number> {
+  const res = await db.delete(sessions).where(lt(sessions.expiresAt, now.toISOString()));
+  const count = res.meta?.changes ?? 0;
+  console.log('[audit] sessions purged', { count });
+  return count;
 }
 
 // ---- Precise-capture helpers (services, and crud()'s generic entity path) ----

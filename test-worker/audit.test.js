@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { createDb } from '../server/db/index';
-import { activityLog, staff } from '../server/db/schema';
+import { accounts, activityLog, sessions, staff } from '../server/db/schema';
 import {
   auditALS,
   flush,
   newRequestStore,
   newSystemStore,
+  purgeExpiredSessions,
   purgeOldLogs,
   record,
   recordCreate,
@@ -233,6 +234,32 @@ describe('purgeOldLogs', () => {
     expect(deleted).toBe(0);
     const remaining = await d.select().from(activityLog).where(eq(activityLog.route, marker));
     expect(remaining).toHaveLength(1);
+  });
+});
+
+describe('purgeExpiredSessions', () => {
+  it('deletes sessions past their expiry and leaves live ones alone', async () => {
+    const d = db();
+    const now = new Date('2026-06-01T00:00:00.000Z');
+    const accountId = crypto.randomUUID();
+    await d.insert(accounts).values({
+      id: accountId,
+      email: `purge-${accountId}@test.com`,
+      passwordHash: 'x',
+      createdAt: now.toISOString(),
+    });
+    const liveToken = crypto.randomUUID();
+    await d.insert(sessions).values([
+      { token: crypto.randomUUID(), accountId, expiresAt: '2026-05-01T00:00:00.000Z' },
+      { token: crypto.randomUUID(), accountId, expiresAt: '2026-05-31T23:59:59.000Z' },
+      { token: liveToken, accountId, expiresAt: '2026-07-01T00:00:00.000Z' },
+    ]);
+
+    await purgeExpiredSessions(d, now);
+
+    const remaining = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].token).toBe(liveToken);
   });
 });
 

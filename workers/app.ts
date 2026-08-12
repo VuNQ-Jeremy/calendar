@@ -26,6 +26,7 @@ import {
   flush,
   newRequestStore,
   newSystemStore,
+  purgeExpiredSessions,
   purgeOldLogs,
 } from '../server/services/audit';
 
@@ -135,6 +136,11 @@ export default {
       ctx.waitUntil(
         purgeOldLogs(createDb(env), new Date()).catch((err) =>
           console.error('[audit] purge failed', { err: String(err) }),
+        ),
+      );
+      ctx.waitUntil(
+        purgeExpiredSessions(createDb(env), new Date()).catch((err) =>
+          console.error('[audit] session purge failed', { err: String(err) }),
         ),
       );
     }
