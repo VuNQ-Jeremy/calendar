@@ -874,6 +874,12 @@ export const vocabAssignments = sqliteTable(
     minScorePct: integer('min_score_pct').notNull().default(70),
     /** ICT YYYY-MM-DD, inclusive. */
     deadline: text('deadline').notNull(),
+    /**
+     * ICT 'HH:MM' the deadline day expires at, or NULL for end of day — see
+     * 0036_vocab_assignment_deadline_time.sql. Every day-level comparison still reads `deadline`
+     * alone; this only sharpens the qualifying window (`deadlineEndUtc`).
+     */
+    deadlineTime: text('deadline_time'),
     note: text('note'),
     /**
      * CSV of game-mode ids that count toward this assignment, canonicalised by

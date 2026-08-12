@@ -1,0 +1,12 @@
+-- A clock time on the vocabulary assignment deadline: "due 20/08 at 6pm", not just "due 20/08".
+--
+-- `deadline_time` is an ICT 'HH:MM' or NULL. NULL — every row that exists before this migration —
+-- means the whole deadline day still counts, which is exactly how these assignments have always
+-- behaved, so no open homework changes when this lands.
+--
+-- Kept as a second column rather than folded into `deadline` because every index, every window
+-- query and every screen compares deadlines as bare ICT DAYS (`deadline < vnToday`); a datetime
+-- in that column would have broken all of them at once. The time is applied where it is actually
+-- decisive: `deadlineEndUtc` in server/services/garden.ts, which bounds the qualifying-round
+-- window and therefore also what the missed-deadline sweep charges for.
+ALTER TABLE vocab_assignments ADD COLUMN deadline_time TEXT;

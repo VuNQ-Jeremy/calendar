@@ -20,11 +20,13 @@ import { ictDateOf } from '../../shared/logic/tests';
  * (app/routes/flashcards.tsx), so the widget renders identically on either client.
  */
 async function loadPlant(db: Parameters<typeof svc.getPlant>[0], studentId: string) {
-  const vnToday = ictDateOf(new Date().toISOString());
+  const nowIso = new Date().toISOString();
+  const vnToday = ictDateOf(nowIso);
   const [settings, plant, assignments, classes] = await Promise.all([
     svc.getGardenSettings(db),
     svc.getPlant(db, studentId),
-    svc.studentAssignments(db, studentId, vnToday),
+    // The instant, not the day: an assignment with a clock time closes when that time passes.
+    svc.studentAssignments(db, studentId, nowIso),
     svc.studentClasses(db, studentId),
   ]);
   const view = plantView(plant?.state ?? null, settings, vnToday);

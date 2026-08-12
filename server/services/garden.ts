@@ -230,6 +230,8 @@ export type VocabAssignmentRow = {
   requiredCount: number;
   minScorePct: number;
   deadline: string;
+  /** ICT 'HH:MM' the deadline expires at, or null for end of day (see 0036). */
+  deadlineTime: string | null;
   note: string | null;
   /** CSV of game modes that count, canonical order; null = any (see 0034). */
   modes: string | null;
@@ -256,6 +258,7 @@ export async function listAssignments(
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
       deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
       note: vocabAssignments.note,
       modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
@@ -281,6 +284,7 @@ export async function getAssignment(db: Db, id: string): Promise<VocabAssignment
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
       deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
       note: vocabAssignments.note,
       modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
@@ -306,6 +310,7 @@ export async function createAssignment(
     requiredCount: input.requiredCount,
     minScorePct: input.minScorePct,
     deadline: input.deadline,
+    deadlineTime: input.deadlineTime ?? null,
     note: input.note ?? null,
     modes: input.modes ?? null,
     createdAt: new Date().toISOString(),
@@ -324,6 +329,7 @@ export async function updateAssignment(
   if (patch.requiredCount !== undefined) set.requiredCount = patch.requiredCount;
   if (patch.minScorePct !== undefined) set.minScorePct = patch.minScorePct;
   if (patch.deadline !== undefined) set.deadline = patch.deadline;
+  if (patch.deadlineTime !== undefined) set.deadlineTime = patch.deadlineTime ?? null;
   if (patch.note !== undefined) set.note = patch.note ?? null;
   if (patch.modes !== undefined) set.modes = patch.modes ?? null;
   if (Object.keys(set).length) {
@@ -335,9 +341,17 @@ export async function deleteAssignment(db: Db, id: string): Promise<void> {
   await db.delete(vocabAssignments).where(eq(vocabAssignments.id, id));
 }
 
-/** The last instant an ICT deadline day still counts, as a UTC ISO bound to compare `playedAt` to. */
-function deadlineEndUtc(deadline: string): string {
-  return composeUtcFromIct(addDaysVn(deadline, 1), '00:00');
+/**
+ * The instant an assignment stops accepting work, as a UTC ISO bound to compare `playedAt` to.
+ *
+ * Exclusive: `countQualifying` uses `playedAt < end`. A null `deadlineTime` — every row before
+ * 0036, and every assignment a teacher leaves unset — means the whole ICT day counts, so the bound
+ * is the following midnight, exactly as it was before times existed.
+ */
+function deadlineEndUtc(deadline: string, deadlineTime: string | null = null): string {
+  return deadlineTime
+    ? composeUtcFromIct(deadline, deadlineTime)
+    : composeUtcFromIct(addDaysVn(deadline, 1), '00:00');
 }
 
 /**
@@ -375,7 +389,7 @@ export async function assignmentProgress(
     members.map((m) => m.id),
     assignment.minScorePct,
     assignment.createdAt,
-    deadlineEndUtc(assignment.deadline),
+    deadlineEndUtc(assignment.deadline, assignment.deadlineTime),
     parseModes(assignment.modes),
   );
 
@@ -427,27 +441,35 @@ async function countQualifying(
   return out;
 }
 
-/** Assignments covering `topicId` for the classes this student is in, still inside their deadline. */
+/**
+ * Assignments covering `topicId` for the classes this student is in, still inside their deadline.
+ *
+ * The SQL gate is the deadline DAY (that is what the index covers); the exact instant is applied
+ * in memory afterwards, so a round played at 8pm does not set the bar for an assignment that
+ * expired at 6pm. `nowIso` rather than a day string for exactly that reason.
+ */
 export async function activeAssignmentsFor(
   db: Db,
   studentId: string,
   topicId: string,
-  vnToday: string,
+  nowIso: string,
 ): Promise<
   {
     id: string;
     minScorePct: number;
     requiredCount: number;
     deadline: string;
+    deadlineTime: string | null;
     modes: string | null;
   }[]
 > {
-  return db
+  const rows = await db
     .select({
       id: vocabAssignments.id,
       minScorePct: vocabAssignments.minScorePct,
       requiredCount: vocabAssignments.requiredCount,
       deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
       modes: vocabAssignments.modes,
     })
     .from(vocabAssignments)
@@ -456,16 +478,23 @@ export async function activeAssignmentsFor(
       and(
         eq(classStudents.studentId, studentId),
         eq(vocabAssignments.topicId, topicId),
-        gte(vocabAssignments.deadline, vnToday),
+        gte(vocabAssignments.deadline, ictDateOf(nowIso)),
       ),
     );
+  return rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
 }
 
-/** Every open assignment for a student, with their progress — the chips on /vocabulary. */
+/**
+ * Every open assignment for a student, with their progress — the chips on /vocabulary.
+ *
+ * "Open" is the same instant test as `activeAssignmentsFor`: an assignment that expired at 6pm
+ * stops being listed at 6pm, not at midnight, because after 6pm no further round can count
+ * toward it.
+ */
 export async function studentAssignments(
   db: Db,
   studentId: string,
-  vnToday: string,
+  nowIso: string,
 ): Promise<
   {
     id: string;
@@ -474,6 +503,8 @@ export async function studentAssignments(
     topicSlug: string | null;
     className: string;
     deadline: string;
+    /** ICT 'HH:MM' the deadline expires at, or null for end of day. */
+    deadlineTime: string | null;
     requiredCount: number;
     minScorePct: number;
     /** The assignment's modes CSV, for the chip's mode badges. Null = any. */
@@ -481,7 +512,8 @@ export async function studentAssignments(
     done: number;
   }[]
 > {
-  const open = await db
+  const vnToday = ictDateOf(nowIso);
+  const rows = await db
     .select({
       id: vocabAssignments.id,
       topicId: vocabAssignments.topicId,
@@ -489,6 +521,7 @@ export async function studentAssignments(
       topicSlug: flashcardTopics.slug,
       className: classes.name,
       deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
       modes: vocabAssignments.modes,
@@ -501,6 +534,8 @@ export async function studentAssignments(
     .where(and(eq(classStudents.studentId, studentId), gte(vocabAssignments.deadline, vnToday)))
     .orderBy(asc(vocabAssignments.deadline));
 
+  const open = rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
+
   const out = [];
   for (const a of open) {
     const counts = await countQualifying(
@@ -509,7 +544,7 @@ export async function studentAssignments(
       [studentId],
       a.minScorePct,
       a.createdAt,
-      deadlineEndUtc(a.deadline),
+      deadlineEndUtc(a.deadline, a.deadlineTime),
       parseModes(a.modes),
     );
     const { createdAt: _unused, ...rest } = a;
@@ -549,6 +584,7 @@ export async function studentAssignmentsInMonth(
       topicName: flashcardTopics.name,
       className: classes.name,
       deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
       modes: vocabAssignments.modes,
@@ -575,7 +611,7 @@ export async function studentAssignmentsInMonth(
       [studentId],
       a.minScorePct,
       a.createdAt,
-      deadlineEndUtc(a.deadline),
+      deadlineEndUtc(a.deadline, a.deadlineTime),
       parseModes(a.modes),
     );
     const done = counts.get(studentId) ?? 0;
@@ -615,7 +651,7 @@ export async function onStudentResult(
 ): Promise<GardenOutcome> {
   const vnToday = ictDateOf(nowIso);
   const settings = await getGardenSettings(db);
-  const assignments = await activeAssignmentsFor(db, studentId, input.topicId, vnToday);
+  const assignments = await activeAssignmentsFor(db, studentId, input.topicId, nowIso);
   // Only assignments this round's mode counts toward set the bar. A round in an excluded mode
   // is still free study: it grows the plant at the free-study threshold, it just doesn't tick
   // the assignment's counter (countQualifying applies the same filter when it recounts).
@@ -1216,6 +1252,11 @@ async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<Swee
 
   // 1. Missed deadlines. Bounded to the recent past: anything older was either charged already or
   // predates the feature, and the unique index makes a re-run a no-op either way.
+  //
+  // The gate stays the deadline DAY even for assignments with a clock time: the penalty is a daily
+  // job, so an assignment that shut at 6pm is charged by the run after ICT midnight, not at 6pm.
+  // What the time does change is `countQualifying` below — a round played at 8pm does not save the
+  // student from the drop, exactly as the closed chip told them at 6.
   const overdue = await db
     .select({
       id: vocabAssignments.id,
@@ -1225,6 +1266,7 @@ async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<Swee
       requiredCount: vocabAssignments.requiredCount,
       minScorePct: vocabAssignments.minScorePct,
       deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
       modes: vocabAssignments.modes,
       createdAt: vocabAssignments.createdAt,
     })
@@ -1256,7 +1298,7 @@ async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<Swee
       members.map((m) => m.studentId),
       a.minScorePct,
       a.createdAt,
-      deadlineEndUtc(a.deadline),
+      deadlineEndUtc(a.deadline, a.deadlineTime),
       parseModes(a.modes),
     );
 

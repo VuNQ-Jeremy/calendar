@@ -40,6 +40,11 @@ test.describe('CRUD: vocabulary assignments', () => {
     await f.pickSel('Class', CLASS);
     await f.textIn('Rounds required').fill('2');
     await f.textIn('Minimum score (%)').fill('50');
+    // The due TIME is optional — it opens on "End of day", the meaning a deadline has always had.
+    // Picking one narrows the deadline to that instant. Blocks are 30 minutes apart, so "6:30 pm"
+    // is on the list where "6:15 pm" would not be.
+    await expect(f.field('Due time')).toContainText('End of day');
+    await f.pickSel('Due time', '6:30 pm');
     // Restrict which game modes count. Unchecked (the default) means any mode, so the hint is
     // showing before the first tick and disappears after it. The DS checkbox hides its native
     // input behind a styled span, so ticking clicks the LABEL; asserting reads the input, which
@@ -61,6 +66,9 @@ test.describe('CRUD: vocabulary assignments', () => {
     const row = panel.locator('.lrow', { hasText: topic });
     await expect(row).toBeVisible();
     await expect(row).toContainText(CLASS);
+    // The deadline now prints its time beside the date, here and on the topic card's tag.
+    await expect(row).toContainText('6:30 pm');
+    await expect(card).toContainText('6:30 pm');
     // The mode restriction shows as badges on the assignment row.
     await expect(row).toContainText('Unscramble');
     await expect(row).toContainText('Type it');
@@ -85,6 +93,9 @@ test.describe('CRUD: vocabulary assignments', () => {
     await edit.locator('.mochi-check', { hasText: 'Unscramble' }).click();
     await edit.locator('.mochi-check', { hasText: 'Type it' }).click();
     await expect(edit.getByRole('checkbox', { name: 'Unscramble' })).not.toBeChecked();
+    // The saved due time comes back on the trigger, and can be handed back to "End of day".
+    await expect(k.on(edit).field('Due time')).toContainText('6:30 pm');
+    await k.on(edit).pickSel('Due time', 'End of day');
     await k.on(edit).textIn('Rounds required').fill('5');
     post = k.posted('/vocabulary');
     await edit.locator('.m-dialog__foot .mochi-btn.is-primary').click();
@@ -93,6 +104,7 @@ test.describe('CRUD: vocabulary assignments', () => {
     // row it was handed, so asserting on it first would only re-read the pre-edit snapshot.
     await expect(row).toContainText('Rounds required: 5');
     await expect(row.getByText('Unscramble')).toHaveCount(0);
+    await expect(row.getByText('6:30 pm')).toHaveCount(0);
     await row.getByRole('button', { name: 'Progress' }).click();
     const track2 = k.dlgOf(`Progress · ${topic}`);
     await expect(track2.locator('.lrow', { hasText: 'Leo Park' })).toContainText('0/5');

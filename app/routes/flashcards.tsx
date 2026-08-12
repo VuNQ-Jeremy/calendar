@@ -37,14 +37,16 @@ async function loadGarden(
   su: SessionUser,
 ): Promise<{ garden: StudentGardenData | null; gardenStaff: StaffGardenData | null }> {
   // The Worker clock is UTC and the school is UTC+7: every day boundary here is an ICT one.
-  const today = ictDateOf(new Date().toISOString());
+  const nowIso = new Date().toISOString();
+  const today = ictDateOf(nowIso);
   try {
     if (su.kind === 'student') {
       const studentId = su.user.id;
       const [settings, record, assignments, classesOf] = await Promise.all([
         gardenSvc.getGardenSettings(db),
         gardenSvc.getPlant(db, studentId),
-        gardenSvc.studentAssignments(db, studentId, today),
+        // The instant, not the day: an assignment with a clock time closes when that time passes.
+        gardenSvc.studentAssignments(db, studentId, nowIso),
         gardenSvc.studentClasses(db, studentId),
       ]);
       // Settled in memory, never written — a read of the plant stays a read (shared/logic/garden).

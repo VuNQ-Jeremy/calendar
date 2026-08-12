@@ -496,21 +496,29 @@ interface TimePickerProps {
   value: string;
   onChange: (v: string) => void;
   hint?: string;
+  /** Minutes between blocks. 15 for the calendar; 30 where a coarser list is easier to scan. */
+  step?: number;
+  /** When set, the list opens with a `''` option under this label — "no time chosen". */
+  emptyLabel?: string;
 }
 
-function TimePicker({ label, value, onChange, hint }: TimePickerProps) {
+function TimePicker({ label, value, onChange, hint, step = 15, emptyLabel }: TimePickerProps) {
   const options = React.useMemo(() => {
     const opts: { value: string; label: string }[] = [];
-    for (let m = 0; m < 24 * 60; m += 15) {
+    for (let m = 0; m < 24 * 60; m += step) {
       const v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
       opts.push({ value: v, label: fmtTime(v, true) });
     }
+    // A saved time off the grid (a 10-minute slot, or a 15-minute one in a 30-minute list) still
+    // has to be selectable, or reopening the dialog would silently move it.
     if (value && !opts.some((o) => o.value === value)) {
       opts.push({ value, label: fmtTime(value, true) });
       opts.sort((a, b) => toMin(a.value) - toMin(b.value));
     }
+    // Unshifted after the sort: '' has no minute-of-day to sort by.
+    if (emptyLabel) opts.unshift({ value: '', label: emptyLabel });
     return opts;
-  }, [value]);
+  }, [value, step, emptyLabel]);
   return <Select label={label} value={value} onChange={onChange} options={options} hint={hint} />;
 }
 

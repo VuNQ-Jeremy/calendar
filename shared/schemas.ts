@@ -985,6 +985,17 @@ export const VocabAssignmentInput = z.object({
   minScorePct: z.coerce.number().int().min(0).max(100),
   /** ICT YYYY-MM-DD, inclusive. */
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /**
+   * ICT 'HH:MM' the deadline day expires at. NULL and '' both mean end of day — the meaning every
+   * row had before 0036, and what the dialog posts when the teacher leaves the time unset.
+   */
+  deadlineTime: z
+    .string()
+    .nullish()
+    .transform((v) => (v == null || v === '' ? null : v))
+    .refine((v) => v == null || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), {
+      message: 'Expected HH:MM',
+    }),
   note: z.string().max(200).nullish(),
   /**
    * CSV of the game modes that count toward this assignment, canonicalised on the way in

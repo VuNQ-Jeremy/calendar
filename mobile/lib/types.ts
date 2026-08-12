@@ -358,6 +358,8 @@ export interface StudentAssignmentChip {
   topicSlug: string | null;
   className: string;
   deadline: string;
+  /** ICT 'HH:MM' the deadline expires at, or null for end of day — print with `formatDmyTime`. */
+  deadlineTime: string | null;
   requiredCount: number;
   minScorePct: number;
   /** CSV of the game modes that count, null/absent = any — parse with `parseModes`. */

@@ -7,7 +7,7 @@ import * as gardenSvc from '../server/services/garden';
 import * as peopleSvc from '../server/services/people';
 import * as classesSvc from '../server/services/classes';
 import { gardenEvents, gardenPlants } from '../server/db/schema';
-import { composeUtcFromIct } from '../shared/logic/tests';
+import { composeUtcFromIct, ictDateOf } from '../shared/logic/tests';
 
 /**
  * Vườn cây từ vựng, against real D1.
@@ -206,7 +206,7 @@ describe('assignments', () => {
     progress = await gardenSvc.assignmentProgress(d, id);
     expect(progress.rows[0].done).toBe(1);
 
-    const open = await gardenSvc.studentAssignments(d, student.id, '2026-08-07');
+    const open = await gardenSvc.studentAssignments(d, student.id, new Date().toISOString());
     expect(open).toEqual([
       expect.objectContaining({ id, requiredCount: 2, done: 1, className: cls.name }),
     ]);
@@ -254,12 +254,46 @@ describe('assignments', () => {
     expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(1);
 
     // The student chip carries the CSV so the client can badge it.
-    const open = await gardenSvc.studentAssignments(d, student.id, '2026-08-07');
+    const open = await gardenSvc.studentAssignments(d, student.id, new Date().toISOString());
     expect(open[0]).toMatchObject({ id, modes: 'fill,type', done: 1 });
 
     // Clearing the restriction goes back to any-mode counting: both 60% rounds now qualify.
     await gardenSvc.updateAssignment(d, id, { modes: null });
     expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(3);
+  });
+
+  it('a deadline time closes the window before the deadline day ends', async () => {
+    const d = db();
+    const topic = await seedTopic(d);
+    const { cls, student } = await seedClassWithStudent(d);
+    const nowIso = new Date().toISOString();
+
+    // Due TODAY at ICT midnight: the deadline day is still running, but its instant has gone.
+    const id = await gardenSvc.createAssignment(
+      d,
+      {
+        classId: cls.id,
+        topicId: topic.id,
+        requiredCount: 1,
+        minScorePct: 80,
+        deadline: ictDateOf(nowIso),
+        deadlineTime: '00:00',
+        note: null,
+      },
+      null,
+    );
+
+    await play(d, student.id, topic.id);
+    expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(0);
+    expect(await gardenSvc.studentAssignments(d, student.id, nowIso)).toEqual([]);
+
+    // Clearing the time restores the pre-0036 meaning — the whole day counts — and the same
+    // round now qualifies.
+    await gardenSvc.updateAssignment(d, id, { deadlineTime: null });
+    expect((await gardenSvc.assignmentProgress(d, id)).rows[0].done).toBe(1);
+    expect(await gardenSvc.studentAssignments(d, student.id, nowIso)).toEqual([
+      expect.objectContaining({ id, deadlineTime: null, done: 1 }),
+    ]);
   });
 
   it('windows the report list by deadline month, missed deadlines included', async () => {

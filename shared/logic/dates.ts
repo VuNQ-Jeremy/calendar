@@ -20,6 +20,34 @@ export function formatDmy(date: string): string {
   return d && m && y ? `${d}/${m}/${y}` : date;
 }
 
+/**
+ * `09:00` -> `9am`, `13:30` -> `1:30pm`; `full` gives the uniform `9:00 am` the time-picker lists
+ * use, the compact form the calendar pills use.
+ *
+ * The single definition for both clients — `src/calendar/utils.ts` and `mobile/lib/cal.ts` now
+ * re-export this rather than each keeping a copy, so an event and a deadline read identically
+ * wherever they are printed.
+ */
+export function fmtTime(t: string, full = false): string {
+  const parts = t.split(':').map(Number);
+  let h = parts[0] ?? 0;
+  const m = parts[1] ?? 0;
+  const ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  if (full) return `${h}:${String(m).padStart(2, '0')} ${ap}`;
+  return m ? `${h}:${String(m).padStart(2, '0')}${ap}` : `${h}${ap}`;
+}
+
+/**
+ * A deadline as it is printed: '04/05/2026', or '04/05/2026 6:00 pm' once a time is set.
+ *
+ * A null/absent time means the whole day is still the deadline, which is exactly what the bare
+ * date already says — so it prints nothing extra rather than inventing a midnight.
+ */
+export function formatDmyTime(date: string, time?: string | null): string {
+  return time ? `${formatDmy(date)} ${fmtTime(time, true)}` : formatDmy(date);
+}
+
 /** `Date` -> `YYYY-MM-DD`, in local time. */
 export function iso(d: Date | string | number): string {
   const x = new Date(d);

@@ -10,7 +10,7 @@ import { mapWithConcurrency } from '../lib/vocab-image-client.js';
 import { ImageStrip, emptyChoice, loadChoice, resolvePickedImageKey } from './image-strip.js';
 import type { ImageChoice } from './image-strip.js';
 import { VOCAB_TOPICS, vocabTopicLabel } from '../../shared/logic/vocab-topics';
-import { formatDmy } from '../../shared/logic/tuition.js';
+import { formatDmyTime } from '../../shared/logic/dates.js';
 import { GardenWidget } from '../garden/garden-widget.jsx';
 import { AssignModal } from '../garden/assign-modal.jsx';
 import { parseModes } from '../../shared/logic/flashcards';
@@ -345,7 +345,10 @@ export function FlashcardTopicsScreen() {
                   <span style={{ alignSelf: 'flex-start' }}>
                     <Tag color="orange" dot={false}>
                       {t('garden_assigned_tag', {
-                        date: formatDmy(openByTopic.get(topic.id)![0].deadline),
+                        date: formatDmyTime(
+                          openByTopic.get(topic.id)![0].deadline,
+                          openByTopic.get(topic.id)![0].deadlineTime,
+                        ),
                       })}
                     </Tag>
                   </span>
@@ -451,7 +454,7 @@ function AssignmentsPanel({
                     style={{ gap: 12, flexWrap: 'wrap', fontSize: 'var(--text-sm)', marginTop: 2 }}
                   >
                     <span style={{ color: overdue ? DANGER.ink : 'var(--text-muted)' }}>
-                      {t('garden_deadline')}: {formatDmy(a.deadline)}
+                      {t('garden_deadline')}: {formatDmyTime(a.deadline, a.deadlineTime)}
                     </span>
                     <span style={{ color: 'var(--text-muted)' }}>
                       {t('garden_required')}: {a.requiredCount}
@@ -512,7 +515,7 @@ function TrackModal({
       open={true}
       onClose={onClose}
       title={t('garden_track_title', { topic: block.assignment.topicName })}
-      subtitle={`${block.assignment.className} · ${t('garden_deadline')}: ${formatDmy(block.assignment.deadline)}`}
+      subtitle={`${block.assignment.className} · ${t('garden_deadline')}: ${formatDmyTime(block.assignment.deadline, block.assignment.deadlineTime)}`}
       width={480}
       footer={
         <FBtn variant="secondary" onClick={onClose}>

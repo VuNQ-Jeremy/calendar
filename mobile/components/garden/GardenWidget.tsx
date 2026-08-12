@@ -3,7 +3,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { ChevronRight, Clock, Flame, Pencil, Sprout } from 'lucide-react-native';
 import { daysBetweenVn } from '@mochi/shared/logic/garden';
-import { formatDmy } from '@mochi/shared/logic/dates';
+import { formatDmy, formatDmyTime } from '@mochi/shared/logic/dates';
 import { parseModes } from '@mochi/shared/logic/flashcards';
 import { useLang } from '~/lib/i18n';
 import { useHarvest, usePlant, useUpdatePlant } from '~/lib/use-garden';
@@ -345,7 +345,7 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
         <Clock size={14} color={urgent ? th.category.rose.ink : th.color.textMuted} />
         <Muted style={urgent ? { color: th.category.rose.ink } : undefined}>
-          {t('garden_deadline')}: {formatDmy(chip.deadline)}
+          {t('garden_deadline')}: {formatDmyTime(chip.deadline, chip.deadlineTime)}
         </Muted>
         <ProgressBar
           style={{ flex: 1 }}

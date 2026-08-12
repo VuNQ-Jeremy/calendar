@@ -1,4 +1,4 @@
-import { parseISO, toMin, addMin, startOfWeek } from '../../shared/logic/dates';
+import { parseISO, toMin, addMin, startOfWeek, fmtTime } from '../../shared/logic/dates';
 import { expandEvents, type Expanded } from '../../shared/logic/recurrence';
 import type { EventRow } from '../../server/services/events.js';
 
@@ -7,7 +7,7 @@ import type { EventRow } from '../../server/services/events.js';
  * reminder cron use the identical implementations. Re-exported here so calendar components
  * need no changes.
  */
-export { parseISO, toMin, addMin, startOfWeek, expandEvents };
+export { parseISO, toMin, addMin, startOfWeek, expandEvents, fmtTime };
 
 export type ExpandedEvent = Expanded<EventRow>;
 
@@ -31,11 +31,5 @@ export const MONTHS = [
 export const HOURS = Array.from({ length: 24 }, (_, i) => i); // midnight .. 11pm
 export const HR_H = 56;
 
-export const fmtTime = (t: string, full = false): string => {
-  let [h, m] = t.split(':').map(Number);
-  const ap = h >= 12 ? 'pm' : 'am';
-  h = h % 12 || 12;
-  // full: uniform "h:mm am" (time-picker lists); default: compact "9am" pills
-  if (full) return `${h}:${String(m).padStart(2, '0')} ${ap}`;
-  return m ? `${h}:${String(m).padStart(2, '0')}${ap}` : `${h}${ap}`;
-};
+// `fmtTime` moved to shared/logic/dates.ts (re-exported above) — the deadline chips in the garden
+// are rendered by shared code that cannot reach into src/.

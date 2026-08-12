@@ -196,7 +196,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/garden/harvest` | **user** (student) | Banks a fruit and replants a seed. 409 `not_ripe` / `dead` when the plant is not at the fruit stage — including on a double tap |
 | GET | `/api/garden/class/:id` | **user** | One class's garden plus its cooperative tree. A student may only read classes they are in (403 otherwise) |
 | POST | `/api/garden/water` | staff | `WaterInput` (`studentId`, `note?`) — one stage, wilt cleared, daily cap bypassed. Logged against the staff member |
-| GET POST PATCH DELETE | `/api/garden/assignments/:id?` | staff | `VocabAssignmentInput`. GET takes `?classId=`. `modes` is a CSV of game modes that count toward the assignment (`'scramble,type'`); null/'' = any mode |
+| GET POST PATCH DELETE | `/api/garden/assignments/:id?` | staff | `VocabAssignmentInput`. GET takes `?classId=`. `modes` is a CSV of game modes that count toward the assignment (`'scramble,type'`); null/'' = any mode. `deadlineTime` is an ICT `HH:MM` the deadline day expires at; null/'' = end of day |
 | GET | `/api/garden/progress/:id` | staff | Who has finished one assignment. NOT under `/assignments`, whose `:id?` would swallow the segment |
 | GET | `/api/garden/snapshots?classId=` | **user** | Saved album months; add `&month=` for one frozen garden. Same membership rule as the class garden |
 | GET PUT | `/api/settings/garden` | admin | `GardenSettingsInput` — school-wide, and it re-times every plant |

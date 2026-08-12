@@ -5,7 +5,7 @@ import { MIcon } from '../icons.jsx';
 import { Modal, ColorPicker } from '../ui.jsx';
 import { PALETTE, colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
-import { formatDmy } from '../../shared/logic/tuition.js';
+import { formatDmy, formatDmyTime } from '../../shared/logic/dates.js';
 import { PlantSvg, stageKey } from './plant-art.jsx';
 import { MAX_STAGE, daysBetweenVn } from '../../shared/logic/garden';
 import { parseModes } from '../../shared/logic/flashcards';
@@ -41,6 +41,8 @@ export type StudentAssignmentChip = {
   topicSlug: string | null;
   className: string;
   deadline: string;
+  /** ICT 'HH:MM' the deadline expires at, or null for end of day. */
+  deadlineTime: string | null;
   requiredCount: number;
   minScorePct: number;
   /** CSV of the game modes that count, null = any — parse with `parseModes`. */
@@ -378,7 +380,7 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
         }}
       >
         <MIcon name="clock" size={14} />
-        {t('garden_deadline')}: {formatDmy(chip.deadline)}
+        {t('garden_deadline')}: {formatDmyTime(chip.deadline, chip.deadlineTime)}
       </span>
       <span style={{ flex: 1, minWidth: 60, maxWidth: 120 }}>
         <ProgressBar

@@ -5,7 +5,7 @@ import { MIcon } from '../icons.jsx';
 import { Modal, MSelect, PageHeader, Empty } from '../ui.jsx';
 import { colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
-import { formatDmy } from '../../shared/logic/tuition.js';
+import { formatDmy, formatDmyTime } from '../../shared/logic/dates.js';
 import { ClassTreeSvg, PlantSvg, stageKey } from './plant-art.jsx';
 import { MAX_CLASS_TREE_LEVEL, classTreeNext } from '../../shared/logic/garden';
 import type { FruitTitleId, GardenSnapshotData, PlantStage } from '../../shared/logic/garden';
@@ -691,7 +691,7 @@ function AssignmentCard({ block, vnToday }: { block: AssignmentBlock; vnToday: s
         <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>{assignment.topicName}</span>
         <span className="m-row" style={{ gap: 12, flexWrap: 'wrap', fontSize: 'var(--text-sm)' }}>
           <span style={{ color: overdue ? DANGER_INK : 'var(--text-muted)' }}>
-            {t('garden_deadline')}: {formatDmy(assignment.deadline)}
+            {t('garden_deadline')}: {formatDmyTime(assignment.deadline, assignment.deadlineTime)}
           </span>
           <span style={{ color: 'var(--text-muted)' }}>
             {t('garden_required')}: {required}

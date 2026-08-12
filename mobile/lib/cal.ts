@@ -2,6 +2,7 @@ import {
   addDays,
   addMin,
   fmtStamp,
+  fmtTime,
   iso,
   parseISO,
   startOfWeek,
@@ -19,7 +20,7 @@ import type { EventRow } from './types';
  * screen in this phase would be untrustworthy.
  */
 
-export { addDays, addMin, fmtStamp, iso, parseISO, startOfWeek, toMin, expandEvents };
+export { addDays, addMin, fmtStamp, fmtTime, iso, parseISO, startOfWeek, toMin, expandEvents };
 
 export type ExpandedEvent = Expanded<EventRow>;
 
@@ -28,20 +29,6 @@ export function todayDate(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-/**
- * `09:00` -> `9am`, `13:30` -> `1:30pm`. Ported verbatim from `src/calendar/utils.ts` so an
- * event reads identically on both clients.
- */
-export function fmtTime(t: string, full = false): string {
-  const parts = t.split(':').map(Number);
-  let h = parts[0] ?? 0;
-  const m = parts[1] ?? 0;
-  const ap = h >= 12 ? 'pm' : 'am';
-  h = h % 12 || 12;
-  if (full) return `${h}:${String(m).padStart(2, '0')} ${ap}`;
-  return m ? `${h}:${String(m).padStart(2, '0')}${ap}` : `${h}${ap}`;
 }
 
 /** Chronological within a day. Untimed events sort first, as they do on the web. */
