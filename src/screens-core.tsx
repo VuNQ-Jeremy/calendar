@@ -178,6 +178,26 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
                       )}
                     </div>
                     {e.classId && <STag color={e.color}>{className(e.classId) || t('class')}</STag>}
+                    {e.classId && (
+                      <a
+                        title={t('ck_open_kiosk_in')}
+                        href={`/kiosk/${encodeURIComponent(e.id)}/${encodeURIComponent(e.date)}/checkin`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: 'grid',
+                          placeItems: 'center',
+                          width: 32,
+                          height: 32,
+                          borderRadius: 'var(--radius-md)',
+                          background: colorOf('orange').soft,
+                          color: colorOf('orange').ink,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <MIcon name="gift" size={16} />
+                      </a>
+                    )}
                   </div>
                 );
               })}

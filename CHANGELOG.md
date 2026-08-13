@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0191 — 2026-08-13
+Check-in kiosk: fullscreen name-grid-to-personal-board screen, confetti + bag on completion, auto-present attendance, dashboard entry.
+
 ## v0.0190 — 2026-08-13
 Check-in kiosk authoring: /checkin resource route, event-modal Check-in/out tab (this session + next session + check-out + live flag panel).
 
