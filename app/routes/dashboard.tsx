@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ClientLoaderFunctionArgs } from 'react-router';
 import { useOutletContext, useNavigate } from 'react-router';
-import { DashboardScreen } from '../../src/screens-core.jsx';
+import { DashboardScreen, UPCOMING_DAYS } from '../../src/screens-core.jsx';
 import type { AppContext } from './_app.js';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
@@ -9,7 +9,7 @@ import * as testsSvc from '../../server/services/tests';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
-import { iso, TODAY } from '../../src/lib/core.js';
+import { iso, addDays } from '../../src/lib/core.js';
 import { requireStaff } from '../../server/services/auth';
 import { K, swrLoad } from '../../src/lib/route-cache.js';
 
@@ -17,18 +17,24 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const today = iso(TODAY);
-  const [todayEvents, tests, attemptsSummary, classes, students, materials] = await Promise.all([
-    eventsSvc.listForToday(db, today),
-    testsSvc.list(db),
-    testsSvc.attemptsSummary(db),
-    classesSvc.listLite(db),
-    peopleSvc.listStudents(db),
-    materialsSvc.list(db),
-  ]);
+  // A fresh clock, not the module-level TODAY: a Worker isolate can outlive the day it booted on,
+  // and the two windows below must agree with each other.
+  const now = new Date();
+  const today = iso(now);
+  const [todayEvents, upcomingEvents, attemptsSummary, classes, students, materials] =
+    await Promise.all([
+      eventsSvc.listForToday(db, today),
+      // Tomorrow .. +UPCOMING_DAYS for the "Coming up" card. Recurring rows come back whatever
+      // their stored date; the screen expands them over the same window.
+      eventsSvc.listRange(db, iso(addDays(now, 1)), iso(addDays(now, UPCOMING_DAYS))),
+      testsSvc.attemptsSummary(db),
+      classesSvc.listLite(db),
+      peopleSvc.listStudents(db),
+      materialsSvc.list(db),
+    ]);
   return {
     todayEvents,
-    tests,
+    upcomingEvents,
     attemptsSummary,
     classes,
     studentCount: students.length,

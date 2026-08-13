@@ -1,16 +1,14 @@
 import React from 'react';
-import { Link, useLoaderData } from 'react-router';
+import { useLoaderData } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PageHeader, Empty } from './ui.jsx';
-import { colorOf, iso, TODAY, ICON_TINT } from './lib/core.js';
+import { colorOf, iso, addDays, parseISO, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
 import { useLang, locale } from './lib/i18n.jsx';
 import type { IconName } from './icons.jsx';
 import type { ClassLite } from '../server/services/classes.js';
-import type { TestRow } from '../server/services/tests.js';
 import type { EventRow } from '../server/services/events.js';
-import { isWindowOpen } from '../shared/logic/tests.js';
 
 const { Card: SC, Button: SBtn, Tag: STag, Badge: SBadge } = DS;
 
@@ -26,12 +24,26 @@ export interface AppUser {
 
 interface DashLoaderData {
   todayEvents: EventRow[];
-  tests: TestRow[];
+  /**
+   * Rows the "Coming up" card expands: everything dated inside the window below, plus every
+   * recurring row (recurrence is expanded here, not in SQL — same as the calendar's views).
+   */
+  upcomingEvents: EventRow[];
   attemptsSummary: Record<string, { total: number; needsGrading: number; graded: number }>;
   classes: ClassLite[];
   studentCount: number;
   materialCount: number;
 }
+
+/**
+ * How far past today the "Coming up" card looks. The loader queries exactly this window, so it
+ * lives here rather than in the route — and it matches the calendar's Agenda tab, which is the
+ * view the card's "more" link hands off to.
+ */
+export const UPCOMING_DAYS = 14;
+
+/** How many of those occurrences the card lists before deferring to the calendar. */
+const UPCOMING_LIMIT = 5;
 
 // ---- StatCard ----
 function StatCard({
@@ -66,45 +78,67 @@ function StatCard({
   );
 }
 
-/** One row of the dashboard's open-tests card. Links straight to the test's page. */
-function DashTestItem({ test, classes }: { test: TestRow; classes: ClassLite[] }) {
-  const c = colorOf(test.color);
-  const clsName = classes.find((cl) => cl.id === test.classId)?.name;
+/** One row of the dashboard's "Coming up" card: a day label, the title, and its class tag. */
+function DashUpcomingItem({
+  ev,
+  dayLabel,
+  className,
+}: {
+  ev: EventRow;
+  dayLabel: string;
+  className?: string;
+}) {
+  const c = colorOf(ev.color);
   return (
-    <Link to={`/tests/${test.id}`} className="m-row" style={{ gap: 12, textDecoration: 'none' }}>
-      <div style={{ flex: 1 }}>
+    <div className="m-row" style={{ gap: 12 }}>
+      <span style={{ width: 10, height: 10, borderRadius: 9, background: c.base, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>
-          {test.title}
+          {ev.title}
         </div>
         <div className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
-          {clsName}
+          {[dayLabel, ev.start ? fmtTime(ev.start) : null, ev.location].filter(Boolean).join(' · ')}
         </div>
       </div>
-      <span style={{ width: 10, height: 10, borderRadius: 9, background: c.base }} />
-    </Link>
+      {className && <STag color={ev.color}>{className}</STag>}
+    </div>
   );
 }
 
 // ---- Dashboard / Today ----
 function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string) => void }) {
-  const { todayEvents, tests, attemptsSummary, classes, studentCount, materialCount } =
+  const { todayEvents, upcomingEvents, attemptsSummary, classes, studentCount, materialCount } =
     useLoaderData() as DashLoaderData;
   const { t, lang } = useLang();
-  const today = iso(TODAY);
   const todays = expandEvents(todayEvents, TODAY, TODAY).sort(
     (a, b) => toMin(a.start ?? '00:00') - toMin(b.start ?? '00:00'),
   );
-  // What a teacher can act on right now: an online test whose window is open, or any
-  // test dated today (paper tests carry a date, not a window).
-  const now = new Date();
-  const openTests = tests.filter(
-    (tst) =>
-      tst.status === 'published' &&
-      ((tst.mode === 'online' && isWindowOpen(tst.openAt, tst.closeAt, now) === 'open') ||
-        tst.date === today),
+  // Tomorrow onwards — today already has its own card. `?? []` covers a cached payload written
+  // by a build that predates this field (route-cache serves it before the refresh lands).
+  const tomorrow = iso(addDays(TODAY, 1));
+  const upcoming = React.useMemo(
+    () =>
+      expandEvents(upcomingEvents ?? [], addDays(TODAY, 1), addDays(TODAY, UPCOMING_DAYS)).sort(
+        (a, b) =>
+          a.date === b.date
+            ? toMin(a.start ?? '00:00') - toMin(b.start ?? '00:00')
+            : a.date < b.date
+              ? -1
+              : 1,
+      ),
+    [upcomingEvents],
   );
   const needsGrading = Object.values(attemptsSummary).reduce((n, s) => n + s.needsGrading, 0);
   const className = (id: string | null) => classes.find((c) => c.id === id)?.name;
+  /** "Tomorrow" for the next day, a short weekday + date after that. */
+  const dayLabel = (date: string) =>
+    date === tomorrow
+      ? t('sched_tomorrow')
+      : parseISO(date).toLocaleDateString(locale(lang), {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+        });
   const todayStr = new Date(TODAY).toLocaleDateString(locale(lang), {
     weekday: 'long',
     month: 'long',
@@ -210,20 +244,39 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
             />
           )}
         </SC>
-        {/* Open tests */}
+        {/* Coming up */}
         <SC>
           <div className="m-spread" style={{ marginBottom: 16 }}>
-            <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('dash_open_tests')}</h2>
-            {openTests.length > 0 && <SBadge color="brand">{openTests.length}</SBadge>}
+            <h2 style={{ margin: 0, fontSize: 'var(--text-xl)' }}>{t('dash_upcoming')}</h2>
+            {upcoming.length > 0 && <SBadge color="brand">{upcoming.length}</SBadge>}
           </div>
-          {openTests.length ? (
+          {upcoming.length ? (
             <div className="m-stack">
-              {openTests.map((tst) => (
-                <DashTestItem key={tst.id} test={tst} classes={classes} />
+              {upcoming.slice(0, UPCOMING_LIMIT).map((e) => (
+                <DashUpcomingItem
+                  key={`${e.id}:${e.date}`}
+                  ev={e}
+                  dayLabel={dayLabel(e.date)}
+                  className={e.classId ? className(e.classId) || t('class') : undefined}
+                />
               ))}
+              {upcoming.length > UPCOMING_LIMIT && (
+                <SBtn
+                  variant="ghost"
+                  size="sm"
+                  iconRight={<MIcon name="chevronRight" size={16} />}
+                  onClick={() => onNav('calendar')}
+                >
+                  {t('dash_upcoming_more', { n: upcoming.length - UPCOMING_LIMIT })}
+                </SBtn>
+              )}
             </div>
           ) : (
-            <Empty icon="check" title={t('dash_all_caught')} sub={t('dash_no_open_tests')} />
+            <Empty
+              icon="calendar"
+              title={t('dash_upcoming_none')}
+              sub={t('dash_upcoming_none_sub', { days: UPCOMING_DAYS })}
+            />
           )}
         </SC>
       </div>

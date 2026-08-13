@@ -123,7 +123,8 @@ export type { MutationDomain };
  * stale -> served instantly, refreshed in the background.
  *
  * Derived from what each route's loader reads:
- *   dashboard:   events(today), tests, attempts summary, classesLite, students, materials
+ *   dashboard:   events(today + the next fortnight), attempts summary, classesLite, students,
+ *                materials
  *   calendar:    events, classes, students, theme, materials, eventMaterials
  *   classes:     classes, students, materials
  *   people:      students, staff, parents, invites, classesLite, flashcardStats
@@ -197,8 +198,8 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // Editing a question changes what the test builder lists, so /tests goes stale.
   questions: { hard: [K.questions], stale: [K.tests] },
   // A test writes score_records when graded, is scoped to a class, appears on the
-  // student's own list, and feeds the dashboard's open-tests card and needs-grading
-  // stat — all four surfaces must refresh.
+  // student's own list, and feeds the dashboard's needs-grading stat — all four
+  // surfaces must refresh.
   tests: {
     hard: [K.tests],
     stale: [K.assessments, K.classes, K.myTests, K.dashboard, K.rankings],

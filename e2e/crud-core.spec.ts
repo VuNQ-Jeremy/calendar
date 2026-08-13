@@ -50,6 +50,42 @@ test.describe('CRUD: core domains', () => {
     await expect(page.locator('.aev', { hasText: title })).toHaveCount(0);
   });
 
+  test("dashboard: an event dated tomorrow shows in 'Coming up'", async ({ page }) => {
+    const k = ui(page);
+    const title = `E2E upcoming ${Date.now()}`;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dk = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    await page.goto('/calendar');
+
+    await page.getByRole('button', { name: 'New event' }).click();
+    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    // The date picker is portalled to document.body; each day button is labelled with its ISO
+    // date, so tomorrow is addressable even when it falls in the next month's leading cells.
+    await k.field('Date').locator('button.m-select__trigger').click();
+    await page.locator(`.m-datepicker__day[aria-label="${dk}"]`).first().click();
+    let post = k.posted('/calendar');
+    await k.submit().click(); // "Add event"
+    await post;
+
+    // A full load, not a client nav: the dashboard's own loader is what supplies the window.
+    await page.goto('/dashboard');
+    const card = page.locator('.mochi-card:has(h2:text-is("Coming up"))');
+    await expect(card).toContainText(title);
+    await expect(card).toContainText('Tomorrow');
+
+    // Clean up through the agenda, whose 14-day window covers tomorrow.
+    await page.goto('/calendar');
+    await page.getByRole('tab', { name: 'Agenda' }).click();
+    const event = page.locator('.aev', { hasText: title });
+    await expect(event).toBeVisible();
+    await event.click();
+    post = k.posted('/calendar');
+    await k.dlg.locator('.m-dialog__foot .mochi-btn.is-danger').click();
+    await post;
+    await expect(page.locator('.aev', { hasText: title })).toHaveCount(0);
+  });
+
   test('class: create with roster, edit, delete', async ({ page }) => {
     const k = ui(page);
     const name = `E2E class ${Date.now()}`;

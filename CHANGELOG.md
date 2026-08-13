@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0196 — 2026-08-13
+Dashboard: replaced the open-tests card with a 'Coming up' list of the next 14 days of events, backed by a new upcomingEvents loader query.
+
 ## v0.0195 — 2026-08-13
 English page title for the mystery bag board is now just 'Mystery bags' — dropped the '(túi mù)' gloss.
 

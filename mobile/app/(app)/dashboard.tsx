@@ -36,10 +36,10 @@ export default function Dashboard() {
  * two-column body are a single column here — they already reflow at 920px, so this is the same
  * design taken one step further, not a different one.
  *
- * The web's fourth stat and its second card are the Tests feature (`stat_needs_grading`,
- * `dash_open_tests`), which has no mobile endpoints yet: `/api/dashboard` returns only
- * `today`, `todayEvents` and `classes`. Rather than invent a card with nothing behind it, the
- * homework card and stat that used to sit here are simply gone until Tests reaches the phone.
+ * The web's fourth stat is the Tests feature (`stat_needs_grading`) and its second card is the
+ * next fortnight of events (`dash_upcoming`); neither has a mobile endpoint yet — `/api/dashboard`
+ * returns only `today`, `todayEvents` and `classes`. Rather than invent a card with nothing behind
+ * it, the homework card and stat that used to sit here are simply gone until those reach the phone.
  *
  * The mobile-only addition is the **Take attendance** shortcut on every one of today's class
  * events. That is the whole point of the phone: two taps from a cold launch to marking a register,
@@ -57,10 +57,7 @@ function StaffDashboard() {
 
   const today = todayDate();
   const todaysEvents = dash.data?.todayEvents;
-  const todays = React.useMemo(
-    () => eventsOn(todaysEvents ?? [], todayDate()),
-    [todaysEvents],
-  );
+  const todays = React.useMemo(() => eventsOn(todaysEvents ?? [], todayDate()), [todaysEvents]);
 
   const classes = dash.data?.classes ?? [];
   const className = (id: string | null) => classes.find((c) => c.id === id)?.name;
