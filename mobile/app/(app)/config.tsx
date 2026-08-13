@@ -89,7 +89,8 @@ export default function Config() {
   });
 
   const toggleActive = useMutation({
-    mutationFn: (tp: AssessmentTypeRow) => api.assessmentTypes.update(tp.id, { active: !tp.active }),
+    mutationFn: (tp: AssessmentTypeRow) =>
+      api.assessmentTypes.update(tp.id, { active: !tp.active }),
     onSuccess: () => void invalidate(),
   });
 

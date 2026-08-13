@@ -46,12 +46,10 @@ export const LowerThird: React.FC<{
   const { fps } = useVideoConfig();
 
   const rise = spring({ frame, fps, config: softSpring });
-  const out = interpolate(
-    frame,
-    [durationInFrames - timing.captionOut, durationInFrames],
-    [1, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-  );
+  const out = interpolate(frame, [durationInFrames - timing.captionOut, durationInFrames], [1, 0], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
 
   const pad = 22 * unit * typeScale;
 

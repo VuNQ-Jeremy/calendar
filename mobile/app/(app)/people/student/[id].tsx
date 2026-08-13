@@ -14,17 +14,7 @@ import {
 } from '~/lib/staff-data';
 import type { ColorIdValue } from '~/lib/types';
 import { useTheme } from '~/theme';
-import {
-  Body,
-  Button,
-  Card,
-  ColorPicker,
-  Heading,
-  IconButton,
-  Input,
-  Muted,
-  Screen,
-} from '~/ui';
+import { Body, Button, Card, ColorPicker, Heading, IconButton, Input, Muted, Screen } from '~/ui';
 
 /**
  * Student detail: edit, class memberships, flashcard stats, delete.

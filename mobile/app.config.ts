@@ -106,10 +106,7 @@ const config: ExpoConfig = {
       'expo-splash-screen',
       { image: './assets/images/splash-icon.png', resizeMode: 'contain', backgroundColor: BRAND },
     ],
-    [
-      'expo-notifications',
-      { icon: './assets/images/notification-icon.png', color: BRAND },
-    ],
+    ['expo-notifications', { icon: './assets/images/notification-icon.png', color: BRAND }],
   ],
   experiments: { typedRoutes: true },
   extra: {

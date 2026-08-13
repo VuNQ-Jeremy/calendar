@@ -293,7 +293,6 @@ async function imageBytes(out: unknown): Promise<Uint8Array> {
   return bytes;
 }
 
-
 // ---- Housekeeping ----
 
 /**

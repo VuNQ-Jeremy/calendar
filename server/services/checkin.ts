@@ -72,7 +72,13 @@ export async function setCheckinSettings(db: Db, input: CheckinSettings): Promis
     .insert(settings)
     .values({ key: SETTINGS_KEY, value })
     .onConflictDoUpdate({ target: settings.key, set: { value } });
-  record({ action: 'update', entityType: 'setting', entityId: SETTINGS_KEY, before, after: stored });
+  record({
+    action: 'update',
+    entityType: 'setting',
+    entityId: SETTINGS_KEY,
+    before,
+    after: stored,
+  });
   return stored;
 }
 
@@ -152,8 +158,9 @@ export async function createItem(
   if (sortOrder == null) {
     const existing = await itemsForOccurrence(db, input.eventId, input.date);
     sortOrder =
-      existing.filter((i) => i.phase === input.phase).reduce((m, i) => Math.max(m, i.sortOrder), 0) +
-      1;
+      existing
+        .filter((i) => i.phase === input.phase)
+        .reduce((m, i) => Math.max(m, i.sortOrder), 0) + 1;
   }
   await db.insert(checklistItems).values({
     id,
@@ -247,10 +254,7 @@ export async function setCheck(
     await db
       .delete(checklistChecks)
       .where(
-        and(
-          eq(checklistChecks.itemId, item.id),
-          eq(checklistChecks.studentId, input.studentId),
-        ),
+        and(eq(checklistChecks.itemId, item.id), eq(checklistChecks.studentId, input.studentId)),
       );
   }
 
@@ -264,9 +268,7 @@ export async function setCheck(
     db,
     items.map((i) => i.id),
   );
-  const mine = new Set(
-    checks.filter((c) => c.studentId === input.studentId).map((c) => c.itemId),
-  );
+  const mine = new Set(checks.filter((c) => c.studentId === input.studentId).map((c) => c.itemId));
   const phaseCounts = (phase: CheckPhase) => {
     const ids = items.filter((i) => i.phase === phase).map((i) => i.id);
     return { total: ids.length, done: ids.filter((id) => mine.has(id)).length };
@@ -286,9 +288,7 @@ export async function setCheck(
     const existing = await db
       .select()
       .from(tuiMuEvents)
-      .where(
-        and(eq(tuiMuEvents.studentId, input.studentId), inArray(tuiMuEvents.refId, refIds)),
-      );
+      .where(and(eq(tuiMuEvents.studentId, input.studentId), inArray(tuiMuEvents.refId, refIds)));
     const have = new Set(existing.map((r) => r.refId));
     const eventRows = await db
       .select({ classId: events.classId })
@@ -448,9 +448,7 @@ function outcomesFor(
   attendance: Map<string, string>,
   bagsByStudent: Map<string, { vnDay: string; kind: string; refId: string }[]>,
 ): SessionOutcome[] {
-  const mine = new Set(
-    checks.filter((c) => c.studentId === studentId).map((c) => c.itemId),
-  );
+  const mine = new Set(checks.filter((c) => c.studentId === studentId).map((c) => c.itemId));
   const myBags = bagsByStudent.get(studentId) ?? [];
   return occurrences.map((occ) => {
     const prefix = `${occ.eventId}:${occ.date}:`;
@@ -629,9 +627,6 @@ export async function redeemGift(
 }
 
 export async function listRedemptions(db: Db, month: string): Promise<GiftRedemptionRow[]> {
-  const rows = await db
-    .select()
-    .from(giftRedemptions)
-    .where(eq(giftRedemptions.month, month));
+  const rows = await db.select().from(giftRedemptions).where(eq(giftRedemptions.month, month));
   return rows.map(mapRedemption);
 }

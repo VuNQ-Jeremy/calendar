@@ -172,7 +172,10 @@ test.describe('CRUD: online test round trip and paper scores', () => {
     // Score is an unlabelled combobox in the row — posts on the same tick.
     await row.locator('.hw-grade-score button.m-select__trigger').click();
     post = k.posted(detailPath);
-    await page.locator('[role="listbox"] [role="option"]').getByText('8.5', { exact: true }).click();
+    await page
+      .locator('[role="listbox"] [role="option"]')
+      .getByText('8.5', { exact: true })
+      .click();
     await post;
     await expect(page.getByText('Saved ✓')).toBeVisible();
     await expect(row.locator('.m-select__value')).toHaveText('8.5');

@@ -43,7 +43,12 @@ export default function More() {
 
   const iconColor = th.color.textMuted;
   const rows: Row[] = [
-    { key: 'people', tk: 'nav_people', href: '/people', icon: <Users size={20} color={iconColor} /> },
+    {
+      key: 'people',
+      tk: 'nav_people',
+      href: '/people',
+      icon: <Users size={20} color={iconColor} />,
+    },
     {
       key: 'materials',
       tk: 'nav_materials',

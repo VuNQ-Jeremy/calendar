@@ -452,9 +452,7 @@ function ReportRoster({
             <button
               key={s.id}
               type="button"
-              className={`assess-report__roster-row${
-                s.id === activeStudentId ? ' is-active' : ''
-              }`}
+              className={`assess-report__roster-row${s.id === activeStudentId ? ' is-active' : ''}`}
               aria-pressed={s.id === activeStudentId}
               onClick={() => onSelect(s.id)}
             >

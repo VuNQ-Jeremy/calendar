@@ -230,7 +230,18 @@ export function RankingsScreen() {
       unranked: result.filter((s) => s.rank == null),
       byId: new Map(students.map((s) => [s.id, s])),
     };
-  }, [attendance, behavior, scores, remarks, students, weights, scope, cohorts, classes, checkinByClass]);
+  }, [
+    attendance,
+    behavior,
+    scores,
+    remarks,
+    students,
+    weights,
+    scope,
+    cohorts,
+    classes,
+    checkinByClass,
+  ]);
 
   /**
    * One board per cohort. Each class's score is the mean of its students' totals computed under

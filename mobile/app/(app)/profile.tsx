@@ -64,7 +64,9 @@ export default function Profile() {
     },
     onError: (err) => {
       setPwDone(false);
-      setPwError(err instanceof ApiError && err.status === 400 ? 'auth_wrong_current_pw' : 'err_generic_msg');
+      setPwError(
+        err instanceof ApiError && err.status === 400 ? 'auth_wrong_current_pw' : 'err_generic_msg',
+      );
     },
   });
 
@@ -177,12 +179,7 @@ export default function Profile() {
         />
         {pwError ? <Body style={{ color: th.status.danger }}>{t(pwError)}</Body> : null}
         {pwDone ? <Muted>{t('prof_pw_changed')}</Muted> : null}
-        <Button
-          variant="secondary"
-          block
-          loading={changePw.isPending}
-          onPress={onChangePw}
-        >
+        <Button variant="secondary" block loading={changePw.isPending} onPress={onChangePw}>
           {t('prof_change_pw')}
         </Button>
       </Card>

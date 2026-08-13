@@ -68,7 +68,8 @@ export class Recorder {
   }
 
   static async launch(opts: RecorderOptions): Promise<Recorder> {
-    const baseUrl = opts.baseUrl ?? process.env.E2E_BASE_URL ?? 'https://calendar.ngqv0712.workers.dev';
+    const baseUrl =
+      opts.baseUrl ?? process.env.E2E_BASE_URL ?? 'https://calendar.ngqv0712.workers.dev';
     const videoDir = path.join(RECORDINGS, opts.id, '_raw');
     await fs.rm(videoDir, { recursive: true, force: true });
     await fs.mkdir(videoDir, { recursive: true });

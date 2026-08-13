@@ -1,15 +1,15 @@
-import { crud } from "../../server/api/handler";
-import * as svc from "../../server/services/feedback";
-import { notifyFeedbackIssue } from "../../server/services/github";
-import { FeedbackInput } from "../../shared/schemas";
+import { crud } from '../../server/api/handler';
+import * as svc from '../../server/services/feedback';
+import { notifyFeedbackIssue } from '../../server/services/github';
+import { FeedbackInput } from '../../shared/schemas';
 
 // Resource route: no default export, or React Router serves this as a document.
 // All work is delegated to server/services/feedback.ts — the same functions the
 // web loaders and actions use.
 const routes = crud({
-  level: "staff",
+  level: 'staff',
   schema: FeedbackInput,
-  live: "feedback",
+  live: 'feedback',
   list: ({ db }) => svc.list(db),
   create: async (input, ctx) => {
     const row = await svc.create(ctx.db, input);

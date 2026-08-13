@@ -51,8 +51,16 @@ export function TuiMuBoardScreen() {
     );
   }
 
-  const { classId, month, currentMonth, classes, roster = [], tallies = {}, tiers = [], redemptions = [] } =
-    data;
+  const {
+    classId,
+    month,
+    currentMonth,
+    classes,
+    roster = [],
+    tallies = {},
+    tiers = [],
+    redemptions = [],
+  } = data;
 
   const monthOptions = React.useMemo(() => {
     const opts: { value: string; label: string }[] = [];

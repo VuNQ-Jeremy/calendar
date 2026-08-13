@@ -142,9 +142,9 @@ describe('checkinComponent', () => {
     ).toBeNull();
   });
   it('ratio × 10, one decimal', () => {
-    expect(
-      checkinComponent({ bags: 0, misses: 1, fullCheckins: 2, streak: 0, sessions: 3 }),
-    ).toBe(6.7);
+    expect(checkinComponent({ bags: 0, misses: 1, fullCheckins: 2, streak: 0, sessions: 3 })).toBe(
+      6.7,
+    );
   });
 });
 

@@ -64,7 +64,9 @@ function Gate() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.color.bgPage } }}>
+    <Stack
+      screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.color.bgPage } }}
+    >
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="(app)" />

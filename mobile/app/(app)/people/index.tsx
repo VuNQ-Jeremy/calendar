@@ -130,7 +130,10 @@ export default function People() {
         <FlashList
           data={shownStudents}
           keyExtractor={(s) => s.id}
-          contentContainerStyle={{ paddingHorizontal: th.spacing[4], paddingBottom: th.spacing[10] }}
+          contentContainerStyle={{
+            paddingHorizontal: th.spacing[4],
+            paddingBottom: th.spacing[10],
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -139,7 +142,9 @@ export default function People() {
             />
           }
           ListHeaderComponent={header}
-          ListEmptyComponent={loading ? null : empty(t('ppl_no_students'), t('ppl_no_students_sub'))}
+          ListEmptyComponent={
+            loading ? null : empty(t('ppl_no_students'), t('ppl_no_students_sub'))
+          }
           renderItem={({ item: s }) => (
             <PersonRow
               name={s.name}
@@ -156,7 +161,10 @@ export default function People() {
         <FlashList
           data={shownStaff}
           keyExtractor={(u) => u.id}
-          contentContainerStyle={{ paddingHorizontal: th.spacing[4], paddingBottom: th.spacing[10] }}
+          contentContainerStyle={{
+            paddingHorizontal: th.spacing[4],
+            paddingBottom: th.spacing[10],
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -185,7 +193,10 @@ export default function People() {
         <FlashList
           data={shownParents}
           keyExtractor={(p) => p.id}
-          contentContainerStyle={{ paddingHorizontal: th.spacing[4], paddingBottom: th.spacing[10] }}
+          contentContainerStyle={{
+            paddingHorizontal: th.spacing[4],
+            paddingBottom: th.spacing[10],
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

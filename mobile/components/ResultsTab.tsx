@@ -50,7 +50,13 @@ export function ResultsTab({ results }: { results: FlashcardResultRow[] }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: th.spacing[4], gap: th.spacing[4], paddingBottom: th.spacing[10] }}>
+    <ScrollView
+      contentContainerStyle={{
+        padding: th.spacing[4],
+        gap: th.spacing[4],
+        paddingBottom: th.spacing[10],
+      }}
+    >
       <Card style={{ gap: th.spacing[3] }}>
         <Heading>{t('fc_recent_plays')}</Heading>
         {results.slice(0, 25).map((r) => (

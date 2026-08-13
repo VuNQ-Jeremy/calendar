@@ -42,8 +42,12 @@ test.describe('CRUD: question bulk operations', () => {
     let post = k.posted('/questions');
     await k.on(page).pickSel('Set difficulty', 'Hard');
     await post;
-    await expect(page.locator('.mochi-card', { hasText: prompts[0] }).getByText('Hard')).toBeVisible();
-    await expect(page.locator('.mochi-card', { hasText: prompts[1] }).getByText('Hard')).toBeVisible();
+    await expect(
+      page.locator('.mochi-card', { hasText: prompts[0] }).getByText('Hard'),
+    ).toBeVisible();
+    await expect(
+      page.locator('.mochi-card', { hasText: prompts[1] }).getByText('Hard'),
+    ).toBeVisible();
 
     // bulk-tags: one tag for both rows.
     await k.on(page).textIn('Add tag').fill('e2e-bulk');

@@ -66,7 +66,8 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   if (checkinSettings.showRankings) {
     const entries = await Promise.all(
       classes.map(
-        async (c) => [c.id, Object.fromEntries(await checkinSvc.classMonthTallies(db, c.id, month))] as const,
+        async (c) =>
+          [c.id, Object.fromEntries(await checkinSvc.classMonthTallies(db, c.id, month))] as const,
       ),
     );
     checkinByClass = Object.fromEntries(entries);

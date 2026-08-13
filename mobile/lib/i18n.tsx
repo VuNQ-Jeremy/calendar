@@ -1,7 +1,14 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocales } from 'expo-localization';
-import { STRINGS, LANGUAGES, locale, getCal, translate, type LangId } from '@mochi/shared/i18n/strings';
+import {
+  STRINGS,
+  LANGUAGES,
+  locale,
+  getCal,
+  translate,
+  type LangId,
+} from '@mochi/shared/i18n/strings';
 
 /**
  * The React Native half of i18n — the analogue of src/lib/i18n.tsx, over the SAME dictionary.

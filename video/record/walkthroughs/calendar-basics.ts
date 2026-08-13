@@ -123,7 +123,10 @@ export const calendarBasics: Walkthrough = {
       // the editor's `if (!drag)` guard races React's state commit — so the edit dialog
       // often opens over the result. Dismiss it and let the moved session be the shot.
       await page.keyboard.press('Escape');
-      await page.locator('.m-dialog[role="dialog"]').waitFor({ state: 'hidden' }).catch(() => {});
+      await page
+        .locator('.m-dialog[role="dialog"]')
+        .waitFor({ state: 'hidden' })
+        .catch(() => {});
       await page.waitForLoadState('networkidle');
       await rec.beat(2400);
     });

@@ -54,7 +54,11 @@ export default function FlashcardTopics() {
       <ScrollView
         contentContainerStyle={{ padding: th.spacing[5], gap: th.spacing[4] }}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={th.color.brand} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={th.color.brand}
+          />
         }
       >
         <View style={{ gap: th.spacing[1] }}>
@@ -98,14 +102,21 @@ export default function FlashcardTopics() {
         {error && !topics ? (
           <Card>
             <Body style={{ color: th.status.danger }}>{t('m_offline')}</Body>
-            <Button variant="secondary" onPress={() => refetch()} style={{ marginTop: th.spacing[3] }}>
+            <Button
+              variant="secondary"
+              onPress={() => refetch()}
+              style={{ marginTop: th.spacing[3] }}
+            >
               {t('m_retry')}
             </Button>
           </Card>
         ) : null}
 
         {(topics ?? []).map((topic) => {
-          const cat = th.category[(topic.color as ColorIdKey) in th.category ? (topic.color as ColorIdKey) : 'violet'];
+          const cat =
+            th.category[
+              (topic.color as ColorIdKey) in th.category ? (topic.color as ColorIdKey) : 'violet'
+            ];
           const syncedAt = downloaded.get(topic.id) ?? null;
           const isDownloaded = syncedAt !== null;
           const busy =
@@ -162,9 +173,7 @@ export default function FlashcardTopics() {
                   hitSlop={15}
                   disabled={busy}
                   onPress={() =>
-                    isDownloaded
-                      ? remove.mutate(topic.id)
-                      : download.mutate(topic.slug ?? topic.id)
+                    isDownloaded ? remove.mutate(topic.id) : download.mutate(topic.slug ?? topic.id)
                   }
                   style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}
                 >

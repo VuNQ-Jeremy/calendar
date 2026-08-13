@@ -417,7 +417,11 @@ function CheckinActivityTypesSection({ rows }: { rows: ActivityTypeRow[] }) {
 
   const toggleActive = async (row: ActivityTypeRow) => {
     if (row.active) {
-      const ok = await confirm({ title: t('cfg_deactivate'), message: row.name + '?', danger: true });
+      const ok = await confirm({
+        title: t('cfg_deactivate'),
+        message: row.name + '?',
+        danger: true,
+      });
       if (!ok) return;
     }
     const fd = new FormData();
@@ -671,9 +675,7 @@ function CheckinSettingsSection({ settings }: { settings: CheckinSettings }) {
     current.tiers.length <= CHECKIN_MAX_TIERS &&
     current.tiers.every((x, i) => {
       const n = tierNumbers[i];
-      return (
-        x.bags !== '' && Number.isInteger(n) && n >= 1 && n <= 60 && x.label.trim().length > 0
-      );
+      return x.bags !== '' && Number.isInteger(n) && n >= 1 && n <= 60 && x.label.trim().length > 0;
     }) &&
     tierNumbers.every((n, i) => i === 0 || n > tierNumbers[i - 1]);
 
@@ -825,7 +827,10 @@ function CheckinSettingsSection({ settings }: { settings: CheckinSettings }) {
           {t('save')}
         </Button>
         {!valid && (
-          <span className="m-muted" style={{ color: colorOf('rose').ink, fontSize: 'var(--text-sm)' }}>
+          <span
+            className="m-muted"
+            style={{ color: colorOf('rose').ink, fontSize: 'var(--text-sm)' }}
+          >
             {t('cfg_ck_tier_hint')}
           </span>
         )}

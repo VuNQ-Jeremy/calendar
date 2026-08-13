@@ -8,7 +8,12 @@ import { SearchField, matches } from '~/components/SearchField';
 import { ChipSelect } from '~/components/ChipSelect';
 import { useLang } from '~/lib/i18n';
 import { MAT_TYPES, MAT_TYPE_IDS, isLinkType } from '~/lib/mat-types';
-import { useClasses, useMaterialMutations, useMaterials, useInvalidateStaff } from '~/lib/staff-data';
+import {
+  useClasses,
+  useMaterialMutations,
+  useMaterials,
+  useInvalidateStaff,
+} from '~/lib/staff-data';
 import type { MaterialRow } from '~/lib/types';
 import { useTheme } from '~/theme';
 import { Body, Button, Card, Heading, IconButton, Muted, Screen, Switch, Tag } from '~/ui';
@@ -116,7 +121,10 @@ export default function Materials() {
           const link = isLinkType(m.type);
 
           return (
-            <Card flat style={{ padding: th.spacing[4], gap: th.spacing[3], marginBottom: th.spacing[2] }}>
+            <Card
+              flat
+              style={{ padding: th.spacing[4], gap: th.spacing[3], marginBottom: th.spacing[2] }}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: th.spacing[3] }}>
                 <View
                   style={{

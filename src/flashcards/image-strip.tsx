@@ -134,9 +134,7 @@ export function ImageStrip({
     // rather than a tint — it has to be obvious at a glance down a list of fifty rows. The ring is
     // mixed from --brand rather than written as a literal: the brand is orange here, and a
     // hardcoded colour would sit wrong against it (and wrong again under a re-theme).
-    border: selected
-      ? '2px solid var(--brand)'
-      : '1px solid var(--border-soft, rgba(0,0,0,0.12))',
+    border: selected ? '2px solid var(--brand)' : '1px solid var(--border-soft, rgba(0,0,0,0.12))',
     boxShadow: selected ? '0 0 0 3px color-mix(in srgb, var(--brand) 35%, transparent)' : 'none',
     background: 'var(--surface-muted, rgba(0,0,0,0.04))',
     cursor: 'pointer',

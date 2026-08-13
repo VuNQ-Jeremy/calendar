@@ -159,7 +159,9 @@ export default function MaterialViewer() {
               <Muted>{t('mat_preview_unsupported')}</Muted>
             )}
 
-            {failed ? <Body style={{ color: th.status.danger }}>{t('mat_open_failed')}</Body> : null}
+            {failed ? (
+              <Body style={{ color: th.status.danger }}>{t('mat_open_failed')}</Body>
+            ) : null}
           </Card>
         </View>
       )}

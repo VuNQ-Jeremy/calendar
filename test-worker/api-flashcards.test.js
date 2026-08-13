@@ -58,11 +58,21 @@ describe('recordResult idempotency', () => {
     const first = await flashcardsSvc.recordResult(
       d,
       { kind: 'student', id: student.id },
-      { clientId, topicId: topic.id, mode: 'flip', score: 1, total: 1, answers: [{ wordId: word.id, correct: true }] },
+      {
+        clientId,
+        topicId: topic.id,
+        mode: 'flip',
+        score: 1,
+        total: 1,
+        answers: [{ wordId: word.id, correct: true }],
+      },
     );
     expect(first).toBe(true);
 
-    const rows = await d.select().from(flashcardResults).where(eq(flashcardResults.clientId, clientId));
+    const rows = await d
+      .select()
+      .from(flashcardResults)
+      .where(eq(flashcardResults.clientId, clientId));
     expect(rows).toHaveLength(1);
   });
 
@@ -80,10 +90,17 @@ describe('recordResult idempotency', () => {
       answers: [{ wordId: word.id, correct: true }],
     };
 
-    expect(await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload)).toBe(true);
-    expect(await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload)).toBe(false);
+    expect(await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload)).toBe(
+      true,
+    );
+    expect(await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload)).toBe(
+      false,
+    );
 
-    const rows = await d.select().from(flashcardResults).where(eq(flashcardResults.clientId, clientId));
+    const rows = await d
+      .select()
+      .from(flashcardResults)
+      .where(eq(flashcardResults.clientId, clientId));
     expect(rows).toHaveLength(1);
   });
 
@@ -128,7 +145,10 @@ describe('recordResult idempotency', () => {
     await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload);
     await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload);
 
-    const rows = await d.select().from(flashcardResults).where(eq(flashcardResults.topicId, topic.id));
+    const rows = await d
+      .select()
+      .from(flashcardResults)
+      .where(eq(flashcardResults.topicId, topic.id));
     expect(rows).toHaveLength(2);
   });
 
@@ -141,7 +161,13 @@ describe('recordResult idempotency', () => {
       const ok = await flashcardsSvc.recordResult(
         d,
         { kind: 'student', id: student.id },
-        { topicId: topic.id, mode, score: 1, total: 1, answers: [{ wordId: word.id, correct: true }] },
+        {
+          topicId: topic.id,
+          mode,
+          score: 1,
+          total: 1,
+          answers: [{ wordId: word.id, correct: true }],
+        },
       );
       expect(ok).toBe(true);
     }
@@ -218,7 +244,10 @@ describe('recordResult idempotency', () => {
     expect(first.outcomes[0].garden.thresholdPct).toBeGreaterThan(0);
 
     // Replay: still one outcome each, but the garden says nothing rather than growing again.
-    const replay = await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [a, b]);
+    const replay = await flashcardsSvc.recordResults(d, { kind: 'student', id: student.id }, [
+      a,
+      b,
+    ]);
     expect(replay.recorded).toBe(0);
     expect(replay.outcomes).toHaveLength(2);
     expect(replay.outcomes.every((o) => o.recorded === false && o.garden === null)).toBe(true);
@@ -240,9 +269,7 @@ describe('recordResult idempotency', () => {
 
     const res = await flashcardsSvc.recordResults(d, { kind: 'staff', id: teacher.id }, [payload]);
     expect(res.recorded).toBe(1);
-    expect(res.outcomes).toEqual([
-      { clientId: payload.clientId, recorded: true, garden: null },
-    ]);
+    expect(res.outcomes).toEqual([{ clientId: payload.clientId, recorded: true, garden: null }]);
   });
 });
 
@@ -255,14 +282,26 @@ describe('staff vs student plays', () => {
     await flashcardsSvc.recordResult(
       d,
       { kind: 'student', id: student.id },
-      { topicId: topic.id, mode: 'flip', score: 1, total: 1, answers: [{ wordId: word.id, correct: true }] },
+      {
+        topicId: topic.id,
+        mode: 'flip',
+        score: 1,
+        total: 1,
+        answers: [{ wordId: word.id, correct: true }],
+      },
     );
 
-    const rows = await d.select().from(flashcardResults).where(eq(flashcardResults.topicId, topic.id));
+    const rows = await d
+      .select()
+      .from(flashcardResults)
+      .where(eq(flashcardResults.topicId, topic.id));
     expect(rows[0].studentId).toBe(student.id);
     expect(rows[0].staffId).toBeNull();
 
-    const mastery = await d.select().from(flashcardMastery).where(eq(flashcardMastery.wordId, word.id));
+    const mastery = await d
+      .select()
+      .from(flashcardMastery)
+      .where(eq(flashcardMastery.wordId, word.id));
     expect(mastery).toHaveLength(1);
   });
 
@@ -275,14 +314,26 @@ describe('staff vs student plays', () => {
     await flashcardsSvc.recordResult(
       d,
       { kind: 'staff', id: teacher.id },
-      { topicId: topic.id, mode: 'flip', score: 1, total: 1, answers: [{ wordId: word.id, correct: true }] },
+      {
+        topicId: topic.id,
+        mode: 'flip',
+        score: 1,
+        total: 1,
+        answers: [{ wordId: word.id, correct: true }],
+      },
     );
 
-    const rows = await d.select().from(flashcardResults).where(eq(flashcardResults.topicId, topic.id));
+    const rows = await d
+      .select()
+      .from(flashcardResults)
+      .where(eq(flashcardResults.topicId, topic.id));
     expect(rows[0].staffId).toBe(teacher.id);
     expect(rows[0].studentId).toBeNull();
 
-    const mastery = await d.select().from(flashcardMastery).where(eq(flashcardMastery.wordId, word.id));
+    const mastery = await d
+      .select()
+      .from(flashcardMastery)
+      .where(eq(flashcardMastery.wordId, word.id));
     expect(mastery).toHaveLength(0);
   });
 });

@@ -21,7 +21,7 @@ export function resolveBuildWith(buildOffset: number, commitCount: number): numb
     throw new Error(
       `Refusing to build: git history is truncated (${commitCount} commits, build offset ` +
         `${buildOffset}), so the build number would collapse to 0. Run ` +
-        `\`git fetch --unshallow\` — see deepenShallowClone in scripts/git-version.mjs.`
+        `\`git fetch --unshallow\` — see deepenShallowClone in scripts/git-version.mjs.`,
     );
   }
   // A count EQUAL to the offset is build 0 on purpose: scripts/changelog.mjs --major

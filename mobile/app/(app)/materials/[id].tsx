@@ -269,7 +269,9 @@ export default function MaterialEditor() {
           </Card>
         ) : null}
 
-        {save.isError ? <Body style={{ color: th.status.danger }}>{t('mat_save_failed')}</Body> : null}
+        {save.isError ? (
+          <Body style={{ color: th.status.danger }}>{t('mat_save_failed')}</Body>
+        ) : null}
 
         <Button block loading={save.isPending} onPress={onSave}>
           {save.isPending ? t('mat_saving') : t('save')}

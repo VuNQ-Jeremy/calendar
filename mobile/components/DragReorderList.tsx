@@ -154,7 +154,8 @@ function DragRow({
 
   const style = useAnimatedStyle(() => {
     const active = activeIndex.value;
-    if (active < 0) return { transform: [{ translateY: 0 }, { scale: 1 }], zIndex: 0, elevation: 0 };
+    if (active < 0)
+      return { transform: [{ translateY: 0 }, { scale: 1 }], zIndex: 0, elevation: 0 };
 
     if (active === index) {
       return {

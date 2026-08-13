@@ -9,8 +9,7 @@ import { crudGuard, signInStaff, ui } from './crud-helpers';
  * filtered list contains exactly the rows these tests created.
  */
 
-const monthLabel = () =>
-  new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+const monthLabel = () => new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
 test.describe('CRUD: assessments', () => {
   crudGuard();

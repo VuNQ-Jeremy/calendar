@@ -2,11 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { Check, Clock, FileText, X } from 'lucide-react-native';
 import { useLang } from '~/lib/i18n';
-import {
-  ATTENDANCE_META,
-  ATTENDANCE_STATUSES,
-  type AttendanceStatusId,
-} from '~/lib/cal';
+import { ATTENDANCE_META, ATTENDANCE_STATUSES, type AttendanceStatusId } from '~/lib/cal';
 import {
   rosterOf,
   useAttendance,
@@ -86,9 +82,7 @@ export function AttendanceEditor({
   }, [records, eventId, date]);
 
   const persist = (next: Marks) => {
-    save.mutate(
-      Object.entries(next).map(([studentId, status]) => ({ studentId, status })),
-    );
+    save.mutate(Object.entries(next).map(([studentId, status]) => ({ studentId, status })));
   };
 
   const setMark = (studentId: string, status: AttendanceStatusId) => {

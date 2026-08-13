@@ -91,7 +91,11 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
         )}
       </div>
       <div className="evm-split__right">
-        {selMat ? <MaterialPreview material={selMat} /> : <Empty icon="folder" title={t('mat_pick_prompt')} />}
+        {selMat ? (
+          <MaterialPreview material={selMat} />
+        ) : (
+          <Empty icon="folder" title={t('mat_pick_prompt')} />
+        )}
       </div>
     </div>
   );

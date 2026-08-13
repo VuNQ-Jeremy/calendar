@@ -12,10 +12,7 @@ export function Title({ style, ...rest }: TextProps) {
   const th = useTheme();
   return (
     <Text
-      style={[
-        { fontFamily: th.font.display, color: th.color.textStrong, ...th.text.xl },
-        style,
-      ]}
+      style={[{ fontFamily: th.font.display, color: th.color.textStrong, ...th.text.xl }, style]}
       {...rest}
     />
   );

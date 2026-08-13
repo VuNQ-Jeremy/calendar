@@ -13,7 +13,20 @@ import { useFeedback, useInvalidateStaff } from '~/lib/staff-data';
 import type { FeedbackRow } from '~/lib/types';
 import { versionStamp } from '~/lib/version';
 import { useTheme } from '~/theme';
-import { Badge, Body, Button, Card, Heading, IconButton, Input, Mono, Muted, Screen, Tabs, Tag } from '~/ui';
+import {
+  Badge,
+  Body,
+  Button,
+  Card,
+  Heading,
+  IconButton,
+  Input,
+  Mono,
+  Muted,
+  Screen,
+  Tabs,
+  Tag,
+} from '~/ui';
 
 /**
  * Task 5.5 — feedback: the inbox and the submit form.

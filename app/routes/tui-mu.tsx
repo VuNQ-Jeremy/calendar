@@ -81,7 +81,12 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     const parsed = GiftRedeemInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     try {
-      const redemption = await checkinSvc.redeemGift(db, parsed.data, staff.user.id, new Date().toISOString());
+      const redemption = await checkinSvc.redeemGift(
+        db,
+        parsed.data,
+        staff.user.id,
+        new Date().toISOString(),
+      );
       return { ok: true, redemption };
     } catch (err) {
       if (err instanceof Error && err.message === checkinSvc.ALREADY_REDEEMED) {

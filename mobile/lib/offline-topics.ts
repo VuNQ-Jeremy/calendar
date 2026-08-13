@@ -32,7 +32,9 @@ export async function listDownloaded(): Promise<OfflineTopicMeta[]> {
   return rows.map((r) => ({ topicId: r.topic_id, slug: r.slug, syncedAt: r.synced_at }));
 }
 
-export async function readTopic(slug: string): Promise<{ bundle: TopicBundle; syncedAt: string } | null> {
+export async function readTopic(
+  slug: string,
+): Promise<{ bundle: TopicBundle; syncedAt: string } | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<Row>('SELECT * FROM offline_topics WHERE slug = ?', slug);
   if (!row) return null;

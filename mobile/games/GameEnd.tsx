@@ -34,7 +34,9 @@ export function GameEnd({
         padding: th.spacing[6],
       }}
     >
-      <Title style={{ ...th.text.xxl, fontFamily: th.font.displayBold }}>{t('fc_round_done')}</Title>
+      <Title style={{ ...th.text.xxl, fontFamily: th.font.displayBold }}>
+        {t('fc_round_done')}
+      </Title>
       <Body style={{ ...th.text.xl, color: th.color.textStrong }}>{headline}</Body>
       {sub ? <Muted>{sub}</Muted> : null}
       {children}

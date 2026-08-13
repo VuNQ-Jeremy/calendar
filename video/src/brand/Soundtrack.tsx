@@ -8,10 +8,7 @@ import { Audio, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 
  * Music, YouTube Audio Library) in there and name it in the catalog entry. When
  * no file is named the videos are silent, which is a valid state, not a bug.
  */
-export const Soundtrack: React.FC<{ src?: string; volume?: number }> = ({
-  src,
-  volume = 0.22,
-}) => {
+export const Soundtrack: React.FC<{ src?: string; volume?: number }> = ({ src, volume = 0.22 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   if (!src) return null;

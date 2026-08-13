@@ -45,15 +45,7 @@ export const PawGlyph: React.FC<{
         // Toes pop in one after another across the back half of the draw.
         const start = 0.45 + i * 0.15;
         const t = Math.max(0, Math.min(1, (draw - start) / 0.2));
-        return (
-          <circle
-            key={c.cx}
-            cx={c.cx}
-            cy={c.cy}
-            r={c.r * t}
-            opacity={t}
-          />
-        );
+        return <circle key={c.cx} cx={c.cx} cy={c.cy} r={c.r * t} opacity={t} />;
       })}
     </svg>
   );

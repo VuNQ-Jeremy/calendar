@@ -117,10 +117,7 @@ export default function Calendar() {
     return expandEvents(events, monthCells[0], monthCells[41]);
   }, [events, monthCells]);
 
-  const dayEvents = React.useMemo(
-    () => (events ? eventsOn(events, cursor) : []),
-    [events, cursor],
-  );
+  const dayEvents = React.useMemo(() => (events ? eventsOn(events, cursor) : []), [events, cursor]);
 
   const selectedEvents = React.useMemo(
     () => monthExpanded.filter((e) => e.date === selectedDay).sort(byStart),
@@ -330,11 +327,7 @@ export default function Calendar() {
         )}
       </View>
 
-      <MoveEventSheet
-        target={moveTarget}
-        onClose={() => setMoveTarget(null)}
-        onMove={applyMove}
-      />
+      <MoveEventSheet target={moveTarget} onClose={() => setMoveTarget(null)} onMove={applyMove} />
     </Screen>
   );
 }
@@ -519,7 +512,8 @@ function MonthGrid({
               <Body style={{ fontSize: th.text.sm.fontSize }}>{d.getDate()}</Body>
               <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center', height: 8 }}>
                 {list.slice(0, 3).map((e, j) => {
-                  const cat = th.category[(e.color ?? 'orange') as ColorIdKey] ?? th.category.orange;
+                  const cat =
+                    th.category[(e.color ?? 'orange') as ColorIdKey] ?? th.category.orange;
                   return (
                     <View
                       key={j}
@@ -527,9 +521,7 @@ function MonthGrid({
                     />
                   );
                 })}
-                {list.length > 3 ? (
-                  <Muted style={{ fontSize: 9 }}>+{list.length - 3}</Muted>
-                ) : null}
+                {list.length > 3 ? <Muted style={{ fontSize: 9 }}>+{list.length - 3}</Muted> : null}
               </View>
             </Pressable>
           );
@@ -584,7 +576,9 @@ function DayGrid({
           backgroundColor: isToday ? (theme?.today ?? th.color.brandSoft) : 'transparent',
         }}
       >
-        <Muted>{events.length ? t('cal_day_count', { n: events.length }) : t('cal_day_empty')}</Muted>
+        <Muted>
+          {events.length ? t('cal_day_count', { n: events.length }) : t('cal_day_empty')}
+        </Muted>
       </View>
 
       <View style={{ flexDirection: 'row', paddingHorizontal: th.spacing[3] }}>

@@ -438,7 +438,10 @@ export function FlipGame({ words, onExit, onFinish, endNote }: GameProps) {
   };
 
   /** The two Tinder-style badges, driven straight from dx — the web paints these imperatively. */
-  const renderBadges = (knownStyle: typeof knownBadgeStyle, unknownStyle: typeof knownBadgeStyle) => (
+  const renderBadges = (
+    knownStyle: typeof knownBadgeStyle,
+    unknownStyle: typeof knownBadgeStyle,
+  ) => (
     <>
       <Animated.View
         pointerEvents="none"

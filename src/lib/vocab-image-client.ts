@@ -10,8 +10,7 @@ import type { VocabImageCandidate, VocabImageProvider } from '../../shared/schem
  */
 
 export type SearchResult =
-  | { ok: true; candidates: VocabImageCandidate[]; provider: VocabImageProvider }
-  | { ok: false };
+  { ok: true; candidates: VocabImageCandidate[]; provider: VocabImageProvider } | { ok: false };
 
 /**
  * Candidates for one phrase. `ok: true` with an empty list means "nothing matched" — which is also

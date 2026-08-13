@@ -655,7 +655,10 @@ function RemarkFormCard({
 
       {criteria.length ? (
         criteria.map((c) => (
-          <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
+          <View
+            key={c.id}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}
+          >
             <Body style={{ flex: 1 }}>{c.name}</Body>
             <RatingStars
               value={draft.ratings[c.id] ?? 0}

@@ -107,7 +107,9 @@ test.describe('CRUD: question type variants', () => {
     await k.submit().click();
     await post;
     await expect(row(page, prompt)).toBeVisible();
-    await expect(row(page, prompt).locator('.mochi-tag', { hasText: 'Short answer' })).toBeVisible();
+    await expect(
+      row(page, prompt).locator('.mochi-tag', { hasText: 'Short answer' }),
+    ).toBeVisible();
 
     await deleteQuestion(page, prompt);
   });

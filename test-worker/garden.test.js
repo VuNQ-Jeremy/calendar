@@ -218,7 +218,7 @@ describe('assignments', () => {
     expect(await gardenSvc.assignmentProgress(d, id)).toBeNull();
   });
 
-  it('counts only rounds in the assignment\'s modes, and matches the threshold the same way', async () => {
+  it("counts only rounds in the assignment's modes, and matches the threshold the same way", async () => {
     const d = db();
     const topic = await seedTopic(d);
     const { cls, student } = await seedClassWithStudent(d);

@@ -48,9 +48,7 @@ export function TimeGrid({
   // focus the grid on the earliest event in the visible range (fall back to now),
   // keeping ~1h of context above it; refocus when navigating to another range
   const rangeKey = iso(rangeStart) + ':' + dayList.length;
-  const earliestMin = all.length
-    ? Math.min(...all.map((e) => toMin(e.start ?? '00:00')))
-    : null;
+  const earliestMin = all.length ? Math.min(...all.map((e) => toMin(e.start ?? '00:00'))) : null;
   React.useEffect(() => {
     const el = gridRef.current;
     if (!el) return;

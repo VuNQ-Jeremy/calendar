@@ -30,7 +30,12 @@ export function ProgressBar({ value = 0, color = 'brand', style }: ProgressBarPr
       ]}
     >
       <View
-        style={{ height: '100%', width: `${pct}%`, borderRadius: th.radius.pill, backgroundColor: fill }}
+        style={{
+          height: '100%',
+          width: `${pct}%`,
+          borderRadius: th.radius.pill,
+          backgroundColor: fill,
+        }}
       />
     </View>
   );

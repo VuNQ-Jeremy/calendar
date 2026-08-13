@@ -103,7 +103,10 @@ export async function requestAndRegister(): Promise<PermissionState> {
 export async function registerToken(): Promise<string | null> {
   try {
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: projectId() });
-    await api.push.register({ expoToken: token, platform: Platform.OS === 'ios' ? 'ios' : 'android' });
+    await api.push.register({
+      expoToken: token,
+      platform: Platform.OS === 'ios' ? 'ios' : 'android',
+    });
     await AsyncStorage.setItem(TOKEN_KEY, token);
     return token;
   } catch (err) {

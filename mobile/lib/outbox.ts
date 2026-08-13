@@ -116,7 +116,8 @@ export async function flush(now: Date): Promise<FlushOutcome> {
     BATCH,
   );
 
-  if (rows.length === 0) return { sent: 0, recorded: 0, duplicates: 0, remaining: await pendingCount() };
+  if (rows.length === 0)
+    return { sent: 0, recorded: 0, duplicates: 0, remaining: await pendingCount() };
 
   const parsed = rows.map(parse);
   // A row whose JSON will not parse can never succeed. Drop it rather than blocking the queue

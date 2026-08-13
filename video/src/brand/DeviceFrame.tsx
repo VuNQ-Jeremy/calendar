@@ -41,10 +41,7 @@ export const DeviceFrame: React.FC<{
         }}
       >
         {[ramp.cocoa[300], ramp.sand[400], ramp.cocoa[100]].map((c) => (
-          <div
-            key={c}
-            style={{ width: dot, height: dot, borderRadius: 999, background: c }}
-          />
+          <div key={c} style={{ width: dot, height: dot, borderRadius: 999, background: c }} />
         ))}
         <div
           style={{

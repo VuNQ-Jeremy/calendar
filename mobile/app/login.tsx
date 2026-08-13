@@ -7,17 +7,7 @@ import * as api from '~/lib/endpoints';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
-import {
-  Body,
-  Button,
-  Card,
-  IconButton,
-  Input,
-  Muted,
-  Screen,
-  Tag,
-  Title,
-} from '~/ui';
+import { Body, Button, Card, IconButton, Input, Muted, Screen, Tag, Title } from '~/ui';
 
 /**
  * Port of `app/routes/login.tsx`. Four modes, minus one.
@@ -118,11 +108,7 @@ export default function Login() {
   };
 
   const pwToggle = (
-    <IconButton
-      size="sm"
-      label={t('auth_password')}
-      onPress={() => setShowPw((s) => !s)}
-    >
+    <IconButton size="sm" label={t('auth_password')} onPress={() => setShowPw((s) => !s)}>
       {showPw ? (
         <EyeOff size={18} color={th.color.textMuted} />
       ) : (
@@ -141,7 +127,12 @@ export default function Login() {
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: th.spacing[5], gap: th.spacing[5], flexGrow: 1, justifyContent: 'center' }}
+          contentContainerStyle={{
+            padding: th.spacing[5],
+            gap: th.spacing[5],
+            flexGrow: 1,
+            justifyContent: 'center',
+          }}
         >
           {/* Brand block — the same paw mark and chips as the web auth screen. */}
           <View style={{ alignItems: 'center', gap: th.spacing[3] }}>

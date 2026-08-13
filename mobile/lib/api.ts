@@ -20,8 +20,7 @@ import Constants from 'expo-constants';
  */
 const rawExtraApiUrl = (Constants.expoConfig?.extra as { apiUrl?: unknown } | undefined)?.apiUrl;
 export const BASE = (
-  process.env.EXPO_PUBLIC_API_URL ??
-  (typeof rawExtraApiUrl === 'string' ? rawExtraApiUrl : '')
+  process.env.EXPO_PUBLIC_API_URL ?? (typeof rawExtraApiUrl === 'string' ? rawExtraApiUrl : '')
 ).replace(/\/$/, '');
 
 /** ~15s. Vietnamese mobile connections drop silently; a fetch with no timeout is a frozen screen. */
@@ -107,7 +106,11 @@ function buildUrl(path: string, query?: ApiInit['query']): string {
 export async function apiUpload<T>(
   path: string,
   form: FormData,
-  opts: { method?: 'POST' | 'PATCH'; query?: ApiInit['query']; onProgress?: (pct: number) => void } = {},
+  opts: {
+    method?: 'POST' | 'PATCH';
+    query?: ApiInit['query'];
+    onProgress?: (pct: number) => void;
+  } = {},
 ): Promise<T> {
   if (!BASE) throw new ApiError(0, 'no_base_url', 'm_server_error');
   const token = await readToken();
@@ -189,7 +192,11 @@ export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> 
     // An aborted fetch and a dead network are indistinguishable to the caller otherwise, and
     // they need different messages: "too slow" vs "you are offline".
     const timedOut = err instanceof Error && err.name === 'AbortError';
-    throw new ApiError(0, timedOut ? 'timeout' : 'network_error', messageKeyFor(0, timedOut ? 'timeout' : 'network_error'));
+    throw new ApiError(
+      0,
+      timedOut ? 'timeout' : 'network_error',
+      messageKeyFor(0, timedOut ? 'timeout' : 'network_error'),
+    );
   } finally {
     clearTimeout(timer);
   }
