@@ -77,7 +77,12 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     const parsed = parsePatch(EventInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await eventsSvc.update(db, id, parsed.data);
+    // Not part of EventInput (it names an occurrence, not a column) so parsePatch drops it —
+    // read it off the form directly. See eventsSvc.update's `fromDate`.
+    const from = formData.get('fromDate');
+    const fromDate =
+      typeof from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : undefined;
+    await eventsSvc.update(db, id, parsed.data, fromDate);
     return { ok: true };
   }
 

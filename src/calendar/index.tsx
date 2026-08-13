@@ -10,12 +10,21 @@ import { MonthView } from './month-view.jsx';
 import { TimeGrid } from './time-grid.jsx';
 import { AgendaView } from './agenda-view.jsx';
 import { CalendarThemeDrawer } from './theme-drawer.jsx';
-import { startOfWeek, addMin, fmtTime, toMin, MONTHS, DOW, expandEvents } from './utils.js';
+import {
+  startOfWeek,
+  addMin,
+  fmtTime,
+  toMin,
+  MONTHS,
+  DOW,
+  expandEvents,
+  eventFormData,
+} from './utils.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { MaterialRow } from '../../server/services/materials.js';
-import type { ExpandedEvent } from './utils.js';
+import type { EventDraft, ExpandedEvent } from './utils.js';
 
 const { Button: CBtn, IconButton: CIBtn, Tabs: CTabs } = DS;
 
@@ -38,8 +47,6 @@ interface CalendarLoaderData {
 }
 
 type ViewMode = 'day' | 'week' | 'month' | 'agenda';
-
-type EventDraft = Partial<EventRow> & { recurrence?: string };
 
 function CalendarScreen() {
   const { events, classes, students, theme, materials, eventMaterials } =
@@ -87,19 +94,9 @@ function CalendarScreen() {
   const openEdit = (ev: EventRow) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
 
   const save = (f: EventDraft) => {
-    const evTitle = (f.title ?? '').trim() || t('ev_untitled');
-    const fd = new FormData();
-    fd.set('intent', f.id ? 'update' : 'create');
-    if (f.id) fd.set('id', f.id);
-    fd.set('title', evTitle);
-    if (f.date) fd.set('date', f.date);
-    if (f.start) fd.set('start', f.start);
-    if (f.end) fd.set('end', f.end);
-    if (f.color) fd.set('color', f.color);
-    if (f.classId) fd.set('classId', f.classId);
-    if (f.location) fd.set('location', f.location);
-    fd.set('recurrence', f.recurrence || 'none');
-    fd.set('notes', f.notes ?? '');
+    // `editor` still holds the draft as it was opened — the modal edits its own copy — so it is
+    // the occurrence date the teacher started from.
+    const fd = eventFormData(f, t('ev_untitled'), editor?.date);
     fetcher.submit(fd, { action: '/calendar', method: 'post' });
     setEditor(null);
   };

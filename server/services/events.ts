@@ -1,7 +1,8 @@
-import { eq, and, gte, lte, or, ne } from 'drizzle-orm';
-import { events, eventMaterials } from '../db/schema';
+import { eq, and, gte, inArray, lte, or, ne } from 'drizzle-orm';
+import { events, eventMaterials, checklistItems } from '../db/schema';
 import type { Db } from '../db/index';
 import type { EventInput } from '../../shared/schemas';
+import { addDaysVn, daysBetweenVn } from '../../shared/logic/garden';
 import { record, recordCreate, recordDelete } from './audit';
 
 function sameJson(a: unknown, b: unknown): boolean {
@@ -79,13 +80,64 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
   return row;
 }
 
-export async function update(db: Db, id: string, patch: Partial<EventInput>): Promise<EventRow> {
+/**
+ * Move every checklist_items row of this event by `days`. Those rows key on (event_id, date), the
+ * same per-occurrence shape attendance_records uses, so moving the event without this leaves a
+ * teacher's authored check-in list stranded on a date nothing renders any more.
+ *
+ * Collected as ids first, then updated one distinct source date at a time: a +7 shift maps 08-12
+ * onto 08-19, which is itself a date being shifted, so a plain `WHERE date = ?` sweep would pick
+ * up rows it had already moved.
+ *
+ * Deliberately not applied to attendance_records / session_previews (the orphan caveat documented
+ * in attendance.ts stands — a mark describes a session that already happened) nor to tui_mu_events,
+ * an append-only ledger of moments a kid already celebrated.
+ */
+async function shiftChecklistDates(db: Db, eventId: string, days: number): Promise<number> {
+  const rows = await db
+    .select({ id: checklistItems.id, date: checklistItems.date })
+    .from(checklistItems)
+    .where(eq(checklistItems.eventId, eventId));
+  if (!rows.length) return 0;
+  const byDate = new Map<string, string[]>();
+  for (const r of rows) {
+    const ids = byDate.get(r.date);
+    if (ids) ids.push(r.id);
+    else byDate.set(r.date, [r.id]);
+  }
+  for (const [date, ids] of byDate) {
+    await db
+      .update(checklistItems)
+      .set({ date: addDaysVn(date, days) })
+      .where(inArray(checklistItems.id, ids));
+  }
+  return rows.length;
+}
+
+export async function update(
+  db: Db,
+  id: string,
+  patch: Partial<EventInput>,
+  /**
+   * The occurrence date the editor was opened at. A recurring class is one row expanded in memory,
+   * and the event modal seeds its date field from the expanded instance — so `patch.date` is that
+   * instance's new date, not a new anchor. Passing the instance's old date lets the row move by the
+   * delta instead, which keeps the series' history and stops an untouched date field (where new and
+   * old are equal) from re-anchoring the series onto whichever occurrence happened to be open.
+   * Omit it — mobile, drag-move — and `patch.date` is read as the anchor itself, as before.
+   */
+  fromDate?: string,
+): Promise<EventRow> {
   const beforeRows = await db.select().from(events).where(eq(events.id, id));
   const before = beforeRows[0] ? map(beforeRows[0]) : undefined;
 
   const set: Partial<typeof events.$inferInsert> = {};
   if (patch.title !== undefined) set.title = patch.title;
-  if (patch.date !== undefined) set.date = patch.date;
+  let shiftDays = 0;
+  if (patch.date !== undefined && before) {
+    shiftDays = daysBetweenVn(fromDate ?? before.date, patch.date);
+    if (shiftDays !== 0) set.date = addDaysVn(before.date, shiftDays);
+  }
   if (patch.start !== undefined) set.startTime = patch.start ?? null;
   if (patch.end !== undefined) set.endTime = patch.end ?? null;
   if (patch.color !== undefined) set.color = patch.color ?? null;
@@ -98,10 +150,18 @@ export async function update(db: Db, id: string, patch: Partial<EventInput>): Pr
   if (Object.keys(set).length) {
     await db.update(events).set(set).where(eq(events.id, id));
   }
+  const shifted = shiftDays === 0 ? 0 : await shiftChecklistDates(db, id, shiftDays);
   const rows = await db.select().from(events).where(eq(events.id, id));
   const after = map(rows[0]);
   if (!sameJson(before, after)) {
-    record({ action: 'update', entityType: 'event', entityId: id, before, after });
+    record({
+      action: 'update',
+      entityType: 'event',
+      entityId: id,
+      before,
+      after,
+      ...(shifted ? { meta: { checklistItemsShifted: shifted, shiftDays } } : {}),
+    });
   }
   return after;
 }
