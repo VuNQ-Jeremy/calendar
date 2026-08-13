@@ -26,6 +26,7 @@ import { IpaGame } from '~/games/IpaGame';
 import { StressGame } from '~/games/StressGame';
 import { ClozeGame } from '~/games/ClozeGame';
 import { ListenGame } from '~/games/ListenGame';
+import { PronounceGame } from '~/games/PronounceGame';
 import { MixGame } from '~/games/MixGame';
 import type { GameResult } from '~/games/types';
 
@@ -48,6 +49,7 @@ const MODES: GameMode[] = [
   'stress',
   'cloze',
   'listen',
+  'pronounce',
   'mix',
 ];
 
@@ -273,6 +275,14 @@ export default function PlayScreen() {
         />
       ) : gameMode === 'listen' ? (
         <ListenGame
+          words={words}
+          roundSize={roundSize}
+          onExit={exit}
+          onFinish={onFinish}
+          endNote={endNote}
+        />
+      ) : gameMode === 'pronounce' ? (
+        <PronounceGame
           words={words}
           roundSize={roundSize}
           onExit={exit}

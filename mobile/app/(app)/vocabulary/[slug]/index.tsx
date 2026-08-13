@@ -11,6 +11,7 @@ import {
   Keyboard,
   Layers,
   ListChecks,
+  Mic,
   Pencil,
   PencilLine,
   Plus,
@@ -66,6 +67,7 @@ const MODES: { id: GameMode; tk: string; Icon: typeof Layers }[] = [
   { id: 'stress', tk: 'fc_mode_stress', Icon: Zap },
   { id: 'cloze', tk: 'fc_mode_cloze', Icon: Quote },
   { id: 'listen', tk: 'fc_mode_listen', Icon: Headphones },
+  { id: 'pronounce', tk: 'fc_mode_pronounce', Icon: Mic },
   { id: 'mix', tk: 'fc_mode_mix', Icon: Dices },
 ];
 

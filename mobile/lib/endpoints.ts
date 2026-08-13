@@ -35,6 +35,7 @@ import type {
   UiPrefsInput,
   VocabEnrichItem,
   VocabGenerateInput,
+  PronounceAssessment,
 } from '@mochi/shared/schemas';
 import type { GardenOutcome } from '@mochi/shared/logic/garden';
 import type {
@@ -315,6 +316,14 @@ export const flashcards = {
     apiFetch<{ studentId: string; rounds: number; avgPct: number; lastPlayedAt: string | null }[]>(
       '/api/flashcards/stats',
     ),
+
+  /**
+   * Score one spoken word (the pronounce game). Multipart — the WAV clip rides as a file part —
+   * hence apiUpload, not apiFetch. NOT under /api: the route also serves the web game's cookie
+   * fetch (the enrich-vocab split); bearer auth works there all the same. 429 means the free
+   * Azure tier is busy with another student — retryable; 503 means scoring is not configured.
+   */
+  assessPronunciation: (form: FormData) => apiUpload<PronounceAssessment>('/speech-assess', form),
 };
 
 /**
