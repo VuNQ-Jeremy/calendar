@@ -30,6 +30,10 @@ export default [
   route('garden/:classId/share', 'routes/garden.$classId.share.tsx'),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
+  // Pronunciation scoring (Azure Speech) for the pronounce game. Outside `_app` for the same
+  // cache reason as enrich-vocab, and NOT under api/ because the web game posts with a session
+  // cookie (the zalo-send-card split). Student-level auth — students are the players.
+  route('speech-assess', 'routes/speech-assess.tsx'),
   // Pictures for vocabulary words. Search/generate/commit are staff-only and, like the two above,
   // outside `_app` so using the picker never invalidates the vocabulary route cache.
   route('vocab-image-search', 'routes/vocab-image-search.tsx'),

@@ -35,6 +35,7 @@ import { IpaGame } from './game-ipa.jsx';
 import { StressGame } from './game-stress.jsx';
 import { ClozeGame } from './game-cloze.jsx';
 import { ListenGame } from './game-listen.jsx';
+import { PronounceGame } from './game-pronounce.jsx';
 import { MixGame } from './game-mix.jsx';
 import type { RoundGarden } from '../garden/garden-widget.jsx';
 import type {
@@ -82,6 +83,7 @@ const MODE_META: {
     | 'zap'
     | 'quote'
     | 'headphones'
+    | 'mic'
     | 'dices';
 }[] = [
   { id: 'flip', tk: 'fc_mode_flip', icon: 'cards' },
@@ -95,6 +97,7 @@ const MODE_META: {
   { id: 'stress', tk: 'fc_mode_stress', icon: 'zap' },
   { id: 'cloze', tk: 'fc_mode_cloze', icon: 'quote' },
   { id: 'listen', tk: 'fc_mode_listen', icon: 'headphones' },
+  { id: 'pronounce', tk: 'fc_mode_pronounce', icon: 'mic' },
   { id: 'mix', tk: 'fc_mode_mix', icon: 'dices' },
 ];
 
@@ -262,6 +265,15 @@ export function FlashcardTopicScreen() {
         )}
         {playing === 'listen' && (
           <ListenGame
+            words={deck}
+            roundSize={roundSize}
+            onExit={exit}
+            onFinish={finish}
+            garden={roundGarden}
+          />
+        )}
+        {playing === 'pronounce' && (
+          <PronounceGame
             words={deck}
             roundSize={roundSize}
             onExit={exit}

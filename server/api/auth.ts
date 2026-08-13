@@ -4,6 +4,7 @@ import { sessions } from '../db/schema';
 import { hashToken } from '../services/crypto';
 import {
   DAY_MS,
+  requireLearner,
   requireStaff,
   userFromToken,
   type SessionUser,
@@ -125,4 +126,17 @@ export async function requireApiAdmin(request: Request, env: Env): Promise<Sessi
 export async function requireStaffCookieOrBearer(request: Request, env: Env): Promise<SessionUser> {
   if (bearer(request)) return requireApiStaff(request, env);
   return requireStaff(request, env);
+}
+
+/**
+ * Student-or-staff twin of requireStaffCookieOrBearer, for routes both clients' GAMES call
+ * (currently /speech-assess). Same split: a bearer means a native client that needs JSON
+ * errors, no bearer means a browser whose failures should redirect like any app page.
+ */
+export async function requireLearnerCookieOrBearer(
+  request: Request,
+  env: Env,
+): Promise<LearnerUser> {
+  if (bearer(request)) return requireApiLearner(request, env);
+  return requireLearner(request, env);
 }

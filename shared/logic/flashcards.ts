@@ -21,6 +21,7 @@ export type GameMode =
   | 'stress'
   | 'cloze'
   | 'listen'
+  | 'pronounce'
   | 'mix';
 
 /**
@@ -40,6 +41,7 @@ export const ALL_MODES: readonly GameMode[] = [
   'stress',
   'cloze',
   'listen',
+  'pronounce',
   'mix',
 ];
 
@@ -61,8 +63,22 @@ export const MIN_WORDS: Record<GameMode, number> = {
   stress: 1,
   cloze: 4,
   listen: 1,
+  pronounce: 1,
   mix: 4,
 };
+
+/**
+ * Azure accuracy score (0-100) at or above which a spoken word counts as correct in the
+ * pronounce mode. 70 is Azure's own suggested "fair pronunciation" line. Pronounce stays out
+ * of MIX_POOL_MODES / wordSupportsMode on purpose: it needs the network and a microphone,
+ * and a mixed round must stay playable offline.
+ */
+export const PRONOUNCE_PASS = 70;
+
+/** Whether an Azure accuracy score passes the pronounce mode's bar. */
+export function pronouncePassed(accuracy: number): boolean {
+  return accuracy >= PRONOUNCE_PASS;
+}
 
 /** The number of pairs in one round of match. */
 export const MATCH_ROUND_SIZE = 6;

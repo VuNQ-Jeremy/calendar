@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0200 — 2026-08-13
+Pronunciation game mode (web): say the word, Azure scores it, correct at accuracy >= 70
+
 ## v0.0199 — 2026-08-13
 Kiosk shows a loading line instead of 'no checklist yet' while its list is still being fetched.
 

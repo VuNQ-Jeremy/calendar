@@ -31,5 +31,12 @@ export default defineConfig({
     channel: process.env.E2E_CHANNEL || 'msedge',
     viewport: { width: 1400, height: 900 },
     trace: 'retain-on-failure',
+    // The pronounce game (crud-pronounce.spec.ts) records through getUserMedia. The fake
+    // device makes Chromium/Edge emit a synthetic tone instead of touching real hardware,
+    // and the fake UI + permission grant skip the mic prompt no test could click.
+    permissions: ['microphone'],
+    launchOptions: {
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+    },
   },
 });

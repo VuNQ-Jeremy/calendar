@@ -22,6 +22,11 @@
  * GITHUB_FEEDBACK_TOKEN opens a GitHub issue for every new feedback row
  * (server/services/github.ts), which in turn fires a claude.ai brainstorm
  * routine. Optional and fails safe: unset means the issue post silently no-ops.
+ *
+ * AZURE_SPEECH_KEY / AZURE_SPEECH_REGION power pronunciation scoring for the vocabulary
+ * "pronounce" game (app/routes/speech-assess.tsx). Optional and fail safe together: either
+ * unset means /speech-assess returns 503 and the game shows its "not set up yet" notice.
+ * calendar-test deliberately carries neither, so e2e stubs the route.
  */
 interface Env {
   ANTHROPIC_API_KEY?: string;
@@ -29,6 +34,8 @@ interface Env {
   ZALO_BOT_TOKEN?: string;
   ZALO_WEBHOOK_SECRET?: string;
   GITHUB_FEEDBACK_TOKEN?: string;
+  AZURE_SPEECH_KEY?: string;
+  AZURE_SPEECH_REGION?: string;
 }
 
 /** Injected by vite `define` — see vite.config.ts. e.g. "v0.0042" */

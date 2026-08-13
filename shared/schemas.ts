@@ -434,9 +434,28 @@ export const FlashcardMode = z.enum([
   'stress',
   'cloze',
   'listen',
+  'pronounce',
   'mix',
 ]);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
+
+/**
+ * What /speech-assess returns inside `{ data }` — the Worker's mapping of Azure's
+ * pronunciation assessment (server/services/speech.ts). Both game clients type against this.
+ */
+export type PronounceAssessment = {
+  /** 0-100; drives correctness (see PRONOUNCE_PASS in logic/flashcards.ts). */
+  accuracy: number;
+  fluency: number;
+  completeness: number;
+  /** Azure's blended overall score. */
+  pronScore: number;
+  /** The words Azure actually heard (lowercased), for the "we heard …" line. */
+  recognized: string;
+  correct: boolean;
+  /** True when Azure heard silence or noise — offer a re-record, don't grade. */
+  noSpeech: boolean;
+};
 
 export const FlashcardResultInput = z.object({
   /**

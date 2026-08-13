@@ -22,6 +22,7 @@ import {
   normalizeModesCsv,
   parseModes,
   pickRound,
+  pronouncePassed,
   scrambleLetters,
   stressEligible,
   typeEligible,
@@ -231,6 +232,21 @@ describe('modes CSV', () => {
 describe('mode constants', () => {
   it('every mode has a MIN_WORDS entry', () => {
     for (const m of ALL_MODES) expect(MIN_WORDS[m]).toBeGreaterThanOrEqual(1);
+  });
+
+  it('lists pronounce exactly once, before mix, playable from one word', () => {
+    expect(ALL_MODES.filter((m) => m === 'pronounce')).toHaveLength(1);
+    expect(ALL_MODES.indexOf('pronounce')).toBe(ALL_MODES.indexOf('mix') - 1);
+    expect(MIN_WORDS.pronounce).toBe(1);
+  });
+});
+
+describe('pronouncePassed', () => {
+  it('passes at the 70 threshold and fails just under it', () => {
+    expect(pronouncePassed(70)).toBe(true);
+    expect(pronouncePassed(100)).toBe(true);
+    expect(pronouncePassed(69.9)).toBe(false);
+    expect(pronouncePassed(0)).toBe(false);
   });
 });
 
@@ -444,6 +460,16 @@ describe('mixEligibleModes', () => {
   it('intersects with an allowed list that IS usable', () => {
     const modes = mixEligibleModes(words, ['ipa', 'quiz']);
     expect(new Set(modes)).toEqual(new Set(['ipa', 'quiz']));
+  });
+
+  it('never mixes in pronounce — it needs the network and a mic', () => {
+    expect(mixEligibleModes(words, null)).not.toContain('pronounce');
+    // "pronounce" alone leaves nothing usable in the pool -> fall back, still without it.
+    const modes = mixEligibleModes(words, ['pronounce']);
+    expect(modes.length).toBeGreaterThan(0);
+    expect(modes).not.toContain('pronounce');
+    const items = buildMixItems(words, ['pronounce'], 5);
+    expect(items.map((i) => i.mode as string)).not.toContain('pronounce');
   });
 });
 
