@@ -22,6 +22,24 @@ const SCORED = {
     recognized: 'ephemeral',
     correct: true,
     noSpeech: false,
+    // Mixed tiers on purpose: the breakdown must render every phoneme, not just the bad ones.
+    words: [
+      {
+        word: 'ephemeral',
+        errorType: 'None',
+        accuracy: 85,
+        phonemes: [
+          { ipa: 'ɪ', accuracy: 95 },
+          { ipa: 'f', accuracy: 40 },
+          { ipa: 'ɛ', accuracy: 92 },
+          { ipa: 'm', accuracy: 70 },
+          { ipa: 'ə', accuracy: 88 },
+          { ipa: 'r', accuracy: 81 },
+          { ipa: 'ə', accuracy: 90 },
+          { ipa: 'l', accuracy: 85 },
+        ],
+      },
+    ],
   },
 };
 
@@ -66,14 +84,16 @@ test.describe('CRUD: pronounce game round', () => {
     await expect(page.locator('.mochi-card', { hasText: name })).toHaveCount(0);
   }
 
-  /** Record ~a second of fake-mic tone and stop. Leaves the game in the "recorded" state. */
+  /**
+   * Record ~a second of fake-mic tone and stop. Stopping submits on its own — the caller's
+   * /speech-assess route must already be armed before this runs.
+   */
   async function recordClip(page: Page) {
     await page.getByRole('button', { name: 'Tap the mic and say the word' }).click();
-    const stop = page.getByRole('button', { name: 'Listening… tap to stop' });
+    const stop = page.getByRole('button', { name: 'Listening… tap to stop and score' });
     await expect(stop).toBeVisible();
     await page.waitForTimeout(800); // give the fake device time to fill some buffers
     await stop.click();
-    await expect(page.getByRole('button', { name: 'Check my pronunciation' })).toBeVisible();
   }
 
   test.beforeEach(async ({ page }) => {
@@ -96,13 +116,13 @@ test.describe('CRUD: pronounce game round', () => {
     await page.getByRole('button', { name: 'Say it' }).click();
     await expect(page.getByText('ephemeral').first()).toBeVisible();
 
+    // Stopping scores it — no second tap. The canned score renders, then Next finishes the
+    // one-word round; the result posts as the end screen mounts, so arm the wait before clicking.
     await recordClip(page);
-    await page.getByRole('button', { name: 'Check my pronunciation' }).click();
-
-    // The canned score renders, then Next finishes the one-word round; the result posts as
-    // the end screen mounts, so arm the wait before clicking.
-    await expect(page.getByText('85', { exact: true })).toBeVisible();
+    await expect(page.getByText('85%', { exact: true })).toBeVisible();
     await expect(page.getByText('We heard: “ephemeral”')).toBeVisible();
+    // Each phoneme is its own coloured span; getByText matches the concatenated line.
+    await expect(page.getByText('/ɪfɛmərəl/')).toBeVisible();
     const post = k.posted(path);
     await page.getByRole('button', { name: 'Next' }).click();
     await post;
@@ -145,11 +165,10 @@ test.describe('CRUD: pronounce game round', () => {
 
     await page.getByRole('button', { name: 'Say it' }).click();
     await recordClip(page);
-    await page.getByRole('button', { name: 'Check my pronunciation' }).click();
 
     // The busy copy shows, then the single auto-retry (2s) succeeds on the stub's second call.
     await expect(page.getByText(/scoring service is busy/)).toBeVisible();
-    await expect(page.getByText('85', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('85%', { exact: true })).toBeVisible({ timeout: 10_000 });
     const post = k.posted(path);
     await page.getByRole('button', { name: 'Next' }).click();
     await post;

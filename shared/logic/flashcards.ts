@@ -80,6 +80,16 @@ export function pronouncePassed(accuracy: number): boolean {
   return accuracy >= PRONOUNCE_PASS;
 }
 
+/**
+ * How one phoneme of the IPA breakdown is coloured: green / amber / red. The red line sits
+ * below PRONOUNCE_PASS on purpose — per-phoneme scores on a one-word clip are noisier than the
+ * word score, and marking a sound wrong is harsher feedback than failing the word.
+ */
+export function phonemeTier(accuracy: number): 'good' | 'close' | 'wrong' {
+  if (accuracy >= 80) return 'good';
+  return accuracy >= 60 ? 'close' : 'wrong';
+}
+
 /** The number of pairs in one round of match. */
 export const MATCH_ROUND_SIZE = 6;
 

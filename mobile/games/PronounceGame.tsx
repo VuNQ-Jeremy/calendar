@@ -3,8 +3,8 @@ import { View } from 'react-native';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { createAudioPlayer } from 'expo-audio';
 import { Mic, Play, Square, Volume2 } from 'lucide-react-native';
-import { meaningOf, pickRound } from '@mochi/shared/logic/flashcards';
-import { MAX_CLIP_MS } from '@mochi/shared/logic/wav';
+import { meaningOf, phonemeTier, pickRound } from '@mochi/shared/logic/flashcards';
+import { MAX_CLIP_MS, MIN_CLIP_MS } from '@mochi/shared/logic/wav';
 import type { PronounceAssessment } from '@mochi/shared/schemas';
 import * as api from '~/lib/endpoints';
 import { ApiError } from '~/lib/api';
@@ -19,7 +19,9 @@ import { GameEnd } from './GameEnd';
 /**
  * Port of `src/flashcards/game-pronounce.tsx`. The word is shown (IPA + a model reading), the
  * student records themself saying it, and Azure scores the clip through /speech-assess.
- * Accuracy ≥ 70 counts as correct; the exact score is shown but not persisted.
+ * Accuracy ≥ 70 counts as correct; the exact score is shown but not persisted. Stopping the
+ * recorder submits immediately, and the scored screen colours each IPA phoneme by how clearly
+ * it came out.
  *
  * Unlike every sibling game this one needs the NETWORK mid-round — scoring is a server call —
  * so an offline session gets an honest notice instead of a spinner. The finished round still
@@ -29,6 +31,7 @@ import { GameEnd } from './GameEnd';
 type Phase =
   | 'idle'
   | 'recording'
+  /** Clip in hand but not scored — only reached on silence, a mis-tap, or a failed call. */
   | 'recorded'
   | 'submitting'
   | 'busy' // 429 — the free tier scores one student at a time
@@ -48,6 +51,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
   const [idx, setIdx] = React.useState(0);
   const [phase, setPhase] = React.useState<Phase>('idle');
   const [clip, setClip] = React.useState<PcmClip | null>(null);
+  const clipRef = React.useRef<PcmClip | null>(null);
   const [result, setResult] = React.useState<PronounceAssessment | null>(null);
   const [noSpeech, setNoSpeech] = React.useState(false);
   const [autoRetrying, setAutoRetrying] = React.useState(false);
@@ -57,6 +61,9 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
   const stopTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const retriedRef = React.useRef(false);
+  // usePcmRecorder.stop() writes a file every call, so unlike the web recorder it needs its own
+  // guard against a manual stop racing the MAX_CLIP_MS timer.
+  const stoppingRef = React.useRef(false);
 
   const done = round.length > 0 && idx >= round.length;
   const score = answers.filter((a) => a.correct).length;
@@ -78,11 +85,22 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
   React.useEffect(
     () => () => {
       recorder.cancel();
+      clipRef.current?.dispose();
       if (stopTimer.current) clearTimeout(stopTimer.current);
       if (retryTimer.current) clearTimeout(retryTimer.current);
     },
     [],
   );
+
+  /**
+   * Hold the newest clip and bin the one it replaces. The clip now outlives its upload — the
+   * scored screen can play it back — so a ref mirrors it for the unmount sweep.
+   */
+  const keepClip = (c: PcmClip | null) => {
+    if (clipRef.current && clipRef.current !== c) clipRef.current.dispose();
+    clipRef.current = c;
+    setClip(c);
+  };
 
   const startRecording = async () => {
     const ok = await recorder.start();
@@ -91,14 +109,27 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
       return;
     }
     setNoSpeech(false);
+    // Each clip gets its own single automatic 429 retry.
+    retriedRef.current = false;
+    stoppingRef.current = false;
     setPhase('recording');
     stopTimer.current = setTimeout(() => void stopRecording(), MAX_CLIP_MS);
   };
 
+  /** Stop and score in one gesture — the MAX_CLIP_MS timer lands here too. */
   const stopRecording = async () => {
+    if (stoppingRef.current) return;
+    stoppingRef.current = true;
     if (stopTimer.current) clearTimeout(stopTimer.current);
-    setClip(await recorder.stop());
-    setPhase('recorded');
+    const c = await recorder.stop();
+    keepClip(c);
+    if (c.durationMs < MIN_CLIP_MS) {
+      // A mis-tap, not an attempt — say so locally rather than paying Azure to hear nothing.
+      setNoSpeech(true);
+      setPhase('recorded');
+      return;
+    }
+    void submit(c);
   };
 
   const submit = async (c: PcmClip) => {
@@ -138,18 +169,31 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
       setPhase('recorded');
       return;
     }
-    c.dispose();
     setResult(data);
-    setAnswers((a) => [...a, { wordId: w.id, correct: data.correct }]);
+    // Write at this word's slot rather than appending: re-recording after a score replaces the
+    // attempt instead of grading the same word twice.
+    setAnswers((a) => {
+      const nextAnswers = a.slice(0, idx);
+      nextAnswers[idx] = { wordId: w.id, correct: data.correct };
+      return nextAnswers;
+    });
     setPhase('scored');
   };
 
   const next = () => {
     setPhase('idle');
-    setClip(null);
+    keepClip(null);
     setResult(null);
     setNoSpeech(false);
     setIdx((i) => i + 1);
+  };
+
+  /** Back to the mic for another go at the same word. A later score overwrites this one. */
+  const rerecord = () => {
+    keepClip(null);
+    setResult(null);
+    setNoSpeech(false);
+    setPhase('idle');
   };
 
   const replay = () => {
@@ -158,7 +202,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
     setAnswers([]);
     setIdx(0);
     setPhase('idle');
-    setClip(null);
+    keepClip(null);
     setResult(null);
     setNoSpeech(false);
     started.current = Date.now();
@@ -243,13 +287,35 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
               color: result.correct ? th.status.success : th.status.danger,
             }}
           >
-            {String(Math.round(result.accuracy))}
+            {`${Math.round(result.accuracy)}%`}
           </Title>
           <Muted>{t('fc_pron_accuracy')}</Muted>
           {result.recognized ? (
             <Body>{t('fc_pron_heard', { word: result.recognized })}</Body>
           ) : null}
-          <Button onPress={next}>{t('fc_pron_next')}</Button>
+          <PhonemeBreakdown result={result} hint={t('fc_pron_ipa_hint')} />
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: th.spacing[2],
+              justifyContent: 'center',
+            }}
+          >
+            {clip ? (
+              <Button
+                variant="ghost"
+                iconLeft={<Play size={16} color={th.color.textStrong} />}
+                onPress={() => playClip(clip)}
+              >
+                {t('fc_pron_replay')}
+              </Button>
+            ) : null}
+            <Button variant="soft" onPress={rerecord}>
+              {t('fc_pron_rerecord')}
+            </Button>
+            <Button onPress={next}>{t('fc_pron_next')}</Button>
+          </View>
         </View>
       ) : phase === 'idle' || phase === 'recording' ? (
         <View style={{ alignItems: 'center', gap: th.spacing[3] }}>
@@ -307,16 +373,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
             >
               {t('fc_pron_replay')}
             </Button>
-            <Button
-              variant="soft"
-              disabled={phase === 'submitting'}
-              onPress={() => {
-                clip.dispose();
-                setClip(null);
-                setNoSpeech(false);
-                setPhase('idle');
-              }}
-            >
+            <Button variant="soft" disabled={phase === 'submitting'} onPress={rerecord}>
               {t('fc_pron_rerecord')}
             </Button>
             <Button
@@ -333,5 +390,40 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
         </View>
       ) : null}
     </View>
+  );
+}
+
+/**
+ * The sound-by-sound verdict: the reference word's IPA, each symbol coloured by how clearly it
+ * came out. Insertion entries are words the student added on top of the reference — they have no
+ * reference phonemes, and the "we heard …" line above already reports them.
+ */
+function PhonemeBreakdown({ result, hint }: { result: PronounceAssessment; hint: string }) {
+  const th = useTheme();
+  const tierColor = {
+    good: th.status.success,
+    close: th.status.warning,
+    wrong: th.status.danger,
+  };
+  const phonemes = (result.words ?? [])
+    .filter((wd) => wd.errorType !== 'Insertion')
+    .flatMap((wd) => wd.phonemes);
+  if (phonemes.length === 0) return null;
+  return (
+    <>
+      <Title style={{ fontSize: 24, lineHeight: 32, letterSpacing: 1 }}>
+        {'/'}
+        {phonemes.map((p, i) => (
+          <Title
+            key={i}
+            style={{ fontSize: 24, lineHeight: 32, color: tierColor[phonemeTier(p.accuracy)] }}
+          >
+            {p.ipa}
+          </Title>
+        ))}
+        {'/'}
+      </Title>
+      <Muted style={{ textAlign: 'center' }}>{hint}</Muted>
+    </>
   );
 }

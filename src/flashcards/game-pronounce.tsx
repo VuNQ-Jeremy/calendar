@@ -5,8 +5,8 @@ import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
 import { createRecorder, type WebRecorder } from './recorder.js';
 import type { GameProps } from './game-utils.js';
-import { meaningOf, pickRound } from '../../shared/logic/flashcards';
-import { MAX_CLIP_MS } from '../../shared/logic/wav';
+import { meaningOf, phonemeTier, pickRound } from '../../shared/logic/flashcards';
+import { MAX_CLIP_MS, MIN_CLIP_MS } from '../../shared/logic/wav';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { PronounceAssessment } from '../../shared/schemas';
 
@@ -18,6 +18,10 @@ const { Button: FBtn, IconButton: FIB } = DS;
  * /speech-assess route. Accuracy ≥ PRONOUNCE_PASS counts the word as correct; the exact score
  * is shown but not persisted (GameResult only carries the boolean, like every other mode).
  *
+ * Stopping the recorder submits straight away — one tap to record, one to stop, no third to
+ * "check". The scored screen then breaks the word into IPA phonemes, each coloured by how
+ * clearly it came out, so the student can see WHICH sound to fix rather than just a number.
+ *
  * The free Azure tier scores one clip at a time, so a 429 ("another student is mid-word") is
  * an expected state, not an error: the clip is kept and retried once automatically.
  */
@@ -25,6 +29,7 @@ const { Button: FBtn, IconButton: FIB } = DS;
 type Phase =
   | 'idle'
   | 'recording'
+  /** Clip in hand but not scored — only reached on silence, a mis-tap, or a failed call. */
   | 'recorded'
   | 'submitting'
   | 'busy' // 429 — auto-retrying, then manual
@@ -95,17 +100,31 @@ export function PronounceGame({
       return;
     }
     setNoSpeech(false);
+    // Each clip gets its own single automatic 429 retry.
+    retriedRef.current = false;
     setPhase('recording');
     stopTimer.current = setTimeout(stopRecording, MAX_CLIP_MS);
   };
 
+  /**
+   * Stop and score in one gesture. The MAX_CLIP_MS timer lands here too, so a student who just
+   * keeps talking gets the same treatment. Nulling `recorder.current` first is what stops a
+   * manual tap racing that timer into a double submit.
+   */
   const stopRecording = async () => {
     if (stopTimer.current) clearTimeout(stopTimer.current);
     const rec = recorder.current;
     if (!rec) return;
     recorder.current = null;
-    setClip(await rec.stop());
-    setPhase('recorded');
+    const c = await rec.stop();
+    setClip(c);
+    if (c.durationMs < MIN_CLIP_MS) {
+      // A mis-tap, not an attempt — say so locally rather than paying Azure to hear nothing.
+      setNoSpeech(true);
+      setPhase('recorded');
+      return;
+    }
+    void submit(c.blob);
   };
 
   const submit = async (blob: Blob) => {
@@ -152,7 +171,13 @@ export function PronounceGame({
       return;
     }
     setResult(data);
-    setAnswers((a) => [...a, { wordId: w.id, correct: data.correct }]);
+    // Write at this word's slot rather than appending: re-recording after a score replaces the
+    // attempt instead of grading the same word twice.
+    setAnswers((a) => {
+      const nextAnswers = a.slice(0, idx);
+      nextAnswers[idx] = { wordId: w.id, correct: data.correct };
+      return nextAnswers;
+    });
     setPhase('scored');
   };
 
@@ -174,6 +199,14 @@ export function PronounceGame({
     setResult(null);
     setNoSpeech(false);
     started.current = Date.now();
+  };
+
+  /** Back to the mic for another go at the same word. A later score overwrites this one. */
+  const rerecord = () => {
+    setClip(null);
+    setResult(null);
+    setNoSpeech(false);
+    setPhase('idle');
   };
 
   const playClip = () => {
@@ -256,7 +289,7 @@ export function PronounceGame({
               color: result.correct ? 'var(--green-600, #2e7d32)' : 'var(--red-600, #c0392b)',
             }}
           >
-            {Math.round(result.accuracy)}
+            {Math.round(result.accuracy)}%
           </div>
           <div style={{ color: 'var(--text-muted)' }}>{t('fc_pron_accuracy')}</div>
           {result.recognized && (
@@ -264,9 +297,20 @@ export function PronounceGame({
               {t('fc_pron_heard', { word: result.recognized })}
             </div>
           )}
-          <FBtn variant="primary" onClick={next}>
-            {t('fc_pron_next')}
-          </FBtn>
+          <PhonemeBreakdown result={result} hint={t('fc_pron_ipa_hint')} />
+          <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {clip && (
+              <FBtn variant="ghost" onClick={playClip} iconLeft={<MIcon name="volume" size={16} />}>
+                {t('fc_pron_replay')}
+              </FBtn>
+            )}
+            <FBtn variant="soft" onClick={rerecord}>
+              {t('fc_pron_rerecord')}
+            </FBtn>
+            <FBtn variant="primary" onClick={next}>
+              {t('fc_pron_next')}
+            </FBtn>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -323,15 +367,7 @@ export function PronounceGame({
                   >
                     {t('fc_pron_replay')}
                   </FBtn>
-                  <FBtn
-                    variant="soft"
-                    disabled={phase === 'submitting'}
-                    onClick={() => {
-                      setClip(null);
-                      setNoSpeech(false);
-                      setPhase('idle');
-                    }}
-                  >
+                  <FBtn variant="soft" disabled={phase === 'submitting'} onClick={rerecord}>
                     {t('fc_pron_rerecord')}
                   </FBtn>
                   <FBtn
@@ -351,6 +387,38 @@ export function PronounceGame({
         </div>
       )}
     </div>
+  );
+}
+
+const TIER_COLOR: Record<ReturnType<typeof phonemeTier>, string> = {
+  good: 'var(--green-600, #2e7d32)',
+  close: 'var(--warning, #E0A02E)',
+  wrong: 'var(--red-600, #c0392b)',
+};
+
+/**
+ * The sound-by-sound verdict: the reference word's IPA, each symbol coloured by how clearly it
+ * came out. Insertion entries are words the student added on top of the reference — they have no
+ * reference phonemes, and the "we heard …" line above already reports them.
+ */
+function PhonemeBreakdown({ result, hint }: { result: PronounceAssessment; hint: string }) {
+  const phonemes = (result.words ?? [])
+    .filter((wd) => wd.errorType !== 'Insertion')
+    .flatMap((wd) => wd.phonemes);
+  if (phonemes.length === 0) return null;
+  return (
+    <>
+      <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 1 }}>
+        /
+        {phonemes.map((p, i) => (
+          <span key={i} style={{ color: TIER_COLOR[phonemeTier(p.accuracy)] }}>
+            {p.ipa}
+          </span>
+        ))}
+        /
+      </div>
+      <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>{hint}</div>
+    </>
   );
 }
 

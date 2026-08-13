@@ -439,6 +439,23 @@ export const FlashcardMode = z.enum([
 ]);
 export type FlashcardMode = z.infer<typeof FlashcardMode>;
 
+/** One sound of the IPA breakdown, scored on its own (PhonemeAlphabet: 'IPA'). */
+export type PronouncePhoneme = {
+  /** A single IPA symbol, e.g. 'ɪ'. */
+  ipa: string;
+  /** 0-100; colour tiers live in phonemeTier (logic/flashcards.ts). */
+  accuracy: number;
+};
+
+/** One word of the reference (or an extra one the student inserted), with its phonemes. */
+export type PronounceWord = {
+  word: string;
+  /** Azure's miscue tag. 'Insertion' entries are words the student added — no reference IPA. */
+  errorType: 'None' | 'Omission' | 'Insertion' | 'Mispronunciation';
+  accuracy: number;
+  phonemes: PronouncePhoneme[];
+};
+
 /**
  * What /speech-assess returns inside `{ data }` — the Worker's mapping of Azure's
  * pronunciation assessment (server/services/speech.ts). Both game clients type against this.
@@ -455,6 +472,11 @@ export type PronounceAssessment = {
   correct: boolean;
   /** True when Azure heard silence or noise — offer a re-record, don't grade. */
   noSpeech: boolean;
+  /**
+   * Per-word IPA breakdown, empty when noSpeech. Added after the flat scores, so a mobile
+   * build older than this field simply ignores it — read it as `words ?? []`.
+   */
+  words: PronounceWord[];
 };
 
 export const FlashcardResultInput = z.object({

@@ -22,6 +22,7 @@ import {
   normalizeModesCsv,
   parseModes,
   pickRound,
+  phonemeTier,
   pronouncePassed,
   scrambleLetters,
   stressEligible,
@@ -247,6 +248,17 @@ describe('pronouncePassed', () => {
     expect(pronouncePassed(100)).toBe(true);
     expect(pronouncePassed(69.9)).toBe(false);
     expect(pronouncePassed(0)).toBe(false);
+  });
+});
+
+describe('phonemeTier', () => {
+  it('splits the IPA breakdown at 80 and 60', () => {
+    expect(phonemeTier(100)).toBe('good');
+    expect(phonemeTier(80)).toBe('good');
+    expect(phonemeTier(79.9)).toBe('close');
+    expect(phonemeTier(60)).toBe('close');
+    expect(phonemeTier(59.9)).toBe('wrong');
+    expect(phonemeTier(0)).toBe('wrong');
   });
 });
 

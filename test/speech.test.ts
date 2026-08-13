@@ -10,6 +10,7 @@ describe('pronunciationAssessmentHeader', () => {
       ReferenceText: 'hello',
       GradingSystem: 'HundredMark',
       Granularity: 'Phoneme',
+      PhonemeAlphabet: 'IPA',
       Dimension: 'Comprehensive',
       EnableMiscue: 'True',
     });
@@ -34,6 +35,16 @@ describe('mapAzureAssessment', () => {
           FluencyScore: 90,
           CompletenessScore: 100,
           PronScore: 88,
+          Words: [
+            {
+              Word: 'hello',
+              PronunciationAssessment: { AccuracyScore: 85.5, ErrorType: 'None' },
+              Phonemes: [
+                { Phoneme: 'h', PronunciationAssessment: { AccuracyScore: 95 } },
+                { Phoneme: 'ə', PronunciationAssessment: { AccuracyScore: 40 } },
+              ],
+            },
+          ],
         },
       ],
     });
@@ -45,6 +56,17 @@ describe('mapAzureAssessment', () => {
       recognized: 'hello',
       correct: true,
       noSpeech: false,
+      words: [
+        {
+          word: 'hello',
+          errorType: 'None',
+          accuracy: 85.5,
+          phonemes: [
+            { ipa: 'h', accuracy: 95 },
+            { ipa: 'ə', accuracy: 40 },
+          ],
+        },
+      ],
     });
   });
 
@@ -56,6 +78,36 @@ describe('mapAzureAssessment', () => {
     expect(out.correct).toBe(false);
     expect(out.noSpeech).toBe(false);
     expect(out.accuracy).toBe(42);
+    expect(out.words).toEqual([]); // no Words in the payload — never undefined
+  });
+
+  it('keeps miscue words and defaults every missing score to 0', () => {
+    const out = mapAzureAssessment({
+      RecognitionStatus: 'Success',
+      NBest: [
+        {
+          Lexical: 'a whisker',
+          AccuracyScore: 60,
+          Words: [
+            { Word: 'a', PronunciationAssessment: { ErrorType: 'Insertion' } },
+            {
+              Word: 'whisker',
+              PronunciationAssessment: { AccuracyScore: 60, ErrorType: 'Mispronunciation' },
+              Phonemes: [{ Phoneme: 'w' }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(out.words).toEqual([
+      { word: 'a', errorType: 'Insertion', accuracy: 0, phonemes: [] },
+      {
+        word: 'whisker',
+        errorType: 'Mispronunciation',
+        accuracy: 60,
+        phonemes: [{ ipa: 'w', accuracy: 0 }],
+      },
+    ]);
   });
 
   it('treats silence statuses and missing NBest as noSpeech, never a throw', () => {
@@ -69,6 +121,7 @@ describe('mapAzureAssessment', () => {
       expect(out.noSpeech).toBe(true);
       expect(out.correct).toBe(false);
       expect(out.accuracy).toBe(0);
+      expect(out.words).toEqual([]);
     }
   });
 });

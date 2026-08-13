@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0205 — 2026-08-13
+Pronounce game: stopping the recorder now scores immediately, the result shows a percentage plus a sound-by-sound IPA breakdown (green/amber/red), and Play + Record again stay on the scored screen.
+
 ## v0.0204 — 2026-08-13
 Mobile: confirming the exit dialog now kills the app (removes it from recents and ends the process) via a local app-exit native module, instead of backgrounding it. Native change - runtimeVersion 2 -> 3; older APKs keep the backgrounding fallback.
 

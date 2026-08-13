@@ -9,6 +9,12 @@
 /** Longest clip either recorder will capture. One word never needs more. */
 export const MAX_CLIP_MS = 5000;
 
+/**
+ * Shortest clip worth scoring. Stopping the recorder now submits straight to Azure, so a
+ * mis-tap (tap the mic, tap stop) would otherwise bill a call to grade nothing.
+ */
+export const MIN_CLIP_MS = 300;
+
 /** Convert Float32 samples in [-1, 1] (Web Audio's native format) to Int16. */
 export function floatTo16(samples: Float32Array): Int16Array {
   const out = new Int16Array(samples.length);
