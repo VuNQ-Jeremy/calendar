@@ -12,9 +12,10 @@ import { Button, Heading } from '~/ui';
  * button row — but as a CENTERED card with a fade rather than a bottom sheet with a slide. A
  * leave-or-stay question is a dialog; a sheet is for editing something.
  *
- * Title only, no message line, and Exit is `primary` rather than `danger`: `exitApp()` is
- * `moveTaskToBack`, so nothing is discarded and there is nothing to warn about. `danger` is
- * reserved for deletes in this app.
+ * Title only, no message line, and Exit is `primary` rather than `danger`: exiting kills the app
+ * (`killApp()` in modules/app-exit — `finishAndRemoveTask` + process kill), but nothing durable
+ * is discarded — the offline outbox and query cache are persisted — so there is nothing to warn
+ * about. `danger` is reserved for deletes in this app.
  *
  * While this Modal is visible, Android hands the hardware back press to the Modal natively and it
  * arrives here as `onRequestClose` — the BackHandler subscription in (app)/_layout.tsx never fires.

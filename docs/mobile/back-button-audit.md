@@ -212,6 +212,14 @@ the role-dependent list actually works.
 
 ## Exit confirmation
 
+> **Update (2026-08-13).** Exit no longer backgrounds. Confirming the dialog now calls
+> `killApp()` (`mobile/modules/app-exit`, a local Expo module): `finishAndRemoveTask()` plus a
+> delayed `Process.killProcess`, so the app leaves recents and the process dies rather than
+> staying warm. `BackHandler.exitApp()` remains only as the fallback on binaries built before the
+> module existed (runtimeVersion ≤ 2), which keep the backgrounding described below. This was a
+> native change, so runtimeVersion bumped 2 → 3 — the paragraphs below record the behaviour as
+> audited before it.
+
 Back on a tab root raises **`ExitConfirmDialog`** (`mobile/components/ExitConfirmDialog.tsx`) — the
 design system's own dialog, not the platform's. A centered card: fade-in `Modal`, warm scrim
 (`rgba(60,40,25,0.45)`), `surfaceCard` at `radius.xl`, a `Heading` reading `m_exit_q` ("Exit Mochi?" /

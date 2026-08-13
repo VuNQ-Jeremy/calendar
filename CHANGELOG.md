@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0204 — 2026-08-13
+Mobile: confirming the exit dialog now kills the app (removes it from recents and ends the process) via a local app-exit native module, instead of backgrounding it. Native change - runtimeVersion 2 -> 3; older APKs keep the backgrounding fallback.
+
 ## v0.0203 — 2026-08-13
 Kiosk background is opaque again — it referenced a --bg-canvas token that does not exist, so the overlay rendered transparent.
 

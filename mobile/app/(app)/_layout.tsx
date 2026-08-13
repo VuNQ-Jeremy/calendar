@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
 import { ExitConfirmDialog } from '~/components/ExitConfirmDialog';
+import { killApp } from '~/modules/app-exit';
 import { TabBar } from '~/components/TabBar';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
@@ -58,10 +59,12 @@ const parentTabRoots = (portalOn: boolean) => (portalOn ? ['/children', '/profil
  * press just shows the one dialog. And while the Modal is visible, Android hands the back press to
  * the Modal natively (arriving as `onRequestClose` → cancel), so this subscription cannot re-fire.
  *
- * `exitApp()` is a misleading name: it calls `invokeDefaultBackPressHandler`, i.e. MainActivity's
- * `invokeDefaultOnBackPressed` → `moveTaskToBack`. It backgrounds the task exactly as back on
- * Dashboard already did; it is NOT `finish()`, so the app stays warm in recents. That is also why
- * the dialog says "Exit" and not "Close without saving" — nothing is being thrown away.
+ * Exit KILLS the app — `killApp()` (modules/app-exit) is `finishAndRemoveTask` plus a process
+ * kill, so the task leaves recents and nothing stays warm. It used to be `BackHandler.exitApp()`,
+ * which despite the name only `moveTaskToBack`s (backgrounds); the user asked for Exit to mean
+ * exit, and on binaries too old to carry the native module killApp() still falls back to that
+ * backgrounding. Killing still discards nothing durable — the offline outbox and query cache are
+ * persisted — which is why the button stays `primary` rather than `danger`.
  *
  * Registering later than the NavigationContainer is what gives this priority — RN calls
  * hardwareBackPress subscribers in reverse order of registration.
@@ -101,10 +104,11 @@ function useTabRootsEndTheBackStack(
     askingExit: asking,
     cancelExit: () => setAsking(false),
     confirmExit: () => {
-      // Hide first, then background. The task is resumed later exactly as it was left, and it
-      // should come back showing the tab — not a dialog still asking whether to leave it.
+      // Hide first, then kill. On the old-binary fallback (which only backgrounds) the task is
+      // resumed later exactly as it was left, and it should come back showing the tab — not a
+      // dialog still asking whether to leave it.
       setAsking(false);
-      BackHandler.exitApp();
+      killApp();
     },
   };
 }
