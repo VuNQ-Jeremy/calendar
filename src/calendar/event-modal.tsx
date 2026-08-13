@@ -451,7 +451,10 @@ function ChecklistItemsEditor({
   }, [fetcher.data, fetcher.state]);
 
   const rows = items.filter((i) => i.phase === phase).sort((a, b) => a.sortOrder - b.sortOrder);
-  const typeOpts = activityTypes.map((a) => ({ value: a.id, label: a.name }));
+  const typeOpts = [
+    { value: '', label: t('ck_activity_none') },
+    ...activityTypes.map((a) => ({ value: a.id, label: a.name })),
+  ];
 
   const addItem = () => {
     const fd = new FormData();
@@ -459,7 +462,8 @@ function ChecklistItemsEditor({
     fd.set('eventId', eventId);
     fd.set('date', date);
     fd.set('phase', phase);
-    if (phase === 'checkin' && activityTypes[0]) fd.set('activityTypeId', activityTypes[0].id);
+    // No activity type: seeding the first one made every added row look like a copy of the
+    // one above it, and a teacher scanning the list can't tell "not chosen yet" from "chosen".
     fd.set('label', '');
     submit(fd);
   };
@@ -490,30 +494,26 @@ function ChecklistItemsEditor({
   return (
     <div className="m-stack" style={{ gap: 8 }}>
       {rows.map((row) => (
-        <div key={row.id} className="m-row" style={{ gap: 8, alignItems: 'flex-end' }}>
+        <div key={row.id} className="ck-item-row">
           {phase === 'checkin' ? (
-            <div className="mochi-field" style={{ marginBottom: 0, width: 200 }}>
-              <label className="mochi-field__label">{t('ck_activity_type')}</label>
+            <div className="ck-item-row__type">
               <MSelect
+                label={t('ck_activity_type')}
                 value={row.activityTypeId ?? ''}
                 onChange={(v) => setType(row.id, v)}
                 options={typeOpts}
               />
             </div>
           ) : null}
-          <div className="mochi-field" style={{ marginBottom: 0, flex: 1 }}>
-            <label className="mochi-field__label">
-              {phase === 'checkin' ? t('ck_label_ph') : t('ck_free_text')}
-            </label>
-            <input
-              className="mochi-input"
-              defaultValue={row.label}
-              placeholder={t('ck_label_ph')}
-              onBlur={(e) => {
-                if (e.target.value !== row.label) setLabel(row.id, e.target.value);
-              }}
-            />
-          </div>
+          {/* No label above the detail box — it read the placeholder back at you. */}
+          <input
+            className="mochi-input ck-item-row__label"
+            defaultValue={row.label}
+            placeholder={t('ck_label_ph')}
+            onBlur={(e) => {
+              if (e.target.value !== row.label) setLabel(row.id, e.target.value);
+            }}
+          />
           <CIBtn label={t('delete')} size="sm" onClick={() => removeItem(row.id)}>
             <MIcon name="trash" size={16} />
           </CIBtn>

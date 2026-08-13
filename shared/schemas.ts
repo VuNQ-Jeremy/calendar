@@ -1206,8 +1206,15 @@ export const ChecklistItemInput = z.object({
   eventId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   phase: z.enum(['checkin', 'checkout']),
-  /** The UI requires a type for check-in cells; checkout lines may be free text. */
-  activityTypeId: z.string().min(1).nullish(),
+  /**
+   * The kiosk cell's managed type. Checkout lines are free text and a freshly added check-in row
+   * starts unset, so absent, NULL and '' all mean "no type" — the picker's own "not chosen yet"
+   * option posts the empty string, and that has to clear the column rather than 400.
+   */
+  activityTypeId: z
+    .string()
+    .nullish()
+    .transform((v) => (v == null || v === '' ? null : v)),
   label: z.string().trim().max(300).default(''),
   sortOrder: z.coerce.number().int().nullish(),
 });

@@ -22,9 +22,7 @@ test.describe('CRUD: kiosk', () => {
     await signInStaff(page);
     await page.goto('/config');
     await page.locator('.cfg-row', { hasText: 'Check-in activities' }).click();
-    const typesDlg = page.locator(
-      '.m-dialog:has(.m-dialog__title:text-is("Check-in activities"))',
-    );
+    const typesDlg = page.locator('.m-dialog:has(.m-dialog__title:text-is("Check-in activities"))');
     await typesDlg.getByRole('button', { name: 'Add activity' }).click();
     await k.dlgOf('Add activity').locator('input.mochi-input').fill(typeName);
     let post = k.posted('/config');
@@ -51,6 +49,12 @@ test.describe('CRUD: kiosk', () => {
     const thisSection = k.dlg.locator('.ck-section--this');
     post = k.posted('/checkin');
     await thisSection.getByRole('button', { name: 'Add item' }).click();
+    await post;
+    // The row starts with no activity picked, so choose the throwaway type explicitly —
+    // that is what gives the kiosk cell its icon and colour.
+    post = k.posted('/checkin');
+    await thisSection.locator('button.m-select__trigger').click();
+    await page.getByRole('option', { name: typeName, exact: true }).click();
     await post;
     post = k.posted('/checkin');
     await thisSection.locator('input.mochi-input').fill('Học phát âm 5 phút');

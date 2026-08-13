@@ -1154,6 +1154,25 @@ body {
   min-height: 0;
   overflow-y: auto;
 }
+/* One authoring row of the check-in/check-out checklist: activity picker (check-in only),
+   the detail box, and the delete button, all sitting on one baseline. Select renders its own
+   .mochi-field, whose bottom margin used to lift the picker a whole --space-4 off that
+   baseline, so it is zeroed here rather than fought with inline styles. */
+.ck-item-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.ck-item-row .mochi-field {
+  margin-bottom: 0;
+}
+.ck-item-row__type {
+  flex: 0 0 200px;
+}
+.ck-item-row__label {
+  flex: 1;
+  min-width: 0;
+}
 /* word editor (vocabulary): the fields on the left, the 3x3 picture picker on the right. The
    picker column is a fixed width rather than a fraction — its tiles are a 3-up grid, and a fluid
    column would resize all nine of them as the dialog breathes. Below the two-column width it

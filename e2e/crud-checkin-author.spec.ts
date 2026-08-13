@@ -50,10 +50,15 @@ test.describe('CRUD: check-in/out authoring', () => {
     post = k.posted('/checkin');
     await thisSection.getByRole('button', { name: 'Add item' }).click();
     await post;
-    const thisRow = thisSection
-      .locator('.m-row')
-      .filter({ has: page.locator('.m-select__trigger') });
+    const thisRow = thisSection.locator('.ck-item-row');
     await expect(thisRow).toHaveCount(1);
+    // A new row picks no activity — it must not inherit the first type, or the row above.
+    await expect(thisRow.locator('.m-select__value')).toHaveText('Not chosen yet');
+    post = k.posted('/checkin');
+    await thisRow.locator('button.m-select__trigger').click();
+    await page.getByRole('option', { name: typeName, exact: true }).click();
+    await post;
+    await expect(thisRow.locator('.m-select__value')).toHaveText(typeName);
     post = k.posted('/checkin');
     await thisRow.locator('input.mochi-input').fill('10 từ vựng chủ đề Animals');
     await thisRow.locator('input.mochi-input').blur();
@@ -64,16 +69,14 @@ test.describe('CRUD: check-in/out authoring', () => {
     post = k.posted('/checkin');
     await nextSection.getByRole('button', { name: 'Add item' }).click();
     await post;
-    await expect(
-      nextSection.locator('.m-row').filter({ has: page.locator('.m-select__trigger') }),
-    ).toHaveCount(1);
+    await expect(nextSection.locator('.ck-item-row')).toHaveCount(1);
 
     // --- Check-out list (free text, no type picker) ---
     const outSection = k.dlg.locator('.ck-section--checkout');
     post = k.posted('/checkin');
     await outSection.getByRole('button', { name: 'Add item' }).click();
     await post;
-    const outRow = outSection.locator('.m-row').last();
+    const outRow = outSection.locator('.ck-item-row').last();
     post = k.posted('/checkin');
     await outRow.locator('input.mochi-input').fill('Đếm từ 1 đến 20');
     await outRow.locator('input.mochi-input').blur();
