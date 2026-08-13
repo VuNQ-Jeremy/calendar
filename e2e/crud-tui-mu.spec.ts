@@ -19,7 +19,9 @@ test.describe('CRUD: túi mù board', () => {
 
     // Board is on by default (showClassBoard defaults true) — the nav item and the page exist.
     await page.goto('/mystery-bag');
-    await expect(page.getByRole('heading', { name: 'Mystery bags (túi mù)' })).toBeVisible();
+    // Exact: the config card's own title is still 'Mystery bags (túi mù)', which a substring
+    // match on the page header would happily accept.
+    await expect(page.getByRole('heading', { name: 'Mystery bags', exact: true })).toBeVisible();
     await expect(page.locator('.lrow', { hasText: 'Leo Park' })).toBeVisible();
 
     // Turn the class board off in config.

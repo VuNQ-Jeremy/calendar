@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0195 — 2026-08-13
+English page title for the mystery bag board is now just 'Mystery bags' — dropped the '(túi mù)' gloss.
+
 ## v0.0194 — 2026-08-13
 Check-in authoring rows: a new item no longer inherits an activity type, the picker and the detail box share one baseline, and the detail box drops the label that just repeated its placeholder.
 

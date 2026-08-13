@@ -1569,7 +1569,7 @@ const en_strings = {
   ck_kiosk_empty: 'No checklist for today yet',
   ck_bag_earned: '+1 mystery bag!',
   tm_nav: 'Mystery bags',
-  tm_title: 'Mystery bags (túi mù)',
+  tm_title: 'Mystery bags',
   tm_sub: 'Check-in rewards, misses and monthly gifts',
   tm_bags: 'Bags',
   tm_misses: 'Misses',
