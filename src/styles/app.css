@@ -2993,13 +2993,13 @@ html .sb::-webkit-scrollbar-thumb:active {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  background: var(--bg-canvas);
+  background: var(--bg-page);
   overflow-y: auto;
 }
 .kiosk {
   min-height: 100%;
   padding: var(--space-5);
-  background: var(--bg-canvas);
+  background: var(--bg-page);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3173,7 +3173,7 @@ html .sb::-webkit-scrollbar-thumb:active {
   font-size: clamp(24px, 4vw, 40px);
   font-weight: 800;
   color: var(--brand);
-  background: var(--bg-canvas);
+  background: var(--bg-page);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
