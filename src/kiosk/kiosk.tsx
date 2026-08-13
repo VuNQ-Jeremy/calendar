@@ -172,7 +172,11 @@ export function KioskModal({
             <h1 className="kiosk-title">
               {phaseTitle} · {cls?.name ?? ''}
             </h1>
-            {items.length === 0 ? (
+            {/* Not `items.length === 0` alone: the payload loads client-side now, and a blank
+                first paint would tell the class there is no checklist a beat before there is. */}
+            {!data ? (
+              <p className="kiosk-empty">{t('ck_kiosk_loading')}</p>
+            ) : items.length === 0 ? (
               <p className="kiosk-empty">{t('ck_kiosk_empty')}</p>
             ) : (
               <>
