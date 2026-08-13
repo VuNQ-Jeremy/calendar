@@ -12,7 +12,9 @@ import { MaterialSearchDropdown } from '../material-search.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
 import { cacheSet, markStale } from '../lib/cache.js';
 import { noteLocalMutation } from '../lib/route-cache.js';
+import { KioskModal } from '../kiosk/kiosk.jsx';
 import { nextOccurrenceDate } from '../../shared/logic/checkin.js';
+import type { CheckPhase } from '../../shared/logic/checkin.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
@@ -583,6 +585,7 @@ interface CheckinTabProps {
  */
 function CheckinTab({ eventId, date, classId, recurrence, classes, students }: CheckinTabProps) {
   const { t } = useLang();
+  const [kiosk, setKiosk] = React.useState<CheckPhase | null>(null);
   const ckKey = `ck:${eventId}:${date}`;
   const { data } = useCachedLoad<CheckinPayload>(
     ckKey,
@@ -612,17 +615,23 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
 
   return (
     <div className="m-stack" style={{ gap: 20 }}>
+      {kiosk && (
+        <KioskModal
+          eventId={eventId}
+          date={date}
+          classId={classId}
+          classes={classes}
+          students={students}
+          initialPhase={kiosk}
+          onClose={() => setKiosk(null)}
+        />
+      )}
       <div className="ck-section ck-section--this">
         <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
           <h4 style={{ margin: 0 }}>{t('ck_items_this')}</h4>
-          <a
-            className="m-textlink"
-            href={`/kiosk/${encodeURIComponent(eventId)}/${encodeURIComponent(date)}/checkin`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <CBtn variant="secondary" size="sm" onClick={() => setKiosk('checkin')}>
             {t('ck_open_kiosk_in')}
-          </a>
+          </CBtn>
         </div>
         {data ? (
           <ChecklistItemsEditor
@@ -641,14 +650,9 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
       <div className="ck-section ck-section--checkout">
         <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
           <h4 style={{ margin: 0 }}>{t('ck_checkout_title')}</h4>
-          <a
-            className="m-textlink"
-            href={`/kiosk/${encodeURIComponent(eventId)}/${encodeURIComponent(date)}/checkout`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <CBtn variant="secondary" size="sm" onClick={() => setKiosk('checkout')}>
             {t('ck_open_kiosk_out')}
-          </a>
+          </CBtn>
         </div>
         {data ? (
           <ChecklistItemsEditor

@@ -19,7 +19,7 @@ omission is built.
 | `/assessments` | `(app)/assessments.tsx` | Phase 5. Tables → cards; same charts |
 | `/rankings/:month?` | **Not built** | Added 2026-08, web-only for now — see below |
 | `/mystery-bag/:classId?/:month?` | **Not built** | Added 2026-08, web-only by design — see below |
-| `/kiosk/:eventId/:date/:phase` | **Not built** | Added 2026-08, deliberate omission — see below |
+| Kiosk (in-app layer, no route) | **Not built** | Added 2026-08, deliberate omission — see below |
 | `/tuition/:month?` | **Not built** | Web-only by design — tuition is staff-only, see below |
 | `/flashcards` | `(app)/vocabulary/` | Phase 3. The plant widget sits at the top for students, as on the web |
 | `/garden/:classId?` | `(app)/vocabulary/garden/[classId]/` | Added 2026-08. Student view only — see below |
@@ -80,10 +80,15 @@ answered from cached bundles rather than a query, and that is a design question 
 a student has downloaded — not a port. Recording a round already reschedules correctly from the
 phone today, because the write path is shared.
 
-**Check-in/check-out kiosk and the túi mù class board** (web `/kiosk/:eventId/:date/:phase` and
+**Check-in/check-out kiosk and the túi mù class board** (the kiosk plus web
 `/mystery-bag/:classId?/:month?`, added 2026-08).
 
-The kiosk is a deliberate omission on principle, not a "not yet": it is a *classroom-screen*
+The kiosk has no route of its own: it is a fullscreen layer opened from the dashboard's today
+rows or the event dialog's check-in tab. It began as a standalone document route outside `_app`
+and moved inside for the LIVE_HUB socket — a list the teacher edits from their laptop mid-class
+now reaches the classroom screen by push instead of a 60-second poll.
+
+It is a deliberate omission on principle, not a "not yet": it is a *classroom-screen*
 surface — a shared tablet or laptop a teacher leaves propped up at the front of the room, opened
 from their own logged-in session, with kids tapping their own name on someone else's device. A
 phone kiosk makes no sense — there is no "someone else's phone" in this flow, and the feature's

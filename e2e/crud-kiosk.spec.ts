@@ -3,18 +3,15 @@ import { crudGuard, signInStaff, ui } from './crud-helpers';
 
 /**
  * The classroom kiosk itself: name grid → personal board → tap → confetti + bag, and the
- * auto-present side effect on attendance. Opens in a new tab (the modal's kiosk link is
- * target="_blank"), so most assertions run against that popup page while the original tab
- * still owns the event modal for setup and cleanup.
+ * auto-present side effect on attendance. It is a fullscreen layer over the app rather than a
+ * route, so it opens and closes in the same tab and the event dialog is still mounted behind
+ * it for the attendance assertion and the cleanup.
  */
 
 test.describe('CRUD: kiosk', () => {
   crudGuard();
 
-  test('tap through a single-item check-in: present, bag, idempotent re-tap', async ({
-    page,
-    context,
-  }) => {
+  test('tap through a single-item check-in: present, bag, idempotent re-tap', async ({ page }) => {
     const k = ui(page);
     const typeName = `E2E kiosk activity ${Date.now()}`;
 
@@ -61,42 +58,37 @@ test.describe('CRUD: kiosk', () => {
     await thisSection.locator('input.mochi-input').blur();
     await post;
 
-    // Open the check-in kiosk — it's a target="_blank" link, so a new tab appears.
-    const [kiosk] = await Promise.all([
-      context.waitForEvent('page'),
-      thisSection.getByRole('link', { name: 'Open check-in kiosk' }).click(),
-    ]);
-    await kiosk.waitForLoadState();
+    // Open the kiosk — same tab, layered over the dialog.
+    const kiosk = page.locator('.kiosk-overlay');
+    await thisSection.getByRole('button', { name: 'Open check-in kiosk' }).click();
     await expect(kiosk.locator('.kiosk-card', { hasText: 'Leo Park' })).toBeVisible();
 
     await kiosk.locator('.kiosk-card', { hasText: 'Leo Park' }).click();
     await expect(kiosk.locator('.kiosk-cell')).toHaveCount(1);
+    // The cell names the activity type AND the teacher's detail, not one or the other.
+    await expect(kiosk.locator('.kiosk-cell-type')).toHaveText(typeName);
+    await expect(kiosk.locator('.kiosk-cell-label')).toHaveText('Học phát âm 5 phút');
 
     // First tap: completes the only check-in item -> earns a bag (perfect_day default
     // needs check-out too, but check-in-only sessions still exercise per_phase logic
     // server-side; here we only assert the check landed and attendance followed).
-    const cellPost = kiosk.waitForResponse(
-      (r) => r.url().endsWith('/checkin.data') && r.request().method() === 'POST' && r.ok(),
-    );
+    let cellPost = k.posted('/checkin');
     await kiosk.locator('.kiosk-cell').click();
     await cellPost;
     await expect(kiosk.locator('.kiosk-cell-check')).toBeVisible();
 
     // Re-tap (uncheck) then tap again (re-check) — idempotency: no error, no duplicate state.
-    const uncheckPost = kiosk.waitForResponse(
-      (r) => r.url().endsWith('/checkin.data') && r.request().method() === 'POST' && r.ok(),
-    );
+    cellPost = k.posted('/checkin');
     await kiosk.locator('.kiosk-cell').click();
-    await uncheckPost;
+    await cellPost;
     await expect(kiosk.locator('.kiosk-cell-check')).toHaveCount(0);
-    const recheckPost = kiosk.waitForResponse(
-      (r) => r.url().endsWith('/checkin.data') && r.request().method() === 'POST' && r.ok(),
-    );
+    cellPost = k.posted('/checkin');
     await kiosk.locator('.kiosk-cell').click();
-    await recheckPost;
+    await cellPost;
     await expect(kiosk.locator('.kiosk-cell-check')).toBeVisible();
 
-    await kiosk.close();
+    await kiosk.getByRole('button', { name: 'Close kiosk' }).click();
+    await expect(kiosk).toHaveCount(0);
 
     // Auto-present: the Attendance tab should now show Leo Park as Present, though the
     // teacher never touched that tab. The active chip is the one styled white-on-color
@@ -120,6 +112,47 @@ test.describe('CRUD: kiosk', () => {
     post = k.posted('/config');
     await row.getByRole('button', { name: 'Delete' }).click();
     await k.dlgOf('Delete this activity?').getByRole('button', { name: 'Delete' }).click();
+    await post;
+  });
+
+  test("dashboard's today rows open the event dialog, and the kiosk from there", async ({
+    page,
+  }) => {
+    const k = ui(page);
+    const title = `E2E dash row ${Date.now()}`;
+
+    await signInStaff(page);
+    await page.goto('/calendar');
+    await page.getByRole('button', { name: 'New event' }).click();
+    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await k.pickSel('Class', 'Biology 9A');
+    let post = k.posted('/calendar');
+    await k.submit().click();
+    await post;
+
+    // The row itself opens the same dialog the calendar uses — check-in tab and all.
+    await page.goto('/dashboard');
+    const dashRow = page.locator('.lrow', { hasText: title });
+    await dashRow.click();
+    await expect(k.dlg.locator('input[placeholder="e.g. Biology lab"]')).toHaveValue(title);
+    await expect(k.dlg.getByRole('tab', { name: 'Check-in/out' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // Its kiosk button opens the kiosk instead of the dialog (the click must not fall through).
+    await dashRow.getByRole('button', { name: 'Open check-in kiosk' }).click();
+    const kiosk = page.locator('.kiosk-overlay');
+    await expect(kiosk.locator('.kiosk-card', { hasText: 'Leo Park' })).toBeVisible();
+    await expect(k.dlg).toHaveCount(0);
+    await kiosk.getByRole('button', { name: 'Close kiosk' }).click();
+    await expect(kiosk).toHaveCount(0);
+
+    // Cleanup via the calendar (the dashboard dialog deletes just as well; this keeps the
+    // teardown identical to the other specs').
+    await page.goto('/calendar');
+    await page.getByRole('tab', { name: 'Agenda' }).click();
+    await page.locator('.aev', { hasText: title }).click();
+    post = k.posted('/calendar');
+    await k.dlg.locator('.m-dialog__foot .mochi-btn.is-danger').click();
     await post;
   });
 });

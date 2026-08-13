@@ -28,13 +28,6 @@ export default [
   route('session-preview/:eventId/:date/print', 'routes/session-preview.$eventId.$date.print.tsx'),
   // Class-garden share card — another image for the class group chat, so another document.
   route('garden/:classId/share', 'routes/garden.$classId.share.tsx'),
-  // Classroom kiosk. Fullscreen shared-device screen, opened by a logged-in teacher — no
-  // app shell, no nav chrome, and (unlike routes inside `_app`) no LIVE_HUB socket, so it
-  // polls for freshness instead of receiving pushes. Kids never authenticate.
-  route(
-    'kiosk/:eventId/:date/:phase',
-    'routes/kiosk.$eventId.$date.$phase.tsx',
-  ),
   route('enrich-vocab', 'routes/enrich-vocab.tsx'),
   route('generate-vocab', 'routes/generate-vocab.tsx'),
   // Pictures for vocabulary words. Search/generate/commit are staff-only and, like the two above,

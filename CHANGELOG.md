@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0198 — 2026-08-13
+Dashboard schedule rows open the event dialog, and the classroom kiosk is now an in-app fullscreen layer (live-updating, phase switch, cells show activity type and detail) instead of a separate /kiosk page.
+
 ## v0.0197 — 2026-08-13
 Rescheduling an event now carries its check-in/check-out checklists to the new date, and editing a recurring event from one occurrence no longer re-anchors the whole series.
 

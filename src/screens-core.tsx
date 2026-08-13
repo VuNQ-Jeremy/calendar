@@ -1,14 +1,20 @@
 import React from 'react';
-import { useLoaderData } from 'react-router';
+import { useFetcher, useLoaderData } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PageHeader, Empty } from './ui.jsx';
 import { colorOf, iso, addDays, parseISO, TODAY, ICON_TINT } from './lib/core.js';
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
+import { EventModal } from './calendar/event-modal.jsx';
+import { KioskModal } from './kiosk/kiosk.jsx';
+import { eventFormData } from './calendar/utils.js';
 import { useLang, locale } from './lib/i18n.jsx';
 import type { IconName } from './icons.jsx';
-import type { ClassLite } from '../server/services/classes.js';
+import type { ClassRow } from '../server/services/classes.js';
 import type { EventRow } from '../server/services/events.js';
+import type { StudentRow } from '../server/services/people.js';
+import type { MaterialRow } from '../server/services/materials.js';
+import type { EventDraft } from './calendar/utils.js';
 
 const { Card: SC, Button: SBtn, Tag: STag, Badge: SBadge } = DS;
 
@@ -30,9 +36,13 @@ interface DashLoaderData {
    */
   upcomingEvents: EventRow[];
   attemptsSummary: Record<string, { total: number; needsGrading: number; graded: number }>;
-  classes: ClassLite[];
+  classes: ClassRow[];
   studentCount: number;
   materialCount: number;
+  /** Everything past this point exists only to feed the event dialog both cards open. */
+  students: StudentRow[];
+  materials: MaterialRow[];
+  eventMaterials: { eventId: string; materialId: string }[];
 }
 
 /**
@@ -83,14 +93,16 @@ function DashUpcomingItem({
   ev,
   dayLabel,
   className,
+  onOpen,
 }: {
   ev: EventRow;
   dayLabel: string;
   className?: string;
+  onOpen: () => void;
 }) {
   const c = colorOf(ev.color);
   return (
-    <div className="m-row" style={{ gap: 12 }}>
+    <div className="m-row" style={{ gap: 12, cursor: 'pointer' }} onClick={onOpen}>
       <span style={{ width: 10, height: 10, borderRadius: 9, background: c.base, flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-sm)' }}>
@@ -107,9 +119,25 @@ function DashUpcomingItem({
 
 // ---- Dashboard / Today ----
 function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string) => void }) {
-  const { todayEvents, upcomingEvents, attemptsSummary, classes, studentCount, materialCount } =
-    useLoaderData() as DashLoaderData;
+  const {
+    todayEvents,
+    upcomingEvents,
+    attemptsSummary,
+    classes,
+    studentCount,
+    materialCount,
+    students,
+    materials,
+    eventMaterials,
+  } = useLoaderData() as DashLoaderData;
   const { t, lang } = useLang();
+  const fetcher = useFetcher();
+  const [editor, setEditor] = React.useState<EventDraft | null>(null);
+  const [kiosk, setKiosk] = React.useState<{
+    eventId: string;
+    date: string;
+    classId: string;
+  } | null>(null);
   const todays = expandEvents(todayEvents, TODAY, TODAY).sort(
     (a, b) => toMin(a.start ?? '00:00') - toMin(b.start ?? '00:00'),
   );
@@ -144,6 +172,30 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
     month: 'long',
     day: 'numeric',
   });
+
+  // The same dialog the calendar opens, and the same writes — it posts to /calendar whichever
+  // screen it is mounted on, and that route's clientAction invalidates this card's cache for us.
+  const openEvent = (ev: EventRow) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
+  const saveEvent = (f: EventDraft) => {
+    fetcher.submit(eventFormData(f, t('ev_untitled'), editor?.date), {
+      action: '/calendar',
+      method: 'post',
+    });
+    setEditor(null);
+  };
+  const deleteEvent = (id: string) => {
+    const fd = new FormData();
+    fd.set('intent', 'delete');
+    fd.set('id', id);
+    fetcher.submit(fd, { action: '/calendar', method: 'post' });
+    setEditor(null);
+  };
+  /** Both cards' rows, deduped — the dialog only reads this to date-label shared materials. */
+  const allEvents = React.useMemo(() => {
+    const byId = new Map<string, EventRow>();
+    for (const e of [...todayEvents, ...(upcomingEvents ?? [])]) byId.set(e.id, e);
+    return [...byId.values()];
+  }, [todayEvents, upcomingEvents]);
 
   return (
     <div className="content">
@@ -189,7 +241,12 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
               {todays.map((e, i) => {
                 const c = colorOf(e.color);
                 return (
-                  <div key={i} className="lrow" style={{ padding: 12 }}>
+                  <div
+                    key={i}
+                    className="lrow"
+                    style={{ padding: 12, cursor: 'pointer' }}
+                    onClick={() => openEvent(e)}
+                  >
                     <div className="lrow__bar" style={{ background: c.base }} />
                     <div
                       className="m-mono"
@@ -213,24 +270,18 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
                     </div>
                     {e.classId && <STag color={e.color}>{className(e.classId) || t('class')}</STag>}
                     {e.classId && (
-                      <a
-                        title={t('ck_open_kiosk_in')}
-                        href={`/kiosk/${encodeURIComponent(e.id)}/${encodeURIComponent(e.date)}/checkin`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          display: 'grid',
-                          placeItems: 'center',
-                          width: 32,
-                          height: 32,
-                          borderRadius: 'var(--radius-md)',
-                          background: colorOf('orange').soft,
-                          color: colorOf('orange').ink,
-                          flexShrink: 0,
+                      <SBtn
+                        variant="secondary"
+                        size="sm"
+                        iconLeft={<MIcon name="gift" size={16} />}
+                        onClick={(ev: React.MouseEvent) => {
+                          // The row itself opens the event dialog; the kiosk is its own surface.
+                          ev.stopPropagation();
+                          setKiosk({ eventId: e.id, date: e.date, classId: e.classId! });
                         }}
                       >
-                        <MIcon name="gift" size={16} />
-                      </a>
+                        {t('ck_open_kiosk_in')}
+                      </SBtn>
                     )}
                   </div>
                 );
@@ -258,6 +309,7 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
                   ev={e}
                   dayLabel={dayLabel(e.date)}
                   className={e.classId ? className(e.classId) || t('class') : undefined}
+                  onOpen={() => openEvent(e)}
                 />
               ))}
               {upcoming.length > UPCOMING_LIMIT && (
@@ -280,6 +332,33 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
           )}
         </SC>
       </div>
+
+      {kiosk && (
+        <KioskModal
+          eventId={kiosk.eventId}
+          date={kiosk.date}
+          classId={kiosk.classId}
+          classes={classes ?? []}
+          students={students ?? []}
+          initialPhase="checkin"
+          onClose={() => setKiosk(null)}
+        />
+      )}
+
+      {/* `?? []` on the three dialog-only lists: route-cache can hydrate a payload written by a
+          build that predates them, same reason the "Coming up" expansion guards upcomingEvents. */}
+      <EventModal
+        open={!!editor}
+        onClose={() => setEditor(null)}
+        draft={editor}
+        onSave={saveEvent}
+        onDelete={deleteEvent}
+        classes={classes ?? []}
+        students={students ?? []}
+        materials={materials ?? []}
+        eventMaterials={eventMaterials ?? []}
+        events={allEvents}
+      />
     </div>
   );
 }

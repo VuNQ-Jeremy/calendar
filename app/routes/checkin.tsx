@@ -6,6 +6,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as checkinSvc from '../../server/services/checkin';
 import { CheckInput, ChecklistItemInput, parsePatch } from '../../shared/schemas';
+import { monthOfVn } from '../../shared/logic/garden';
 import { withLiveAction } from '../../server/live';
 
 /**
@@ -14,18 +15,21 @@ import { withLiveAction } from '../../server/live';
  * /api/ (bearer-only; a browser fetcher there 401s silently — the garden-month trap).
  */
 
-async function rosterOf(db: ReturnType<typeof createDb>, eventId: string): Promise<string[]> {
+async function rosterOf(
+  db: ReturnType<typeof createDb>,
+  eventId: string,
+): Promise<{ classId: string | null; studentIds: string[] }> {
   const ev = await db
     .select({ classId: events.classId })
     .from(events)
     .where(eq(events.id, eventId));
-  const classId = ev[0]?.classId;
-  if (!classId) return [];
+  const classId = ev[0]?.classId ?? null;
+  if (!classId) return { classId: null, studentIds: [] };
   const rows = await db
     .select({ studentId: classStudents.studentId })
     .from(classStudents)
     .where(eq(classStudents.classId, classId));
-  return rows.map((r) => r.studentId);
+  return { classId, studentIds: rows.map((r) => r.studentId) };
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -40,8 +44,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     checkinSvc.getOccurrence(db, eventId, date),
     rosterOf(db, eventId),
   ]);
-  const flags = await checkinSvc.occurrenceFlags(db, eventId, date, roster);
-  return { ...occ, flags };
+  const flags = await checkinSvc.occurrenceFlags(db, eventId, date, roster.studentIds);
+  // Only the kiosk asks for bag counts — its name grid badges each kid's month so far. The
+  // authoring tab shares this route and opens far more often, and has no use for a whole-class
+  // month aggregate, so it does not pay for one.
+  if (url.searchParams.get('kiosk') !== '1' || !roster.classId) return { ...occ, flags };
+  const tallies = await checkinSvc.classMonthTallies(db, roster.classId, monthOfVn(date));
+  return {
+    ...occ,
+    flags,
+    bagsByStudent: Object.fromEntries(
+      roster.studentIds.map((sid) => [sid, tallies.get(sid)?.bags ?? 0]),
+    ),
+  };
 }
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {

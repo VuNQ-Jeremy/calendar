@@ -1,79 +1,113 @@
 import React from 'react';
-import { useFetcher, useLoaderData, useRevalidator } from 'react-router';
+import { createPortal } from 'react-dom';
+import { useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import type { IconName } from '../icons.jsx';
 import { PALETTE, colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
-import type { CheckPhase, CheckinSettings } from '../../shared/logic/checkin.js';
+import { useCachedLoad } from '../lib/use-cached-load.js';
+import { markStale } from '../lib/cache.js';
+import type { CheckPhase } from '../../shared/logic/checkin.js';
 import type { ChecklistItemRow, CheckRow } from '../../server/services/checkin.js';
 import type { ActivityTypeRow } from '../../server/services/checkin-activity-types.js';
+import type { ClassRow } from '../../server/services/classes.js';
+import type { StudentRow } from '../../server/services/people.js';
 
-const { Button } = DS;
+const { Button, IconButton } = DS;
 
-interface RosterStudent {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface KioskLoaderData {
-  eventId: string;
-  date: string;
-  phase: CheckPhase;
-  className: string;
-  roster: RosterStudent[];
+/** `/checkin?kiosk=1` — the authoring payload plus the grid's per-kid month bag counts. */
+interface KioskPayload {
   items: ChecklistItemRow[];
   checks: CheckRow[];
   activityTypes: ActivityTypeRow[];
-  settings: CheckinSettings;
-  /** This month's túi mù count per student — the grid's small reward badge. */
-  bagsByStudent: Record<string, number>;
+  bagsByStudent?: Record<string, number>;
+}
+
+interface KioskModalProps {
+  eventId: string;
+  date: string;
+  classId: string;
+  classes: ClassRow[];
+  students: StudentRow[];
+  initialPhase: CheckPhase;
+  onClose: () => void;
 }
 
 /**
- * The classroom kiosk. No app shell, no route cache, no live socket — it polls instead
- * (60s + on tab focus) because LIVE_HUB only reaches routes inside `_app`. Two views:
- * a name grid, and one kid's fullscreen personal board. Every write goes through the
- * teacher's own session via /checkin; the kids never authenticate.
+ * The classroom kiosk: a fullscreen layer over the app, handed to the class on a shared
+ * tablet. It was a standalone route once; living inside `_app` instead means it reaches the
+ * LIVE_HUB socket, so a list the teacher edits from their laptop mid-class arrives by push
+ * and the old 60-second poll is gone.
+ *
+ * Mount it only while open — the data load is a hook, and a closed kiosk should not be
+ * fetching. Kids never authenticate: every write rides the teacher's own staff session
+ * through /checkin.
  */
-export function KioskScreen() {
-  const data = useLoaderData() as KioskLoaderData;
+export function KioskModal({
+  eventId,
+  date,
+  classId,
+  classes,
+  students,
+  initialPhase,
+  onClose,
+}: KioskModalProps) {
   const { t } = useLang();
-  const revalidator = useRevalidator();
+  const [phase, setPhase] = React.useState<CheckPhase>(initialPhase);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [localChecks, setLocalChecks] = React.useState<Set<string>>(() => new Set());
   const [celebrate, setCelebrate] = React.useState(false);
   const fetcher = useFetcher<{ ok: boolean; checks: CheckRow[]; awarded: string[] }>();
 
-  React.useEffect(() => {
-    const id = setInterval(() => revalidator.revalidate(), 60_000);
-    const onVis = () => {
-      if (document.visibilityState === 'visible') revalidator.revalidate();
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', onVis);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const kioskKey = `ck:kiosk:${eventId}:${date}`;
+  const { data } = useCachedLoad<KioskPayload>(
+    kioskKey,
+    `/checkin?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}&kiosk=1`,
+  );
 
-  // Re-seed the tapped-cell state whenever a kid is (re)selected or fresh data lands.
-  React.useEffect(() => {
-    if (!selected) return;
-    const itemIds = new Set(data.items.map((i) => i.id));
-    setLocalChecks(
-      new Set(
-        data.checks.filter((c) => c.studentId === selected && itemIds.has(c.itemId)).map((c) => c.itemId),
-      ),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, data]);
+  const cls = classes.find((c) => c.id === classId);
+  const roster = React.useMemo(
+    () =>
+      (cls?.studentIds ?? [])
+        .map((sid) => students.find((s) => s.id === sid))
+        .filter((s): s is StudentRow => !!s),
+    [cls, students],
+  );
+  const items = React.useMemo(
+    () => (data?.items ?? []).filter((i) => i.phase === phase),
+    [data, phase],
+  );
+  const checks = data?.checks ?? [];
+  const bags = data?.bagsByStudent ?? {};
 
+  const checksOf = React.useCallback(
+    (studentId: string, forItems: ChecklistItemRow[], from: CheckRow[]) => {
+      const ids = new Set(forItems.map((i) => i.id));
+      return new Set(
+        from.filter((c) => c.studentId === studentId && ids.has(c.itemId)).map((c) => c.itemId),
+      );
+    },
+    [],
+  );
+
+  // Seed the tapped cells when a kid opens their board (or flips phase), and only then. A
+  // background refresh must not re-seed mid-session: one triggered by an earlier tap can land
+  // while a later tap is still in flight, and its older snapshot would blink the cell the kid
+  // just pressed back off. Writes reconcile from their own response instead, below.
+  React.useEffect(() => {
+    if (!selected || !data) return;
+    setLocalChecks(checksOf(selected, items, data.checks));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, phase]);
+
+  // The write's own response is authoritative for this kid's cells; a bag award additionally
+  // marks the payload stale so the grid's badge catches up without waiting on the socket.
   React.useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data?.ok) return;
+    if (selected) setLocalChecks(checksOf(selected, items, fetcher.data.checks));
     if (fetcher.data.awarded.length === 0) return;
+    markStale(kioskKey);
     setCelebrate(true);
     const timer = setTimeout(() => {
       setCelebrate(false);
@@ -95,112 +129,139 @@ export function KioskScreen() {
     fd.set('itemId', itemId);
     fd.set('studentId', selected);
     fd.set('checked', String(!wasChecked));
+    // Deliberately no noteLocalMutation: the echo of this write is what refreshes the teacher's
+    // authoring tab (its own 'ck:' key) when the kiosk was opened from it, in this same tab.
     fetcher.submit(fd, { action: '/checkin', method: 'post' });
   };
 
-  const doneCount = (sid: string) =>
-    data.checks.filter((c) => c.studentId === sid && data.items.some((i) => i.id === c.itemId))
-      .length;
+  const student = roster.find((s) => s.id === selected) ?? null;
+  const phaseTitle = phase === 'checkin' ? t('ck_kiosk_checkin_title') : t('ck_kiosk_checkout_title');
 
-  const student = data.roster.find((s) => s.id === selected) ?? null;
-  const phaseTitle =
-    data.phase === 'checkin' ? t('ck_kiosk_checkin_title') : t('ck_kiosk_checkout_title');
+  const chrome = (
+    <div className="kiosk-chrome">
+      <div className="kiosk-phase">
+        {(['checkin', 'checkout'] as const).map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={`kiosk-phase__chip${p === phase ? ' is-on' : ''}`}
+            onClick={() => {
+              setPhase(p);
+              setSelected(null);
+            }}
+          >
+            {p === 'checkin' ? t('ck_kiosk_checkin_title') : t('ck_kiosk_checkout_title')}
+          </button>
+        ))}
+      </div>
+      <IconButton label={t('ck_kiosk_close')} onClick={onClose}>
+        <MIcon name="x" size={20} />
+      </IconButton>
+    </div>
+  );
 
-  if (!student) {
-    return (
+  // Portalled to <body>, the same escape hatch MSelect's menu uses: opened from the event
+  // dialog, this would otherwise sit inside `.m-dialog__body`, whose overflow clips it the
+  // moment the dialog's pop animation makes `.m-dialog` a containing block for fixed children.
+  return createPortal(
+    <div className="kiosk-overlay">
       <div className="kiosk">
-        <h1 className="kiosk-title">
-          {phaseTitle} · {data.className}
-        </h1>
-        {data.items.length === 0 ? (
-          <p className="kiosk-empty">{t('ck_kiosk_empty')}</p>
+        {chrome}
+        {!student ? (
+          <>
+            <h1 className="kiosk-title">
+              {phaseTitle} · {cls?.name ?? ''}
+            </h1>
+            {items.length === 0 ? (
+              <p className="kiosk-empty">{t('ck_kiosk_empty')}</p>
+            ) : (
+              <>
+                <p className="kiosk-sub">{t('ck_kiosk_pick_name')}</p>
+                <div className="kiosk-grid">
+                  {roster.map((s) => {
+                    const c = colorOf(s.color);
+                    const done = checksOf(s.id, items, checks).size >= items.length;
+                    const bagCount = bags[s.id] ?? 0;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="kiosk-card"
+                        style={{ background: c.soft }}
+                        onClick={() => setSelected(s.id)}
+                      >
+                        <span className="kiosk-avatar" style={{ background: c.base }}>
+                          {s.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="kiosk-name">{s.name}</span>
+                        {done && (
+                          <span className="kiosk-donebadge" aria-hidden="true">
+                            <MIcon name="check" size={16} />
+                          </span>
+                        )}
+                        {bagCount > 0 && <span className="kiosk-bagbadge">🎁 {bagCount}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </>
         ) : (
           <>
-            <p className="kiosk-sub">{t('ck_kiosk_pick_name')}</p>
-            <div className="kiosk-grid">
-              {data.roster.map((s) => {
-                const c = colorOf(s.color);
-                const done = doneCount(s.id) >= data.items.length;
-                const bags = data.bagsByStudent[s.id] ?? 0;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className="kiosk-card"
-                    style={{ background: c.soft }}
-                    onClick={() => setSelected(s.id)}
-                  >
-                    <span className="kiosk-avatar" style={{ background: c.base }}>
-                      {s.name.charAt(0).toUpperCase()}
-                    </span>
-                    <span className="kiosk-name">{s.name}</span>
-                    {done && (
-                      <span className="kiosk-donebadge" aria-hidden="true">
-                        <MIcon name="check" size={16} />
-                      </span>
-                    )}
-                    {bags > 0 && <span className="kiosk-bagbadge">🎁 {bags}</span>}
-                  </button>
-                );
-              })}
+            <h1 className="kiosk-title">{t('ck_kiosk_hello', { name: student.name })}</h1>
+            <div className="kiosk-board">
+              <div className="kiosk-cells">
+                {items.map((item) => {
+                  const type = data?.activityTypes.find((a) => a.id === item.activityTypeId);
+                  const c = colorOf(type?.color ?? 'orange');
+                  const checked = localChecks.has(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="kiosk-cell"
+                      style={{ background: checked ? c.base : c.soft, color: checked ? '#fff' : c.ink }}
+                      onClick={() => toggle(item.id)}
+                    >
+                      <MIcon name={(type?.icon as IconName) ?? 'star'} size={40} />
+                      {/* Both halves, not one or the other: the type says what kind of homework
+                          this was, the label says which — "Vocabulary" over "10 words: Animals". */}
+                      {type && <span className="kiosk-cell-type">{type.name}</span>}
+                      {item.label && <span className="kiosk-cell-label">{item.label}</span>}
+                      {checked && (
+                        <span className="kiosk-cell-check" aria-hidden="true">
+                          <MIcon name="check" size={22} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="kiosk-actions">
+                <Button variant="secondary" size="lg" onClick={() => setSelected(null)}>
+                  {t('ck_kiosk_not_you')}
+                </Button>
+                <Button variant="primary" size="lg" onClick={() => setSelected(null)}>
+                  {t('ck_kiosk_done')}
+                </Button>
+              </div>
             </div>
           </>
         )}
-      </div>
-    );
-  }
 
-  return (
-    <div className="kiosk">
-      <h1 className="kiosk-title">{t('ck_kiosk_hello', { name: student.name })}</h1>
-      <div className="kiosk-board">
-        <div className="kiosk-cells">
-          {data.items.map((item) => {
-            const type = data.activityTypes.find((a) => a.id === item.activityTypeId);
-            const c = colorOf(type?.color ?? 'orange');
-            const checked = localChecks.has(item.id);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className="kiosk-cell"
-                style={{
-                  background: checked ? c.base : c.soft,
-                  color: checked ? '#fff' : c.ink,
-                }}
-                onClick={() => toggle(item.id)}
-              >
-                <MIcon name={(type?.icon as IconName) ?? 'star'} size={40} />
-                <span className="kiosk-cell-label">{item.label || type?.name}</span>
-                {checked && (
-                  <span className="kiosk-cell-check" aria-hidden="true">
-                    <MIcon name="check" size={22} />
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="kiosk-actions">
-          <Button variant="secondary" size="lg" onClick={() => setSelected(null)}>
-            {t('ck_kiosk_not_you')}
-          </Button>
-          <Button variant="primary" size="lg" onClick={() => setSelected(null)}>
-            {t('ck_kiosk_done')}
-          </Button>
-        </div>
-      </div>
-
-      {celebrate && (
-        <div className="kiosk-celebrate">
-          <div className="garden-confetti" aria-hidden="true">
-            {Array.from({ length: 10 }, (_, i) => (
-              <span key={i} style={{ background: PALETTE[i % PALETTE.length].hex }} />
-            ))}
+        {celebrate && (
+          <div className="kiosk-celebrate">
+            <div className="garden-confetti" aria-hidden="true">
+              {Array.from({ length: 10 }, (_, i) => (
+                <span key={i} style={{ background: PALETTE[i % PALETTE.length].hex }} />
+              ))}
+            </div>
+            <div className="kiosk-bag-msg">{t('ck_bag_earned')}</div>
           </div>
-          <div className="kiosk-bag-msg">{t('ck_bag_earned')}</div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
