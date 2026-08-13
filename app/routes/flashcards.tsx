@@ -11,6 +11,7 @@ import { requireLearner, requireStaff, type SessionUser } from '../../server/ser
 import * as flashcardsSvc from '../../server/services/flashcards';
 import * as gardenSvc from '../../server/services/garden';
 import * as classesSvc from '../../server/services/classes';
+import * as checkinSvc from '../../server/services/checkin';
 import {
   FlashcardTopicInput,
   FlashcardTopicWithWordsInput,
@@ -117,14 +118,33 @@ async function loadReview(db: Db, su: SessionUser) {
   }
 }
 
+/**
+ * The student's own túi mù chip, next to the garden widget. Same degrade-to-null posture as
+ * loadGarden/loadReview: this page is the topics list first, and a chip is not worth a 500.
+ * Null for staff (only students earn bags) and while the admin's `showStudentView` toggle is off.
+ */
+async function loadTuiMu(db: Db, su: SessionUser) {
+  if (su.kind !== 'student') return null;
+  try {
+    const settings = await checkinSvc.getCheckinSettings(db);
+    if (!settings.showStudentView) return null;
+    const month = ictDateOf(new Date().toISOString()).slice(0, 7);
+    return await checkinSvc.studentMonthTally(db, su.user.id, month);
+  } catch (err) {
+    console.error('túi mù tally unavailable on /vocabulary', err);
+    return null;
+  }
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireLearner(request, env);
   const db = createDb(env);
   const topics = await flashcardsSvc.listTopics(db);
-  const [{ garden, gardenStaff }, review] = await Promise.all([
+  const [{ garden, gardenStaff }, review, tuiMu] = await Promise.all([
     loadGarden(db, su),
     loadReview(db, su),
+    loadTuiMu(db, su),
   ]);
   // Gates the AI generator in the UI — same flag the topic page passes down.
   return {
@@ -134,6 +154,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     garden,
     gardenStaff,
     review,
+    tuiMu,
   };
 }
 

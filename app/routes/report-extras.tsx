@@ -4,6 +4,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as attendanceSvc from '../../server/services/attendance';
 import * as gardenSvc from '../../server/services/garden';
+import * as checkinSvc from '../../server/services/checkin';
 import { TuitionMonth } from '../../shared/schemas';
 
 /**
@@ -26,9 +27,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const parsed = TuitionMonth.safeParse(url.searchParams.get('month'));
   if (!parsed.success) return Response.json({ error: 'bad_month' }, { status: 400 });
 
-  const [attendance, homework] = await Promise.all([
+  const checkinSettings = await checkinSvc.getCheckinSettings(db);
+  const [attendance, homework, tuiMu] = await Promise.all([
     attendanceSvc.studentMonthAttendance(db, studentId, parsed.data),
     gardenSvc.studentAssignmentsInMonth(db, studentId, parsed.data),
+    checkinSettings.showParentReport
+      ? checkinSvc.studentMonthTally(db, studentId, parsed.data)
+      : Promise.resolve(null),
   ]);
-  return { data: { attendance, homework } };
+  return { data: { attendance, homework, tuiMu } };
 }

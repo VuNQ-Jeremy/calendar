@@ -30,6 +30,7 @@ import type { AssessmentTypeRow } from '../server/services/assessment-types.js';
 import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 import type { ClassAttendanceSummary } from '../server/services/attendance.js';
 import type { StudentMonthAssignment } from '../server/services/garden.js';
+import type { TuiMuMonthTally } from '../shared/logic/checkin.js';
 
 const { Card, Button, IconButton, Tabs, Badge, Avatar, ProgressBar } = DS;
 
@@ -316,7 +317,11 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
 function ReportExtrasCards({ studentId, month }: { studentId: string; month: string }) {
   const { t } = useLang();
   const fetcher = useFetcher<{
-    data?: { attendance: ClassAttendanceSummary[]; homework: StudentMonthAssignment[] };
+    data?: {
+      attendance: ClassAttendanceSummary[];
+      homework: StudentMonthAssignment[];
+      tuiMu: TuiMuMonthTally | null;
+    };
     error?: string;
   }>();
 
@@ -389,6 +394,15 @@ function ReportExtrasCards({ studentId, month }: { studentId: string; month: str
           </p>
         )}
       </Card>
+
+      {d.tuiMu && (
+        <Card style={{ padding: 14 }}>
+          <h2 style={{ margin: '0 0 10px', fontSize: 'var(--text-base)' }}>{t('rep_tm_title')}</h2>
+          <p style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+            {t('rep_tm_line', { bags: d.tuiMu.bags, misses: d.tuiMu.misses })}
+          </p>
+        </Card>
+      )}
     </>
   );
 }

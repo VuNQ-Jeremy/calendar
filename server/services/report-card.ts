@@ -6,6 +6,7 @@ import * as classesSvc from './classes';
 import * as gardenSvc from './garden';
 import * as attendanceSvc from './attendance';
 import * as subjectsSvc from './subjects';
+import * as checkinSvc from './checkin';
 import { NEGATIVE_TYPES, scoreStats, scoreStatsByClass } from '../../shared/logic/assess';
 import { ictDateOf } from '../../shared/logic/tests';
 
@@ -24,6 +25,7 @@ import { ictDateOf } from '../../shared/logic/tests';
  */
 export async function buildReportCard(db: Db, studentId: string, month: string) {
   const vnToday = ictDateOf(new Date().toISOString());
+  const checkinSettings = await checkinSvc.getCheckinSettings(db);
   const [
     students,
     classes,
@@ -36,6 +38,7 @@ export async function buildReportCard(db: Db, studentId: string, month: string) 
     homework,
     subjects,
     staffList,
+    tuiMu,
   ] = await Promise.all([
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
@@ -51,6 +54,10 @@ export async function buildReportCard(db: Db, studentId: string, month: string) 
     gardenSvc.studentAssignmentsInMonth(db, studentId, month).catch(() => []),
     subjectsSvc.list(db),
     peopleSvc.listStaff(db),
+    // Same admin toggle as report-extras.tsx; null when off keeps the slip unchanged.
+    checkinSettings.showParentReport
+      ? checkinSvc.studentMonthTally(db, studentId, month).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   const student = students.find((s) => s.id === studentId);
@@ -122,5 +129,7 @@ export async function buildReportCard(db: Db, studentId: string, month: string) 
             streak: month === vnToday.slice(0, 7) ? (garden.plant?.streak ?? 0) : 0,
           }
         : null,
+    // Túi mù month tally, only while the admin has switched on parent-facing check-in reporting.
+    tuiMu,
   };
 }

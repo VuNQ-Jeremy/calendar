@@ -27,6 +27,7 @@ import type { StudentRow } from '../server/services/people.js';
 import type { ClassLite } from '../server/services/classes.js';
 import type { GradeLevelRow } from '../server/services/grade-levels.js';
 import type { ClassLevelRow } from '../server/services/class-levels.js';
+import type { TuiMuMonthTally } from '../shared/logic/checkin.js';
 
 const { Card, Avatar, Tabs } = DS;
 
@@ -46,6 +47,28 @@ interface RankingsLoaderData {
   weights: RankingWeights;
   gradeLevels: GradeLevelRow[];
   classLevels: ClassLevelRow[];
+  /**
+   * classId -> studentId -> that class's check-in tally for the month, or null when the admin
+   * toggle (`checkin-settings.showRankings`) is off — in which case rankings are byte-identical
+   * to the feature not existing. Each class's tally is the exact, correctly-scoped number
+   * `classMonthTallies` computes; a student in several classes gets those tallies SUMMED for the
+   * 'all'/cohort boards (sessions/fullCheckins/misses are additive across disjoint class rosters)
+   * except `bags`, which is a whole-student total already and would double-count if summed — see
+   * `aggregateCheckin` below.
+   */
+  checkinByClass: Record<string, Record<string, TuiMuMonthTally>> | null;
+}
+
+/** Fold several classes' tallies for one student into one, per the note above. */
+function aggregateCheckin(tallies: TuiMuMonthTally[]): TuiMuMonthTally | null {
+  if (!tallies.length) return null;
+  return {
+    bags: Math.max(...tallies.map((t) => t.bags)),
+    misses: tallies.reduce((n, t) => n + t.misses, 0),
+    fullCheckins: tallies.reduce((n, t) => n + t.fullCheckins, 0),
+    streak: Math.max(...tallies.map((t) => t.streak)),
+    sessions: tallies.reduce((n, t) => n + t.sessions, 0),
+  };
 }
 
 /** A labelled score chip. `null` shows an em dash rather than a misleading zero. */
@@ -104,6 +127,7 @@ export function RankingsScreen() {
     weights,
     gradeLevels,
     classLevels,
+    checkinByClass,
   } = useLoaderData() as RankingsLoaderData;
   const { t, lang } = useLang();
   const navigate = useNavigate();
@@ -176,12 +200,28 @@ export function RankingsScreen() {
     const remarksBy = new Map<string, Record<string, number>>();
     for (const r of remarks) remarksBy.set(r.studentId, r.ratings);
 
+    // Each class's tally is exact (classMonthTallies scopes it); a multi-class student's
+    // several classes are summed by aggregateCheckin — see the loader-data doc comment.
+    const checkinBy = new Map<string, TuiMuMonthTally>();
+    if (checkinByClass) {
+      for (const cls of classes) {
+        if (!inScope(cls.id)) continue;
+        const byStudent = checkinByClass[cls.id];
+        if (!byStudent) continue;
+        for (const [studentId, tally] of Object.entries(byStudent)) {
+          const existing = checkinBy.get(studentId);
+          checkinBy.set(studentId, existing ? aggregateCheckin([existing, tally])! : tally);
+        }
+      }
+    }
+
     const rows: RankRowInput[] = roster.map((s) => ({
       studentId: s.id,
       attendanceStatuses: attendanceBy.get(s.id) ?? [],
       behaviorTypes: behaviorBy.get(s.id) ?? [],
       scores: scoresBy.get(s.id) ?? [],
       remarkRatings: remarksBy.get(s.id) ?? null,
+      checkin: checkinBy.get(s.id) ?? null,
     }));
 
     const result = computeMonthRankings(rows, weights);
@@ -190,7 +230,7 @@ export function RankingsScreen() {
       unranked: result.filter((s) => s.rank == null),
       byId: new Map(students.map((s) => [s.id, s])),
     };
-  }, [attendance, behavior, scores, remarks, students, weights, scope, cohorts]);
+  }, [attendance, behavior, scores, remarks, students, weights, scope, cohorts, classes, checkinByClass]);
 
   /**
    * One board per cohort. Each class's score is the mean of its students' totals computed under
@@ -236,6 +276,7 @@ export function RankingsScreen() {
           behaviorTypes: behaviorBy.get(cls.id)?.get(s.id) ?? [],
           scores: scoresBy.get(cls.id)?.get(s.id) ?? [],
           remarkRatings: remarksBy.get(s.id) ?? null,
+          checkin: checkinByClass?.[cls.id]?.[s.id] ?? null,
         }));
         return {
           classId: cls.id,
@@ -251,7 +292,18 @@ export function RankingsScreen() {
         rows: computeClassRankings(inputs),
       };
     });
-  }, [attendance, behavior, scores, remarks, students, weights, cohorts, cohortKeys, cohortLabel]);
+  }, [
+    attendance,
+    behavior,
+    scores,
+    remarks,
+    students,
+    weights,
+    cohorts,
+    cohortKeys,
+    cohortLabel,
+    checkinByClass,
+  ]);
 
   /**
    * A rolling window ending at the current month. The loader only ever fetches one month, so
@@ -276,6 +328,7 @@ export function RankingsScreen() {
     if (s.attendance != null) parts.push(t('rank_breakdown_attendance', { v: s.attendance }));
     if (s.behavior != null) parts.push(t('rank_breakdown_behavior', { v: s.behavior }));
     if (s.remark != null) parts.push(t('rank_breakdown_remark', { v: s.remark }));
+    if (s.checkin != null) parts.push(t('rank_breakdown_checkin', { v: s.checkin }));
     if (s.testCount > 0) parts.push(t('rank_tests_n', { n: s.testCount }));
     return parts.join(' · ');
   };

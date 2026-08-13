@@ -71,6 +71,8 @@ type ReportLoaderData = {
     /** 0 unless the reported month is still running. */
     streak: number;
   } | null;
+  /** Túi mù (check-in) month tally, or null while the admin toggle is off. */
+  tuiMu: { bags: number; misses: number } | null;
 };
 
 const SLIP_CSS = `
@@ -288,6 +290,7 @@ export function ReportSlipView() {
     attendance,
     homework,
     garden,
+    tuiMu,
     teacher,
   } = useLoaderData() as ReportLoaderData;
   const { t, lang } = useLang();
@@ -473,6 +476,11 @@ export function ReportSlipView() {
                       </span>
                     )}
                   </>
+                )}
+                {tuiMu && (tuiMu.bags > 0 || tuiMu.misses > 0) && (
+                  <span className="rslip__stat rslip__stat--garden">
+                    🎁 {t('rep_tm_line', { bags: tuiMu.bags, misses: tuiMu.misses })}
+                  </span>
                 )}
               </div>
 

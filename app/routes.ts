@@ -94,6 +94,7 @@ export default [
   route('api/garden/month/:id', 'routes/api.garden.month.$id.tsx'),
   route('api/garden/snapshots', 'routes/api.garden.snapshots.tsx'),
   route('api/feedback/:id?', 'routes/api.feedback.tsx'),
+  route('api/checkin/summary', 'routes/api.checkin.summary.tsx'),
   route('api/profile', 'routes/api.profile.tsx'),
   route('api/settings/theme', 'routes/api.settings.theme.tsx'),
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
@@ -153,6 +154,8 @@ export default [
     // Class id (and the album's month) in the PATH for the same cache reason as tuition below.
     route('garden/:classId?', 'routes/garden.tsx'),
     route('garden/:classId/album/:month', 'routes/garden.$classId.album.$month.tsx'),
+    // Túi mù class board. Class id + month in the PATH, same cache reasoning as tuition/garden.
+    route('tui-mu/:classId?/:month?', 'routes/tui-mu.tsx'),
     // The month sits in the PATH, not a query string: cacheKeyForPath only sees pathnames, so a
     // `?month=` would give every month the same cache entry.
     route('tuition/:month?', 'routes/tuition.tsx'),

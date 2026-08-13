@@ -25,6 +25,9 @@ export interface NavItem {
   parentOk?: boolean;
   /** The mirror of staffOnly: hidden from everyone EXCEPT parents. */
   parentOnly?: boolean;
+  /** Opt-in for the túi mù board — hidden until the admin `checkin-settings.showClassBoard`
+   *  toggle is on. The route re-enforces server-side; this flag only hides the link. */
+  tuiMuOk?: boolean;
 }
 
 export interface NavSection {
@@ -83,6 +86,14 @@ export const NAV: NavSection[] = [
         staffOnly: true,
       },
       { id: 'rankings', path: '/rankings', tk: 'nav_rankings', icon: 'grad', staffOnly: true },
+      {
+        id: 'tui-mu',
+        path: '/tui-mu',
+        tk: 'tm_nav',
+        icon: 'gift',
+        staffOnly: true,
+        tuiMuOk: true,
+      },
     ],
   },
   {
@@ -150,7 +161,7 @@ export const NAV: NavSection[] = [
 export function visibleItems(
   sec: NavSection,
   user: { kind: string; role: string },
-  opts?: { parentPortal?: boolean },
+  opts?: { parentPortal?: boolean; tuiMuBoard?: boolean },
 ): NavItem[] {
   const isParent = user.kind === 'parent';
   return sec.items.filter(
@@ -161,7 +172,8 @@ export function visibleItems(
       // Unflagged rows are staff+student by default; a parent must be named explicitly, and then
       // only while the portal is open.
       (!isParent || (n.parentOk && opts?.parentPortal === true)) &&
-      (!n.adminOnly || user.role === 'Admin'),
+      (!n.adminOnly || user.role === 'Admin') &&
+      (!n.tuiMuOk || opts?.tuiMuBoard === true),
   );
 }
 

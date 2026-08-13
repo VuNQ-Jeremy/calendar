@@ -21,6 +21,7 @@ import type {
 } from '../garden/garden-widget.jsx';
 import type { FlashcardTopicRow } from '../../server/services/flashcards.js';
 import type { VocabAssignmentRow } from '../../server/services/garden.js';
+import type { TuiMuMonthTally } from '../../shared/logic/checkin.js';
 
 const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput, Checkbox: FCheck, Badge, Tag } = DS;
 
@@ -37,6 +38,8 @@ type LoaderData = {
   gardenStaff: StaffGardenData | null;
   /** Student only, null while the review columns are missing — see the route's loadReview. */
   review: ReviewData | null;
+  /** Student only, null while the `showStudentView` toggle is off — see the route's loadTuiMu. */
+  tuiMu: TuiMuMonthTally | null;
 };
 
 /** Today's review backlog, grouped by topic. `total` is the sum, and what the sidebar badge shows. */
@@ -110,7 +113,8 @@ interface TopicDraft {
 }
 
 export function FlashcardTopicsScreen() {
-  const { topics, kind, canUseAi, garden, gardenStaff, review } = useLoaderData() as LoaderData;
+  const { topics, kind, canUseAi, garden, gardenStaff, review, tuiMu } =
+    useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useLang();
@@ -224,6 +228,21 @@ export function FlashcardTopicsScreen() {
         }
       />
       {!isStaff && <GardenWidget data={garden} />}
+      {!isStaff && tuiMu && (tuiMu.bags > 0 || tuiMu.misses > 0) && (
+        <div
+          className="m-row"
+          style={{
+            gap: 8,
+            alignItems: 'center',
+            margin: '4px 0 16px',
+            fontSize: 'var(--text-sm)',
+            fontWeight: 700,
+            color: colorOf('orange').ink,
+          }}
+        >
+          🎁 {tuiMu.bags} {t('tm_this_month')}
+        </div>
+      )}
       {!isStaff && review && review.total > 0 && <ReviewCard review={review} />}
       {topics.length ? (
         <div

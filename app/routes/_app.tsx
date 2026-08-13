@@ -41,6 +41,7 @@ import { ictDateOf } from '../../shared/logic/tests';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser } from '../../server/services/auth';
 import { getParentPortal } from '../../server/services/parent-portal';
+import { getCheckinSettings } from '../../server/services/checkin';
 
 const { Avatar: ShAv, Badge: ShBadge } = DS;
 
@@ -109,15 +110,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       dueReviewCount,
       uiPrefs,
       parentPortal,
+      // Nav visibility only, not enforced for non-staff — the route itself re-checks.
+      showTuiMuBoard: false,
       user: { ...user, kind },
     };
   }
-  const [unusedInviteCount, unresolvedFeedbackCount, uiPrefs, summary] = await Promise.all([
-    invitesSvc.countUnused(db),
-    feedbackSvc.countUnresolved(db),
-    uiPrefsSvc.getUiPrefs(db),
-    testsSvc.attemptsSummary(db),
-  ]);
+  const [unusedInviteCount, unresolvedFeedbackCount, uiPrefs, summary, checkinSettings] =
+    await Promise.all([
+      invitesSvc.countUnused(db),
+      feedbackSvc.countUnresolved(db),
+      uiPrefsSvc.getUiPrefs(db),
+      testsSvc.attemptsSummary(db),
+      getCheckinSettings(db),
+    ]);
   const needsGradingCount = Object.values(summary).reduce((n, s) => n + s.needsGrading, 0);
   return {
     unusedInviteCount,
@@ -128,6 +133,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     uiPrefs,
     // Staff nav has no parent rows to gate; the field exists so the payload shape is uniform.
     parentPortal,
+    showTuiMuBoard: checkinSettings.showClassBoard,
     user: { ...user, kind },
   };
 }
@@ -177,6 +183,7 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
     needsGradingCount,
     dueReviewCount,
     parentPortal,
+    showTuiMuBoard,
   } = useLoaderData<typeof loader>();
   const { t } = useLang();
   const counts: Record<string, number> = {
@@ -212,7 +219,7 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
         Mochi
       </Link>
       {NAV.map((sec) => {
-        const items = visibleItems(sec, user, { parentPortal });
+        const items = visibleItems(sec, user, { parentPortal, tuiMuBoard: showTuiMuBoard });
         if (items.length === 0) return null;
         const open = !collapsed.has(sec.id);
         // Collapsed rows still render — the ≤720px icon rail shows every item and

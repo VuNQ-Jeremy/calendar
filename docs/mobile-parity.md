@@ -18,6 +18,8 @@ omission is built.
 | `/materials` | `(app)/materials/` | Phase 5. `.docx` via the platform viewer, not `docx-preview` |
 | `/assessments` | `(app)/assessments.tsx` | Phase 5. Tables → cards; same charts |
 | `/rankings/:month?` | **Not built** | Added 2026-08, web-only for now — see below |
+| `/tui-mu/:classId?/:month?` | **Not built** | Added 2026-08, web-only by design — see below |
+| `/kiosk/:eventId/:date/:phase` | **Not built** | Added 2026-08, deliberate omission — see below |
 | `/tuition/:month?` | **Not built** | Web-only by design — tuition is staff-only, see below |
 | `/flashcards` | `(app)/vocabulary/` | Phase 3. The plant widget sits at the top for students, as on the web |
 | `/garden/:classId?` | `(app)/vocabulary/garden/[classId]/` | Added 2026-08. Student view only — see below |
@@ -77,6 +79,27 @@ The reason it waits: the phone's vocabulary flow is offline-first, so "what is d
 answered from cached bundles rather than a query, and that is a design question about which topics
 a student has downloaded — not a port. Recording a round already reschedules correctly from the
 phone today, because the write path is shared.
+
+**Check-in/check-out kiosk and the túi mù class board** (web `/kiosk/:eventId/:date/:phase` and
+`/tui-mu/:classId?/:month?`, added 2026-08).
+
+The kiosk is a deliberate omission on principle, not a "not yet": it is a *classroom-screen*
+surface — a shared tablet or laptop a teacher leaves propped up at the front of the room, opened
+from their own logged-in session, with kids tapping their own name on someone else's device. A
+phone kiosk makes no sense — there is no "someone else's phone" in this flow, and the feature's
+whole point is one shared screen the whole class sees.
+
+The class board (`/tui-mu`) is web-only for the same reason `/rankings` and `/tuition` are: a
+desk-side admin/teacher view of a roster and a month, not something built for one-hand phone use
+in v1. Nothing here is blocked — `classMonthTallies`/`studentMonthTally`
+(`server/services/checkin.ts`) are pure services with no route logic in them.
+
+What DID ship for the phone: `GET /api/checkin/summary` — the student's own bag/miss/tier tally,
+the mobile twin of the `/vocabulary` bag chip (`app/routes/flashcards.tsx`'s `loadTuiMu`). The RN
+chip itself (next to `GardenWidget` in `mobile/app/(app)/vocabulary/index.tsx`) was not wired in
+this pass — the endpoint exists and returns `{ disabled }` while `checkin-settings.showStudentView`
+is off, exactly like the web loader, so the port is a fetch call and a `Text` node whenever the
+mobile team picks it up.
 
 **Student rankings** (web `/rankings/:month?`, added 2026-08).
 Not an omission on principle — just not built yet. Everything that would be hard to port already

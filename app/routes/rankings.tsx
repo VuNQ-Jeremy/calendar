@@ -8,8 +8,10 @@ import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
 import * as levelsSvc from '../../server/services/grade-levels';
 import * as classLevelsSvc from '../../server/services/class-levels';
+import * as checkinSvc from '../../server/services/checkin';
 import { TuitionMonth } from '../../shared/schemas';
 import { ictDateOf } from '../../shared/logic/tests';
+import type { TuiMuMonthTally } from '../../shared/logic/checkin';
 import { K, rankingsMonthKey, swrLoad } from '../../src/lib/route-cache.js';
 
 /**
@@ -56,6 +58,20 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     levelsSvc.list(db),
     classLevelsSvc.list(db),
   ]);
+
+  // Only queried when the admin toggle is on — an off toggle costs nothing extra and rankings
+  // stay byte-identical to the feature not existing (checkinByClass: null).
+  const checkinSettings = await checkinSvc.getCheckinSettings(db);
+  let checkinByClass: Record<string, Record<string, TuiMuMonthTally>> | null = null;
+  if (checkinSettings.showRankings) {
+    const entries = await Promise.all(
+      classes.map(
+        async (c) => [c.id, Object.fromEntries(await checkinSvc.classMonthTallies(db, c.id, month))] as const,
+      ),
+    );
+    checkinByClass = Object.fromEntries(entries);
+  }
+
   return {
     month,
     // The picker stops here. Sent from the server because the browser's clock is the user's, and
@@ -70,6 +86,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     weights,
     gradeLevels,
     classLevels,
+    checkinByClass,
   };
 }
 
