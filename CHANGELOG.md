@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0193 — 2026-08-13
+Túi mù class board moved from /tui-mu to /mystery-bag (URL only; file and internal names unchanged).
+
 ## v0.0192 — 2026-08-13
 Túi mù reward surfaces: class board, rankings component, parent/monthly report, student bag chip + mobile API — all behind config visibility toggles.
 

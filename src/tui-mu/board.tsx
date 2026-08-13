@@ -64,7 +64,7 @@ export function TuiMuBoardScreen() {
   }, [currentMonth, lang]);
 
   const goto = (nextClassId: string, nextMonth: string) =>
-    navigate(`/tui-mu/${nextClassId}/${nextMonth}`);
+    navigate(`/mystery-bag/${nextClassId}/${nextMonth}`);
 
   const redeem = async (studentId: string, studentName: string, tier: CheckinTier) => {
     const ok = await confirm({
@@ -77,7 +77,7 @@ export function TuiMuBoardScreen() {
     fd.set('studentId', studentId);
     fd.set('month', month);
     fd.set('tierBags', String(tier.bags));
-    fetcher.submit(fd, { action: '/tui-mu', method: 'post' });
+    fetcher.submit(fd, { action: '/mystery-bag', method: 'post' });
   };
 
   return (

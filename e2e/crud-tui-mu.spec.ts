@@ -18,7 +18,7 @@ test.describe('CRUD: túi mù board', () => {
     await signInStaff(page);
 
     // Board is on by default (showClassBoard defaults true) — the nav item and the page exist.
-    await page.goto('/tui-mu');
+    await page.goto('/mystery-bag');
     await expect(page.getByRole('heading', { name: 'Mystery bags (túi mù)' })).toBeVisible();
     await expect(page.locator('.lrow', { hasText: 'Leo Park' })).toBeVisible();
 
@@ -31,7 +31,7 @@ test.describe('CRUD: túi mù board', () => {
     await page.keyboard.press('Escape');
 
     // The board now reports itself disabled.
-    await page.goto('/tui-mu');
+    await page.goto('/mystery-bag');
     await expect(page.getByText('The class board is turned off in Configuration')).toBeVisible();
 
     // The nav item disappears too (staff sidebar).

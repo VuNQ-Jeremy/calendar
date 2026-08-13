@@ -347,7 +347,7 @@ export function cacheKeyForPath(pathname: string): string | null {
   const lg = pathname.match(/^\/logs\/([^/]+)\/?$/);
   if (lg) return logsStudentKey(decodeURIComponent(lg[1]));
   // Class + month in the path for the same cache reason as tuition/rankings above.
-  const tb = pathname.match(/^\/tui-mu\/([^/]+)\/(\d{4}-\d{2})\/?$/);
+  const tb = pathname.match(/^\/mystery-bag\/([^/]+)\/(\d{4}-\d{2})\/?$/);
   if (tb) return tuiMuKey(decodeURIComponent(tb[1]), tb[2]);
   // Album first: it is the longer path, and gardenClassKey is a prefix of it.
   const ga = pathname.match(/^\/garden\/([^/]+)\/album\/(\d{4}-\d{2})\/?$/);
@@ -371,7 +371,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/tuition': K.tuition,
     '/rankings': K.rankings,
     '/garden': K.garden,
-    '/tui-mu': K.tuiMu,
+    '/mystery-bag': K.tuiMu,
     '/logs': K.logs,
   };
   return map[clean] ?? null;

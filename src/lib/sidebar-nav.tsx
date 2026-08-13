@@ -88,7 +88,7 @@ export const NAV: NavSection[] = [
       { id: 'rankings', path: '/rankings', tk: 'nav_rankings', icon: 'grad', staffOnly: true },
       {
         id: 'tui-mu',
-        path: '/tui-mu',
+        path: '/mystery-bag',
         tk: 'tm_nav',
         icon: 'gift',
         staffOnly: true,
