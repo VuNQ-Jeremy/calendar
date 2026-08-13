@@ -123,6 +123,37 @@ export async function saveOccurrence(
   return listForOccurrence(db, eventId, date);
 }
 
+/**
+ * Kiosk auto-present: insert ONLY if this student has no mark yet for the occurrence.
+ * Deliberately NOT `saveOccurrence` (delete-then-insert for the whole roster) — the kiosk
+ * touches one student, must never rewrite a teacher's existing 'late'/'excused' mark, and
+ * must never clobber classmates' rows. The conflict target is the composite PK, so a race
+ * with a concurrent tap is a silent no-op. Returns whether a row was actually inserted.
+ */
+export async function markPresentIfUnmarked(
+  db: Db,
+  eventId: string,
+  date: string,
+  studentId: string,
+): Promise<boolean> {
+  const existing = await db
+    .select()
+    .from(attendanceRecords)
+    .where(
+      and(
+        eq(attendanceRecords.eventId, eventId),
+        eq(attendanceRecords.date, date),
+        eq(attendanceRecords.studentId, studentId),
+      ),
+    );
+  if (existing.length) return false;
+  await db
+    .insert(attendanceRecords)
+    .values({ eventId, date, studentId, status: 'present' })
+    .onConflictDoNothing();
+  return true;
+}
+
 /** One student's month of roll-calls folded per class — the attendance block on the monthly report. */
 export type ClassAttendanceSummary = {
   classId: string;

@@ -28,6 +28,7 @@ export const MUTATION_DOMAINS = [
   'tuition',
   'previews',
   'garden',
+  'checkin',
 ] as const;
 
 export type MutationDomain = (typeof MUTATION_DOMAINS)[number];
@@ -52,11 +53,15 @@ export function isMutationDomain(value: unknown): value is MutationDomain {
  * their schedule screens are uncached and refetch on focus (server-clock
  * sensitive, see server/services/session-preview.ts), so there is nothing for
  * an invalidation message to invalidate.
+ *
+ * 'checkin' is here for the túi mù chip on /vocabulary: a bag earned on the
+ * classroom kiosk should appear on the kid's own open tab without a reload.
  */
 export const STUDENT_LIVE_DOMAINS: ReadonlySet<MutationDomain> = new Set([
   'flashcards',
   'tests',
   'garden',
+  'checkin',
 ]);
 
 export type LiveInvalidateMsg = {

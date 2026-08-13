@@ -51,6 +51,15 @@ DELETE FROM class_prices;
 -- run's "no links yet" assertion fail. Codes never cascade at all — they outlive their target.
 DELETE FROM zalo_chats;
 DELETE FROM zalo_pair_codes;
+-- Check-in kiosk + túi mù. Checks/items cascade off events, but activity types, the bag
+-- ledger and gift redemptions are keyed to students that seed.sql keeps — a leaked bag would
+-- shift the next run's tally assertions. Also drop the settings row so earn mode is default.
+DELETE FROM checklist_checks;
+DELETE FROM checklist_items;
+DELETE FROM tui_mu_events;
+DELETE FROM gift_redemptions;
+DELETE FROM checkin_activity_types;
+DELETE FROM settings WHERE key = 'checkin-settings';
 -- Subjects (môn học). seed.sql still writes the legacy free-text `classes.subject`, so re-derive
 -- the managed rows and the subject_id link after every reset — otherwise the seeded classes come
 -- back reading "General" and the class spec has nothing to pick.

@@ -3,7 +3,7 @@ import { useLoaderData, useFetcher } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import type { IconName } from './icons.jsx';
-import { PageHeader, Empty, Modal, useConfirm } from './ui.jsx';
+import { PageHeader, Empty, Modal, useConfirm, ColorPicker } from './ui.jsx';
 import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { ATTENDANCE_STATUSES, ATTENDANCE_META } from '../shared/logic/assess.js';
@@ -17,6 +17,8 @@ import type { RemarkCriterionRow } from '../server/services/remark-criteria.js';
 import type { TuitionPaymentInfo, TuitionSettings } from '../server/services/tuition.js';
 import type { RankingWeights } from '../shared/logic/rankings.js';
 import type { GardenSettings } from '../shared/logic/garden.js';
+import { CHECKIN_MAX_TIERS, type CheckinSettings } from '../shared/logic/checkin.js';
+import type { ActivityTypeRow } from '../server/services/checkin-activity-types.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
 
@@ -35,6 +37,8 @@ interface ConfigLoaderData {
   gardenSettings: GardenSettings;
   reviewSettings: { intervals: number[] };
   paymentInfo: TuitionPaymentInfo;
+  checkinActivityTypes: ActivityTypeRow[];
+  checkinSettings: CheckinSettings;
   zalo: ZaloConfig;
 }
 
@@ -370,6 +374,463 @@ function ManagedListSection({ rows, spec }: { rows: ManagedRow[]; spec: ManagedL
       )}
       {confirmNode}
     </>
+  );
+}
+
+/**
+ * Hoạt động check-in — the managed enum the kiosk's checklist cells pick from. Not a sixth
+ * `ManagedListSection` because these rows carry an icon and a color alongside the name: the
+ * cells must look identical to the kids week after week, so the visual identity is part of the
+ * row, not of the per-session label. Same drag-reorder bookkeeping and modal shape otherwise.
+ */
+const CHECKIN_ICON_CHOICES: IconName[] = [
+  'mic',
+  'book',
+  'cards',
+  'message',
+  'star',
+  'sparkle',
+  'zap',
+  'headphones',
+];
+
+type CheckinTypeDraft = { id?: string; name: string; icon: IconName; color: string };
+
+function CheckinActivityTypesSection({ rows }: { rows: ActivityTypeRow[] }) {
+  const fetcher = useFetcher<{ error?: string }>();
+  const { t } = useLang();
+  const [confirm, confirmNode] = useConfirm();
+  const [modal, setModal] = React.useState<CheckinTypeDraft | null>(null);
+
+  const submit = (fd: FormData) => fetcher.submit(fd, { action: '/config', method: 'post' });
+
+  const save = (draft: CheckinTypeDraft) => {
+    const fd = new FormData();
+    fd.set('intent', draft.id ? 'update-checkin-type' : 'create-checkin-type');
+    if (draft.id) fd.set('id', draft.id);
+    fd.set('name', draft.name.trim());
+    fd.set('icon', draft.icon);
+    fd.set('color', draft.color);
+    submit(fd);
+    setModal(null);
+  };
+
+  const toggleActive = async (row: ActivityTypeRow) => {
+    if (row.active) {
+      const ok = await confirm({ title: t('cfg_deactivate'), message: row.name + '?', danger: true });
+      if (!ok) return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'update-checkin-type');
+    fd.set('id', row.id);
+    fd.set('active', String(!row.active));
+    submit(fd);
+  };
+
+  const del = async (row: ActivityTypeRow) => {
+    const ok = await confirm({
+      title: t('cfg_ck_delete_confirm'),
+      message: row.name + '?',
+      confirmLabel: t('delete'),
+      danger: true,
+    });
+    if (!ok) return;
+    const fd = new FormData();
+    fd.set('intent', 'delete-checkin-type');
+    fd.set('id', row.id);
+    submit(fd);
+  };
+
+  const [dragId, setDragId] = React.useState<string | null>(null);
+  const [localOrder, setLocalOrder] = React.useState<string[] | null>(null);
+  const reorderPending = React.useRef(false);
+
+  const ordered = React.useMemo(() => {
+    if (!localOrder) return rows;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const out = localOrder.flatMap((id) => byId.get(id) ?? []);
+    for (const r of rows) if (!localOrder.includes(r.id)) out.push(r);
+    return out;
+  }, [rows, localOrder]);
+
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && reorderPending.current) {
+      reorderPending.current = false;
+      setLocalOrder(null);
+    }
+  }, [fetcher.state]);
+
+  const previewMove = (srcId: string, overId: string) => {
+    setLocalOrder((prev) => {
+      const cur = prev ?? rows.map((r) => r.id);
+      const from = cur.indexOf(srcId);
+      const to = cur.indexOf(overId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = cur.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, srcId);
+      return next;
+    });
+  };
+
+  const commitOrder = () => {
+    setDragId(null);
+    if (!localOrder) return;
+    if (localOrder.join('|') === rows.map((r) => r.id).join('|')) {
+      setLocalOrder(null);
+      return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'reorder-checkin-types');
+    fd.set('ids', JSON.stringify(localOrder));
+    submit(fd);
+    reorderPending.current = true;
+  };
+
+  return (
+    <>
+      <div className="m-row" style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
+        <Button
+          variant="primary"
+          iconLeft={<MIcon name="plus" size={18} />}
+          onClick={() => setModal({ name: '', icon: 'mic', color: 'orange' })}
+        >
+          {t('cfg_ck_add')}
+        </Button>
+      </div>
+      {ordered.length ? (
+        <div className="m-stack">
+          {ordered.map((row) => {
+            const c = colorOf(row.color);
+            return (
+              <div
+                key={row.id}
+                className={'lrow' + (dragId === row.id ? ' is-dragging' : '')}
+                draggable
+                onDragStart={(e) => {
+                  setDragId(row.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', row.id);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragId && dragId !== row.id) previewMove(dragId, row.id);
+                }}
+                onDrop={(e) => e.preventDefault()}
+                onDragEnd={commitOrder}
+              >
+                <span className="lrow__grip" title={t('cfg_drag_reorder')} aria-hidden="true">
+                  <MIcon name="grip" size={16} />
+                </span>
+                <span
+                  className="iconwrap"
+                  style={{ background: c.soft, color: c.ink }}
+                  aria-hidden="true"
+                >
+                  <MIcon name={(row.icon as IconName) ?? 'star'} size={18} />
+                </span>
+                <div className="m-row" style={{ flex: 1, gap: 10 }}>
+                  <span className="lrow__title">{row.name}</span>
+                  <Badge color={row.active ? 'green' : 'neutral'}>
+                    {row.active ? t('cfg_active') : t('cfg_inactive')}
+                  </Badge>
+                </div>
+                <div className="lrow__actions">
+                  <IconButton
+                    label={t('cfg_rename')}
+                    size="sm"
+                    onClick={() =>
+                      setModal({
+                        id: row.id,
+                        name: row.name,
+                        icon: (row.icon as IconName) ?? 'star',
+                        color: row.color,
+                      })
+                    }
+                  >
+                    <MIcon name="edit" size={16} />
+                  </IconButton>
+                  <Button variant="secondary" size="sm" onClick={() => toggleActive(row)}>
+                    {row.active ? t('cfg_deactivate') : t('cfg_activate')}
+                  </Button>
+                  <IconButton label={t('delete')} size="sm" onClick={() => del(row)}>
+                    <MIcon name="trash" size={16} />
+                  </IconButton>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Empty icon="check" title={t('cfg_ck_empty')} />
+      )}
+
+      {modal && (
+        <Modal
+          open
+          onClose={() => setModal(null)}
+          title={modal.id ? t('cfg_rename') : t('cfg_ck_add')}
+          width={460}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setModal(null)}>
+                {t('cancel')}
+              </Button>
+              <Button variant="primary" disabled={!modal.name.trim()} onClick={() => save(modal)}>
+                {t('save')}
+              </Button>
+            </>
+          }
+        >
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('cfg_ck_name_ph')}</label>
+            <input
+              className="mochi-input"
+              autoFocus
+              value={modal.name}
+              onChange={(e) => setModal((m) => (m ? { ...m, name: e.target.value } : m))}
+            />
+          </div>
+          <div className="mochi-field">
+            <label className="mochi-field__label">{t('cfg_ck_icon')}</label>
+            <div className="m-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              {CHECKIN_ICON_CHOICES.map((ic) => {
+                const active = modal.icon === ic;
+                const c = colorOf(modal.color);
+                return (
+                  <button
+                    key={ic}
+                    type="button"
+                    title={ic}
+                    className="mchip"
+                    style={{
+                      background: active ? c.base : c.soft,
+                      color: active ? '#fff' : c.ink,
+                      cursor: 'pointer',
+                      border: 'none',
+                      padding: 8,
+                    }}
+                    onClick={() => setModal((m) => (m ? { ...m, icon: ic } : m))}
+                  >
+                    <MIcon name={ic} size={18} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <ColorPicker
+            label={t('cfg_ck_color')}
+            value={modal.color}
+            onChange={(v) => setModal((m) => (m ? { ...m, color: v } : m))}
+          />
+          {fetcher.data?.error && (
+            <div className="m-muted" style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)' }}>
+              {fetcher.data.error}
+            </div>
+          )}
+        </Modal>
+      )}
+      {confirmNode}
+    </>
+  );
+}
+
+/**
+ * Túi mù: how bags are earned, the monthly gift ladder, and which surfaces show the counts.
+ *
+ * Held in a draft until Save like the garden numbers — earn mode and tiers are read together by
+ * the kiosk and the class board, and a half-edited ladder would visibly re-tier every student.
+ * Past bags are a stored ledger, so flipping the earn mode never revokes anything already earned.
+ */
+function CheckinSettingsSection({ settings }: { settings: CheckinSettings }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+
+  type Draft = {
+    earnMode: CheckinSettings['earnMode'];
+    tiers: { bags: string; label: string }[];
+    showClassBoard: boolean;
+    showParentReport: boolean;
+    showRankings: boolean;
+    showStudentView: boolean;
+  };
+  const fromSettings = (): Draft => ({
+    earnMode: settings.earnMode,
+    tiers: settings.tiers.map((x) => ({ bags: String(x.bags), label: x.label })),
+    showClassBoard: settings.showClassBoard,
+    showParentReport: settings.showParentReport,
+    showRankings: settings.showRankings,
+    showStudentView: settings.showStudentView,
+  });
+  const [draft, setDraft] = React.useState<Draft | null>(null);
+  const current = draft ?? fromSettings();
+
+  const tierNumbers = current.tiers.map((x) => Number(x.bags));
+  const valid =
+    current.tiers.length <= CHECKIN_MAX_TIERS &&
+    current.tiers.every((x, i) => {
+      const n = tierNumbers[i];
+      return (
+        x.bags !== '' && Number.isInteger(n) && n >= 1 && n <= 60 && x.label.trim().length > 0
+      );
+    }) &&
+    tierNumbers.every((n, i) => i === 0 || n > tierNumbers[i - 1]);
+
+  const set = (patch: Partial<Draft>) => setDraft({ ...current, ...patch });
+
+  const save = () => {
+    if (!valid) return;
+    const fd = new FormData();
+    fd.set('intent', 'checkin-settings');
+    fd.set('earnMode', current.earnMode);
+    fd.set(
+      'tiers',
+      JSON.stringify(
+        current.tiers.map((x, i) => ({ bags: tierNumbers[i], label: x.label.trim() })),
+      ),
+    );
+    fd.set('showClassBoard', String(current.showClassBoard));
+    fd.set('showParentReport', String(current.showParentReport));
+    fd.set('showRankings', String(current.showRankings));
+    fd.set('showStudentView', String(current.showStudentView));
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+    setDraft(null);
+  };
+
+  const EARN_MODES = [
+    { id: 'perfect_day', tk: 'cfg_ck_earn_perfect' },
+    { id: 'per_phase', tk: 'cfg_ck_earn_per_phase' },
+  ] as const;
+
+  const VIS_TOGGLES = [
+    { key: 'showClassBoard', tk: 'cfg_ck_vis_board' },
+    { key: 'showRankings', tk: 'cfg_ck_vis_rankings' },
+    { key: 'showParentReport', tk: 'cfg_ck_vis_report' },
+    { key: 'showStudentView', tk: 'cfg_ck_vis_student' },
+  ] as const;
+
+  return (
+    <div className="m-stack">
+      <div className="mochi-field" style={{ marginBottom: 0 }}>
+        <label className="mochi-field__label">{t('cfg_ck_earn_mode')}</label>
+        <div className="m-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {EARN_MODES.map((m) => {
+            const active = current.earnMode === m.id;
+            const c = colorOf('orange');
+            return (
+              <button
+                key={m.id}
+                type="button"
+                className="mchip"
+                style={{
+                  background: active ? c.base : c.soft,
+                  color: active ? '#fff' : c.ink,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: 'none',
+                }}
+                onClick={() => set({ earnMode: m.id })}
+              >
+                {t(m.tk)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mochi-field" style={{ marginBottom: 0 }}>
+        <label className="mochi-field__label">{t('cfg_ck_tiers')}</label>
+        <div className="m-stack" style={{ gap: 8 }}>
+          {current.tiers.map((tier, i) => (
+            <div key={i} className="m-row" style={{ gap: 8, alignItems: 'flex-end' }}>
+              <div className="mochi-field" style={{ marginBottom: 0, width: 110 }}>
+                <label className="mochi-field__label">{t('cfg_ck_tier_bags')}</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={1}
+                  className="mochi-input"
+                  value={tier.bags}
+                  onChange={(e) =>
+                    set({
+                      tiers: current.tiers.map((x, j) =>
+                        j === i ? { ...x, bags: e.target.value } : x,
+                      ),
+                    })
+                  }
+                />
+              </div>
+              <div className="mochi-field" style={{ marginBottom: 0, flex: 1 }}>
+                <label className="mochi-field__label">{t('cfg_ck_tier_label')}</label>
+                <input
+                  className="mochi-input"
+                  value={tier.label}
+                  onChange={(e) =>
+                    set({
+                      tiers: current.tiers.map((x, j) =>
+                        j === i ? { ...x, label: e.target.value } : x,
+                      ),
+                    })
+                  }
+                />
+              </div>
+              <IconButton
+                label={t('delete')}
+                size="sm"
+                onClick={() => set({ tiers: current.tiers.filter((_, j) => j !== i) })}
+              >
+                <MIcon name="trash" size={16} />
+              </IconButton>
+            </div>
+          ))}
+          <div className="m-row">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={current.tiers.length >= CHECKIN_MAX_TIERS}
+              iconLeft={<MIcon name="plus" size={16} />}
+              onClick={() =>
+                set({
+                  tiers: [
+                    ...current.tiers,
+                    { bags: String((tierNumbers[tierNumbers.length - 1] || 0) + 4), label: '' },
+                  ],
+                })
+              }
+            >
+              {t('cfg_ck_tier_add')}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mochi-field" style={{ marginBottom: 0 }}>
+        <label className="mochi-field__label">{t('cfg_ck_visibility')}</label>
+        <div className="m-row" style={{ gap: 18, flexWrap: 'wrap' }}>
+          {VIS_TOGGLES.map((v) => (
+            <Checkbox
+              key={v.key}
+              label={t(v.tk)}
+              checked={current[v.key]}
+              onChange={() => set({ [v.key]: !current[v.key] } as Partial<Draft>)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="m-row" style={{ gap: 12 }}>
+        <Button onClick={save} disabled={!valid || !draft}>
+          {t('save')}
+        </Button>
+        {!valid && (
+          <span className="m-muted" style={{ color: colorOf('rose').ink, fontSize: 'var(--text-sm)' }}>
+            {t('cfg_ck_tier_hint')}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1122,6 +1583,8 @@ function SystemConfigScreen() {
     reviewSettings,
     paymentInfo,
     parentPortal,
+    checkinActivityTypes,
+    checkinSettings,
     zalo,
   } = useLoaderData() as ConfigLoaderData;
   const { t } = useLang();
@@ -1179,6 +1642,15 @@ function SystemConfigScreen() {
           summary: listSummary(subjects),
           width: 640,
           render: () => <ManagedListSection rows={subjects} spec={LIST_SPECS.subjects} />,
+        },
+        {
+          id: 'checkinTypes',
+          icon: 'check',
+          title: t('cfg_ck_types_title'),
+          sub: t('cfg_ck_types_sub'),
+          summary: listSummary(checkinActivityTypes),
+          width: 640,
+          render: () => <CheckinActivityTypesSection rows={checkinActivityTypes} />,
         },
       ],
     },
@@ -1241,6 +1713,19 @@ function SystemConfigScreen() {
           summary: reviewSettings.intervals.join(' · '),
           width: 760,
           render: () => <ReviewSettingsSection intervals={reviewSettings.intervals} />,
+        },
+        {
+          id: 'checkin',
+          icon: 'gift',
+          title: t('cfg_ck_settings_title'),
+          sub: t('cfg_ck_settings_sub'),
+          summary: t(
+            checkinSettings.earnMode === 'perfect_day'
+              ? 'cfg_ck_earn_perfect'
+              : 'cfg_ck_earn_per_phase',
+          ),
+          width: 680,
+          render: () => <CheckinSettingsSection settings={checkinSettings} />,
         },
       ],
     },

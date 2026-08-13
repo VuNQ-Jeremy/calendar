@@ -47,6 +47,7 @@ export const K = {
    * flashcards domain needs, since a finished round changes the digest and garden forecasts.
    */
   logsNotifications: 'route:logs:notifications',
+  tuiMu: 'route:tui-mu',
 } as const;
 
 export const flashcardTopicKey = (slug: string) => `route:flashcards:${slug}`;
@@ -79,6 +80,9 @@ export const logsStudentKey = (studentId: string) => `route:logs:${studentId}`;
 export const gardenClassKey = (classId: string) => `route:garden:${classId}`;
 export const gardenAlbumKey = (classId: string, month: string) =>
   `route:garden:${classId}:${month}`;
+
+/** Same prefix trick: K.tuiMu stales every cached class-month board at once. */
+export const tuiMuKey = (classId: string, month: string) => `route:tui-mu:${classId}:${month}`;
 
 /**
  * Stale-while-revalidate loader for route clientLoaders.
@@ -216,6 +220,8 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
       K.rankings,
       K.classes,
       K.logsNotifications,
+      // Earn-mode/tier/visibility edits change what the túi mù board shows.
+      K.tuiMu,
     ],
   },
   feedback: { hard: [K.feedback], stale: [] },
@@ -246,6 +252,12 @@ const MUTATION_EFFECTS: Record<MutationDomain, { hard: string[]; stale: string[]
   // K.logsNotifications: watering rescues a plant from tomorrow's stage drop, and a new
   // assignment deadline is a future penalty — both are garden alert rows in the forecast.
   garden: { hard: [K.garden], stale: [K.flashcards, K.logsNotifications] },
+  // Checklist rows live under 'ck:<eventId>:<date>', read by useCachedLoad in the calendar
+  // event modal — stale rather than hard for the same reason as attendance above: the modal
+  // is usually open on the very key being marked, and deleting it would blank the editor
+  // mid-edit. K.tuiMu covers the class board; K.flashcards the student's bag chip on
+  // /vocabulary; K.rankings + K.assessments the tally surfaces those loaders feed.
+  checkin: { hard: [], stale: ['ck:', K.tuiMu, K.rankings, K.flashcards, K.assessments] },
 };
 
 /**
@@ -334,6 +346,9 @@ export function cacheKeyForPath(pathname: string): string | null {
   // function only ever sees a pathname, so a `?student=` would give every student one cache entry.
   const lg = pathname.match(/^\/logs\/([^/]+)\/?$/);
   if (lg) return logsStudentKey(decodeURIComponent(lg[1]));
+  // Class + month in the path for the same cache reason as tuition/rankings above.
+  const tb = pathname.match(/^\/tui-mu\/([^/]+)\/(\d{4}-\d{2})\/?$/);
+  if (tb) return tuiMuKey(decodeURIComponent(tb[1]), tb[2]);
   // Album first: it is the longer path, and gardenClassKey is a prefix of it.
   const ga = pathname.match(/^\/garden\/([^/]+)\/album\/(\d{4}-\d{2})\/?$/);
   if (ga) return gardenAlbumKey(decodeURIComponent(ga[1]), ga[2]);
@@ -356,6 +371,7 @@ export function cacheKeyForPath(pathname: string): string | null {
     '/tuition': K.tuition,
     '/rankings': K.rankings,
     '/garden': K.garden,
+    '/tui-mu': K.tuiMu,
     '/logs': K.logs,
   };
   return map[clean] ?? null;

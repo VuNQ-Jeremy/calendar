@@ -5,7 +5,7 @@
  * the same reason — the mobile app has to be able to import this without pulling in Workers types).
  * Rows are described structurally; the only fields read are status, type, score and ratings.
  *
- * Ý thức (attitude, 0–10) is the mean of up to three components. A component with no data for the
+ * Ý thức (attitude, 0–10) is the mean of up to four components. A component with no data for the
  * month is null and is EXCLUDED from the mean rather than counted as zero — a class that has never
  * recorded behaviour must not drag every student down to a third of their attendance score:
  *
@@ -14,6 +14,9 @@
  *   2. behaviour  — starts at 10, −1 per negative record, +0.5 per praise, clamped to [0, 10].
  *   3. remark     — the teacher's monthly 1–5 star ratings, averaged, × 2. Remarks are
  *      student-wide (there is no class column), so they survive a class filter unchanged.
+ *   4. check-in   — full kiosk check-ins over counted sessions, × 10 (shared/logic/checkin.ts).
+ *      Only supplied when the admin toggle is on; callers that pass nothing rank exactly as
+ *      before the feature existed.
  *
  * total = round1((attitude × w.attitude + avgScore × w.score) / 100). When exactly one of the two
  * criteria has no data the total is the other one alone: a student who sat tests but has no
@@ -25,6 +28,7 @@
  */
 
 import { NEGATIVE_TYPES, type BehaviorTypeId } from './assess';
+import { checkinComponent, type TuiMuMonthTally } from './checkin';
 
 export interface RankingWeights {
   /** Integer percent; attitude + score === 100. */
@@ -49,15 +53,18 @@ export interface RankRowInput {
   scores: number[];
   /** `monthly_remarks.ratings` for this student and month, or null when no remark exists. */
   remarkRatings: Record<string, number> | null;
+  /** Túi mù month tally, supplied only while the admin rankings toggle is on. */
+  checkin?: TuiMuMonthTally | null;
 }
 
 export interface StudentRanking {
   studentId: string;
-  /** The three ý thức components, each 0–10, or null when the month has no data for it. */
+  /** The four ý thức components, each 0–10, or null when the month has no data for it. */
   attendance: number | null;
   behavior: number | null;
   remark: number | null;
-  /** Mean of the non-null components; null when all three are null. */
+  checkin: number | null;
+  /** Mean of the non-null components; null when all are null. */
   attitude: number | null;
   /** Mean of the month's test scores; null when there are none. */
   avgScore: number | null;
@@ -133,7 +140,8 @@ export function computeMonthRankings(
     const attendance = attendanceComponent(r.attendanceStatuses);
     const behavior = behaviorComponent(r.behaviorTypes);
     const remark = remarkComponent(r.remarkRatings);
-    const parts = [attendance, behavior, remark].filter((x): x is number => x != null);
+    const checkin = checkinComponent(r.checkin);
+    const parts = [attendance, behavior, remark, checkin].filter((x): x is number => x != null);
     const attitude = parts.length ? round1(mean(parts)) : null;
     const avgScore = r.scores.length ? round1(mean(r.scores)) : null;
     return {
@@ -141,6 +149,7 @@ export function computeMonthRankings(
       attendance,
       behavior,
       remark,
+      checkin,
       attitude,
       avgScore,
       testCount: r.scores.length,

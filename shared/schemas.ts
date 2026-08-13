@@ -1184,3 +1184,63 @@ export const TrackBeaconInput = z.object({
   appVersion: z.string().max(200).optional(),
 });
 export type TrackBeaconInput = z.infer<typeof TrackBeaconInput>;
+
+/* ── Check-in / check-out kiosk + túi mù ──────────────────────────────────────────────── */
+
+/** Managed enum row (subjects pattern) plus the icon and color a kiosk cell renders with. */
+export const CheckinActivityTypeInput = z.object({
+  name: z.string().trim().min(1).max(100),
+  icon: z.string().trim().min(1).max(40),
+  color: ColorId,
+  active: FormBool.default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type CheckinActivityTypeInput = z.infer<typeof CheckinActivityTypeInput>;
+
+export const CheckinActivityTypeReorder = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+});
+export type CheckinActivityTypeReorder = z.infer<typeof CheckinActivityTypeReorder>;
+
+export const ChecklistItemInput = z.object({
+  eventId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  phase: z.enum(['checkin', 'checkout']),
+  /** The UI requires a type for check-in cells; checkout lines may be free text. */
+  activityTypeId: z.string().min(1).nullish(),
+  label: z.string().trim().max(300).default(''),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type ChecklistItemInput = z.infer<typeof ChecklistItemInput>;
+
+/** One kiosk tap: check or uncheck a cell for a student. */
+export const CheckInput = z.object({
+  itemId: z.string().min(1),
+  studentId: z.string().min(1),
+  checked: FormBool,
+});
+export type CheckInput = z.infer<typeof CheckInput>;
+
+export const CheckinTierInput = z.object({
+  bags: z.coerce.number().int().min(1).max(60),
+  label: z.string().trim().min(1).max(100),
+});
+
+export const CheckinSettingsInput = z.object({
+  earnMode: z.enum(['perfect_day', 'per_phase']),
+  /** Posted as a JSON string from the config form; the action parses before validating. */
+  tiers: z.array(CheckinTierInput).max(5),
+  showClassBoard: FormBool.default(true),
+  showParentReport: FormBool.default(false),
+  showRankings: FormBool.default(false),
+  showStudentView: FormBool.default(true),
+});
+export type CheckinSettingsInput = z.infer<typeof CheckinSettingsInput>;
+
+export const GiftRedeemInput = z.object({
+  studentId: z.string().min(1),
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  tierBags: z.coerce.number().int().min(1),
+  note: z.string().trim().max(300).nullish(),
+});
+export type GiftRedeemInput = z.infer<typeof GiftRedeemInput>;

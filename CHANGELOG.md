@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0189 — 2026-08-13
+Check-in kiosk groundwork: D1 schema (checklists, tui mu ledger, gift tiers), pure tally logic, services, and the two /config cards (activity types + tui mu settings).
+
 ## v0.0188 — 2026-08-12
 5 new vocabulary games (IPA quiz, word stress, sentence cloze, listen & fill, mixed round) with AI-generated example sentences and a per-assignment/free-study question count
 

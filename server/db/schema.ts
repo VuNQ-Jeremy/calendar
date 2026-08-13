@@ -975,3 +975,128 @@ export const activityLog = sqliteTable(
     index('idx_activity_time').on(t.recordedAt),
   ],
 );
+
+/**
+ * Check-in/check-out activity types — the managed enum kiosk cells are built from
+ * (subjects pattern, plus an icon and a palette color so the cells stay visually
+ * stable for the kids week after week). See migrations/0038_checkin.sql.
+ */
+export const checkinActivityTypes = sqliteTable('checkin_activity_types', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  /** src/icons.tsx IconName. */
+  icon: text('icon').notNull().default('star'),
+  /** App palette key, same vocabulary as students.color. */
+  color: text('color').notNull().default('orange'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+/**
+ * One checklist cell of one occurrence — keyed (eventId, date) like sessionPreviews,
+ * because a weekly class is a single events row. `phase` is 'checkin' (home activities,
+ * authored at the END of the previous session) or 'checkout' (what was learned, written
+ * during the session). Rows are id-stable and individually CRUDed — never
+ * delete-then-insert — because checklistChecks reference them and a teacher fixing a
+ * typo must not wipe the kids' taps.
+ */
+export const checklistItems = sqliteTable(
+  'checklist_items',
+  {
+    id: text('id').primaryKey(),
+    eventId: text('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    /** 'checkin' | 'checkout' */
+    phase: text('phase').notNull(),
+    /** Null for free-text checkout lines; check-in cells always pick a managed type. */
+    activityTypeId: text('activity_type_id').references(() => checkinActivityTypes.id, {
+      onDelete: 'set null',
+    }),
+    /** Per-session detail, e.g. "10 từ vựng chủ đề Animals". */
+    label: text('label').notNull().default(''),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdBy: text('created_by').references(() => staff.id, { onDelete: 'set null' }),
+    createdAt: text('created_at'),
+  },
+  (t) => [index('idx_checklist_items_occ').on(t.eventId, t.date, t.phase)],
+);
+
+/**
+ * A student's tap on a checklist cell. The composite PK IS the idempotency: a double
+ * tap is an ON CONFLICT DO NOTHING no-op, unchecking is a DELETE. No status column —
+ * presence of the row is the check.
+ */
+export const checklistChecks = sqliteTable(
+  'checklist_checks',
+  {
+    itemId: text('item_id')
+      .notNull()
+      .references(() => checklistItems.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** UTC ISO. */
+    checkedAt: text('checked_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.itemId, t.studentId] }),
+    index('idx_checklist_checks_student').on(t.studentId),
+  ],
+);
+
+/**
+ * Túi mù (mystery bag) ledger — append-only, the gardenEvents pattern. A bag is a
+ * moment the kid already celebrated on the kiosk, so it is STORED (config flips or
+ * later checklist edits never revoke it) while misses are derived at read time and
+ * self-correct. No FK to events on purpose: deleting an event must not un-earn a bag.
+ * refId = "<eventId>:<date>:<kind>" — the natural key that makes replays no-ops.
+ */
+export const tuiMuEvents = sqliteTable(
+  'tui_mu_events',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** Denormalized snapshot for the class board; the event may be gone later. */
+    classId: text('class_id'),
+    /** The SESSION's ICT date — month attribution, even for a tap after midnight. */
+    vnDay: text('vn_day').notNull(),
+    /** 'checkin' | 'checkout' (per_phase mode) | 'perfect' (perfect_day mode). */
+    kind: text('kind').notNull(),
+    refId: text('ref_id').notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    unique('uq_tui_mu_ref').on(t.studentId, t.refId),
+    index('idx_tui_mu_student_day').on(t.studentId, t.vnDay),
+  ],
+);
+
+/**
+ * "Đã tặng quà" — a monthly gift tier handed out. tierBags + label are snapshotted at
+ * redemption so an admin editing the tier table later doesn't rewrite what a child
+ * already received; the unique triple makes the redeem button double-click safe.
+ */
+export const giftRedemptions = sqliteTable(
+  'gift_redemptions',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** YYYY-MM. */
+    month: text('month').notNull(),
+    tierBags: integer('tier_bags').notNull(),
+    label: text('label'),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    note: text('note'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    unique('uq_gift_redemptions').on(t.studentId, t.month, t.tierBags),
+    index('idx_gift_redemptions_month').on(t.month),
+  ],
+);

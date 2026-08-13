@@ -20,6 +20,8 @@ import * as rankingsSvc from '../../server/services/rankings';
 import * as gardenSvc from '../../server/services/garden';
 import * as flashcardsSvc from '../../server/services/flashcards';
 import * as zaloSvc from '../../server/services/zalo';
+import * as checkinTypesSvc from '../../server/services/checkin-activity-types';
+import * as checkinSvc from '../../server/services/checkin';
 import * as peopleSvc from '../../server/services/people';
 import * as classesSvc from '../../server/services/classes';
 import {
@@ -40,6 +42,9 @@ import {
   TuitionSettingsInput,
   UiPrefsInput,
   ParentPortalInput,
+  CheckinActivityTypeInput,
+  CheckinActivityTypeReorder,
+  CheckinSettingsInput,
   parsePatch,
 } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -67,6 +72,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     parents,
     classList,
     studentList,
+    checkinActivityTypes,
+    checkinSettings,
   ] = await Promise.all([
     typesSvc.list(db),
     criteriaSvc.list(db),
@@ -85,6 +92,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     peopleSvc.listParents(db),
     classesSvc.list(db),
     peopleSvc.listStudents(db),
+    checkinTypesSvc.list(db),
+    checkinSvc.getCheckinSettings(db),
   ]);
   return {
     types,
@@ -99,6 +108,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     gardenSettings,
     reviewSettings,
     paymentInfo,
+    checkinActivityTypes,
+    checkinSettings,
     // The Zalo card needs names, not ids: a chat_id and a parent id next to each other tell an
     // admin nothing about who is actually connected.
     zalo: {
@@ -363,6 +374,61 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       await subjectsSvc.reorder(db, parsed.data.ids);
       return { ok: true };
+    }
+
+    if (intent === 'create-checkin-type') {
+      const parsed = CheckinActivityTypeInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await checkinTypesSvc.create(db, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'update-checkin-type') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      const parsed = parsePatch(CheckinActivityTypeInput, raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await checkinTypesSvc.update(db, id, parsed.data);
+      return { ok: true };
+    }
+
+    if (intent === 'delete-checkin-type') {
+      if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+      await checkinTypesSvc.remove(db, id);
+      return { ok: true };
+    }
+
+    if (intent === 'reorder-checkin-types') {
+      let ids: unknown;
+      try {
+        ids = JSON.parse((formData.get('ids') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid ids' }, { status: 400 });
+      }
+      const parsed = CheckinActivityTypeReorder.safeParse({ ids });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      await checkinTypesSvc.reorder(db, parsed.data.ids);
+      return { ok: true };
+    }
+
+    if (intent === 'checkin-settings') {
+      let tiers: unknown;
+      try {
+        tiers = JSON.parse((formData.get('tiers') as string) ?? '');
+      } catch {
+        return Response.json({ error: 'invalid tiers' }, { status: 400 });
+      }
+      const parsed = CheckinSettingsInput.safeParse({ ...raw, tiers });
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const checkinSettings = await checkinSvc.setCheckinSettings(db, parsed.data);
+      return { ok: true, checkinSettings };
     }
 
     if (intent === 'tuition-settings') {
