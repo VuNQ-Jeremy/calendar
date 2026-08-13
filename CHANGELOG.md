@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0190 — 2026-08-13
+Check-in kiosk authoring: /checkin resource route, event-modal Check-in/out tab (this session + next session + check-out + live flag panel).
+
 ## v0.0189 — 2026-08-13
 Check-in kiosk groundwork: D1 schema (checklists, tui mu ledger, gift tiers), pure tally logic, services, and the two /config cards (activity types + tui mu settings).
 

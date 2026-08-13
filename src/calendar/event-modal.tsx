@@ -12,18 +12,21 @@ import { MaterialSearchDropdown } from '../material-search.jsx';
 import { useCachedLoad } from '../lib/use-cached-load.js';
 import { cacheSet, markStale } from '../lib/cache.js';
 import { noteLocalMutation } from '../lib/route-cache.js';
+import { nextOccurrenceDate } from '../../shared/logic/checkin.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { AttendanceRow } from '../../server/services/attendance.js';
 import type { SessionPreviewRow } from '../../server/services/session-preview.js';
 import type { MaterialRow } from '../../server/services/materials.js';
+import type { ChecklistItemRow, CheckRow, OccurrenceFlags } from '../../server/services/checkin.js';
+import type { ActivityTypeRow } from '../../server/services/checkin-activity-types.js';
 
 const { Button: CBtn, Tabs: CTabs, IconButton: CIBtn } = DS;
 
 type EventDraft = Partial<EventRow> & { recurrence?: string };
 
-type EventModalTab = 'details' | 'attendance' | 'materials' | 'preview';
+type EventModalTab = 'details' | 'attendance' | 'materials' | 'preview' | 'checkin';
 
 interface EventModalProps {
   open: boolean;
@@ -410,6 +413,286 @@ function EventMaterialsPicker({
   );
 }
 
+type CheckinPayload = {
+  items: ChecklistItemRow[];
+  checks: CheckRow[];
+  activityTypes: ActivityTypeRow[];
+  flags: OccurrenceFlags;
+};
+
+/**
+ * One phase's editable list for one occurrence: activity-type picker (check-in) or free
+ * label (check-out), add/remove rows. Edits submit item-level intents to /checkin.
+ */
+function ChecklistItemsEditor({
+  eventId,
+  date,
+  phase,
+  items,
+  activityTypes,
+  onMutated,
+}: {
+  eventId: string;
+  date: string;
+  phase: 'checkin' | 'checkout';
+  items: ChecklistItemRow[];
+  activityTypes: ActivityTypeRow[];
+  onMutated: () => void;
+}) {
+  const { t } = useLang();
+  const fetcher = useFetcher();
+  const submit = (fd: FormData) => fetcher.submit(fd, { action: '/checkin', method: 'post' });
+
+  // Fires once the write actually lands — not at click time, so the subsequent refetch
+  // (triggered by markStale in onMutated) sees the new row rather than racing it.
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data) onMutated();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.data, fetcher.state]);
+
+  const rows = items.filter((i) => i.phase === phase).sort((a, b) => a.sortOrder - b.sortOrder);
+  const typeOpts = activityTypes.map((a) => ({ value: a.id, label: a.name }));
+
+  const addItem = () => {
+    const fd = new FormData();
+    fd.set('intent', 'create-item');
+    fd.set('eventId', eventId);
+    fd.set('date', date);
+    fd.set('phase', phase);
+    if (phase === 'checkin' && activityTypes[0]) fd.set('activityTypeId', activityTypes[0].id);
+    fd.set('label', '');
+    submit(fd);
+  };
+
+  const setType = (id: string, activityTypeId: string) => {
+    const fd = new FormData();
+    fd.set('intent', 'update-item');
+    fd.set('id', id);
+    fd.set('activityTypeId', activityTypeId);
+    submit(fd);
+  };
+
+  const setLabel = (id: string, label: string) => {
+    const fd = new FormData();
+    fd.set('intent', 'update-item');
+    fd.set('id', id);
+    fd.set('label', label);
+    submit(fd);
+  };
+
+  const removeItem = (id: string) => {
+    const fd = new FormData();
+    fd.set('intent', 'delete-item');
+    fd.set('id', id);
+    submit(fd);
+  };
+
+  return (
+    <div className="m-stack" style={{ gap: 8 }}>
+      {rows.map((row) => (
+        <div key={row.id} className="m-row" style={{ gap: 8, alignItems: 'flex-end' }}>
+          {phase === 'checkin' ? (
+            <div className="mochi-field" style={{ marginBottom: 0, width: 200 }}>
+              <label className="mochi-field__label">{t('ck_activity_type')}</label>
+              <MSelect
+                value={row.activityTypeId ?? ''}
+                onChange={(v) => setType(row.id, v)}
+                options={typeOpts}
+              />
+            </div>
+          ) : null}
+          <div className="mochi-field" style={{ marginBottom: 0, flex: 1 }}>
+            <label className="mochi-field__label">
+              {phase === 'checkin' ? t('ck_label_ph') : t('ck_free_text')}
+            </label>
+            <input
+              className="mochi-input"
+              defaultValue={row.label}
+              placeholder={t('ck_label_ph')}
+              onBlur={(e) => {
+                if (e.target.value !== row.label) setLabel(row.id, e.target.value);
+              }}
+            />
+          </div>
+          <CIBtn label={t('delete')} size="sm" onClick={() => removeItem(row.id)}>
+            <MIcon name="trash" size={16} />
+          </CIBtn>
+        </div>
+      ))}
+      <div>
+        <CBtn
+          variant="secondary"
+          size="sm"
+          iconLeft={<MIcon name="plus" size={16} />}
+          onClick={addItem}
+        >
+          {t('ck_add_item')}
+        </CBtn>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Check-in buổi sau": a separate component (not an inline branch) so the conditional
+ * mount — only when the event recurs — never turns into a conditional hook call. Its own
+ * occurrence key, since it authors items for a DIFFERENT date than the one open in the modal.
+ */
+function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: string }) {
+  const { t } = useLang();
+  const nextKey = `ck:${eventId}:${nextDate}`;
+  const { data } = useCachedLoad<CheckinPayload>(
+    nextKey,
+    `/checkin?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(nextDate)}`,
+  );
+  const onMutated = () => {
+    noteLocalMutation('checkin');
+    markStale(nextKey);
+  };
+
+  return (
+    <div className="ck-section ck-section--next">
+      <h4 style={{ margin: '0 0 8px' }}>{t('ck_items_next')}</h4>
+      {data ? (
+        <ChecklistItemsEditor
+          eventId={eventId}
+          date={nextDate}
+          phase="checkin"
+          items={data.items}
+          activityTypes={data.activityTypes}
+          onMutated={onMutated}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+interface CheckinTabProps {
+  eventId: string;
+  date: string;
+  classId: string;
+  recurrence: string | undefined;
+  classes: ClassRow[];
+  students: StudentRow[];
+}
+
+/**
+ * Authoring + live flag view for check-in (home activities) and check-out (what was
+ * learned). "Check-in buổi sau" is a SEPARATE occurrence key: the teacher authors next
+ * week's home-activity list at the end of this session, exactly the feedback board's idea.
+ */
+function CheckinTab({ eventId, date, classId, recurrence, classes, students }: CheckinTabProps) {
+  const { t } = useLang();
+  const ckKey = `ck:${eventId}:${date}`;
+  const { data } = useCachedLoad<CheckinPayload>(
+    ckKey,
+    `/checkin?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
+  );
+  const nextDate = nextOccurrenceDate(recurrence ?? 'none', date);
+
+  // Edits go straight through /checkin; withLiveAction's own broadcast would also mark 'ck:'
+  // stale, but that lands after a round trip through the hub — marking it here means THIS
+  // tab's list updates the moment the fetcher settles, not a beat later. noteLocalMutation
+  // suppresses the echo when the broadcast does arrive.
+  const onMutated = () => {
+    noteLocalMutation('checkin');
+    markStale(ckKey);
+  };
+
+  const roster = (classes.find((c) => c.id === classId)?.studentIds ?? [])
+    .map((sid) => students.find((s) => s.id === sid))
+    .filter((s): s is StudentRow => !!s);
+
+  if (!roster.length) {
+    return <Empty icon="users" title={t('att_empty_roster')} />;
+  }
+
+  const activityTypes = data?.activityTypes ?? [];
+  const flags = data?.flags ?? [];
+
+  return (
+    <div className="m-stack" style={{ gap: 20 }}>
+      <div className="ck-section ck-section--this">
+        <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h4 style={{ margin: 0 }}>{t('ck_items_this')}</h4>
+          <a
+            className="m-textlink"
+            href={`/kiosk/${encodeURIComponent(eventId)}/${encodeURIComponent(date)}/checkin`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t('ck_open_kiosk_in')}
+          </a>
+        </div>
+        {data ? (
+          <ChecklistItemsEditor
+            eventId={eventId}
+            date={date}
+            phase="checkin"
+            items={data.items}
+            activityTypes={activityTypes}
+            onMutated={onMutated}
+          />
+        ) : null}
+      </div>
+
+      {nextDate && <NextCheckinEditor eventId={eventId} nextDate={nextDate} />}
+
+      <div className="ck-section ck-section--checkout">
+        <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h4 style={{ margin: 0 }}>{t('ck_checkout_title')}</h4>
+          <a
+            className="m-textlink"
+            href={`/kiosk/${encodeURIComponent(eventId)}/${encodeURIComponent(date)}/checkout`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t('ck_open_kiosk_out')}
+          </a>
+        </div>
+        {data ? (
+          <ChecklistItemsEditor
+            eventId={eventId}
+            date={date}
+            phase="checkout"
+            items={data.items}
+            activityTypes={activityTypes}
+            onMutated={onMutated}
+          />
+        ) : null}
+      </div>
+
+      <div className="ck-section ck-section--flags">
+        <h4 style={{ margin: '0 0 8px' }}>{t('ck_flags_title')}</h4>
+        <div className="m-stack" style={{ gap: 6 }}>
+          {roster.map((s) => {
+            const f = flags.find((x) => x.studentId === s.id);
+            const missing = f?.uncheckedCheckout ?? [];
+            const labels = missing
+              .map((id) => data?.items.find((i) => i.id === id)?.label)
+              .filter((l): l is string => !!l && l.length > 0);
+            const clear = missing.length === 0;
+            const c = colorOf(clear ? 'green' : 'rose');
+            return (
+              <div key={s.id} className="lrow">
+                <span style={{ flex: 1 }} className="lrow__title">
+                  {s.name}
+                </span>
+                <span
+                  className="mchip"
+                  style={{ background: c.soft, color: c.ink, fontWeight: 700 }}
+                >
+                  {clear ? t('ck_all_clear') : labels.join(', ') || missing.length}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EventModal({
   open,
   onClose,
@@ -493,6 +776,7 @@ export function EventModal({
           tabs={[
             { id: 'details', label: t('ev_details') },
             { id: 'attendance', label: t('att_tab') },
+            { id: 'checkin', label: t('ck_tab') },
             { id: 'preview', label: t('prev_tab') },
             { id: 'materials', label: t('mat_tab') },
           ]}
@@ -509,6 +793,17 @@ export function EventModal({
             eventId={f.id!}
             date={f.date || ''}
             classId={f.classId || ''}
+            classes={classes}
+            students={students}
+          />
+        </div>
+      ) : tab === 'checkin' && showTabs ? (
+        <div className="evm-pane-scroll">
+          <CheckinTab
+            eventId={f.id!}
+            date={f.date || ''}
+            classId={f.classId || ''}
+            recurrence={f.recurrence}
             classes={classes}
             students={students}
           />

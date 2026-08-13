@@ -6,6 +6,7 @@ export default [
   route('materials/:id/download', 'routes/materials.$id.download.tsx'),
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
+  route('checkin', 'routes/checkin.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
   route('event-previews', 'routes/event-previews.tsx'),
   // Page-view beacon (src/lib/track.ts). NOT under api/: that prefix is bearer-only, and the
