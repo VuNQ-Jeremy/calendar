@@ -291,13 +291,7 @@ export function PronounceGame({
           >
             {Math.round(result.accuracy)}%
           </div>
-          <div style={{ color: 'var(--text-muted)' }}>{t('fc_pron_accuracy')}</div>
-          {result.recognized && (
-            <div style={{ color: 'var(--text-strong)' }}>
-              {t('fc_pron_heard', { word: result.recognized })}
-            </div>
-          )}
-          <PhonemeBreakdown result={result} hint={t('fc_pron_ipa_hint')} />
+          <PhonemeBreakdown result={result} />
           <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
             {clip && (
               <FBtn variant="ghost" onClick={playClip} iconLeft={<MIcon name="volume" size={16} />}>
@@ -398,10 +392,10 @@ const TIER_COLOR: Record<ReturnType<typeof phonemeTier>, string> = {
 
 /**
  * The sound-by-sound verdict: the reference word's IPA, each symbol coloured by how clearly it
- * came out. Insertion entries are words the student added on top of the reference — they have no
- * reference phonemes, and the "we heard …" line above already reports them.
+ * came out — green / amber / red, with no legend. Insertion entries are words the student added
+ * on top of the reference; they carry no reference phonemes, so they are skipped.
  */
-function PhonemeBreakdown({ result, hint }: { result: PronounceAssessment; hint: string }) {
+function PhonemeBreakdown({ result }: { result: PronounceAssessment }) {
   const phonemes = (result.words ?? [])
     .filter((wd) => wd.errorType !== 'Insertion')
     .flatMap((wd) => wd.phonemes);
@@ -417,7 +411,6 @@ function PhonemeBreakdown({ result, hint }: { result: PronounceAssessment; hint:
         ))}
         /
       </div>
-      <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center' }}>{hint}</div>
     </>
   );
 }

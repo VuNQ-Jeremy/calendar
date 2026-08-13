@@ -120,7 +120,6 @@ test.describe('CRUD: pronounce game round', () => {
     // one-word round; the result posts as the end screen mounts, so arm the wait before clicking.
     await recordClip(page);
     await expect(page.getByText('85%', { exact: true })).toBeVisible();
-    await expect(page.getByText('We heard: “ephemeral”')).toBeVisible();
     // Each phoneme is its own coloured span; getByText matches the concatenated line.
     await expect(page.getByText('/ɪfɛmərəl/')).toBeVisible();
     const post = k.posted(path);

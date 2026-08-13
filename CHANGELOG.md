@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0206 — 2026-08-13
+Pronounce result screen: drop the Accuracy label, the "We heard" line and the colour-key hint on web — the percentage and the coloured IPA speak for themselves.
+
 ## v0.0205 — 2026-08-13
 Pronounce game: stopping the recorder now scores immediately, the result shows a percentage plus a sound-by-sound IPA breakdown (green/amber/red), and Play + Record again stay on the scored screen.
 
