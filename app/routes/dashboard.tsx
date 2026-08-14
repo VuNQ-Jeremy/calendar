@@ -10,7 +10,8 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
-import { iso, addDays } from '../../src/lib/core.js';
+import { ictDateOf } from '../../shared/logic/tests';
+import { addDaysIso } from '../../server/services/notify';
 import { requireStaff } from '../../server/services/auth';
 import { K, swrLoad } from '../../src/lib/route-cache.js';
 
@@ -20,8 +21,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = createDb(env);
   // A fresh clock, not the module-level TODAY: a Worker isolate can outlive the day it booted on,
   // and the two windows below must agree with each other.
-  const now = new Date();
-  const today = iso(now);
+  //
+  // The ICT day, never `iso(now)`. shared/logic/dates works in the LOCAL zone by design, and a
+  // Worker's local zone is UTC — so before 07:00 in Vietnam this dated "today" to yesterday and
+  // both windows below slid with it. Every other route already goes through `ictDateOf`; these
+  // two dashboards were the last holdouts.
+  const today = ictDateOf(new Date().toISOString());
   // Both schedule cards open the same event dialog the calendar uses, so this loader has to feed
   // it too: full classes (its attendance and check-in tabs read `studentIds`), the student and
   // material rows, and the event-material links. `listLite` was enough when the cards only showed
@@ -38,7 +43,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     eventsSvc.listForToday(db, today),
     // Tomorrow .. +UPCOMING_DAYS for the "Coming up" card. Recurring rows come back whatever
     // their stored date; the screen expands them over the same window.
-    eventsSvc.listRange(db, iso(addDays(now, 1)), iso(addDays(now, UPCOMING_DAYS))),
+    eventsSvc.listRange(db, addDaysIso(today, 1), addDaysIso(today, UPCOMING_DAYS)),
     testsSvc.attemptsSummary(db),
     classesSvc.list(db),
     peopleSvc.listStudents(db),
