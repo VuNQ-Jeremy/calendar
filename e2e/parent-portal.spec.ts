@@ -20,10 +20,15 @@ async function setPortal(page: Page, on: boolean) {
   const k = ui(page);
   await page.goto('/config');
   const dlg = await openConfigEntry(page, 'Parent access');
-  const box = dlg.locator('.mochi-check input[type="checkbox"]');
+  // Click the CHIP, read the input. The DS checkbox hides its native input behind a styled span,
+  // so clicking the input itself never settles ("element is not stable") — only `toBeChecked` and
+  // `isChecked` tolerate the hidden input. There is exactly one check in this dialog
+  // ("Let parents see their children"), so the bare `.mochi-check` is unambiguous.
+  const check = dlg.locator('.mochi-check');
+  const box = check.locator('input[type="checkbox"]');
   if ((await box.isChecked()) !== on) {
     const post = k.posted('/config');
-    await box.click();
+    await check.click();
     await post;
   }
   await expect(box).toBeChecked({ checked: on });
@@ -53,9 +58,12 @@ test.describe('Parent portal', () => {
     await post;
 
     const codesDlg = k.dlgOf('Invite codes ready');
-    const codes = (await codesDlg.getByText(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/).allInnerTexts()).map((c) =>
-      c.trim(),
-    );
+    // Gate on the codes being ON SCREEN first: `allInnerTexts()` does not auto-wait, and awaiting
+    // the POST only proves the server minted them — the save dialog is still up for the re-render
+    // that swaps it for this one, so the unguarded read returned [].
+    const code = codesDlg.getByText(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/);
+    await expect(code.first()).toBeVisible();
+    const codes = (await code.allInnerTexts()).map((c) => c.trim());
     expect(codes).toHaveLength(2);
     const parentCode = codes[1]; // minted student-first, then parent
     await codesDlg.getByRole('button', { name: 'Done' }).click();

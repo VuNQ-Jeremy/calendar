@@ -117,7 +117,9 @@ test.describe('CRUD: spaced-repetition review', () => {
     const due = sp.locator('.mochi-card', { hasText: 'Review today' });
     await expect(due).toContainText(`1 words in "${topic}" are due today`);
     // And the sidebar badge agrees — it counts the same rows against the same ICT day.
-    await expect(sp.locator('.sb a[href="/vocabulary"]')).toContainText('1');
+    // `.sb__item`, not just the href: a student's sidebar BRAND also links to /vocabulary
+    // (app/routes/_app.tsx — it is their home), so the bare href matches two elements.
+    await expect(sp.locator('.sb a.sb__item[href="/vocabulary"]')).toContainText('1');
 
     // ---- Review it. The banner says the deck is the due words, not the whole topic. ----
     await due.getByRole('button', { name: 'Review now' }).click();

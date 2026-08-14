@@ -218,7 +218,7 @@ function ActivityRowView({
   const { t } = useLang();
   const hasDiff = row.before != null || row.after != null;
   return (
-    <div style={{ borderBottom: '1px solid var(--line, #e7e0d6)' }}>
+    <div className="act-row" style={{ borderBottom: '1px solid var(--line, #e7e0d6)' }}>
       <div
         className="m-row"
         style={{ gap: 12, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0' }}

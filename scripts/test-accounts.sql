@@ -39,6 +39,11 @@ DELETE FROM flashcard_words;
 DELETE FROM flashcard_topics;
 DELETE FROM session_previews;
 DELETE FROM event_materials;
+-- The notification idempotency ledger (migration 0015). Keyed by a synthetic `key`, never by an
+-- entity, so nothing cascades it away — and every row is a permanent "already sent" for that key.
+-- logs-notifications.spec.ts presses Send on a forecast row; without this sweep the SECOND run
+-- finds that button disabled (title="already sent") and waits for it until the test times out.
+DELETE FROM sent_notifications;
 -- Tuition state: prices/lines normally cascade off classes/students, but
 -- tuition_months (keyed by month) never would — a leaked CLOSED month would
 -- wreck the tuition spec. Sweep all four explicitly.

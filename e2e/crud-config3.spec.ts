@@ -45,7 +45,7 @@ test.describe('CRUD: class levels and subjects', () => {
 
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete subject?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete subject?').click();
     await post;
     await expect(row(`${name} v2`)).toHaveCount(0);
 
@@ -83,7 +83,7 @@ test.describe('CRUD: class levels and subjects', () => {
 
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete class level?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete class level?').click();
     await post;
     await expect(row(`${name} v2`)).toHaveCount(0);
 

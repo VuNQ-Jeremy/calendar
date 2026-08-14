@@ -16,11 +16,10 @@ test.describe('CRUD: activity log', () => {
     await page.goto('/logs/activity?view=security');
     await expect(page.getByText('Recent sign-ins')).toBeVisible();
     // login rows are attributed to actor_kind 'anon' by design (server/services/audit.ts's
-    // attributeAccount) — the SessionUser is not resolved until the NEXT request. The email
-    // lives in meta_json, so it only shows once the row is expanded.
-    const loginRow = page.locator('details', { hasText: 'Signed in' }).first();
+    // attributeAccount) — the SessionUser is not resolved until the NEXT request. The email lives
+    // in meta_json, which ActivityRowView now prints inline, so no disclosure has to be opened.
+    const loginRow = page.locator('.act-row', { hasText: 'Signed in' }).first();
     await expect(loginRow).toBeVisible();
-    await loginRow.locator('summary').click();
     await expect(loginRow).toContainText('dev@mochi.edu');
   });
 
@@ -57,34 +56,33 @@ test.describe('CRUD: activity log', () => {
 
     // ---- Stream: filter to students, find the three rows for this one. ----
     await page.goto('/logs/activity?view=stream&entityType=student');
-    const createRow = page.locator('details', { hasText: name }).filter({ hasText: 'Created' });
+    const createRow = page.locator('.act-row', { hasText: name }).filter({ hasText: 'Created' });
     await expect(createRow.first()).toBeVisible();
 
     const updateRow = page
-      .locator('details', { hasText: `${name} v2` })
+      .locator('.act-row', { hasText: `${name} v2` })
       .filter({ hasText: 'Updated' })
       .first();
     await expect(updateRow).toBeVisible();
-    await updateRow.locator('summary').click();
-    // The diff shows the old name struck through and the new one in place. toContainText on the
-    // row itself (not a getByText sub-locator) — "name" is a substring of "name v2", and a
-    // sub-locator search would ambiguously match both the before and after cells.
+    // The diff shows the old name struck through and the new one in place, rendered inline under
+    // the row. toContainText on the row itself (not a getByText sub-locator) — "name" is a
+    // substring of "name v2", and a sub-locator search would ambiguously match both the before
+    // and after cells.
     await expect(updateRow).toContainText(name);
     await expect(updateRow).toContainText(`${name} v2`);
 
     const deleteRow = page
-      .locator('details', { hasText: `${name} v2` })
+      .locator('.act-row', { hasText: `${name} v2` })
       .filter({ hasText: 'Deleted' })
       .first();
     await expect(deleteRow).toBeVisible();
-    await deleteRow.locator('summary').click();
     // A delete's before_json is the full record — the name survives the row being gone.
     await expect(deleteRow).toContainText(`${name} v2`);
 
     // ---- Entity view: deep-link from the delete row, see all three events for this one id. ----
     await deleteRow.getByRole('button').first().click();
     await expect(page).toHaveURL(/view=entity&entityType=student&entityId=/);
-    const historyRows = page.locator('details');
+    const historyRows = page.locator('.act-row');
     await expect(historyRows).toHaveCount(3);
     await expect(page.getByText('Created')).toBeVisible();
     await expect(page.getByText('Updated')).toBeVisible();
@@ -101,7 +99,7 @@ test.describe('CRUD: activity log', () => {
     await page.waitForTimeout(16_000);
 
     await page.goto('/logs/activity?view=stream&action=view');
-    await expect(page.locator('details', { hasText: 'Viewed' }).first()).toBeVisible();
+    await expect(page.locator('.act-row', { hasText: 'Viewed' }).first()).toBeVisible();
   });
 
   test('a non-admin is denied', async ({ page }) => {

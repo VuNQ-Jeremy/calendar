@@ -36,10 +36,14 @@ test.describe('CRUD: invite redemption', () => {
     await post;
 
     const codesDlg = k.dlgOf('Invite codes ready');
+    // Gate on the codes being ON SCREEN before reading them. `allInnerTexts()` is a one-shot read
+    // with no auto-waiting, and awaiting the POST only proves the SERVER minted the codes — the
+    // save dialog is still up for the re-render that swaps it for this one, so the unguarded read
+    // returned [].
+    const code = codesDlg.getByText(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/);
+    await expect(code.first()).toBeVisible();
     // Rendered in the order the action minted them: student first, then parent.
-    const codes = (await codesDlg.getByText(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/).allInnerTexts()).map((c) =>
-      c.trim(),
-    );
+    const codes = (await code.allInnerTexts()).map((c) => c.trim());
     expect(codes).toHaveLength(2);
     const [studentCode, parentCode] = codes;
     await expect(codesDlg.getByText('Student code')).toBeVisible();

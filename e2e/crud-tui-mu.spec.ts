@@ -24,7 +24,10 @@ test.describe('CRUD: túi mù board', () => {
     await expect(page.getByRole('heading', { name: 'Mystery bags', exact: true })).toBeVisible();
     await expect(page.locator('.lrow', { hasText: 'Leo Park' })).toBeVisible();
 
-    // Turn the class board off in config.
+    // Turn the class board off in config. openConfigEntry clicks a `.cfg-row` on the CURRENT
+    // page — it does not navigate — so /config has to be opened first; without this it sat on
+    // /mystery-bag waiting for a row that only exists on /config until the test timed out.
+    await page.goto('/config');
     const settingsCard = await openConfigEntry(page, 'Mystery bags (túi mù)');
     let post = k.posted('/config');
     await settingsCard.getByText('Class board', { exact: true }).click();
@@ -40,7 +43,9 @@ test.describe('CRUD: túi mù board', () => {
     await page.goto('/dashboard');
     await expect(page.locator('.sb__item', { hasText: 'Mystery bags' })).toHaveCount(0);
 
-    // Restore the toggle so reruns and other specs see the default state.
+    // Restore the toggle so reruns and other specs see the default state. Back to /config first —
+    // the assertion above left the page on /dashboard.
+    await page.goto('/config');
     const settingsCard2 = await openConfigEntry(page, 'Mystery bags (túi mù)');
     post = k.posted('/config');
     await settingsCard2.getByText('Class board', { exact: true }).click();

@@ -208,7 +208,11 @@ test.describe('CRUD: assessments', () => {
       /\/s2\/report$/,
     );
     const miaRow = roster.locator('.assess-report__roster-row', { hasText: 'Mia Chen' });
-    await expect(miaRow.getByText('Written')).toBeVisible();
+    // `exact` on every status assertion in this test: the badge reads "Written" once a report
+    // exists and "Not written" before, and getByText is a case-insensitive SUBSTRING match — so
+    // the bare 'Written' matched BOTH. It made this line pass vacuously and the toHaveCount(0)
+    // after the delete impossible to satisfy, because the row correctly said "Not written".
+    await expect(miaRow.getByText('Written', { exact: true })).toBeVisible();
     // Zalo is disabled in the test env, so a Sent badge can never appear here.
     await expect(miaRow.getByText('Sent')).toHaveCount(0);
     await expect(roster.getByText(`${beforeN + 1}/`)).toBeVisible();
@@ -218,7 +222,8 @@ test.describe('CRUD: assessments', () => {
     await card.getByRole('button', { name: 'Delete' }).click();
     await k.dlgOf('Delete').getByRole('button', { name: 'Confirm' }).click();
     await post;
-    await expect(miaRow.getByText('Written')).toHaveCount(0);
+    await expect(miaRow.getByText('Written', { exact: true })).toHaveCount(0);
+    await expect(miaRow.getByText('Not written', { exact: true })).toBeVisible();
   });
 
   test('report slip: prints real attendance and per-class scores for a seeded month', async ({
@@ -235,7 +240,10 @@ test.describe('CRUD: assessments', () => {
 
     // Per-class scores: Biology 9A (7.5, 8.5 -> 8) and World Lit (8) both print.
     await expect(page.getByText('Scores by class')).toBeVisible();
-    await expect(page.getByText('World Lit')).toBeVisible();
+    // A CELL whose text starts with the class name: plain getByText('World Lit') also matched the
+    // header's "Biology 9A · World Lit" class list, and a cell carries the subject suffix
+    // ("World Lit · English"), so anchor the match instead of spelling the subject out.
+    await expect(page.getByRole('cell', { name: /^World Lit/ })).toBeVisible();
 
     // No vocab assignments are seeded for June, so the homework section stays off the slip.
     await expect(page.getByText('Vocabulary homework')).toHaveCount(0);

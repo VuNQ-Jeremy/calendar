@@ -76,6 +76,25 @@ export async function openConfigEntry(page: Page, title: string): Promise<Locato
   return dlg;
 }
 
+/**
+ * Set a date field to an ISO day.
+ *
+ * The field is a DATE PICKER, not a text input — `textIn(label).fill(iso)` finds nothing, because
+ * the control is a button that opens a portalled calendar. Only one "Next month" step is
+ * supported, which covers every in-spec target (all of them are days, not months, away).
+ */
+export async function pickDay(page: Page, label: string, iso: string) {
+  await page
+    .locator(`.mochi-field:has(> label.mochi-field__label:text-is("${label}"))`)
+    .locator('button[aria-haspopup="dialog"]')
+    .click();
+  const day = page.locator(`.m-datepicker__day[aria-label="${iso}"]`);
+  if ((await day.count()) === 0) {
+    await page.getByRole('button', { name: 'Next month' }).click();
+  }
+  await day.click();
+}
+
 /** The seeded student account (vunq@mochi.edu = Leo Park, in Biology 9A). */
 export async function signInStudent(page: Page) {
   await signIn(
@@ -133,6 +152,16 @@ export function ui(page: Page) {
   const dlgOf = (title: string) =>
     page.locator(`.m-dialog:has(.m-dialog__title:text-is("${title}"))`);
   const submit = () => dlg.locator('.m-dialog__foot .mochi-btn.is-primary');
+  /**
+   * The danger button of a confirm raised from *inside* another dialog.
+   *
+   * `useConfirm` (src/ui.tsx) renders its Modal inline rather than through a portal, so a confirm
+   * opened from a config row's modal is a DESCENDANT of that modal. `dlgOf(title)` therefore
+   * matches the outer dialog too, and every per-row "Delete" icon button behind it satisfies
+   * `getByRole('button', { name: 'Delete' })` — one strict-mode violation per list row. Take the
+   * innermost matching dialog and locate the button by the class only the confirm's action has.
+   */
+  const confirmDanger = (title: string) => dlgOf(title).last().locator('.mochi-btn.is-danger');
   /** Resolves when the route action's POST round-trips OK. */
   const posted = (path: string) =>
     page.waitForResponse(
@@ -140,5 +169,5 @@ export function ui(page: Page) {
         r.request().method() === 'POST' && new URL(r.url()).pathname === `${path}.data` && r.ok(),
     );
 
-  return { ...on(dlg), on, dlg, dlgOf, submit, posted };
+  return { ...on(dlg), on, dlg, dlgOf, submit, posted, confirmDanger };
 }

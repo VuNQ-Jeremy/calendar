@@ -52,7 +52,10 @@ test.describe('CRUD: vocabulary assignments', () => {
     // toBeChecked() accepts hidden.
     await expect(dlg.getByText('Any mode counts')).toBeVisible();
     // The featured "Mixed round" chip lives in the same checkbox group as the plain modes.
-    await expect(dlg.getByRole('checkbox', { name: 'Mixed round' })).toBeVisible();
+    // Assert the CHIP, not the input: per the note above the native input is hidden behind the
+    // styled span, so toBeVisible() on it can never pass (toBeChecked, used below, is the one
+    // matcher that tolerates a hidden input).
+    await expect(dlg.locator('.mochi-check', { hasText: 'Mixed round' })).toBeVisible();
     await expect(dlg.getByText('Recommended')).toBeVisible();
     await dlg.locator('.mochi-check', { hasText: 'Unscramble' }).click();
     await dlg.locator('.mochi-check', { hasText: 'Type it' }).click();

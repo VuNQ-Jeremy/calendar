@@ -111,7 +111,7 @@ test.describe('CRUD: kiosk', () => {
     const row = page.locator('.lrow', { hasText: typeName });
     post = k.posted('/config');
     await row.getByRole('button', { name: 'Delete' }).click();
-    await k.dlgOf('Delete this activity?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete this activity?').click();
     await post;
   });
 
@@ -141,7 +141,11 @@ test.describe('CRUD: kiosk', () => {
     // Its kiosk button opens the kiosk instead of the dialog (the click must not fall through).
     await dashRow.getByRole('button', { name: 'Open check-in kiosk' }).click();
     const kiosk = page.locator('.kiosk-overlay');
-    await expect(kiosk.locator('.kiosk-card', { hasText: 'Leo Park' })).toBeVisible();
+    // The header, not a name card: this event has no authored checklist, and kiosk.tsx shows its
+    // empty state instead of the name grid when `items.length === 0` (a kiosk with nothing to tick
+    // has no roster to offer). Naming the event's class still proves the right kiosk opened — and
+    // pairing it with the dialog count is what proves the click did not fall through.
+    await expect(kiosk.locator('.kiosk-title')).toContainText('Biology 9A');
     await expect(k.dlg).toHaveCount(0);
     await kiosk.getByRole('button', { name: 'Close kiosk' }).click();
     await expect(kiosk).toHaveCount(0);

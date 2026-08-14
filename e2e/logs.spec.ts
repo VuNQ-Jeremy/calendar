@@ -51,8 +51,14 @@ test.describe('logs: admin diagnostics', () => {
     await sp.getByRole('button', { name: 'I know it' }).click();
     await post;
 
-    // ---- A student may not open the page at all: the loader 403s, nav row or no nav row. ----
-    expect((await sp.request.get('/logs')).status()).toBe(403);
+    // ---- A student may not open the page at all, nav row or no nav row. ----
+    // requireAdmin (server/services/auth.ts) is requireStaff + an Admin check, and requireStaff
+    // REDIRECTS a student to /vocabulary before the 403 branch is ever reached — only non-Admin
+    // staff see a bare 403. request.get follows redirects, so asserting 403 here read the landing
+    // page's 200. Pin maxRedirects: 0 and assert the redirect itself, which is the real denial.
+    const denied = await sp.request.get('/logs', { maxRedirects: 0 });
+    expect(denied.status()).toBe(302);
+    expect(denied.headers()['location']).toBe('/vocabulary');
     await expect(sp.locator('.sb a[href="/logs"]')).toHaveCount(0);
     await studentCtx.close();
 

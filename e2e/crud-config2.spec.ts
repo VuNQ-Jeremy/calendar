@@ -48,7 +48,7 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
     // The criteria list reuses the assessment-type confirm strings.
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete type?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete type?').click();
     await post;
     await expect(row(`${name} v2`)).toHaveCount(0);
   });
@@ -79,7 +79,7 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
 
     await row(name).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete grade level?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete grade level?').click();
     await post;
     await expect(row(name)).toHaveCount(0);
   });

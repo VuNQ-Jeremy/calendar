@@ -1,18 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
-
-/** Pick a date in an MDatePicker by ISO day, hopping one month if needed. */
-async function pickDay(page: Page, label: string, iso: string) {
-  await page
-    .locator(`.mochi-field:has(> label.mochi-field__label:text-is("${label}"))`)
-    .locator('button[aria-haspopup="dialog"]')
-    .click();
-  const day = page.locator(`.m-datepicker__day[aria-label="${iso}"]`);
-  if ((await day.count()) === 0) {
-    await page.getByRole('button', { name: 'Next month' }).click();
-  }
-  await day.click();
-}
+import { test, expect } from '@playwright/test';
+import { crudGuard, pickDay, signInStaff, ui } from './crud-helpers';
 
 /**
  * The event dialog's Check-in/out tab: authoring this session's check-in list, a
@@ -55,7 +42,9 @@ test.describe('CRUD: check-in/out authoring', () => {
     await post;
 
     await page.getByRole('tab', { name: 'Agenda' }).click();
-    await page.locator('.aev', { hasText: title }).click();
+    // 'Every week' above means the agenda lists several occurrences of this same event — open the
+    // earliest one rather than matching them all.
+    await page.locator('.aev', { hasText: title }).first().click();
     await k.dlg.getByRole('tab', { name: 'Check-in/out' }).click();
 
     // --- This session's check-in list ---
@@ -112,7 +101,7 @@ test.describe('CRUD: check-in/out authoring', () => {
     const row = page.locator('.lrow', { hasText: typeName });
     post = k.posted('/config');
     await row.getByRole('button', { name: 'Delete' }).click();
-    await k.dlgOf('Delete this activity?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete this activity?').click();
     await post;
   });
 
@@ -154,7 +143,19 @@ test.describe('CRUD: check-in/out authoring', () => {
     await post;
 
     // Reopen at the new date — the item came along.
-    await page.locator('.aev', { hasText: title }).click();
+    //
+    // Scoped to the TARGET day's group, and that scoping is load-bearing twice over. The check-in
+    // tab reads items for the occurrence the dialog was opened AT, so opening the stale row still
+    // sitting under the old date queries (event_id, old date) and finds nothing. It also doubles
+    // as the wait: awaiting the POST only proves the server moved the row, and the agenda has its
+    // own revalidation to finish before the event appears under its new heading.
+    const targetDayNum = String(Number(target.slice(8, 10)));
+    const targetDay = page.locator('.agenda__day').filter({
+      has: page.locator('.agenda__dnum', { hasText: new RegExp(`^${targetDayNum}$`) }),
+    });
+    const movedEvent = targetDay.locator('.aev', { hasText: title });
+    await expect(movedEvent).toBeVisible();
+    await movedEvent.click();
     await k.dlg.getByRole('tab', { name: 'Check-in/out' }).click();
     await expect(thisSection.locator('input.mochi-input')).toHaveValue(label);
 

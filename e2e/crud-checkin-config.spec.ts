@@ -47,7 +47,7 @@ test.describe('CRUD: check-in config', () => {
 
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete this activity?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete this activity?').click();
     await post;
     await expect(row(`${name} v2`)).toHaveCount(0);
   });

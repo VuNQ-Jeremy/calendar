@@ -48,7 +48,7 @@ test.describe('CRUD: config', () => {
 
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete type?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete type?').click();
     await post;
     await expect(row(`${name} v2`)).toHaveCount(0);
   });
@@ -75,7 +75,7 @@ test.describe('CRUD: config', () => {
 
     await row(`${name} v2`).getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/config');
-    await k.dlgOf('Delete grade level?').getByRole('button', { name: 'Delete' }).click();
+    await k.confirmDanger('Delete grade level?').click();
     await post;
     await expect(row(`${name} v2`)).toHaveCount(0);
   });
@@ -87,8 +87,10 @@ test.describe('CRUD: config', () => {
   test('every setting is a row that opens into its modal', async ({ page }) => {
     const row = (title: string) => page.locator(`.cfg-row:has(.lrow__title:text-is("${title}"))`);
 
-    // Thirteen settings, grouped. The summary is the point — it is what replaces scrolling.
-    await expect(page.locator('.cfg-row')).toHaveCount(13);
+    // Sixteen settings, grouped. The summary is the point — it is what replaces scrolling.
+    // This count is deliberately exact: adding a setting without a row would otherwise pass
+    // silently. Bump it when you add one (13 -> 16 came with check-in and túi mù).
+    await expect(page.locator('.cfg-row')).toHaveCount(16);
     await expect(row('Assessment types').locator('.cfg-row__value')).toHaveText(/of \d+ active/);
     await expect(row('Ranking weights').locator('.cfg-row__value')).toHaveText(/^\d+ \/ \d+$/);
 
