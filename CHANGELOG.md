@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0220 — 2026-08-14
+Calendar drag now snaps to 15 minutes, matching the event dialog's time picker, and snaps where the block lands so an off-grid time settles onto the grid.
+
 ## v0.0219 — 2026-08-14
 Calendar drags now snap to 30 minutes instead of the minute, and dragging a past occurrence of a recurring event detaches it instead of asking which occurrences to change.
 

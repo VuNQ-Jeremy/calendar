@@ -132,7 +132,7 @@ test.describe('CRUD: calendar drag and drop', () => {
     await deleteWholeSeries(page, title);
   });
 
-  test('week view: a dragged block snaps to the half hour, not the minute', async ({ page }) => {
+  test('week view: a dragged block snaps to the quarter hour, not the minute', async ({ page }) => {
     const k = ui(page);
     const title = `E2E snap ${Date.now()}`;
     await page.goto('/calendar');
@@ -143,20 +143,22 @@ test.describe('CRUD: calendar drag and drop', () => {
     await expect(block).toBeVisible();
     const before = startMinutes(await block.locator('.tev__time').innerText());
 
-    // Travel 0.6 of an hour — 36 minutes, deliberately not a multiple of the snap, and far enough
-    // from both 30 and 60 that pixel rounding cannot decide the outcome.
+    // Travel 0.3 of an hour — 18 minutes. Nearest quarter is 15 and nearest half hour is 30, so
+    // this fails both if the snap is lost entirely and if the grid coarsens back to half hours.
     const hourPx = await page
       .locator('.tgrid')
       .first()
       .evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--hr-h')));
     const from = await centre(block);
-    await dragTo(page, block, { x: from.x, y: from.y + hourPx * 0.6 });
+    await dragTo(page, block, { x: from.x, y: from.y + hourPx * 0.3 });
     const post = k.posted('/calendar');
     await page.mouse.up();
     await post;
 
-    // 36 minutes of travel must commit as exactly 30. It used to commit as 36.
-    expect(startMinutes(await block.locator('.tev__time').innerText()) - before).toBe(30);
+    // 18 minutes of travel commits as exactly 15. It used to commit as 18.
+    const after = startMinutes(await block.locator('.tev__time').innerText());
+    expect(after - before).toBe(15);
+    expect(after % 15).toBe(0); // and it lands ON the grid — never a 9:33
 
     await deleteWholeSeries(page, title);
   });

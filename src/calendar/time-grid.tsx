@@ -8,8 +8,8 @@ import type { ExpandedEvent } from './utils.js';
 /** Below this many pixels of travel the gesture is still a click, not a drag. */
 const DRAG_THRESHOLD = 4;
 
-/** Minutes a dragged block snaps to. A class is scheduled on the half hour, not the minute. */
-const SNAP_MIN = 30;
+/** Minutes a dragged block snaps to — the grid the event dialog's TimePicker steps on (ui.tsx). */
+const SNAP_MIN = 15;
 
 interface DragState {
   ev: ExpandedEvent;
@@ -127,7 +127,10 @@ export function TimeGrid({
       const s0 = toMin(drag.origStart);
       const dur = toMin(drag.origEnd) - s0;
       const dyRaw = ((e.clientY - drag.offY + scrollDelta) / HR_H) * 60;
-      let dyMin = Math.round(dyRaw / SNAP_MIN) * SNAP_MIN;
+      // Snap where the block LANDS, not how far it travelled. Snapping the delta preserves any
+      // odd offset the event already had, so a 9:33 event would move to 9:48 and never reach the
+      // grid; snapping the destination settles it on 9:30 or 9:45 the first time it is dragged.
+      let dyMin = Math.round((s0 + dyRaw) / SNAP_MIN) * SNAP_MIN - s0;
       dyMin = Math.max(-s0, Math.min(24 * 60 - dur - s0, dyMin)); // keep the block inside the day
       const colIdx = Math.max(
         0,
