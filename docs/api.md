@@ -1,5 +1,18 @@
 # Mochi JSON API
 
+> **Interactive reference: [`/docs/api`](https://mochi-class.pages.dev/docs/api)** (staff sign-in
+> required), with the OpenAPI 3.1 document behind it at `/docs/openapi.json`.
+>
+> That page is generated from the code — the request schemas in `shared/schemas.ts`, the response
+> schemas in `shared/api-contract.ts`, and the endpoint registry in `server/api/docs/registry.ts` —
+> and a test fails if a route ships without an entry, so it cannot go stale the way a hand-written
+> table can. Use it for **exact shapes, parameters and status codes**, and to try a call with your
+> own token.
+>
+> This file is the other half: the **why**. Envelope semantics, the auth model, offline replay and
+> idempotency, the garden rules, the Zalo channel — the things a schema cannot express. The tables
+> below stay as an at-a-glance index.
+
 The API the mobile app talks to. Added in [docs/mobile/phase-1-json-api.md](./mobile/phase-1-json-api.md).
 
 It sits **alongside** the web app's React Router loaders and actions, not instead of them. Both
@@ -157,6 +170,7 @@ All support `GET` (list), `POST` (create), `PATCH` (update), `DELETE` (remove) u
 | `/api/assessment-types/:id?` | **admin** | `AssessmentTypeInput` |
 | `/api/remark-criteria/:id?` | **admin** (GET: staff) | `RemarkCriterionInput` — the monthly report's rating rows; teachers read them to render the remark form |
 | `/api/grade-levels/:id?` | **admin** | `GradeLevelInput` — managed Khối 6..9 list, categorizes questions and tests |
+| `/api/subjects/:id?` | **admin** (GET: staff) | `SubjectInput` — the managed subject list. `ClassInput.subjectId` points here; the legacy free-text `subject` is resolved against it by name |
 | `/api/feedback/:id?` | staff | `FeedbackInput` |
 
 **PATCH is a true partial.** It uses `parsePatch`, which strips keys absent from the request
@@ -199,7 +213,9 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET POST PATCH DELETE | `/api/garden/assignments/:id?` | staff | `VocabAssignmentInput`. GET takes `?classId=`. `modes` is a CSV of game modes that count toward the assignment (`'scramble,type'`); null/'' = any mode. `deadlineTime` is an ICT `HH:MM` the deadline day expires at; null/'' = end of day |
 | GET | `/api/garden/progress/:id` | staff | Who has finished one assignment. NOT under `/assignments`, whose `:id?` would swallow the segment |
 | GET | `/api/garden/snapshots?classId=` | **user** | Saved album months; add `&month=` for one frozen garden. Same membership rule as the class garden |
+| GET | `/api/garden/month/:id` | staff | One student's garden month for the report card — `?month=YYYY-MM` required. Never 404s: a student with no activity gets the zeroed tally. `/garden-month` is the cookie-authed twin the web report uses |
 | GET PUT | `/api/settings/garden` | admin | `GardenSettingsInput` — school-wide, and it re-times every plant |
+| GET | `/api/checkin/summary` | **user** | One student's túi mù month: `{ tally, tier }`. Students get their own; only staff may pass `?studentId=`. Replies `{ disabled: true }` — and nothing else — when an admin has switched the student view off, so check that flag first |
 
 ### Tuition
 

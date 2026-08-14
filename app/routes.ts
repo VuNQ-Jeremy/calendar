@@ -40,6 +40,13 @@ export default [
   route('vocab-image-generate', 'routes/vocab-image-generate.tsx'),
   route('vocab-image-commit', 'routes/vocab-image-commit.tsx'),
 
+  // The API reference and the OpenAPI document it renders, generated from the route registry in
+  // server/api/docs/. Staff-only through the cookie-or-bearer guard — the spec enumerates every
+  // admin endpoint in the school. Outside `_app` because both return a raw Response: no app shell,
+  // and no app.css reaching into Scalar's markup. See the route files.
+  route('docs/api', 'routes/docs.api.tsx'),
+  route('docs/openapi.json', 'routes/docs.openapi.tsx'),
+
   // ---- JSON API (mobile app; see docs/api.md) ----
   // Resource routes only: none of these has a default export, and none is inside the
   // _app layout — they must not inherit the app-shell loader or its cookie redirect.
