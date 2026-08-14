@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0211 — 2026-08-14
+Docs: the root README is now a real project README — stack, repo layout, the two clients, release and test workflow. The old design handoff moved to design/README.md.
+
 ## v0.0209 — 2026-08-14
 Test suite: the full staging e2e run is green again, 24 failures to none. Almost all of them were specs written against an app that had moved on since the last full run, not broken features.
 

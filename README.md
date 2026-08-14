@@ -1,253 +1,167 @@
-# Handoff: Mochi — Learning Management Calendar
+# Mochi
 
-## Overview
-Mochi is a warm, family-friendly **learning management web app** for a teacher/admin
-audience. It combines **authentication**, **calendar** (Google-Calendar-style, fully
-customizable), **class management**, **people management** (students, staff, parents),
-**materials/resources**, and **homework tracking** — all under one cosy, cream-colored
-shell. A read-only **parent-facing portal** now ships alongside it, switched on per school
-from System Config → Parent access.
+A learning-management app for a small language school in Vietnam — calendar and
+attendance, classes and people, tuition, assessments and report cards, vocabulary
+study, and a read-only portal for parents. Two clients (a server-rendered web app
+and a native Android app) share one backend, one set of domain services, and one
+set of Zod contracts.
 
-The product voice is "a kind, organized friend who happens to love your kids" — calm,
-encouraging, sentence-case, never enterprise-clinical.
+Fully bilingual, English and Tiếng Việt. Every user-facing string goes through
+`t(key)` with entries in both languages — see [shared/i18n/strings.ts](shared/i18n/strings.ts).
 
 ---
 
-## About the Design Files
-The files under `design/` are **design references created in HTML/React-via-Babel** —
-prototypes that demonstrate the intended look, layout, and behavior. **They are not
-production code to ship directly.** They run entirely in the browser with in-memory
-sample data persisted to `localStorage`; there is no backend, router, build step, or
-real auth.
+## Stack
 
-Your task is to **recreate these designs in the target codebase's environment** using
-its established framework, component library, routing, data layer, and auth — or, if no
-codebase exists yet, to choose an appropriate stack (e.g. React + Vite + a real router +
-a backend/API) and implement the designs there. Treat the HTML as the source of truth
-for *visual + interaction intent*, and the in-file logic as a *reference implementation*
-of the behavior, not the architecture.
+| Layer | What |
+|---|---|
+| Web | React Router **v8** framework mode (SSR), React 19, Vite 7 |
+| Runtime | Cloudflare Workers — [workers/app.ts](workers/app.ts) is the SSR entry |
+| Data | D1 (`mochi-class`) via Drizzle; hand-written SQL migrations |
+| Files | R2 (`mochi-files`) — material uploads, share-card images, vocabulary pictures |
+| Realtime | Durable Objects — `LIVE_HUB` (cache invalidation over WebSocket), `TRANSLATE_DO`, `ZALO_POLLER` |
+| AI | Anthropic SDK (vocabulary generation, enrichment), Workers AI `flux-1-schnell` (word illustrations), Azure Speech (pronunciation scoring) |
+| Mobile | Expo / React Native, Android only, distributed as an APK link + EAS OTA updates |
+| Tests | Vitest (jsdom + Workers pool), Playwright e2e against an isolated staging env |
 
-To preview the reference: open `design/index.html` in a browser (it loads React, Babel,
-and the Mochi design-system bundle from local paths + Google Fonts from CDN). **Demo
-login:** `sam@school.edu` / any non-empty password (auth is mocked — any seeded user
-email logs in; see `app/auth.jsx`).
+There is **no `index.html`** and no client-side store — data moves through React
+Router loaders and actions on the web, and through the JSON API on mobile.
 
----
+## Quick start
 
-## Fidelity
-**High-fidelity (hifi).** Final colors, typography, spacing, component shapes, and
-interactions are all intended as shown. Recreate the UI pixel-faithfully using the
-**Mochi Design System** (bundled under `design/_ds/`) — its tokens and React components
-are the binding visual contract. Do not invent new colors/type/spacing; consume the
-design-system tokens and components.
+```bash
+npm install
+npm run db:migrate:local     # apply migrations to the local D1
+npm run db:seed:local        # demo data (optional)
+npm run dev                  # react-router dev
+```
 
----
+Static checks, all cheap and safe to run any time:
 
-## Design System (binding)
-All visuals derive from the **Mochi Design System**, bundled at
-`design/_ds/mochi-design-system-472b365a-31b5-44c2-8b48-4d5ab7945e52/`.
+```bash
+npm run typecheck     # react-router typegen && tsc --noEmit
+npm run lint          # oxlint
+npm run check:i18n    # every t() key exists in both en and vi
+npm run format
+```
 
-- **Stylesheet entry:** `…/_ds/.../styles.css` (imports all token layers: fonts, colors,
-  typography, spacing, effects, base, components).
-- **Component bundle:** `…/_ds/.../_ds_bundle.js` → exposes components on
-  `window.MochiDesignSystem_472b36`: `Button`, `IconButton`, `Card`, `Badge`, `Tag`,
-  `Avatar`, `Input`, `Checkbox`, `Switch`, `ProgressBar`, `Tabs`.
-- In a real codebase, install/port these as proper components (the design-system source
-  tree has per-component `*.prompt.md` usage notes). Keep the **same names and props**.
-- **Icons:** Lucide (2px rounded stroke). The prototype inlines the glyphs it uses in
-  `app/icons.jsx` as `<MIcon name="…" />`; in production use `lucide-react` with the same
-  names.
-- **Fonts:** **Fredoka** (headings, numbers), **Nunito Sans** (UI/body), **DM Mono**
-  (times, dates, grades, codes).
+Deploy: `npm run deploy` (build + `wrangler deploy`). One-time provisioning —
+`npx wrangler d1 create mochi-class`, `npx wrangler r2 bucket create mochi-files`,
+then `npm run db:migrate`.
 
----
+## Repo layout
 
-## Information Architecture / Navigation
-Fixed left **sidebar** (260px, cream) + scrollable main content. No top search bar
-(removed per review). Nav groups:
+```
+app/routes.ts          explicit route config (not file-based) — 118 route files
+app/routes/*.tsx       thin: a loader, an action, a re-export of a screen from src/
+app/root.tsx           the whole document head
 
-- **Overview** — Dashboard (Today), Calendar
-- **Manage** — Classes, People, Materials, Homework
-- **Sidebar footer** — current user avatar → **Profile** (personal management page:
-  name, avatar color, contacts, sign out, reset demo).
+src/                   all web UI — screens, the calendar, flashcards, garden,
+                       assessments, tuition, kiosk, parent portal
+src/ds/                the Mochi Design System: a generated bundle.js + CSS token
+                       layers. Do not hand-edit bundle.js.
+src/lib/               i18n, the client route cache, live updates, tracking
 
-Badges on nav items: **Homework** shows count of items due today/overdue; **People**
-shows count of unused invite codes.
+server/services/*.ts   43 modules of domain logic, all plain (db, …) functions.
+                       Both clients go through here; nothing lives in route files.
+server/db/schema.ts    Drizzle schema — the single source of truth
+server/api/            bearer-token auth + the JSON API handler wrapper
 
----
+shared/                code both clients import: schemas.ts (Zod contracts),
+                       i18n/strings.ts, tokens.ts, logic/ (pure domain rules),
+                       version.ts
+workers/               app.ts (SSR + cron), live-hub.ts, translate-proxy.ts,
+                       zalo-poller.ts
+migrations/            hand-written SQL, applied with wrangler d1 migrations apply
+mobile/                the Expo Android client (its own npm project)
+e2e/                   37 Playwright specs, one per feature area
+design/                the original design handoff + HTML prototype
+```
 
-## Screens / Views
+`worker/index.js` (singular) is a dead stub kept only for `wrangler.test.jsonc`.
 
-### 1. Auth (`app/auth.jsx`)
-- **Modes:** `login`, `signup`, `forgot`, `code` (redeem one-time onboarding code).
-- **Login:** email + password, **"Remember me"** toggle (persists session to
-  `localStorage`), links to Sign up / Forgot password / "I have an invite code".
-- **Sign up:** name, email, password → creates a staff user and logs in.
-- **Forgot password:** email → confirmation message (mocked).
-- **Invite code redemption:** 6-char code in `XXX-XXX` format (mono) → onboarding.
-- **Layout:** centered card on cream; Mochi paw mark + wordmark; sentence-case copy.
+## The two clients
 
-### 2. Dashboard / Today (`app/screens-core.jsx` → `DashboardScreen`)
-- Greeting header, "today" summary. Cards: today's events, homework due today (with
-  inline check-off + completion `ProgressBar`), quick links. Pulls from the store.
+**Web** — server-rendered, cookie session (`__mochi_session`), loaders and actions.
+Client-side caching and invalidation live in [src/lib/cache.ts](src/lib/cache.ts)
+and [src/lib/route-cache.ts](src/lib/route-cache.ts).
 
-### 3. Calendar (`app/calendar.jsx` → `CalendarScreen`) — the centerpiece
-- **Views:** Month, Week, Day, Agenda (list) — switched via `Tabs` segmented control.
-- **Navigation:** prev/next + "Today"; title reflects the range (e.g. "Sep 1 – Sep 7",
-  "Mon, September 4", "Next 2 weeks").
-- **Events:** create/edit via `EventModal` (title, date, start/end time, class link,
-  location, color, recurrence none/weekly). Click empty slot to create; click event to
-  edit/delete.
-- **Drag to reschedule:** events in the week/day time-grid can be dragged to a new
-  day/time (`onMove`).
-- **Color-coding:** every event carries a category hue (violet/green/blue/orange/cocoa/
-  rose) — usually inherited from its class.
-- **Recurring events:** weekly recurrence is expanded into concrete instances within the
-  visible range (`expandEvents`).
-- **Customization (lives ON the calendar page, per review — not in global settings):**
-  a **theme panel** (`CalendarThemePanel`) with full color pickers for canvas
-  background, grid lines, today tint, day-header strip, plus an optional **background
-  image** URL with opacity control. Theme persists in the store (`data.theme`).
-- **Legend** of category colors at the bottom.
-- **Time grid:** hour rows, "now" line, mono time labels; week shows 7 day columns, day
-  shows 1. Today's column is tinted.
+**Mobile** — Expo/Android, talks to the JSON API at `/api/*` with
+`Authorization: Bearer <token>`. Envelope, error codes, and every endpoint are in
+[docs/api.md](docs/api.md); running and building it is in
+[mobile/README.md](mobile/README.md).
 
-### 4. Classes (`app/screens-manage.jsx` → `ClassesScreen`)
-- Card grid; each card has a colored top bar, name, subject `Tag`, edit/delete icon
-  buttons. **Clicking the card body opens a detail popup** (`ClassDetailModal`) showing
-  subject/room, a stat strip (students / open work / materials), the weekly schedule,
-  the full roster (avatars), and linked materials.
-- **Create/edit** (`ClassModal`): name, subject/tag, room, color, weekly schedule
-  (day + start/end time slots), and student assignment.
+The two never drift because both call the same `server/services/*.ts` functions and
+validate with the same `shared/schemas.ts` schemas.
 
-### 5. People (`app/screens-manage.jsx` → `StudentsScreen`)
-Segmented `Tabs`: **Students · Staff · Parents · Invites** (counts in labels).
-- **Students:** list rows (avatar, grade, linked parent, email, class tags); add/edit via
-  `StudentModal` — name and email, then a **Grade & classes** section (grade sits with
-  the **"Enrolled classes" type-ahead search**: the `TokenSearch` component — search by
-  name, pick to add a removable colored chip), then a **Parent** section when adding.
-  Filling the parent in creates a real linked `parents` row, not a free-text label —
-  or tick **"Link an existing parent"** and pick one from the dropdown, which is the
-  sibling case (a second row for the same mother would be wrong).
-- **Staff:** list of staff users; add/edit via `StaffModal` (name, email, role, color,
-  phone — phone inputs have **no placeholder**, blank by design).
-- **Parents:** list rows (avatar, contact, linked children as tags, relation badge);
-  add/edit via `ParentModal` (name, relation, email, phone, color, and **children linked
-  via the same `TokenSearch`**).
-- **Invites (one-time onboarding codes):** there is no "generate" button — **adding
-  anyone mints their code**, and the modal ends on it (`XXX-XXX`, mono, copy button; two
-  codes when a student was added with a parent). Each code is tied to the person it was
-  made for, so redeeming attaches a login to that row instead of creating a second one.
-  `InvitesPanel` lists them by the person's name with used/unused state; copy + revoke.
+## Roles
 
-### 6. Materials (`app/screens-extra.jsx` → `MaterialsScreen`)
-- List/grid of resources filtered by class. Each item: type icon
-  (notes/worksheet/video/link), title, class, favorite/pin star, and a
-  **download action** for uploaded files. Add material: upload a file *or* link an
-  external URL; choose type; assign to a class; mark favorite.
+`Staff` (Teacher / Admin / Assistant), `Student`, and `Parent`. People are onboarded
+with one-time invite codes (`XXX-XXX`) minted when the person is added — redeeming a
+code attaches a login to that existing row rather than creating a second one.
 
-### 7. Homework (`app/screens-core.jsx` → `HomeworkScreen`)
-- A **manually-created checklist** of assigned homework. Each item: `Checkbox` to mark
-  done, title, class tag, due date (relative — "Due today", "Tomorrow", "Yesterday"),
-  **points**, and **notes**. Filter by class/status; completion `ProgressBar`. Add/edit
-  homework manually (title, class, due date, points, notes).
+The **parent portal** (`/children`) is off by default and opens per school from
+System Config → Parent access. It is gated twice: the nav item is hidden and the
+path itself is refused in [app/routes/_app.tsx](app/routes/_app.tsx).
 
-### 8. Profile (`app/screens-extra.jsx` → `ProfileScreen`)
-- **Personal management page** (not system settings): edit your name, avatar color, and
-  contacts (email, phone). Sign out. "Reset demo data" action. Two-column on wide
-  viewports, **collapses to one column below 960px**.
+Parents are also reached over **Zalo** — a bot channel for attendance cards, session
+previews and fee slips. See [docs/zalo.md](docs/zalo.md).
 
-> **Removed per review (do not reintroduce):** global top search bar, notifications,
-> topbar avatar, a separate "System settings" page (its calendar theme + background-image
-> controls were moved onto the Calendar page).
+## Versioning and release
 
----
+Version is `v{major}.{build}`. **The build number is derived from the git commit
+count and is never stored** — that is what keeps parallel work from several machines
+from conflicting on a counter. `shared/version.json` holds only `major`,
+`buildOffset`, and `runtimeVersion`.
 
-## Interactions & Behavior
-- **Routing:** single-page state (`active` screen in `AppShell`). In production, map each
-  screen to a real route.
-- **Modals:** centered dialog surfaces (`Modal`, `useConfirm` for destructive confirms).
-  Open on create/edit/detail; ESC/backdrop to close.
-- **Drag-to-reschedule** on the calendar time grid.
-- **Type-ahead search** (`TokenSearch`): filters a list as you type, click a suggestion
-  to add a removable chip, click chip (or its ×) to remove. Closes on outside click.
-- **Inline check-off** for homework (optimistic toggle, persists to store).
-- **Color pickers:** full per-element color choice for calendar theme.
-- **Motion:** gentle, slightly springy (`--ease-soft`, 120/200/320ms). Buttons shrink on
-  press (`scale(.96)`), cards lift on hover (`translateY(-2px)`). Respect
-  `prefers-reduced-motion`.
-- **Focus:** soft orange ring (`--ring`), never a hard outline.
-- **Responsive:** profile grid collapses below 960px; sidebar is fixed-width. The shell
-  targets desktop-first (teacher/admin tool); plan mobile/tablet refinements as needed.
+Every push to `main` adds a [CHANGELOG.md](CHANGELOG.md) entry:
 
----
+```bash
+node scripts/changelog.mjs "1-2 line summary"
+```
 
-## Data Model (reference — see `app/store.jsx`)
-In-browser store persisted to `localStorage` under a single key. Collections:
+`runtimeVersion` is **not** the app version — it gates Expo OTA updates and is
+bumped by hand only when native dependencies change.
 
-- **users** (staff) — `{ id, name, email, role, color, phone }`
-- **students** — `{ id, name, grade, guardian, email, color, classIds[] }`
-- **parents** — `{ id, name, email, phone, color, relation, studentIds[] }`
-- **classes** — `{ id, name, subject, color, room, schedule:[{ day, start, end }], studentIds[] }`
-- **events** — `{ id, title, date, start, end, classId, location, color, recur }`
-  (`recur`: `none` | `weekly`)
-- **homework** — `{ id, title, classId, due, points, notes, done }`
-- **materials** — `{ id, title, type, classId, url|file, favorite }`
-  (`type`: `notes` | `worksheet` | `video` | `link`)
-- **invites** — `{ id, code, role, name, classId, createdAt, used, studentId|staffId|parentId }`
-  (`role`: `Student` | `Staff` | `Parent`; `code` = `XXX-XXX`; the id links the code to
-  the person it was minted for — all three null on a legacy/mobile-made code)
-- **theme** — calendar customization: background color/image + opacity, grid color,
-  today tint, header strip color.
+A git push alone does not reach phones. The EAS workflow
+`mobile/.eas/workflows/publish-preview-update.yml` runs `eas update` on push;
+verify it with `cd mobile && npx eas-cli workflow:runs`. Manual fallback:
 
-Store API (port to real queries/mutations): `add(key,item)`, `update(key,id,patch)`,
-`remove(key,id)`, plus session + reset helpers. **Replace `localStorage` with a real
-API/DB.** Auth in `app/auth.jsx` is mocked — wire to real email+password auth with
-sessions, "remember me", password reset, and invite-code redemption.
+```bash
+cd mobile && npx eas-cli update --branch preview --platform android \
+  --environment preview --message "…"
+```
 
----
+Never drop `--environment preview` — it supplies `EXPO_PUBLIC_API_URL`.
 
-## Color Tokens (Mochi)
-Warm cream canvas, cocoa ink, six soft category hues. **Use the design-system CSS
-variables — these hexes are for reference only:**
+## Tests
 
-- Canvas / surfaces: cream `#FBF7F0`, raised `#FFFFFF`, sunken `#F4EDE2`
-- Ink: strong `#3B2F2A`, body `#5C4F47`, muted `#9A8C80`
-- Brand (warm orange): base `#E8895A`, soft tint for rings/hover
-- Category hues: **violet, green, blue, orange, cocoa, rose** — each with
-  base / soft / ink variants via `window.colorOf(name)` in the prototype (port to a
-  token map). Calendar events + class color-coding draw from these.
+```bash
+npm test                  # vitest (jsdom) + vitest (Workers pool)
+npm run test:e2e:staging  # reset calendar-test to seed data, run all 37 specs (~4 min)
+```
 
----
+The e2e suite runs against an isolated test environment, never production — CRUD
+specs skip unless `E2E_BASE_URL` contains `calendar-test`. Every feature, mutation
+intent, and data object ships with a spec in the same commit; the suite's contract
+is that every write path is exercised end to end through the real dialogs. Shared
+locators and the app's UI contract live in [e2e/crud-helpers.ts](e2e/crud-helpers.ts).
 
-## Recommended Build Order
-1. **Foundation:** install/port the Mochi design system (tokens + components), fonts,
-   icon set, app shell (sidebar nav + routing).
-2. **Auth + data layer:** real auth (login/signup/forgot/invite-code) + backend models
-   for every collection above.
-3. **People:** Students / Staff / Parents / Invites, with `TokenSearch` linking.
-4. **Classes:** cards, detail popup, create/edit with schedule + roster.
-5. **Calendar:** Month/Week/Day/Agenda, event CRUD, drag-to-reschedule, recurrence,
-   theme panel + background image.
-6. **Materials & Homework:** uploads/links + download; manual homework checklist with
-   points/notes.
-7. **Dashboard:** compose today's events + due homework from the above.
-8. **Parent portal:** a signed-in parent's children — schedule, attendance, monthly report and
-   fee slip, read-only. Off by default; System Config → Parent access opens it.
+Test accounts: staff `dev@mochi.edu`, student `vunq@mochi.edu` (both `mochi123`).
 
----
+## Docs
 
-## Files in this Package
-- `design/index.html` — entry; loads React + Babel + design system + all `app/*.jsx`.
-- `design/app/` — the prototype source:
-  - `main.jsx` (root, auth gate, session, tweaks), `auth.jsx`, `shell.jsx`,
-    `calendar.jsx`, `screens-core.jsx` (Dashboard, Homework),
-    `screens-manage.jsx` (Classes, People), `screens-extra.jsx` (Materials, Profile),
-    `store.jsx` (data + sample data), `ui.jsx` (Modal/confirm/helpers),
-    `icons.jsx` (Lucide glyphs), `styles.css` (app-level CSS on top of the DS).
-- `design/_ds/…` — the **Mochi Design System** bundle (tokens, components, usage notes).
-- `design/ds-base.js`, `design/tweaks-panel.jsx` — runtime helpers for the prototype.
+| For | Read |
+|---|---|
+| Project rules and conventions | [CLAUDE.md](CLAUDE.md) |
+| The JSON API | [docs/api.md](docs/api.md) |
+| The mobile app | [mobile/README.md](mobile/README.md), [docs/mobile/](docs/mobile/) |
+| How the app got here | [docs/refactor/](docs/refactor/) |
+| The Zalo parent channel | [docs/zalo.md](docs/zalo.md) |
+| Original design intent | [design/README.md](design/README.md) |
+| What's next | [BACKLOG.md](BACKLOG.md) |
 
-> Open `design/index.html` to see everything live. Build against the design system, keep
-> component names/props stable, and swap the in-browser store + mock auth for real
-> backend services.
+**Stale — do not trust:** [APP.md](APP.md) and [BACKEND.md](BACKEND.md) describe
+architectures that no longer exist (a Vite SPA with `localStorage`, and a deleted
+`/api/state` Worker). Both carry banners saying so. The code, `CLAUDE.md`, and
+`docs/` are what reflect reality.
