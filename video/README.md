@@ -149,14 +149,6 @@ pulse do the pointing.
 Use `captionAt: 'top'` when a bottom caption would cover the subject — pressing a
 dialog's footer button, for instance.
 
-## Known app quirk the guide works around
-
-Dragging an event in week view reschedules it correctly, but releasing the mouse also
-fires a click, and the editor's `if (!drag) onPick(e)` guard
-(`src/calendar/time-grid.tsx:183-186`) races React's state commit — so the edit dialog
-often opens on top of the result. `calendar-basics` presses Escape after the drag. If
-that guard is ever fixed, the Escape becomes harmless and can be dropped.
-
 ## Music
 
 `public/music/*.mp3` is gitignored. Drop a freely licensed track there (Pixabay Music,

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0212 — 2026-08-14
+Drag events between days in week and month view; recurring edits and deletes now ask This event / This and following / All events.
+
 ## v0.0211 — 2026-08-14
 Docs: the root README is now a real project README — stack, repo layout, the two clients, release and test workflow. The old design handoff moved to design/README.md.
 

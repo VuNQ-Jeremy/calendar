@@ -15,7 +15,7 @@ import * as themeSvc from '../../server/services/theme';
 import * as materialsSvc from '../../server/services/materials';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
 import type { Theme } from '../../server/services/theme';
-import { EventInput, ThemeInput, parsePatch } from '../../shared/schemas';
+import { EventInput, EventEditScope, ThemeInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
 
@@ -58,9 +58,21 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     return { ok: true, theme };
   }
 
+  // `scope` and `occurrenceDate` name an operation and an occurrence rather than columns, so they
+  // never reach EventInput — both intents read them straight off the form. Absent scope means
+  // 'all', which is the pre-scope behavior every other client (mobile) still relies on.
+  const day = (v: FormDataEntryValue | null) =>
+    typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+  const occurrenceDate = day(formData.get('occurrenceDate'));
+  const scope = EventEditScope.catch('all').parse(formData.get('scope') ?? 'all');
+  if (scope !== 'all' && !occurrenceDate)
+    return Response.json({ error: 'missing occurrenceDate' }, { status: 400 });
+
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    await eventsSvc.remove(db, id);
+    if (scope === 'single') await eventsSvc.removeSingle(db, id, occurrenceDate!);
+    else if (scope === 'following') await eventsSvc.removeFollowing(db, id, occurrenceDate!);
+    else await eventsSvc.remove(db, id);
     return { ok: true };
   }
 
@@ -77,12 +89,13 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     const parsed = parsePatch(EventInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    // Not part of EventInput (it names an occurrence, not a column) so parsePatch drops it —
-    // read it off the form directly. See eventsSvc.update's `fromDate`.
-    const from = formData.get('fromDate');
-    const fromDate =
-      typeof from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : undefined;
-    await eventsSvc.update(db, id, parsed.data, fromDate);
+    if (scope === 'following')
+      await eventsSvc.updateFollowing(db, id, occurrenceDate!, parsed.data);
+    else if (scope === 'single') await eventsSvc.updateSingle(db, id, occurrenceDate!, parsed.data);
+    // `fromDate` is the pre-scope spelling of the same idea and still arrives from mobile; either
+    // field turns an edited occurrence's date into a delta. See eventsSvc.update's `fromDate`.
+    else
+      await eventsSvc.update(db, id, parsed.data, day(formData.get('fromDate')) ?? occurrenceDate);
     return { ok: true };
   }
 

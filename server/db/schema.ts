@@ -139,6 +139,10 @@ export const events = sqliteTable(
     classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
     location: text('location'),
     recurrence: text('recurrence').notNull().default('none'),
+    /** Inclusive last ICT day (YYYY-MM-DD) the series generates occurrences; NULL = open-ended. */
+    until: text('until'),
+    /** JSON ["YYYY-MM-DD", ...] — occurrences detached or removed by a "this event only" edit. */
+    exdates: text('exdates').notNull().default('[]'),
     notes: text('notes'),
   },
   (t) => [index('idx_events_date').on(t.date)],

@@ -2371,6 +2371,41 @@ body {
   opacity: 0.85;
 }
 
+/* drag and drop — a dimmed source block plus a ghost in the column being dropped on */
+.tgrid.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+/* No hover flicker under the ghost, and the click that follows a drop cannot land on an event. */
+.tgrid.is-dragging .tev {
+  pointer-events: none;
+}
+.tev--ghost {
+  pointer-events: none;
+  opacity: 0.9;
+  box-shadow: var(--shadow-md);
+  z-index: 12; /* above .tev (6) and its hover (9) */
+}
+.month.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+.mpill.is-dragging {
+  opacity: 0.4;
+}
+.mpill--ghost {
+  position: fixed; /* viewport coordinates: immune to the month grid's scroll offset */
+  z-index: 1000;
+  pointer-events: none; /* required: elementFromPoint must see the cell through it */
+  max-width: 200px;
+  box-shadow: var(--shadow-md);
+  opacity: 0.95;
+}
+.month__cell.is-droptarget {
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+
 /* agenda */
 .agenda {
   display: flex;

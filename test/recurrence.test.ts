@@ -15,6 +15,8 @@ const BASE_EVENT: Omit<EventRow, 'date' | 'recurrence'> = {
   classId: 'cls-1',
   location: null,
   notes: null,
+  until: null,
+  exdates: [],
 };
 
 describe('expandEvents() — weekly recurrence', () => {
@@ -89,5 +91,98 @@ describe('expandEvents() — daily recurrence', () => {
 
     const dates = result.map((e) => e.date).sort();
     expect(dates).toEqual(['2026-01-05', '2026-01-06', '2026-01-07']);
+  });
+
+  it('does not start before its own anchor', () => {
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-06', recurrence: 'daily' }];
+    const result = expandEvents(events, dayStart, dayEnd);
+
+    expect(result.map((e) => e.date)).toEqual(['2026-01-06', '2026-01-07']);
+  });
+
+  it('honors until and exdates', () => {
+    const events: EventRow[] = [
+      { ...BASE_EVENT, date: '2026-01-01', recurrence: 'daily', until: '2026-01-06' },
+      {
+        ...BASE_EVENT,
+        id: 'ev-2',
+        date: '2026-01-01',
+        recurrence: 'daily',
+        exdates: ['2026-01-06'],
+      },
+    ];
+    const result = expandEvents(events, dayStart, dayEnd);
+
+    expect(result.filter((e) => e.id === 'ev-1').map((e) => e.date)).toEqual([
+      '2026-01-05',
+      '2026-01-06',
+    ]);
+    expect(result.filter((e) => e.id === 'ev-2').map((e) => e.date)).toEqual([
+      '2026-01-05',
+      '2026-01-07',
+    ]);
+  });
+});
+
+// A split series is one row capped with `until` plus a second row anchored at the boundary; a
+// detached occurrence is a hole in `exdates` plus a standalone row. Expansion is what makes
+// those two shapes render as one continuous, non-overlapping timeline.
+describe('expandEvents() — series bounds and holes', () => {
+  it('stops at until, inclusively', () => {
+    const events: EventRow[] = [
+      { ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly', until: '2026-01-19' },
+    ];
+    const result = expandEvents(events, RANGE_START, RANGE_END);
+
+    expect(result.map((e) => e.date)).toEqual(['2026-01-05', '2026-01-12', '2026-01-19']);
+  });
+
+  it('yields nothing when until precedes the range', () => {
+    const events: EventRow[] = [
+      { ...BASE_EVENT, date: '2025-12-01', recurrence: 'weekly', until: '2025-12-29' },
+    ];
+    expect(expandEvents(events, RANGE_START, RANGE_END)).toHaveLength(0);
+  });
+
+  it('skips an exdate but keeps generating after it', () => {
+    const events: EventRow[] = [
+      { ...BASE_EVENT, date: '2026-01-05', recurrence: 'weekly', exdates: ['2026-01-12'] },
+    ];
+    const result = expandEvents(events, RANGE_START, RANGE_END);
+
+    expect(result.map((e) => e.date)).toEqual(['2026-01-05', '2026-01-19', '2026-01-26']);
+  });
+
+  it('never generates occurrences before the anchor', () => {
+    // Without the anchor floor, a split's tail row would back-expand across the head row's
+    // window and every occurrence in the past would render twice.
+    const events: EventRow[] = [{ ...BASE_EVENT, date: '2026-01-19', recurrence: 'weekly' }];
+    const result = expandEvents(events, RANGE_START, RANGE_END);
+
+    expect(result.map((e) => e.date)).toEqual(['2026-01-19', '2026-01-26']);
+  });
+
+  it('renders a split series as one unbroken, non-overlapping timeline', () => {
+    const head: EventRow = {
+      ...BASE_EVENT,
+      date: '2026-01-05',
+      recurrence: 'weekly',
+      until: '2026-01-11',
+    };
+    const tail: EventRow = {
+      ...BASE_EVENT,
+      id: 'ev-2',
+      title: 'Weekly Math (moved)',
+      date: '2026-01-13',
+      recurrence: 'weekly',
+    };
+    const result = expandEvents([head, tail], RANGE_START, RANGE_END);
+
+    expect(result.map((e) => `${e.date} ${e.title}`)).toEqual([
+      '2026-01-05 Weekly Math',
+      '2026-01-13 Weekly Math (moved)',
+      '2026-01-20 Weekly Math (moved)',
+      '2026-01-27 Weekly Math (moved)',
+    ]);
   });
 });

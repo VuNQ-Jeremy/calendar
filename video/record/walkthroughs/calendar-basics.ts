@@ -119,14 +119,6 @@ export const calendarBasics: Walkthrough = {
       await rec.beat(600);
       // HR_H is 56px per hour (src/calendar/utils.ts:31) — two hours later.
       await rec.drag(chip, 112);
-      // The reschedule itself lands, but releasing on the chip also fires a click, and
-      // the editor's `if (!drag)` guard races React's state commit — so the edit dialog
-      // often opens over the result. Dismiss it and let the moved session be the shot.
-      await page.keyboard.press('Escape');
-      await page
-        .locator('.m-dialog[role="dialog"]')
-        .waitFor({ state: 'hidden' })
-        .catch(() => {});
       await page.waitForLoadState('networkidle');
       await rec.beat(2400);
     });

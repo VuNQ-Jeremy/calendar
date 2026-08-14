@@ -5,13 +5,19 @@ import { expandEvents, toMin, fmtTime, addMin, HOURS, HR_H } from './utils.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { ExpandedEvent } from './utils.js';
 
+/** Below this many pixels of travel the gesture is still a click, not a drag. */
+const DRAG_THRESHOLD = 4;
+
 interface DragState {
   ev: ExpandedEvent;
+  /** Pointer position at mousedown, the origin both deltas are measured from. */
+  offX: number;
   offY: number;
   origStart: string;
   origEnd: string;
-  colW: number;
-  rectLeft: number;
+  /** Scroll offset at mousedown: wheeling mid-drag moves content under a still pointer. */
+  scrollTop0: number;
+  /** Null until the threshold is passed — its presence is what makes this a drag. */
   preview: { dyMin: number; colIdx: number } | null;
 }
 
@@ -72,16 +78,30 @@ export function TimeGrid({
     onCreate(dk, addMin('00:00', min));
   };
 
+  /**
+   * A drop is followed by a click on the event that was just dragged. Swallow exactly that one:
+   * the click dispatches synchronously after mouseup, well before this timeout clears the flag,
+   * so a real drop never opens the editor and a later genuine click still does.
+   */
+  const suppressClickRef = React.useRef(false);
+  const suppressNextClick = () => {
+    suppressClickRef.current = true;
+    setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  };
+
   const startDrag = (e: React.MouseEvent, ev: ExpandedEvent) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
-    const rect = bodyRef.current!.getBoundingClientRect();
+    e.preventDefault(); // no text selection while dragging
     setDrag({
       ev,
+      offX: e.clientX,
       offY: e.clientY,
       origStart: ev.start ?? '00:00',
       origEnd: ev.end ?? '01:00',
-      colW: (rect.width - 64) / dayList.length,
-      rectLeft: rect.left,
+      scrollTop0: gridRef.current?.scrollTop ?? 0,
       preview: null,
     });
   };
@@ -89,34 +109,62 @@ export function TimeGrid({
   React.useEffect(() => {
     if (!drag) return;
     const onMoveE = (e: MouseEvent) => {
-      const dyMin = Math.round((((e.clientY - drag.offY) / HR_H) * 60) / 15) * 15;
+      const body = bodyRef.current;
+      if (!body) return;
+      if (
+        !drag.preview &&
+        Math.hypot(e.clientX - drag.offX, e.clientY - drag.offY) < DRAG_THRESHOLD
+      )
+        return;
+      // Measured fresh on every move rather than once at mousedown, so a resize mid-drag cannot
+      // skew which column the pointer reads as.
+      const rect = body.getBoundingClientRect();
+      const colW = (rect.width - 64) / dayList.length;
+      const scrollDelta = (gridRef.current?.scrollTop ?? 0) - drag.scrollTop0;
+      const s0 = toMin(drag.origStart);
+      const dur = toMin(drag.origEnd) - s0;
+      let dyMin = Math.round(((((e.clientY - drag.offY + scrollDelta) / HR_H) * 60) / 15) * 15);
+      dyMin = Math.max(-s0, Math.min(24 * 60 - dur - s0, dyMin)); // keep the block inside the day
       const colIdx = Math.max(
         0,
-        Math.min(dayList.length - 1, Math.floor((e.clientX - drag.rectLeft - 64) / drag.colW)),
+        Math.min(dayList.length - 1, Math.floor((e.clientX - rect.left - 64) / colW)),
       );
       setDrag((d) => (d ? { ...d, preview: { dyMin, colIdx } } : d));
     };
     const onUp = () => {
       setDrag((d) => {
         if (d && d.preview) {
-          const dur = toMin(d.origEnd) - toMin(d.origStart);
+          suppressNextClick();
+          const nd = iso(dayList[d.preview.colIdx]);
           const ns = addMin(d.origStart, d.preview.dyMin);
-          const ne = addMin(ns, dur);
-          onMove(d.ev, iso(dayList[d.preview.colIdx]), ns, ne);
+          const dur = toMin(d.origEnd) - toMin(d.origStart);
+          // Dropped back where it started: nothing to save, and no scope question to ask.
+          if (nd !== d.ev.date || ns !== d.origStart) onMove(d.ev, nd, ns, addMin(ns, dur));
         }
         return null;
       });
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      suppressNextClick();
+      setDrag(null); // onUp then finds no drag and commits nothing
+    };
     window.addEventListener('mousemove', onMoveE);
     window.addEventListener('mouseup', onUp);
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('mousemove', onMoveE);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('keydown', onKey);
     };
   }, [drag, dayList, onMove]);
 
   return (
-    <div className="tgrid" ref={gridRef} style={{ '--hr-h': HR_H + 'px' } as React.CSSProperties}>
+    <div
+      className={'tgrid' + (drag?.preview ? ' is-dragging' : '')}
+      ref={gridRef}
+      style={{ '--hr-h': HR_H + 'px' } as React.CSSProperties}
+    >
       <div className="tgrid__head" style={{ gridTemplateColumns: gridTpl }}>
         <div className="tgrid__corner" />
         {dayList.map((d, i) => {
@@ -159,14 +207,16 @@ export function TimeGrid({
               )}
               {dayEvents.map((e, j) => {
                 const c = colorOf(e.color);
-                let top = yFor(toMin(e.start ?? '00:00'));
-                let height =
+                const top = yFor(toMin(e.start ?? '00:00'));
+                const height =
                   ((toMin(e.end ?? '01:00') - toMin(e.start ?? '00:00')) / 60) * HR_H - 3;
-                const isDragging = drag && drag.ev.id === e.id && drag.ev.date === e.date;
-                if (isDragging && drag.preview) {
-                  top = yFor(toMin(addMin(drag.origStart, drag.preview.dyMin)));
-                }
-                if (isDragging && drag.preview && drag.preview.colIdx !== ci) return null;
+                // The block being dragged stays put and dims; the ghost below shows where it
+                // would land, in whichever column that is.
+                const isDragging = !!(
+                  drag?.preview &&
+                  drag.ev.id === e.id &&
+                  drag.ev.date === e.date
+                );
                 return (
                   <div
                     key={j}
@@ -180,7 +230,8 @@ export function TimeGrid({
                     onMouseDown={(ev) => startDrag(ev, e)}
                     onClick={(ev) => {
                       ev.stopPropagation();
-                      if (!drag) onPick(e);
+                      if (suppressClickRef.current) return;
+                      onPick(e);
                     }}
                   >
                     <div className="tev__t">{e.title}</div>
@@ -192,6 +243,31 @@ export function TimeGrid({
                   </div>
                 );
               })}
+              {drag?.preview?.colIdx === ci &&
+                (() => {
+                  const gs = addMin(drag.origStart, drag.preview.dyMin);
+                  const dur = toMin(drag.origEnd) - toMin(drag.origStart);
+                  const gh = (dur / 60) * HR_H - 3;
+                  const c = colorOf(drag.ev.color);
+                  return (
+                    <div
+                      className="tev tev--ghost"
+                      style={{
+                        top: yFor(toMin(gs)),
+                        height: Math.max(gh, 24),
+                        background: c.soft,
+                        borderLeftColor: c.base,
+                      }}
+                    >
+                      <div className="tev__t">{drag.ev.title}</div>
+                      {gh > 34 && (
+                        <div className="tev__time" style={{ color: c.ink }}>
+                          {`${fmtTime(gs)} – ${fmtTime(addMin(gs, dur))}`}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
             </div>
           );
         })}

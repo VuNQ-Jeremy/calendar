@@ -24,7 +24,22 @@ export type EventRow = {
   location: string | null;
   recurrence: string;
   notes: string | null;
+  /** Inclusive last day of the series, or null for open-ended. See migrations/0039. */
+  until: string | null;
+  /** Occurrence days detached from the series. Parsed from the JSON column; always an array. */
+  exdates: string[];
 };
+
+/** Tolerant read of the JSON `exdates` column — a malformed value must not break the calendar. */
+function parseExdates(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 function map(r: typeof events.$inferSelect): EventRow {
   return {
@@ -38,6 +53,8 @@ function map(r: typeof events.$inferSelect): EventRow {
     location: r.location,
     recurrence: r.recurrence,
     notes: r.notes,
+    until: r.until,
+    exdates: parseExdates(r.exdates),
   };
 }
 
@@ -81,9 +98,13 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
 }
 
 /**
- * Move every checklist_items row of this event by `days`. Those rows key on (event_id, date), the
- * same per-occurrence shape attendance_records uses, so moving the event without this leaves a
- * teacher's authored check-in list stranded on a date nothing renders any more.
+ * Move checklist_items rows of this event by `days`, and optionally onto a new parent event.
+ * Those rows key on (event_id, date), the same per-occurrence shape attendance_records uses, so
+ * moving the event without this leaves a teacher's authored check-in list stranded on a date
+ * nothing renders any more.
+ *
+ * `fromDate` (inclusive, >=) limits the sweep to a split's tail; `onDate` (==) to a single
+ * detached occurrence. Pass neither to move every row, the whole-series case.
  *
  * Collected as ids first, then updated one distinct source date at a time: a +7 shift maps 08-12
  * onto 08-19, which is itself a date being shifted, so a plain `WHERE date = ?` sweep would pick
@@ -93,11 +114,24 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
  * in attendance.ts stands — a mark describes a session that already happened) nor to tui_mu_events,
  * an append-only ledger of moments a kid already celebrated.
  */
-async function shiftChecklistDates(db: Db, eventId: string, days: number): Promise<number> {
+async function moveChecklistItems(
+  db: Db,
+  eventId: string,
+  opts: { days: number; fromDate?: string; onDate?: string; toEventId?: string },
+): Promise<number> {
+  const dateFilter = opts.fromDate
+    ? gte(checklistItems.date, opts.fromDate)
+    : opts.onDate
+      ? eq(checklistItems.date, opts.onDate)
+      : undefined;
   const rows = await db
     .select({ id: checklistItems.id, date: checklistItems.date })
     .from(checklistItems)
-    .where(eq(checklistItems.eventId, eventId));
+    .where(
+      dateFilter
+        ? and(eq(checklistItems.eventId, eventId), dateFilter)
+        : eq(checklistItems.eventId, eventId),
+    );
   if (!rows.length) return 0;
   const byDate = new Map<string, string[]>();
   for (const r of rows) {
@@ -108,10 +142,44 @@ async function shiftChecklistDates(db: Db, eventId: string, days: number): Promi
   for (const [date, ids] of byDate) {
     await db
       .update(checklistItems)
-      .set({ date: addDaysVn(date, days) })
+      .set({
+        date: opts.days === 0 ? date : addDaysVn(date, opts.days),
+        ...(opts.toEventId ? { eventId: opts.toEventId } : {}),
+      })
       .where(inArray(checklistItems.id, ids));
   }
   return rows.length;
+}
+
+async function shiftChecklistDates(db: Db, eventId: string, days: number): Promise<number> {
+  return moveChecklistItems(db, eventId, { days });
+}
+
+/** Clone a series' material attachments onto a row split or detached out of it. */
+async function cloneMaterials(db: Db, fromEventId: string, toEventId: string): Promise<void> {
+  const mats = await db
+    .select({ materialId: eventMaterials.materialId, sortOrder: eventMaterials.sortOrder })
+    .from(eventMaterials)
+    .where(eq(eventMaterials.eventId, fromEventId));
+  if (!mats.length) return;
+  await db
+    .insert(eventMaterials)
+    .values(
+      mats.map((m) => ({ eventId: toEventId, materialId: m.materialId, sortOrder: m.sortOrder })),
+    );
+}
+
+/** Series fields overridden by a patch — the shared body of a split's tail and a detached row. */
+function merged(before: EventRow, patch: Partial<EventInput>) {
+  return {
+    title: patch.title ?? before.title,
+    startTime: patch.start !== undefined ? (patch.start ?? null) : before.start,
+    endTime: patch.end !== undefined ? (patch.end ?? null) : before.end,
+    color: patch.color !== undefined ? (patch.color ?? null) : before.color,
+    classId: patch.classId !== undefined ? (patch.classId ?? null) : before.classId,
+    location: patch.location !== undefined ? (patch.location ?? null) : before.location,
+    notes: patch.notes !== undefined ? patch.notes || null : before.notes,
+  };
 }
 
 export async function update(
@@ -136,7 +204,13 @@ export async function update(
   let shiftDays = 0;
   if (patch.date !== undefined && before) {
     shiftDays = daysBetweenVn(fromDate ?? before.date, patch.date);
-    if (shiftDays !== 0) set.date = addDaysVn(before.date, shiftDays);
+    if (shiftDays !== 0) {
+      set.date = addDaysVn(before.date, shiftDays);
+      // The cap and the holes describe slots on the series' own timeline, so they travel with it.
+      if (before.until != null) set.until = addDaysVn(before.until, shiftDays);
+      if (before.exdates.length)
+        set.exdates = JSON.stringify(before.exdates.map((d) => addDaysVn(d, shiftDays)));
+    }
   }
   if (patch.start !== undefined) set.startTime = patch.start ?? null;
   if (patch.end !== undefined) set.endTime = patch.end ?? null;
@@ -164,6 +238,225 @@ export async function update(
     });
   }
   return after;
+}
+
+/**
+ * "This and following events": split the series at `occurrenceDate` (the occurrence's original,
+ * pre-edit date).
+ *
+ * The ORIGINAL row keeps the past — capped at `occurrenceDate - 1` — and keeps its id, so
+ * attendance_records and every other (event_id, date)-keyed history still resolves. A NEW row,
+ * anchored at the edited occurrence's target date, carries the changed fields forward.
+ *
+ * `created` is null when no split was needed: a non-recurring row, or an occurrence at/before the
+ * anchor (the whole series is "following", so it degrades to a plain delta update).
+ */
+export async function updateFollowing(
+  db: Db,
+  id: string,
+  occurrenceDate: string,
+  patch: Partial<EventInput>,
+): Promise<{ series: EventRow; created: EventRow | null }> {
+  const beforeRows = await db.select().from(events).where(eq(events.id, id));
+  if (!beforeRows[0]) throw new Error('event not found');
+  const before = map(beforeRows[0]);
+
+  if (before.recurrence === 'none' || daysBetweenVn(before.date, occurrenceDate) <= 0) {
+    return { series: await update(db, id, patch, occurrenceDate), created: null };
+  }
+
+  const shiftDays = patch.date !== undefined ? daysBetweenVn(occurrenceDate, patch.date) : 0;
+  const shift = (d: string) => (shiftDays === 0 ? d : addDaysVn(d, shiftDays));
+
+  // The tail: series fields overridden by the patch, re-anchored on the edited occurrence.
+  const newId = crypto.randomUUID();
+  await db.insert(events).values({
+    id: newId,
+    ...merged(before, patch),
+    date: shift(occurrenceDate), // === patch.date when the edit moved the day
+    recurrence: patch.recurrence ?? before.recurrence,
+    until: before.until == null ? null : shift(before.until), // an earlier split's cap travels too
+    // Holes at or after the boundary belong to the tail, shifted with it: each names a slot on
+    // the original timeline, and every tail slot moved by the same delta.
+    exdates: JSON.stringify(
+      before.exdates
+        .filter((d) => d >= occurrenceDate)
+        .map(shift)
+        .sort(),
+    ),
+  });
+
+  // The head: capped the day before the boundary, keeping only the holes in its own window.
+  await db
+    .update(events)
+    .set({
+      until: addDaysVn(occurrenceDate, -1),
+      exdates: JSON.stringify(before.exdates.filter((d) => d < occurrenceDate).sort()),
+    })
+    .where(eq(events.id, id));
+
+  const movedChecklist = await moveChecklistItems(db, id, {
+    days: shiftDays,
+    fromDate: occurrenceDate,
+    toEventId: newId,
+  });
+  await cloneMaterials(db, id, newId);
+
+  const [seriesRows, createdRows] = await Promise.all([
+    db.select().from(events).where(eq(events.id, id)),
+    db.select().from(events).where(eq(events.id, newId)),
+  ]);
+  const series = map(seriesRows[0]);
+  const created = map(createdRows[0]);
+  record({
+    action: 'update',
+    entityType: 'event',
+    entityId: id,
+    before,
+    after: series,
+    meta: {
+      splitAt: occurrenceDate,
+      newEventId: newId,
+      shiftDays,
+      ...(movedChecklist ? { checklistItemsMoved: movedChecklist } : {}),
+    },
+  });
+  recordCreate('event', newId, created);
+  return { series, created };
+}
+
+/**
+ * "This event only": punch `occurrenceDate` out of the series and materialize it as a standalone
+ * non-recurring row carrying the series' fields merged with the patch.
+ */
+export async function updateSingle(
+  db: Db,
+  id: string,
+  occurrenceDate: string,
+  patch: Partial<EventInput>,
+): Promise<{ series: EventRow; created: EventRow | null }> {
+  const beforeRows = await db.select().from(events).where(eq(events.id, id));
+  if (!beforeRows[0]) throw new Error('event not found');
+  const before = map(beforeRows[0]);
+
+  // A non-recurring event has exactly one occurrence — "this event" IS "all events".
+  if (before.recurrence === 'none') {
+    return { series: await update(db, id, patch, occurrenceDate), created: null };
+  }
+
+  // Set-dedup so a double submit cannot grow the array.
+  const exdates = [...new Set([...before.exdates, occurrenceDate])].sort();
+  await db
+    .update(events)
+    .set({ exdates: JSON.stringify(exdates) })
+    .where(eq(events.id, id));
+
+  const newId = crypto.randomUUID();
+  const newDate = patch.date ?? occurrenceDate;
+  await db.insert(events).values({
+    id: newId,
+    ...merged(before, patch),
+    date: newDate,
+    recurrence: 'none', // detached from the pattern: it is its own one-off now
+    until: null,
+    exdates: '[]',
+  });
+
+  const movedChecklist = await moveChecklistItems(db, id, {
+    days: daysBetweenVn(occurrenceDate, newDate),
+    onDate: occurrenceDate,
+    toEventId: newId,
+  });
+  await cloneMaterials(db, id, newId);
+
+  const [seriesRows, createdRows] = await Promise.all([
+    db.select().from(events).where(eq(events.id, id)),
+    db.select().from(events).where(eq(events.id, newId)),
+  ]);
+  const series = map(seriesRows[0]);
+  const created = map(createdRows[0]);
+  record({
+    action: 'update',
+    entityType: 'event',
+    entityId: id,
+    before,
+    after: series,
+    meta: {
+      detachedDate: occurrenceDate,
+      newEventId: newId,
+      ...(movedChecklist ? { checklistItemsMoved: movedChecklist } : {}),
+    },
+  });
+  recordCreate('event', newId, created);
+  return { series, created };
+}
+
+/**
+ * "Delete this event": punch a hole in the series rather than deleting the row. Audited as an
+ * update, because the row survives — only one occurrence stops existing.
+ */
+export async function removeSingle(db: Db, id: string, occurrenceDate: string): Promise<void> {
+  const rows = await db.select().from(events).where(eq(events.id, id));
+  if (!rows[0]) return;
+  const before = map(rows[0]);
+  if (before.recurrence === 'none') return remove(db, id);
+
+  const exdates = [...new Set([...before.exdates, occurrenceDate])].sort();
+  await db
+    .update(events)
+    .set({ exdates: JSON.stringify(exdates) })
+    .where(eq(events.id, id));
+  // The check-in list was authored for a session that no longer happens. Attendance marks stay:
+  // they record something that already did.
+  await db
+    .delete(checklistItems)
+    .where(and(eq(checklistItems.eventId, id), eq(checklistItems.date, occurrenceDate)));
+
+  const afterRows = await db.select().from(events).where(eq(events.id, id));
+  record({
+    action: 'update',
+    entityType: 'event',
+    entityId: id,
+    before,
+    after: map(afterRows[0]),
+    meta: { deletedOccurrence: occurrenceDate },
+  });
+}
+
+/**
+ * "Delete this and following events": cap the series the day before `occurrenceDate`. When that
+ * would leave nothing (the occurrence is the anchor, or the row does not recur) the row itself
+ * goes instead.
+ */
+export async function removeFollowing(db: Db, id: string, occurrenceDate: string): Promise<void> {
+  const rows = await db.select().from(events).where(eq(events.id, id));
+  if (!rows[0]) return;
+  const before = map(rows[0]);
+  if (before.recurrence === 'none' || daysBetweenVn(before.date, occurrenceDate) <= 0) {
+    return remove(db, id);
+  }
+
+  await db
+    .update(events)
+    .set({
+      until: addDaysVn(occurrenceDate, -1),
+      // Holes past the new cap describe occurrences that no longer exist at all.
+      exdates: JSON.stringify(before.exdates.filter((d) => d < occurrenceDate).sort()),
+    })
+    .where(eq(events.id, id));
+  await db
+    .delete(checklistItems)
+    .where(and(eq(checklistItems.eventId, id), gte(checklistItems.date, occurrenceDate)));
+
+  const afterRows = await db.select().from(events).where(eq(events.id, id));
+  record({
+    action: 'update',
+    entityType: 'event',
+    entityId: id,
+    before,
+    after: map(afterRows[0]),
+    meta: { deletedFrom: occurrenceDate },
+  });
 }
 
 export async function remove(db: Db, id: string): Promise<void> {

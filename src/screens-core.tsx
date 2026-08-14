@@ -7,7 +7,7 @@ import { colorOf, iso, addDays, parseISO, TODAY, ICON_TINT } from './lib/core.js
 import { expandEvents, fmtTime, toMin } from './calendar/index.jsx';
 import { EventModal } from './calendar/event-modal.jsx';
 import { KioskModal } from './kiosk/kiosk.jsx';
-import { eventFormData } from './calendar/utils.js';
+import { useEventWrites } from './calendar/scope-dialog.jsx';
 import { useLang, locale } from './lib/i18n.jsx';
 import type { IconName } from './icons.jsx';
 import type { ClassRow } from '../server/services/classes.js';
@@ -175,21 +175,13 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
 
   // The same dialog the calendar opens, and the same writes — it posts to /calendar whichever
   // screen it is mounted on, and that route's clientAction invalidates this card's cache for us.
+  // Including the scope question a recurring event asks before it changes.
   const openEvent = (ev: EventRow) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
-  const saveEvent = (f: EventDraft) => {
-    fetcher.submit(eventFormData(f, t('ev_untitled'), editor?.date), {
-      action: '/calendar',
-      method: 'post',
-    });
-    setEditor(null);
-  };
-  const deleteEvent = (id: string) => {
-    const fd = new FormData();
-    fd.set('intent', 'delete');
-    fd.set('id', id);
-    fetcher.submit(fd, { action: '/calendar', method: 'post' });
-    setEditor(null);
-  };
+  const {
+    save: saveEvent,
+    del: deleteEvent,
+    dialog: scopeDialog,
+  } = useEventWrites({ fetcher, editor, setEditor });
   /** Both cards' rows, deduped — the dialog only reads this to date-label shared materials. */
   const allEvents = React.useMemo(() => {
     const byId = new Map<string, EventRow>();
@@ -359,6 +351,7 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
         eventMaterials={eventMaterials ?? []}
         events={allEvents}
       />
+      {scopeDialog}
     </div>
   );
 }

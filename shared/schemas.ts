@@ -58,6 +58,14 @@ export const EventInput = z.object({
 });
 export type EventInput = z.infer<typeof EventInput>;
 
+/**
+ * Which occurrences an edit or delete of a recurring event applies to. Not part of EventInput —
+ * it names an operation, not a column, and pairs with an `occurrenceDate` form field. 'all' is
+ * the default and the pre-scope behavior: the whole series moves or goes.
+ */
+export const EventEditScope = z.enum(['single', 'following', 'all']);
+export type EventEditScope = z.infer<typeof EventEditScope>;
+
 export const ClassInput = z.object({
   name: z.string().trim().min(1).max(200),
   /**

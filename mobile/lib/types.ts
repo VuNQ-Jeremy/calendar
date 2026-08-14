@@ -38,7 +38,15 @@ type Row<T> = T & { id: string };
 
 export type ColorIdValue = z.infer<typeof ColorId>;
 
-export type EventRow = Row<z.infer<typeof EventInput>>;
+/**
+ * `until` and `exdates` are server-computed series bounds, not user input, so they live outside
+ * EventInput: the web app writes them when a recurring event is split or an occurrence detached,
+ * and `expandEvents` reads them. Mobile only ever passes them through.
+ */
+export type EventRow = Row<z.infer<typeof EventInput>> & {
+  until?: string | null;
+  exdates?: string[];
+};
 export type ClassRow = Row<z.infer<typeof ClassInput>>;
 export type StudentRow = Row<z.infer<typeof StudentInput>>;
 export type StaffRow = Row<z.infer<typeof StaffInput>>;

@@ -135,7 +135,8 @@ export function KioskModal({
   };
 
   const student = roster.find((s) => s.id === selected) ?? null;
-  const phaseTitle = phase === 'checkin' ? t('ck_kiosk_checkin_title') : t('ck_kiosk_checkout_title');
+  const phaseTitle =
+    phase === 'checkin' ? t('ck_kiosk_checkin_title') : t('ck_kiosk_checkout_title');
 
   const chrome = (
     <div className="kiosk-chrome">
@@ -225,7 +226,10 @@ export function KioskModal({
                       key={item.id}
                       type="button"
                       className="kiosk-cell"
-                      style={{ background: checked ? c.base : c.soft, color: checked ? '#fff' : c.ink }}
+                      style={{
+                        background: checked ? c.base : c.soft,
+                        color: checked ? '#fff' : c.ink,
+                      }}
                       onClick={() => toggle(item.id)}
                     >
                       <MIcon name={(type?.icon as IconName) ?? 'star'} size={40} />

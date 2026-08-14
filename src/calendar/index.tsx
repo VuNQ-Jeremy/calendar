@@ -10,21 +10,13 @@ import { MonthView } from './month-view.jsx';
 import { TimeGrid } from './time-grid.jsx';
 import { AgendaView } from './agenda-view.jsx';
 import { CalendarThemeDrawer } from './theme-drawer.jsx';
-import {
-  startOfWeek,
-  addMin,
-  fmtTime,
-  toMin,
-  MONTHS,
-  DOW,
-  expandEvents,
-  eventFormData,
-} from './utils.js';
+import { useEventWrites } from './scope-dialog.jsx';
+import { startOfWeek, addMin, fmtTime, toMin, MONTHS, DOW, expandEvents } from './utils.js';
 import type { EventRow } from '../../server/services/events.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
 import type { MaterialRow } from '../../server/services/materials.js';
-import type { EventDraft, ExpandedEvent } from './utils.js';
+import type { EventDraft } from './utils.js';
 
 const { Button: CBtn, IconButton: CIBtn, Tabs: CTabs } = DS;
 
@@ -93,32 +85,41 @@ function CalendarScreen() {
     });
   const openEdit = (ev: EventRow) => setEditor({ ...ev, recurrence: ev.recurrence || 'none' });
 
-  const save = (f: EventDraft) => {
-    // `editor` still holds the draft as it was opened — the modal edits its own copy — so it is
-    // the occurrence date the teacher started from.
-    const fd = eventFormData(f, t('ev_untitled'), editor?.date);
-    fetcher.submit(fd, { action: '/calendar', method: 'post' });
-    setEditor(null);
-  };
+  /**
+   * A dropped event holds its new slot until the loader catches up, instead of snapping back to
+   * where it was for the length of the round trip. Cleared whenever fresh rows arrive — success
+   * or failure, since the route revalidates either way.
+   */
+  const [optimistic, setOptimistic] = React.useState<{
+    id: string;
+    date: string;
+    start?: string;
+    end?: string;
+  } | null>(null);
+  React.useEffect(() => setOptimistic(null), [events]);
+  const shownEvents = React.useMemo(
+    () =>
+      optimistic
+        ? events.map((e) =>
+            e.id === optimistic.id
+              ? {
+                  ...e,
+                  date: optimistic.date,
+                  ...(optimistic.start ? { start: optimistic.start } : {}),
+                  ...(optimistic.end ? { end: optimistic.end } : {}),
+                }
+              : e,
+          )
+        : events,
+    [events, optimistic],
+  );
 
-  const del = (id: string) => {
-    const fd = new FormData();
-    fd.set('intent', 'delete');
-    fd.set('id', id);
-    fetcher.submit(fd, { action: '/calendar', method: 'post' });
-    setEditor(null);
-  };
-
-  const move = (ev: ExpandedEvent, newDate: string, ns: string, ne: string) => {
-    if (!ev.id) return;
-    const fd = new FormData();
-    fd.set('intent', 'update');
-    fd.set('id', ev.id);
-    if (!ev.recurrence || ev.recurrence === 'none') fd.set('date', newDate);
-    fd.set('start', ns);
-    fd.set('end', ne);
-    fetcher.submit(fd, { action: '/calendar', method: 'post' });
-  };
+  const { move, save, del, dialog } = useEventWrites({
+    fetcher,
+    editor,
+    setEditor,
+    onDirectMove: setOptimistic,
+  });
 
   const calStyle = {
     '--cal-bg': theme.bg,
@@ -184,16 +185,17 @@ function CalendarScreen() {
         {view === 'month' && (
           <MonthView
             cursor={cursor}
-            events={events}
+            events={shownEvents}
             onPick={openEdit}
             onCreate={(dk) => openNew(dk)}
+            onMove={(ev, dk) => move(ev, dk)}
           />
         )}
         {view === 'week' && (
           <TimeGrid
             cursor={cursor}
             days={weekDays}
-            events={events}
+            events={shownEvents}
             onPick={openEdit}
             onCreate={openNew}
             onMove={move}
@@ -203,13 +205,13 @@ function CalendarScreen() {
           <TimeGrid
             cursor={cursor}
             days={dayDays}
-            events={events}
+            events={shownEvents}
             onPick={openEdit}
             onCreate={openNew}
             onMove={move}
           />
         )}
-        {view === 'agenda' && <AgendaView cursor={cursor} events={events} onPick={openEdit} />}
+        {view === 'agenda' && <AgendaView cursor={cursor} events={shownEvents} onPick={openEdit} />}
       </div>
       <EventModal
         open={!!editor}
@@ -223,6 +225,7 @@ function CalendarScreen() {
         eventMaterials={eventMaterials}
         events={events}
       />
+      {dialog}
       {themeOpen && <CalendarThemeDrawer onClose={() => setThemeOpen(false)} />}
     </div>
   );
