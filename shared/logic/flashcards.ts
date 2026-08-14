@@ -384,10 +384,38 @@ export interface ExampleSource {
   exampleAnswer?: string | null;
 }
 
-/** Case-insensitive index of the stored surface form inside the sentence, or -1. */
+/** Letters and digits — what may NOT sit against a match for it to count as a whole word. */
+const isWordChar = (c: string | undefined): boolean => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+
+/**
+ * Case-insensitive index of the stored surface form inside the sentence, or -1.
+ *
+ * WHOLE-WORD, not substring. The enrich/generate prompt asks the model for `exampleAnswer` as the
+ * exact form as it appears in the sentence, "including any inflection (\"ran\" for \"run\")" — so a
+ * match that is only a substring is precisely the signal that the model failed to do that.
+ * Accepting it produced broken cloze questions: answer "read" against "He reads books." blanked to
+ * "He _____s books.". Scans every occurrence, because the first one may be the inflected near-miss
+ * while a later one is the real word.
+ */
 export function exampleAnswerIndex(sentence: string, answer: string): number {
   if (!sentence || !answer) return -1;
-  return sentence.toLowerCase().indexOf(answer.toLowerCase());
+  const hay = sentence.toLowerCase();
+  const needle = answer.toLowerCase();
+  for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + 1)) {
+    if (!isWordChar(hay[i - 1]) && !isWordChar(hay[i + needle.length])) return i;
+  }
+  return -1;
+}
+
+/**
+ * Does the sentence really contain its own answer, as a word?
+ *
+ * The ingestion sanitizers (server/services/enrich.ts, generate.ts) null BOTH example fields when
+ * this is false. Exported so those two and the games agree by construction — three independent
+ * `.includes()` checks are what let the mismatch through in the first place.
+ */
+export function exampleContainsAnswer(sentence: string, answer: string): boolean {
+  return exampleAnswerIndex(sentence, answer) >= 0;
 }
 
 /** Words the sentence games can ask: sentence present and it really contains the answer. */

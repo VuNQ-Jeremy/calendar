@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { EnrichedWord, VocabEnrichItem } from '../../shared/schemas';
+import { exampleContainsAnswer } from '../../shared/logic/flashcards';
 
 // Claude Haiku 4.5 — cheap, fast, and supports structured outputs. This is a
 // short, non-agentic classification-style call, so no thinking/effort/sampling
@@ -127,10 +128,10 @@ export function sanitizeEnrichedWords(raw: EnrichedWord[] | undefined): Enriched
     const exampleAnswer = (row.exampleAnswer ?? '').trim().slice(0, 100);
     // A sentence that does not actually contain its own answer is unusable by the cloze/listen
     // games — null BOTH fields rather than save a sentence the games could never blank.
+    // WHOLE-WORD via the games' own helper: a bare `.includes()` accepted "run" inside "He runs
+    // fast.", which is the model returning the uninflected form the prompt told it not to.
     const exampleOk =
-      exampleEn !== '' &&
-      exampleAnswer !== '' &&
-      exampleEn.toLowerCase().includes(exampleAnswer.toLowerCase());
+      exampleEn !== '' && exampleAnswer !== '' && exampleContainsAnswer(exampleEn, exampleAnswer);
     out.push({
       word,
       meaningVi: (row.meaningVi ?? '').trim().slice(0, 500),

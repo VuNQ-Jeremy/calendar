@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { GeneratedWord, VocabGenerateInput } from '../../shared/schemas';
+import { exampleContainsAnswer } from '../../shared/logic/flashcards';
 
 // Same model as translate.ts — cheap, fast, supports structured outputs. A short,
 // non-agentic generation call, so no thinking/effort/sampling params.
@@ -137,10 +138,10 @@ export function sanitizeGeneratedWords(
     const exampleAnswer = (row.exampleAnswer ?? '').trim().slice(0, 100);
     // A sentence that does not actually contain its own answer is unusable by the cloze/listen
     // games — null BOTH fields rather than save a sentence the games could never blank.
+    // WHOLE-WORD via the games' own helper: a bare `.includes()` accepted "run" inside "He runs
+    // fast.", which is the model returning the uninflected form the prompt told it not to.
     const exampleOk =
-      exampleEn !== '' &&
-      exampleAnswer !== '' &&
-      exampleEn.toLowerCase().includes(exampleAnswer.toLowerCase());
+      exampleEn !== '' && exampleAnswer !== '' && exampleContainsAnswer(exampleEn, exampleAnswer);
     const imageQuery = (row.imageQuery ?? '').trim().slice(0, 200);
     out.push({
       word,
