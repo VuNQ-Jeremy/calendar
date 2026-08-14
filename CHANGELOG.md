@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0216 — 2026-08-14
+Stop Prettier and core.autocrlf fighting over line endings: endOfLine auto ends the ~100 phantom-modified files after every format run.
+
 ## v0.0213 — 2026-08-14
 Fix the OTA verification command in CLAUDE.md: read runtimeVersion from shared/version.json instead of hardcoding a stale value.
 
