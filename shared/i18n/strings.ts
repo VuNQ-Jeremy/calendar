@@ -1429,6 +1429,7 @@ const en_strings = {
   cfg_review_hint:
     'Days between reviews of one word. Answer it right when it is due and it moves up a step, so the gaps grow; get it wrong and it drops back a step and returns sooner. Add or remove steps to make the schedule as long as you want — the last step repeats forever, so a word never leaves the cycle.',
   nav_logs: 'Logs',
+  nav_api_docs: 'API reference',
   logs_title: 'Logs',
   logs_subtitle: 'What the database actually says. Admin only, read-only.',
   logs_scheduled_title: 'Scheduled words',
@@ -2959,6 +2960,7 @@ export const STRINGS = {
     cfg_review_hint:
       'Số ngày giữa hai lần ôn một từ. Đến hạn mà trả lời đúng thì từ lên một bậc, khoảng cách giãn dần ra; trả lời sai thì tụt một bậc và quay lại sớm hơn. Thêm hoặc bớt bậc để lịch ôn dài ngắn tuỳ ý — bậc cuối lặp mãi, một từ không bao giờ rời khỏi vòng ôn.',
     nav_logs: 'Nhật ký',
+    nav_api_docs: 'Tài liệu API',
     logs_title: 'Nhật ký',
     logs_subtitle: 'Dữ liệu thật trong cơ sở dữ liệu. Chỉ quản trị, chỉ xem.',
     logs_scheduled_title: 'Từ đã lên lịch ôn',

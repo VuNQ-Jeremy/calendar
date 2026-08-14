@@ -28,6 +28,15 @@ export interface NavItem {
   /** Opt-in for the túi mù board — hidden until the admin `checkin-settings.showClassBoard`
    *  toggle is on. The route re-enforces server-side; this flag only hides the link. */
   tuiMuOk?: boolean;
+  /**
+   * Render a plain anchor with a full page load instead of a `NavLink`, and open it in a new tab.
+   *
+   * Only for a path that is NOT a page inside the `_app` layout. `/docs/api` is a resource route:
+   * it has a loader and no default export, so client-side navigation would ask for a `.data` URL
+   * that does not exist, and `prefetch="intent"` would fetch it on hover. A new tab is also the
+   * right shape for a reference you read beside the app rather than instead of it.
+   */
+  external?: boolean;
 }
 
 export interface NavSection {
@@ -147,6 +156,18 @@ export const NAV: NavSection[] = [
       // route enforces it with requireAdmin — this flag only hides the link.
       { id: 'logs', path: '/logs', tk: 'nav_logs', icon: 'list', adminOnly: true, staffOnly: true },
       { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message', staffOnly: true },
+      // The generated API reference (Scalar). Admin-only here for the same reason as logs — it is
+      // a developer surface, not a teacher's — though the route itself only requires staff, so a
+      // teacher who knows the URL still gets in. See server/api/docs/ and docs/api.md.
+      {
+        id: 'apidocs',
+        path: '/docs/api',
+        tk: 'nav_api_docs',
+        icon: 'book',
+        adminOnly: true,
+        staffOnly: true,
+        external: true,
+      },
     ],
   },
 ];

@@ -244,24 +244,33 @@ function Sidebar({ user, onFeedback }: { user: SessionUser; onFeedback: () => vo
               <MIcon name="chevronDown" size={14} className="sb__section-chevron" />
             </button>
             <div id={`sb-group-${sec.id}`} className="sb__group-items">
-              {items.map((n) => (
-                <NavLink
-                  key={n.id}
-                  to={n.path}
-                  prefetch="intent"
-                  className={({ isActive, isPending }) =>
-                    'sb__item' + (isActive ? ' is-active' : '') + (isPending ? ' is-pending' : '')
-                  }
-                >
-                  <MIcon name={n.icon} size={20} />
-                  <span>{t(n.tk)}</span>
-                  {counts[n.id] > 0 && (
-                    <span className="count">
-                      <ShBadge color="brand">{counts[n.id]}</ShBadge>
-                    </span>
-                  )}
-                </NavLink>
-              ))}
+              {items.map((n) =>
+                // An `external` item points outside the `_app` layout — a NavLink would try to
+                // client-side navigate to a route with no component. See NavItem.external.
+                n.external ? (
+                  <a key={n.id} href={n.path} target="_blank" rel="noreferrer" className="sb__item">
+                    <MIcon name={n.icon} size={20} />
+                    <span>{t(n.tk)}</span>
+                  </a>
+                ) : (
+                  <NavLink
+                    key={n.id}
+                    to={n.path}
+                    prefetch="intent"
+                    className={({ isActive, isPending }) =>
+                      'sb__item' + (isActive ? ' is-active' : '') + (isPending ? ' is-pending' : '')
+                    }
+                  >
+                    <MIcon name={n.icon} size={20} />
+                    <span>{t(n.tk)}</span>
+                    {counts[n.id] > 0 && (
+                      <span className="count">
+                        <ShBadge color="brand">{counts[n.id]}</ShBadge>
+                      </span>
+                    )}
+                  </NavLink>
+                ),
+              )}
             </div>
           </div>
         );
