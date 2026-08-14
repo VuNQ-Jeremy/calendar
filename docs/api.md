@@ -1,7 +1,7 @@
 # Mochi JSON API
 
-> **Interactive reference: [`/docs/api`](https://mochi-class.pages.dev/docs/api)** (staff sign-in
-> required), with the OpenAPI 3.1 document behind it at `/docs/openapi.json`.
+> **Interactive reference: [`/docs/api`](https://calendar.ngqv0712.workers.dev/docs/api)** (staff
+> sign-in required), with the OpenAPI 3.1 document behind it at `/docs/openapi.json`.
 >
 > That page is generated from the code — the request schemas in `shared/schemas.ts`, the response
 > schemas in `shared/api-contract.ts`, and the endpoint registry in `server/api/docs/registry.ts` —
