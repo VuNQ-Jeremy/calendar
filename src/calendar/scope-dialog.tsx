@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FetcherWithComponents } from 'react-router';
 import { DS } from '../ds/index.js';
+import { iso, TODAY } from '../lib/core.js';
 import { Modal } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { eventFormData } from './utils.js';
@@ -133,6 +134,14 @@ export function useEventWrites({ fetcher, editor, setEditor, onDirectMove }: Eve
     if (newDate === ev.date && (!ns || ns === (ev.start ?? '00:00'))) return;
     const req = { kind: 'move' as const, ev, newDate, ns, ne };
     if ((ev.recurrence ?? 'none') !== 'none') {
+      // Moving an occurrence that has already happened records what actually took place that day;
+      // it says nothing about the pattern going forward. The other two answers would rewrite
+      // history, so don't offer them — detach the one occurrence and leave the series alone. It
+      // becomes a standalone event, which is also why deleting it later asks nothing.
+      if (ev.date && ev.date < iso(TODAY)) {
+        submitMove(req, 'single');
+        return;
+      }
       setPending(req); // ask first; nothing is submitted until the chooser is answered
       return;
     }

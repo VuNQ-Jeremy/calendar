@@ -8,6 +8,9 @@ import type { ExpandedEvent } from './utils.js';
 /** Below this many pixels of travel the gesture is still a click, not a drag. */
 const DRAG_THRESHOLD = 4;
 
+/** Minutes a dragged block snaps to. A class is scheduled on the half hour, not the minute. */
+const SNAP_MIN = 30;
+
 interface DragState {
   ev: ExpandedEvent;
   /** Pointer position at mousedown, the origin both deltas are measured from. */
@@ -123,7 +126,8 @@ export function TimeGrid({
       const scrollDelta = (gridRef.current?.scrollTop ?? 0) - drag.scrollTop0;
       const s0 = toMin(drag.origStart);
       const dur = toMin(drag.origEnd) - s0;
-      let dyMin = Math.round(((((e.clientY - drag.offY + scrollDelta) / HR_H) * 60) / 15) * 15);
+      const dyRaw = ((e.clientY - drag.offY + scrollDelta) / HR_H) * 60;
+      let dyMin = Math.round(dyRaw / SNAP_MIN) * SNAP_MIN;
       dyMin = Math.max(-s0, Math.min(24 * 60 - dur - s0, dyMin)); // keep the block inside the day
       const colIdx = Math.max(
         0,

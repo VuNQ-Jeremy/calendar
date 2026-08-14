@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0219 — 2026-08-14
+Calendar drags now snap to 30 minutes instead of the minute, and dragging a past occurrence of a recurring event detaches it instead of asking which occurrences to change.
+
 ## v0.0218 — 2026-08-14
 Plan for a two-axis review of the whole codebase: ten slices ordered by risk, with per-slice file lists, briefs and outputs.
 
