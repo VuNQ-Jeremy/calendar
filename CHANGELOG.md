@@ -6,6 +6,15 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0209 — 2026-08-14
+Test suite: the full staging e2e run is green again, 24 failures to none. Almost all of them were specs written against an app that had moved on since the last full run, not broken features.
+
+## v0.0208 — 2026-08-14
+Vocabulary: an AI-written example sentence now has to contain its answer as a whole word. "run" against "He runs fast." is a mismatch, not a match, so the cloze game stops blanking a sentence into "He _____s fast.".
+
+## v0.0207 — 2026-08-14
+Dashboard: "today" is now the Vietnam day rather than the server's UTC day. Before 07:00 the schedule card was dropping one-off events booked for that morning and showing "Nothing scheduled".
+
 ## v0.0206 — 2026-08-13
 Pronounce result screen: drop the Accuracy label, the "We heard" line and the colour-key hint on web — the percentage and the coloured IPA speak for themselves.
 
