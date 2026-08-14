@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0213 — 2026-08-14
+Fix the OTA verification command in CLAUDE.md: read runtimeVersion from shared/version.json instead of hardcoding a stale value.
+
 ## v0.0212 — 2026-08-14
 Drag events between days in week and month view; recurring edits and deletes now ask This event / This and following / All events.
 
