@@ -2,11 +2,13 @@ import { fail, parseBody, withPublic } from '../../server/api/handler';
 import { MOBILE_TTL_DAYS } from '../../server/api/auth';
 import { createSession, login, DAY_MS } from '../../server/services/auth';
 import { LoginInput } from '../../shared/schemas';
+import { allow, loginKey } from '../../server/services/rate-limit';
 
 // Resource route: no default export, or React Router treats GET as a document request.
 
-export const action = withPublic(async ({ request, db }) => {
+export const action = withPublic(async ({ request, db, env }) => {
   const input = await parseBody(request, LoginInput);
+  if (!(await allow(env.AUTH_LIMITER, loginKey(input.email)))) throw fail('rate_limited', 429);
   // login() runs a timing-safe verify and sleeps 1s on failure to prevent user enumeration.
   // Do not shortcut that.
   const result = await login(db, input.email, input.password);

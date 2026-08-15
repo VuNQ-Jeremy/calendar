@@ -10,6 +10,7 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
 import { NewPassword } from '../../shared/schemas';
+import { allow, loginKey, inviteKey } from '../../server/services/rate-limit';
 import {
   getUser,
   login,
@@ -60,6 +61,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!email || !password) {
       return Response.json({ intent, error: 'auth_enter_both' }, { status: 400 });
     }
+    // Before the PBKDF2 verify, not after: a 100k-iteration derivation is the expensive part,
+    // and an unthrottled attacker turning that into CPU burn is half of this endpoint's risk.
+    if (!(await allow(env.AUTH_LIMITER, loginKey(email)))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
     let result: { accountId: string } | null;
     try {
       result = await login(db, email, password);
@@ -81,6 +87,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'redeem-check') {
     const code = (formData.get('code') as string) ?? '';
+    if (!(await allow(env.INVITE_LIMITER, inviteKey()))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
     const invite = await findOpenInvite(db, code);
     if (!invite) {
       return Response.json({ intent, error: 'auth_invite_invalid' }, { status: 400 });
@@ -100,6 +109,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const name = (formData.get('name') as string) ?? '';
     const email = (formData.get('email') as string) ?? '';
     const password = (formData.get('password') as string) ?? '';
+    if (!(await allow(env.INVITE_LIMITER, inviteKey()))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
     if (!name || !password) {
       return Response.json({ intent, error: 'auth_add_name_pw' }, { status: 400 });
     }
@@ -121,6 +133,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const email = (formData.get('email') as string) ?? '';
     if (!email) {
       return Response.json({ intent, error: 'auth_enter_email' }, { status: 400 });
+    }
+    // Unauthenticated and it INSERTS a password_resets row per call — throttled for the D1
+    // write as much as for the enumeration.
+    if (!(await allow(env.AUTH_LIMITER, loginKey(email)))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
     const result = await requestReset(db, email);
     return Response.json({ intent, sent: true, email, devUrl: result.devUrl ?? null });
