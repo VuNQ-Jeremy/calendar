@@ -1,11 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { VocabEnrichInput } from '../shared/schemas';
-import { sanitizeEnrichedWords } from '../server/services/enrich';
+import { enrichWords, sanitizeEnrichedWords } from '../server/services/enrich';
 import type { EnrichedWord } from '../shared/schemas';
 
-// The Anthropic call itself is not tested (it is network-bound). What IS tested is everything the
-// import and word-editor screens trust: the request schema, and the post-processing that turns raw
-// model output into values the word endpoints will accept.
+// The model's answers are not tested (they are network-bound). What IS tested is everything the
+// import and word-editor screens trust: the request schema, the post-processing that turns raw
+// model output into values the word endpoints will accept, and — against a stubbed `fetch` — that
+// the request is actually built and sent.
 
 describe('VocabEnrichInput', () => {
   it('accepts a bare word list — the sense hint is optional', () => {
@@ -26,6 +27,74 @@ describe('VocabEnrichInput', () => {
     expect(VocabEnrichInput.safeParse({ items: [{ word: '  ' }] }).success).toBe(false);
     const tooMany = Array.from({ length: 201 }, (_, i) => ({ word: `w${i}` }));
     expect(VocabEnrichInput.safeParse({ items: tooMany }).success).toBe(false);
+  });
+});
+
+describe('enrichWords request', () => {
+  // Regression cover for a bug that made AI fill fail 100% of the time while looking like an API
+  // outage: the SDK refuses a non-streaming request whose projected duration exceeds its default
+  // timeout (`max_tokens` over 21,333) and throws BEFORE opening a socket. Nothing here asserts on
+  // model behaviour — the point is that `fetch` is reached at all.
+  const reply = (over: Record<string, unknown>) =>
+    new Response(
+      JSON.stringify({
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-haiku-4-5',
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 12, output_tokens: 34 },
+        ...over,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+
+  const stubFetch = (res: Response) => {
+    const mock = vi.fn(async (_url: unknown, _init?: RequestInit) => res);
+    vi.stubGlobal('fetch', mock);
+    return mock;
+  };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reaches the network with the full token ceiling', async () => {
+    const words = [
+      {
+        word: 'dog',
+        meaningVi: 'con chó',
+        definitionEn: 'a common pet animal',
+        ipa: '/dɔːɡ/',
+        exampleEn: 'The dog barks loudly at night.',
+        exampleAnswer: 'dog',
+      },
+    ];
+    const mock = stubFetch(reply({ content: [{ type: 'text', text: JSON.stringify({ words }) }] }));
+
+    const out = await enrichWords('sk-ant-test', [{ word: 'dog', definitionEn: null }]);
+
+    expect(mock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(mock.mock.calls[0][1]?.body)) as {
+      max_tokens: number;
+      stream?: boolean;
+    };
+    expect(body.max_tokens).toBe(32000);
+    expect(body.stream ?? false).toBe(false);
+    expect(out.words[0].word).toBe('dog');
+    expect(out.usage).toEqual({ inputTokens: 12, outputTokens: 34 });
+  });
+
+  it('throws a legible error when the batch is truncated instead of crashing in JSON.parse', async () => {
+    stubFetch(
+      reply({
+        stop_reason: 'max_tokens',
+        content: [{ type: 'text', text: '{"words":[{"word":"do' }],
+      }),
+    );
+
+    await expect(enrichWords('sk-ant-test', [{ word: 'dog', definitionEn: null }])).rejects.toThrow(
+      /truncated at max_tokens/,
+    );
   });
 });
 

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0238 — 2026-08-15
+fix(vocab): AI fill reached the SDK's non-streaming token guard and threw before sending — an explicit timeout lifts it, and truncated batches now fail legibly
+
 ## v0.0237 — 2026-08-15
 Usage tab now tracks the Anthropic API too: every enrich/generate call counts its input and output tokens (via the TranslateProxy DO, off the response path) and the new card shows calls, tokens and an estimated cost at haiku list prices
 
