@@ -1521,6 +1521,13 @@ const en_strings = {
   logs_notif_send_penalty_note:
     'This one also charges the stage it announces, so the message is true when it arrives — along with any other penalty due at the same moment, which is the work the 08:00 run would have done anyway.',
   logs_tab_activity: 'Activity',
+  logs_tab_usage: 'Usage',
+  usage_speech_title: 'Pronunciation scoring (Azure Speech)',
+  usage_speech_hint:
+    'Free tier: 5 audio-hours of scoring per calendar month, not adjustable. When it runs out Azure refuses clips (403) and the game shows "not set up yet" until the month resets. Counted here per scored clip; Azure’s own billing month may differ by a few hours.',
+  usage_month_clips: '{n} clips · {m} min of audio',
+  usage_free_quota: '{pct}% of the {h}-hour free month used',
+  usage_prev_months: 'Previous months',
   logs_activity_title: 'Activity log',
   logs_activity_subtitle:
     'Every mutation, page view and login. Admin only, read-only, kept 90 days.',
@@ -3072,6 +3079,13 @@ export const STRINGS = {
     logs_notif_send_penalty_note:
       'Tin này còn trừ luôn bậc cây mà nó thông báo, để lời nhắn là đúng khi tới nơi — cùng với mọi hình phạt khác đến hạn cùng lúc, vốn là phần việc lần chạy 08:00 sẽ làm.',
     logs_tab_activity: 'Hoạt động',
+    logs_tab_usage: 'Mức sử dụng',
+    usage_speech_title: 'Chấm điểm phát âm (Azure Speech)',
+    usage_speech_hint:
+      'Gói miễn phí: 5 giờ âm thanh chấm điểm mỗi tháng, không thể nâng. Hết hạn mức Azure sẽ từ chối (403) và trò chơi hiển thị "chưa được bật" cho đến khi sang tháng mới. Số liệu đếm theo từng lượt chấm; tháng tính cước của Azure có thể lệch vài giờ.',
+    usage_month_clips: '{n} lượt · {m} phút âm thanh',
+    usage_free_quota: 'Đã dùng {pct}% trong {h} giờ miễn phí mỗi tháng',
+    usage_prev_months: 'Các tháng trước',
     logs_activity_title: 'Nhật ký hoạt động',
     logs_activity_subtitle:
       'Mọi thay đổi dữ liệu, lượt xem trang và đăng nhập. Chỉ quản trị, chỉ xem, lưu trong 90 ngày.',

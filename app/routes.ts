@@ -177,6 +177,9 @@ export default [
     // /logs/activity would match :studentId and be treated as a student filter. See the
     // cacheKeyForPath early-return in src/lib/route-cache.ts for the other half of that fix.
     route('logs/activity', 'routes/logs.activity.tsx'),
+    // Same static-segment-before-dynamic reasoning again: /logs/usage must not be read as a
+    // student filter by :studentId below.
+    route('logs/usage', 'routes/logs.usage.tsx'),
     route('logs/:studentId?', 'routes/logs.tsx'),
     route('feedback', 'routes/feedback.tsx'),
     route('profile', 'routes/profile.tsx'),

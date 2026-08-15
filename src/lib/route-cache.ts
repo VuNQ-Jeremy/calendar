@@ -343,6 +343,12 @@ export function cacheKeyForPath(pathname: string): string | null {
   if (pathname === '/logs/activity' || pathname === '/logs/activity/') {
     return null;
   }
+  // Same trap and same answer as /logs/activity: a sibling PAGE, not a student filter, and
+  // deliberately uncached — the usage counters move on every scored clip and the read is one
+  // tiny table (see app/routes/logs.usage.tsx).
+  if (pathname === '/logs/usage' || pathname === '/logs/usage/') {
+    return null;
+  }
   // The student filter lives in the path for the same reason the leaderboard's month does: this
   // function only ever sees a pathname, so a `?student=` would give every student one cache entry.
   const lg = pathname.match(/^\/logs\/([^/]+)\/?$/);

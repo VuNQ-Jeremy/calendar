@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0236 — 2026-08-15
+New /logs Usage tab: monthly counters for metered services, starting with Azure Speech pronunciation scoring - clips, audio minutes and a gauge against the 5-hour free month (new usage_counters table, tracked per scored clip off the response path)
+
 ## v0.0235 — 2026-08-15
 Pronounce polish: IPA breakdown centered (details icon moved to the action row on both clients), and the web details drawer slides out on close instead of vanishing
 

@@ -42,13 +42,18 @@ const ALL = 'all';
  * not pay for it — so switching tabs is a route change. Exported so both screens render the same
  * strip and neither can drift out of step with the other.
  */
-const LOGS_TAB_PATH: Record<'schedule' | 'notifications' | 'activity', string> = {
+const LOGS_TAB_PATH: Record<'schedule' | 'notifications' | 'activity' | 'usage', string> = {
   schedule: '/logs',
   notifications: '/logs/notifications',
   activity: '/logs/activity',
+  usage: '/logs/usage',
 };
 
-export function LogsTabs({ value }: { value: 'schedule' | 'notifications' | 'activity' }) {
+export function LogsTabs({
+  value,
+}: {
+  value: 'schedule' | 'notifications' | 'activity' | 'usage';
+}) {
   const navigate = useNavigate();
   const { t } = useLang();
   return (
@@ -60,6 +65,7 @@ export function LogsTabs({ value }: { value: 'schedule' | 'notifications' | 'act
           { id: 'schedule', label: t('logs_tab_schedule') },
           { id: 'notifications', label: t('logs_tab_notifications') },
           { id: 'activity', label: t('logs_tab_activity') },
+          { id: 'usage', label: t('logs_tab_usage') },
         ]}
       />
     </div>
@@ -120,6 +126,140 @@ export function LogsScreen() {
           />
         )}
       </LCard>
+    </div>
+  );
+}
+
+type UsageRow = { month: string; metric: string; count: number; quantity: number };
+
+type UsageLoaderData = {
+  rows: UsageRow[];
+  /** Current ICT month, 'YYYY-MM'. */
+  month: string;
+  speechFreeSeconds: number;
+};
+
+/** Per-metric display strings; a metric without an entry still renders under its raw key. */
+const USAGE_METRIC_LABEL: Record<string, { title: string; hint: string }> = {
+  'speech-assess': { title: 'usage_speech_title', hint: 'usage_speech_hint' },
+};
+
+const mins = (seconds: number) => (seconds / 60).toFixed(1);
+
+/**
+ * /logs → Usage: one card per metered service, its current ICT month first with a gauge
+ * against the free quota, then the past months as plain rows. Built generic on purpose —
+ * a future metric (AI tokens, Zalo sends…) is one row per month in the same table and one
+ * label entry above.
+ */
+export function LogsUsageScreen() {
+  const { rows, month, speechFreeSeconds } = useLoaderData() as UsageLoaderData;
+  const { t } = useLang();
+
+  const metrics = [...new Set(rows.map((r) => r.metric))];
+  if (metrics.length === 0) metrics.push('speech-assess'); // the gauge is useful even at zero
+
+  return (
+    <div className="content">
+      <PageHeader title={t('logs_title')} subtitle={t('logs_subtitle')} />
+      <LogsTabs value="usage" />
+
+      <div className="m-stack" style={{ gap: 16 }}>
+        {metrics.map((metric) => {
+          const label = USAGE_METRIC_LABEL[metric];
+          const monthRows = rows.filter((r) => r.metric === metric);
+          const current = monthRows.find((r) => r.month === month) ?? {
+            month,
+            metric,
+            count: 0,
+            quantity: 0,
+          };
+          const past = monthRows.filter((r) => r.month !== month);
+          // Only the speech metric has a known free quota; a future metric renders no gauge
+          // until it declares one.
+          const quota = metric === 'speech-assess' ? speechFreeSeconds : null;
+          const pct = quota ? Math.min(100, (current.quantity / quota) * 100) : null;
+
+          return (
+            <LCard key={metric} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="m-row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <MIcon name="mic" size={20} />
+                <strong style={{ fontSize: 'var(--text-lg)' }}>
+                  {label ? t(label.title) : metric}
+                </strong>
+                <Badge>{current.month}</Badge>
+              </div>
+
+              <div style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {t('usage_month_clips', { n: current.count, m: mins(current.quantity) })}
+              </div>
+
+              {pct !== null && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 520 }}>
+                  <div
+                    style={{
+                      height: 10,
+                      borderRadius: 999,
+                      background: 'var(--border-subtle, #e7e0d6)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${pct}%`,
+                        height: '100%',
+                        borderRadius: 999,
+                        background:
+                          pct >= 90
+                            ? 'var(--red-600, #c0392b)'
+                            : pct >= 70
+                              ? 'var(--warning, #E0A02E)'
+                              : 'var(--green-600, #2e7d32)',
+                      }}
+                    />
+                  </div>
+                  <span className="m-muted" style={{ fontSize: 13 }}>
+                    {t('usage_free_quota', {
+                      pct: pct.toFixed(pct < 10 ? 1 : 0),
+                      h: Math.round((quota as number) / 3600),
+                    })}
+                  </span>
+                </div>
+              )}
+
+              {label && (
+                <p
+                  className="m-muted"
+                  style={{ margin: 0, fontSize: 13, lineHeight: 1.6, maxWidth: 720 }}
+                >
+                  {t(label.hint)}
+                </p>
+              )}
+
+              {past.length > 0 && (
+                <div className="m-stack" style={{ gap: 4 }}>
+                  <strong style={{ fontSize: 'var(--text-sm)' }}>{t('usage_prev_months')}</strong>
+                  {past.map((r) => (
+                    <div
+                      key={r.month}
+                      className="m-row"
+                      style={{
+                        gap: 12,
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: 'var(--text-sm)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      <span style={{ minWidth: 70 }}>{r.month}</span>
+                      <span>{t('usage_month_clips', { n: r.count, m: mins(r.quantity) })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </LCard>
+          );
+        })}
+      </div>
     </div>
   );
 }

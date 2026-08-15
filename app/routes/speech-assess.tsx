@@ -3,6 +3,9 @@ import { cloudflareCtx } from '../../app/load-context';
 import { createDb } from '../../server/db/index';
 import { requireLearnerCookieOrBearer } from '../../server/api/auth';
 import { getPronounceSettings } from '../../server/services/flashcards';
+import { SPEECH_ASSESS_METRIC, trackUsage } from '../../server/services/usage';
+import { ictDateOf } from '../../shared/logic/tests';
+import { wavSeconds } from '../../shared/logic/wav';
 import {
   mapAzureAssessment,
   pronunciationAssessmentHeader,
@@ -22,7 +25,7 @@ import {
 const MAX_AUDIO_BYTES = 400_000;
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = context.get(cloudflareCtx).env;
+  const { env, ctx } = context.get(cloudflareCtx);
   await requireLearnerCookieOrBearer(request, env);
   if (!env.AZURE_SPEECH_KEY || !env.AZURE_SPEECH_REGION) {
     return Response.json({ error: 'disabled' }, { status: 503 });
@@ -74,9 +77,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return Response.json({ error: 'disabled' }, { status: 503 });
   }
   if (!res.ok) return Response.json({ error: 'assess_failed' }, { status: 502 });
+  const db = createDb(env);
+  // Usage gauge for /logs/usage: Azure billed this call (any 200 means the audio was
+  // processed, whatever RecognitionStatus says), so count it — off the response path.
+  ctx.waitUntil(
+    trackUsage(
+      db,
+      SPEECH_ASSESS_METRIC,
+      ictDateOf(new Date().toISOString()).slice(0, 7),
+      wavSeconds(audio.byteLength),
+    ),
+  );
   // The forgiveness curve (/config → Pronounce scoring). Loaded after the Azure round-trip on
   // purpose: no point reading settings for a clip that failed upstream.
-  const { curve } = await getPronounceSettings(createDb(env));
+  const { curve } = await getPronounceSettings(db);
   const json = (await res.json()) as AzureShortAudio;
   // The raw word/syllable/phoneme block, capped so a long miscue can't blow the log line.
   // Azure's response shape has already diverged from its docs once (flat vs nested scores) —

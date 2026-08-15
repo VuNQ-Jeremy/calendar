@@ -218,6 +218,13 @@ describe('cacheKeyForPath', () => {
     expect(cacheKeyForPath('/logs/some-student-id')).toBe('route:logs:some-student-id');
   });
 
+  it('/logs/usage is never cached, and is not misread as a student filter', () => {
+    // Same trap as /logs/activity: usage counters move on every scored clip, so the page is
+    // deliberately uncached (see app/routes/logs.usage.tsx).
+    expect(cacheKeyForPath('/logs/usage')).toBeNull();
+    expect(cacheKeyForPath('/logs/usage/')).toBeNull();
+  });
+
   it('tolerates trailing slashes and encoded slugs', () => {
     expect(cacheKeyForPath('/dashboard/')).toBe(K.dashboard);
     expect(cacheKeyForPath('/vocabulary/animals/')).toBe('route:flashcards:animals');

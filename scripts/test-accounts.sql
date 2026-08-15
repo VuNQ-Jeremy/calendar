@@ -65,6 +65,10 @@ DELETE FROM tui_mu_events;
 DELETE FROM gift_redemptions;
 DELETE FROM checkin_activity_types;
 DELETE FROM settings WHERE key = 'checkin-settings';
+-- Pronounce scoring: the config spec restores the curve to Off itself, but a failed run must
+-- not leak a curve into the next one; usage counters likewise start every run at zero.
+DELETE FROM settings WHERE key = 'pronounce-settings';
+DELETE FROM usage_counters;
 -- Subjects (môn học). seed.sql still writes the legacy free-text `classes.subject`, so re-derive
 -- the managed rows and the subject_id link after every reset — otherwise the seeded classes come
 -- back reading "General" and the class spec has nothing to pick.

@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { mapAzureAssessment, pronunciationAssessmentHeader } from '../server/services/speech.js';
 import { forgiveScore } from '../shared/logic/flashcards.js';
+import { wavSeconds } from '../shared/logic/wav.js';
+
+describe('wavSeconds', () => {
+  it('converts a 16 kHz mono int16 WAV byte length to seconds', () => {
+    expect(wavSeconds(44)).toBe(0); // header only
+    expect(wavSeconds(44 + 32000)).toBe(1); // one second of samples
+    expect(wavSeconds(44 + 160000)).toBe(5); // a full MAX_CLIP_MS clip
+    expect(wavSeconds(0)).toBe(0); // never negative on a short/odd body
+  });
+});
 
 describe('forgiveScore', () => {
   it('applies each curve preset', () => {

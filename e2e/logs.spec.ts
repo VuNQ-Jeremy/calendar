@@ -105,4 +105,18 @@ test.describe('logs: admin diagnostics', () => {
       'ephemeral',
     );
   });
+
+  test('usage tab: the Azure speech gauge renders, at zero, on a fresh reset', async ({ page }) => {
+    await signInStaff(page);
+    await page.goto('/logs');
+    await page.getByRole('tab', { name: 'Usage' }).click();
+    await page.waitForURL(/\/logs\/usage$/);
+
+    // calendar-test carries no Azure key and the pronounce spec stubs /speech-assess, so the
+    // counter is zero — the card and its quota gauge must render anyway.
+    const card = page.locator('.mochi-card', { hasText: 'Pronunciation scoring (Azure Speech)' });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('0 clips · 0.0 min of audio');
+    await expect(card).toContainText('of the 5-hour free month used');
+  });
 });

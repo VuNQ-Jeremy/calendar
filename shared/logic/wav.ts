@@ -15,6 +15,15 @@ export const MAX_CLIP_MS = 5000;
  */
 export const MIN_CLIP_MS = 300;
 
+/**
+ * Seconds of audio in a 16 kHz mono int16 WAV of this many bytes (44-byte header, 32000
+ * bytes/second). Used by the usage counters — good to the header's own precision, which is
+ * all a quota gauge needs.
+ */
+export function wavSeconds(byteLength: number): number {
+  return Math.max(0, byteLength - 44) / 32000;
+}
+
 /** Convert Float32 samples in [-1, 1] (Web Audio's native format) to Int16. */
 export function floatTo16(samples: Float32Array): Int16Array {
   const out = new Int16Array(samples.length);

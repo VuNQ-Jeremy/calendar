@@ -222,6 +222,22 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
 });
 
+/**
+ * Monthly usage counters for metered external services (/logs/usage). `count` is calls;
+ * `quantity` is the metric's own unit — audio seconds for speech-assess, tokens for a future
+ * AI metric. Blind upserts, no FKs: the month is the whole time axis.
+ */
+export const usageCounters = sqliteTable(
+  'usage_counters',
+  {
+    month: text('month').notNull(),
+    metric: text('metric').notNull(),
+    count: integer('count').notNull().default(0),
+    quantity: real('quantity').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.month, t.metric] })],
+);
+
 export const accounts = sqliteTable('accounts', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
