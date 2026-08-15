@@ -36,16 +36,3 @@ export function normalizeInviteCode(code: string): string | null {
   if (bare.length !== 6) return null;
   return `${bare.slice(0, 3)}-${bare.slice(3)}`;
 }
-
-/**
- * Stand-in for a code the viewer is not entitled to read. The login page tells an anonymous
- * visitor that an unused code exists; it must not tell them what it is, because redeeming one
- * creates an account — a `Staff` invite creates an admin.
- *
- * Masking belongs on the server. Anything a loader returns ships inside the page payload, so a
- * mask applied while rendering would still hand the real code to the browser.
- *
- * Every character goes. Revealing even the first half leaves 32³ = 32,768 candidates, which is
- * not a secret — it is an afternoon of guesses against the redeem check.
- */
-export const MASKED_INVITE_CODE = '•••-•••';

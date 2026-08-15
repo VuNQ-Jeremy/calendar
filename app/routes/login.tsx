@@ -9,7 +9,6 @@ import { useLang } from '../../src/lib/i18n.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
-import { MASKED_INVITE_CODE } from '../../shared/logic/invite-code';
 import {
   getUser,
   login,
@@ -30,18 +29,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const user = await getUser(request, env);
   if (user) return redirect(homeFor(user.kind));
-  const db = createDb(env);
   const url = new URL(request.url);
-  // Only whether a code is waiting, never which one. This page is unauthenticated, so the code
-  // itself would be readable by anyone who opened /login — including the staff codes an admin
-  // had just generated for named people.
-  const hasOpenInvite = (await invitesSvc.countUnused(db)) > 0;
+  // Deliberately says NOTHING about whether an invite is outstanding. This page is
+  // unauthenticated, and "a live code exists right now" is exactly the signal that makes
+  // brute-forcing the redeem check worth an attacker's time.
   return {
     next: url.searchParams.get('next'),
     mode: url.searchParams.get('mode'),
     resetToken: url.searchParams.get('token'),
     resetDone: url.searchParams.get('reset') === 'done',
-    hasOpenInvite,
   };
 }
 
@@ -162,7 +158,6 @@ export default function Login() {
     mode: urlMode,
     resetToken,
     resetDone,
-    hasOpenInvite,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { t } = useLang();
@@ -317,11 +312,6 @@ export default function Login() {
           }}
         />
         {checkError && <div className="auth-error">{checkError}</div>}
-        {hasOpenInvite && (
-          <div className="auth-hint-code">
-            {t('auth_demo_code')} <span className="m-mono">{MASKED_INVITE_CODE}</span>
-          </div>
-        )}
         <LBtn
           variant="primary"
           block={true}
