@@ -17,6 +17,7 @@ export { LiveHub } from './live-hub';
 export { ZaloPoller } from './zalo-poller';
 
 import { handleLiveUpgrade } from './live-hub';
+import { secure } from './security-headers';
 import { pollerStub } from './zalo-poller';
 import { runScheduled } from '../server/services/notify';
 import { isEnabled as zaloEnabled } from '../server/services/zalo';
@@ -70,7 +71,7 @@ export default {
         status: response.status,
         ms: Date.now() - start,
       });
-      return response;
+      return secure(response);
     } catch (err) {
       // Whatever ran before the throw may already have pushed entries (e.g. a login_failed
       // record right before an unrelated downstream error) — flush them rather than drop them.
