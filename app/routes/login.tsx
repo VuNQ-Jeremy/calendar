@@ -9,6 +9,7 @@ import { useLang } from '../../src/lib/i18n.jsx';
 import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
+import { NewPassword } from '../../shared/schemas';
 import {
   getUser,
   login,
@@ -102,6 +103,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!name || !password) {
       return Response.json({ intent, error: 'auth_add_name_pw' }, { status: 400 });
     }
+    // The browser path used to skip RedeemInviteInput entirely, so a one-character password
+    // was accepted here while the mobile API refused it. Same rule, both clients.
+    if (!NewPassword.safeParse(password).success) {
+      return Response.json({ intent, error: 'auth_password_too_short' }, { status: 400 });
+    }
     const result = await redeemInvite(db, code, { name, email, password });
     if (!result) {
       return Response.json({ intent, error: 'auth_invite_invalid' }, { status: 400 });
@@ -125,6 +131,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const password = (formData.get('password') as string) ?? '';
     if (!password) {
       return Response.json({ intent, error: 'auth_add_name_pw' }, { status: 400 });
+    }
+    if (!NewPassword.safeParse(password).success) {
+      return Response.json({ intent, error: 'auth_password_too_short' }, { status: 400 });
     }
     const ok = await resetPassword(db, token, password);
     if (!ok) {

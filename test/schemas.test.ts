@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ChangePasswordInput,
   FormBool,
   InviteInput,
+  NewPassword,
+  RedeemInviteInput,
   StudentCreateInput,
   MaterialInput,
   AssessmentTypeInput,
@@ -281,5 +284,28 @@ describe('ReviewSettingsInput', () => {
     expect(ReviewSettingsInput.safeParse({ intervals: '0,5,7' }).success).toBe(true);
     expect(ReviewSettingsInput.safeParse({ intervals: '-1,5,7' }).success).toBe(false);
     expect(ReviewSettingsInput.safeParse({ intervals: '3,5,366' }).success).toBe(false);
+  });
+});
+
+describe('NewPassword', () => {
+  it('rejects anything under 8 characters', () => {
+    expect(NewPassword.safeParse('short7x').success).toBe(false);
+    expect(NewPassword.safeParse('a').success).toBe(false);
+    expect(NewPassword.safeParse('').success).toBe(false);
+  });
+
+  it('accepts 8 characters and the seeded test password', () => {
+    expect(NewPassword.safeParse('12345678').success).toBe(true);
+    expect(NewPassword.safeParse('mochi123').success).toBe(true);
+    expect(NewPassword.safeParse('e2e-pass-123').success).toBe(true);
+  });
+
+  it('is the rule RedeemInviteInput and ChangePasswordInput both use', () => {
+    expect(
+      RedeemInviteInput.safeParse({ code: 'ABC-123', name: 'A', password: 'short' }).success,
+    ).toBe(false);
+    expect(
+      ChangePasswordInput.safeParse({ currentPassword: 'x', newPassword: 'short' }).success,
+    ).toBe(false);
   });
 });

@@ -565,6 +565,14 @@ export const ZaloPairInput = z
   });
 export type ZaloPairInput = z.infer<typeof ZaloPairInput>;
 
+/**
+ * The rule for SETTING a password — invite redemption, self-serve reset, change-password.
+ *
+ * Deliberately NOT used by LoginInput: that validates a password being *presented*, and
+ * tightening it there would lock out any account created before this floor existed.
+ */
+export const NewPassword = z.string().min(8).max(200);
+
 export const LoginInput = z.object({
   email: z.string().min(1).max(320),
   password: z.string().min(1).max(200),
@@ -575,13 +583,13 @@ export const RedeemInviteInput = z.object({
   code: z.string().min(1).max(20),
   name: z.string().trim().min(1).max(200),
   email: z.string().max(320).optional(),
-  password: z.string().min(6).max(200),
+  password: NewPassword,
 });
 export type RedeemInviteInput = z.infer<typeof RedeemInviteInput>;
 
 export const ChangePasswordInput = z.object({
   currentPassword: z.string().min(1).max(200),
-  newPassword: z.string().min(6).max(200),
+  newPassword: NewPassword,
 });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInput>;
 
