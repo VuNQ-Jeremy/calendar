@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0230 — 2026-08-15
+Hardened authentication: rate-limited login, invite redemption and password reset; crypto-random invite codes; security headers; 8-character password floor.
+
 ## v0.0226 — 2026-08-15
 Pronounce fix: Azure's REST response carries flat AccuracyScore/ErrorType (not the SDK's nested shape), so syllable scores read 0 and the word went red at 98%. The mapper now reads both shapes, nests phonemes without offsets, and the route logs Azure's raw word block
 
