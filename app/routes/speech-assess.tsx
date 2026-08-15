@@ -1,7 +1,11 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearnerCookieOrBearer } from '../../server/api/auth';
-import { mapAzureAssessment, pronunciationAssessmentHeader } from '../../server/services/speech';
+import {
+  mapAzureAssessment,
+  pronunciationAssessmentHeader,
+  type AzureShortAudio,
+} from '../../server/services/speech';
 
 // Pronunciation scoring for the vocabulary "pronounce" game. Resource route, registered
 // OUTSIDE the `_app` layout (same reasoning as enrich-vocab: posting here must not touch the
@@ -68,5 +72,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return Response.json({ error: 'disabled' }, { status: 503 });
   }
   if (!res.ok) return Response.json({ error: 'assess_failed' }, { status: 502 });
-  return Response.json({ data: mapAzureAssessment(await res.json()) });
+  const json = (await res.json()) as AzureShortAudio;
+  // The raw word/syllable/phoneme block, capped so a long miscue can't blow the log line.
+  // Azure's response shape has already diverged from its docs once (flat vs nested scores) —
+  // this is what lets a surprising score be traced in Workers Logs / `wrangler tail`.
+  console.log('[speech-assess]', {
+    word,
+    status: json.RecognitionStatus,
+    words: JSON.stringify(json.NBest?.[0]?.Words ?? []).slice(0, 8_000),
+  });
+  return Response.json({ data: mapAzureAssessment(json) });
 }

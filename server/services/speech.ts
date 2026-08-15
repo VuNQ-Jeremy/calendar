@@ -8,6 +8,28 @@
 import { PRONOUNCE_PASS } from '../../shared/logic/flashcards';
 import type { PronounceAssessment, PronouncePhoneme, PronounceWord } from '../../shared/schemas';
 
+/**
+ * Word/syllable/phoneme entries come in TWO shapes: the short-audio REST endpoint returns the
+ * scores FLAT on each entry (`AccuracyScore`, `ErrorType` — see the rest-speech-to-text-short
+ * sample), while the SDK-style shape nests them under `PronunciationAssessment`. The mapping
+ * reads the nested key first and falls back to the flat one, so either variant scores.
+ */
+type AzureSyllable = {
+  Syllable?: string;
+  AccuracyScore?: number;
+  PronunciationAssessment?: { AccuracyScore?: number };
+  /** 100-ns ticks into the clip; used only to nest phonemes into their syllable. */
+  Offset?: number;
+  Duration?: number;
+};
+
+type AzurePhoneme = {
+  Phoneme?: string;
+  AccuracyScore?: number;
+  PronunciationAssessment?: { AccuracyScore?: number };
+  Offset?: number;
+};
+
 /** The slice of Azure's short-audio `format=detailed` response the mapping reads. */
 export type AzureShortAudio = {
   RecognitionStatus: string;
@@ -20,22 +42,12 @@ export type AzureShortAudio = {
     /** Present because the config asks for Granularity: 'Phoneme'. */
     Words?: {
       Word?: string;
+      AccuracyScore?: number;
+      ErrorType?: string;
       PronunciationAssessment?: { AccuracyScore?: number; ErrorType?: string };
-      /**
-       * Syllable groups — Azure sends them for en-US alongside the phonemes. Offset/Duration
-       * are 100-ns ticks into the clip; they only exist here to nest phonemes into syllables.
-       */
-      Syllables?: {
-        Syllable?: string;
-        PronunciationAssessment?: { AccuracyScore?: number };
-        Offset?: number;
-        Duration?: number;
-      }[];
-      Phonemes?: {
-        Phoneme?: string;
-        PronunciationAssessment?: { AccuracyScore?: number };
-        Offset?: number;
-      }[];
+      /** Syllable groups — Azure sends them for en-US alongside the phonemes. */
+      Syllables?: AzureSyllable[];
+      Phonemes?: AzurePhoneme[];
     }[];
   }[];
 };
@@ -94,36 +106,63 @@ export function mapAzureAssessment(json: AzureShortAudio): PronounceAssessment {
     recognized: best.Lexical ?? '',
     correct: accuracy >= PRONOUNCE_PASS,
     noSpeech: false,
-    words: (best.Words ?? []).slice(0, MAX_ASSESSED_WORDS).map((w) => ({
-      word: w.Word ?? '',
-      errorType: (w.PronunciationAssessment?.ErrorType ?? 'None') as PronounceWord['errorType'],
-      accuracy: w.PronunciationAssessment?.AccuracyScore ?? 0,
-      phonemes: (w.Phonemes ?? []).map(mapPhoneme),
-      syllables: (w.Syllables ?? []).map((s) => ({
-        ipa: s.Syllable ?? '',
-        accuracy: s.PronunciationAssessment?.AccuracyScore ?? 0,
-        // A phoneme belongs to the syllable whose audio window contains its start tick. Azure
-        // sends both from the same alignment, so containment is exact — and if either side is
-        // missing its offsets, the syllable simply carries no phonemes and clients show its
-        // own IPA string instead.
-        phonemes: (w.Phonemes ?? [])
-          .filter(
-            (p) =>
-              p.Offset != null &&
-              s.Offset != null &&
-              s.Duration != null &&
-              p.Offset >= s.Offset &&
-              p.Offset < s.Offset + s.Duration,
-          )
-          .map(mapPhoneme),
-      })),
-    })),
+    words: (best.Words ?? []).slice(0, MAX_ASSESSED_WORDS).map((w) => {
+      const nested = nestPhonemes(w.Syllables ?? [], w.Phonemes ?? []);
+      return {
+        word: w.Word ?? '',
+        errorType: (w.PronunciationAssessment?.ErrorType ??
+          w.ErrorType ??
+          'None') as PronounceWord['errorType'],
+        accuracy: w.PronunciationAssessment?.AccuracyScore ?? w.AccuracyScore ?? 0,
+        phonemes: (w.Phonemes ?? []).map(mapPhoneme),
+        syllables: (w.Syllables ?? []).map((s, i) => ({
+          ipa: s.Syllable ?? '',
+          accuracy: s.PronunciationAssessment?.AccuracyScore ?? s.AccuracyScore ?? 0,
+          phonemes: nested[i] ?? [],
+        })),
+      };
+    }),
   };
 }
 
-function mapPhoneme(p: {
-  Phoneme?: string;
-  PronunciationAssessment?: { AccuracyScore?: number };
-}): PronouncePhoneme {
-  return { ipa: p.Phoneme ?? '', accuracy: p.PronunciationAssessment?.AccuracyScore ?? 0 };
+/**
+ * Attach each phoneme to its syllable, one group per syllable. Preferred signal: the syllable
+ * whose audio window contains the phoneme's start tick — both come from the same alignment, so
+ * containment is exact. When the response carries no usable offsets, fall back to consuming
+ * phonemes left-to-right until their concatenated IPA is as long as the syllable's string (the
+ * syllable IS its phonemes' symbols joined, in en-US IPA). A syllable that still ends up empty
+ * is rendered by clients as its own IPA string, so nothing disappears.
+ */
+function nestPhonemes(syllables: AzureSyllable[], phonemes: AzurePhoneme[]): PronouncePhoneme[][] {
+  const byOffset = syllables.map((s) =>
+    phonemes.filter(
+      (p) =>
+        p.Offset != null &&
+        s.Offset != null &&
+        s.Duration != null &&
+        p.Offset >= s.Offset &&
+        p.Offset < s.Offset + s.Duration,
+    ),
+  );
+  if (byOffset.some((group) => group.length > 0)) {
+    return byOffset.map((group) => group.map(mapPhoneme));
+  }
+  let next = 0;
+  return syllables.map((s) => {
+    const target = (s.Syllable ?? '').length;
+    const group: AzurePhoneme[] = [];
+    let taken = 0;
+    while (next < phonemes.length && taken < target) {
+      taken += (phonemes[next].Phoneme ?? '').length;
+      group.push(phonemes[next++]);
+    }
+    return group.map(mapPhoneme);
+  });
+}
+
+function mapPhoneme(p: AzurePhoneme): PronouncePhoneme {
+  return {
+    ipa: p.Phoneme ?? '',
+    accuracy: p.PronunciationAssessment?.AccuracyScore ?? p.AccuracyScore ?? 0,
+  };
 }

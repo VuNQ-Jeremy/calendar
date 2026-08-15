@@ -127,26 +127,101 @@ describe('mapAzureAssessment', () => {
     ]);
   });
 
-  it('keeps a syllable with no matchable phonemes when offsets are missing', () => {
+  it('reads the flat REST shape — scores directly on word/syllable/phoneme entries', () => {
+    // The short-audio REST endpoint puts AccuracyScore/ErrorType FLAT on each entry (the nested
+    // PronunciationAssessment shape is the SDK's). This is the shape production actually sees.
     const out = mapAzureAssessment({
       RecognitionStatus: 'Success',
       NBest: [
         {
-          Lexical: 'luck',
-          AccuracyScore: 80,
+          Lexical: 'dog',
+          AccuracyScore: 98,
           Words: [
             {
-              Word: 'luck',
-              PronunciationAssessment: { AccuracyScore: 80, ErrorType: 'None' },
-              // No Offset/Duration anywhere — the syllable still arrives, just unnested.
-              Syllables: [{ Syllable: 'lʌk', PronunciationAssessment: { AccuracyScore: 80 } }],
-              Phonemes: [{ Phoneme: 'l', PronunciationAssessment: { AccuracyScore: 85 } }],
+              Word: 'dog',
+              AccuracyScore: 98,
+              ErrorType: 'None',
+              Syllables: [{ Syllable: 'dɔg', AccuracyScore: 98, Offset: 1000, Duration: 3000 }],
+              Phonemes: [
+                { Phoneme: 'd', AccuracyScore: 100, Offset: 1000 },
+                { Phoneme: 'ɔ', AccuracyScore: 97, Offset: 2000 },
+                { Phoneme: 'g', AccuracyScore: 96, Offset: 3000 },
+              ],
             },
           ],
         },
       ],
     });
-    expect(out.words[0].syllables).toEqual([{ ipa: 'lʌk', accuracy: 80, phonemes: [] }]);
+    expect(out.words[0]).toEqual({
+      word: 'dog',
+      errorType: 'None',
+      accuracy: 98,
+      phonemes: [
+        { ipa: 'd', accuracy: 100 },
+        { ipa: 'ɔ', accuracy: 97 },
+        { ipa: 'g', accuracy: 96 },
+      ],
+      syllables: [
+        {
+          ipa: 'dɔg',
+          accuracy: 98,
+          phonemes: [
+            { ipa: 'd', accuracy: 100 },
+            { ipa: 'ɔ', accuracy: 97 },
+            { ipa: 'g', accuracy: 96 },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('nests phonemes by IPA length when the response carries no offsets', () => {
+    const out = mapAzureAssessment({
+      RecognitionStatus: 'Success',
+      NBest: [
+        {
+          Lexical: 'hello',
+          AccuracyScore: 90,
+          Words: [
+            {
+              Word: 'hello',
+              AccuracyScore: 90,
+              ErrorType: 'None',
+              // No Offset/Duration anywhere — the greedy fallback consumes phonemes
+              // left-to-right until each syllable's string length is covered.
+              Syllables: [
+                { Syllable: 'hɛ', AccuracyScore: 88 },
+                { Syllable: 'loʊ', AccuracyScore: 96 },
+              ],
+              Phonemes: [
+                { Phoneme: 'h', AccuracyScore: 90 },
+                { Phoneme: 'ɛ', AccuracyScore: 86 },
+                { Phoneme: 'l', AccuracyScore: 95 },
+                { Phoneme: 'oʊ', AccuracyScore: 97 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(out.words[0].syllables).toEqual([
+      {
+        ipa: 'hɛ',
+        accuracy: 88,
+        phonemes: [
+          { ipa: 'h', accuracy: 90 },
+          { ipa: 'ɛ', accuracy: 86 },
+        ],
+      },
+      {
+        ipa: 'loʊ',
+        accuracy: 96,
+        phonemes: [
+          { ipa: 'l', accuracy: 95 },
+          { ipa: 'oʊ', accuracy: 97 },
+        ],
+      },
+    ]);
   });
 
   it('fails a score under 70 without flagging noSpeech', () => {
