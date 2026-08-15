@@ -7,6 +7,7 @@ import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { formatDmy } from '../shared/logic/tuition.js';
 import { daysBetweenVn } from '../shared/logic/garden.js';
+import { AI_INPUT_METRIC, AI_OUTPUT_METRIC, estimateAiCostUsd } from '../shared/logic/usage.js';
 import type { ScheduledWordRow } from '../server/services/flashcards.js';
 
 /**
@@ -156,7 +157,10 @@ export function LogsUsageScreen() {
   const { rows, month, speechFreeSeconds } = useLoaderData() as UsageLoaderData;
   const { t } = useLang();
 
-  const metrics = [...new Set(rows.map((r) => r.metric))];
+  // The two Anthropic metrics render as ONE combined card (calls, tokens, cost estimate).
+  const isAi = (m: string) => m === AI_INPUT_METRIC || m === AI_OUTPUT_METRIC;
+  const aiRows = rows.filter((r) => isAi(r.metric));
+  const metrics = [...new Set(rows.filter((r) => !isAi(r.metric)).map((r) => r.metric))];
   if (metrics.length === 0) metrics.push('speech-assess'); // the gauge is useful even at zero
 
   return (
@@ -259,8 +263,74 @@ export function LogsUsageScreen() {
             </LCard>
           );
         })}
+        <AiUsageCard rows={aiRows} month={month} />
       </div>
     </div>
+  );
+}
+
+/** Compact token count: 1234 → "1.2k". */
+const tok = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
+
+/**
+ * Anthropic API usage (vocabulary enrichment + generation), combined from its two metric rows
+ * per month — input and output tokens — into one card with a list-price cost estimate
+ * (shared/logic/usage.ts). No quota gauge: the API is pay-as-you-go, so the number to watch
+ * is the estimated dollars, not a percentage.
+ */
+function AiUsageCard({ rows, month }: { rows: UsageRow[]; month: string }) {
+  const { t } = useLang();
+  const of = (m: string, metric: string) => rows.find((r) => r.month === m && r.metric === metric);
+  const line = (m: string) => {
+    const inp = of(m, AI_INPUT_METRIC);
+    const out = of(m, AI_OUTPUT_METRIC);
+    return t('usage_ai_month', {
+      n: inp?.count ?? 0,
+      i: tok(inp?.quantity ?? 0),
+      o: tok(out?.quantity ?? 0),
+      c: `$${estimateAiCostUsd(inp?.quantity ?? 0, out?.quantity ?? 0).toFixed(2)}`,
+    });
+  };
+  const past = [...new Set(rows.map((r) => r.month))]
+    .filter((m) => m !== month)
+    .sort()
+    .toReversed();
+
+  return (
+    <LCard style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="m-row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <MIcon name="zap" size={20} />
+        <strong style={{ fontSize: 'var(--text-lg)' }}>{t('usage_ai_title')}</strong>
+        <Badge>{month}</Badge>
+      </div>
+
+      <div style={{ fontVariantNumeric: 'tabular-nums' }}>{line(month)}</div>
+
+      <p className="m-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.6, maxWidth: 720 }}>
+        {t('usage_ai_hint')}
+      </p>
+
+      {past.length > 0 && (
+        <div className="m-stack" style={{ gap: 4 }}>
+          <strong style={{ fontSize: 'var(--text-sm)' }}>{t('usage_prev_months')}</strong>
+          {past.map((m) => (
+            <div
+              key={m}
+              className="m-row"
+              style={{
+                gap: 12,
+                fontVariantNumeric: 'tabular-nums',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span style={{ minWidth: 70 }}>{m}</span>
+              <span>{line(m)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </LCard>
   );
 }
 

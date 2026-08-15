@@ -1,4 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { AiUsage } from '../../shared/logic/usage';
+import { readAiUsage } from './enrich';
 import type { GeneratedWord, VocabGenerateInput } from '../../shared/schemas';
 import { exampleContainsAnswer } from '../../shared/logic/flashcards';
 
@@ -47,7 +49,7 @@ Rules:
 export async function generateVocabWords(
   apiKey: string,
   input: VocabGenerateInput,
-): Promise<GeneratedWord[]> {
+): Promise<{ words: GeneratedWord[]; usage: AiUsage }> {
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
     model: MODEL,
@@ -104,11 +106,12 @@ export async function generateVocabWords(
       },
     ],
   });
-  if (response.stop_reason === 'refusal') return [];
+  const usage = readAiUsage(response.usage);
+  if (response.stop_reason === 'refusal') return { words: [], usage };
   const text = response.content.find((b) => b.type === 'text');
-  if (!text || text.type !== 'text') return [];
+  if (!text || text.type !== 'text') return { words: [], usage };
   const raw = (JSON.parse(text.text) as { words?: GeneratedWord[] }).words;
-  return sanitizeGeneratedWords(raw, input.exclude, input.count);
+  return { words: sanitizeGeneratedWords(raw, input.exclude, input.count), usage };
 }
 
 /**

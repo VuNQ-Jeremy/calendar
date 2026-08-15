@@ -1528,6 +1528,10 @@ const en_strings = {
   usage_month_clips: '{n} clips · {m} min of audio',
   usage_free_quota: '{pct}% of the {h}-hour free month used',
   usage_prev_months: 'Previous months',
+  usage_ai_title: 'AI generation (Claude API)',
+  usage_ai_month: '{n} calls · {i} in / {o} out tokens · ≈ {c}',
+  usage_ai_hint:
+    'Vocabulary enrichment and generation, on claude-haiku-4-5. The cost is estimated at list prices ($1 in / $5 out per million tokens) — pay-as-you-go, no free quota to run out of.',
   logs_activity_title: 'Activity log',
   logs_activity_subtitle:
     'Every mutation, page view and login. Admin only, read-only, kept 90 days.',
@@ -3086,6 +3090,10 @@ export const STRINGS = {
     usage_month_clips: '{n} lượt · {m} phút âm thanh',
     usage_free_quota: 'Đã dùng {pct}% trong {h} giờ miễn phí mỗi tháng',
     usage_prev_months: 'Các tháng trước',
+    usage_ai_title: 'Tạo nội dung AI (Claude API)',
+    usage_ai_month: '{n} lượt gọi · {i} token vào / {o} token ra · ≈ {c}',
+    usage_ai_hint:
+      'Bổ sung nghĩa và tạo từ vựng, chạy trên claude-haiku-4-5. Chi phí ước tính theo giá niêm yết ($1 vào / $5 ra mỗi triệu token) — trả theo mức dùng, không có hạn mức miễn phí.',
     logs_activity_title: 'Nhật ký hoạt động',
     logs_activity_subtitle:
       'Mọi thay đổi dữ liệu, lượt xem trang và đăng nhập. Chỉ quản trị, chỉ xem, lưu trong 90 ngày.',

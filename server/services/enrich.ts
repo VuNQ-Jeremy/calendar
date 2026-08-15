@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { AiUsage } from '../../shared/logic/usage';
 import type { EnrichedWord, VocabEnrichItem } from '../../shared/schemas';
 import { exampleContainsAnswer } from '../../shared/logic/flashcards';
 
@@ -48,7 +49,7 @@ Rules:
 export async function enrichWords(
   apiKey: string,
   items: VocabEnrichItem[],
-): Promise<EnrichedWord[]> {
+): Promise<{ words: EnrichedWord[]; usage: AiUsage }> {
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
     model: MODEL,
@@ -99,11 +100,32 @@ export async function enrichWords(
       },
     ],
   });
-  if (response.stop_reason === 'refusal') return [];
+  const usage = readAiUsage(response.usage);
+  if (response.stop_reason === 'refusal') return { words: [], usage };
   const text = response.content.find((b) => b.type === 'text');
-  if (!text || text.type !== 'text') return [];
+  if (!text || text.type !== 'text') return { words: [], usage };
   const raw = (JSON.parse(text.text) as { words?: EnrichedWord[] }).words;
-  return sanitizeEnrichedWords(raw);
+  return { words: sanitizeEnrichedWords(raw), usage };
+}
+
+/**
+ * Token spend of one call, for the usage counters. Cache reads/writes count as input — these
+ * calls set no cache_control today, so the cache fields are zero, but if caching ever appears
+ * the counter should still see the whole prompt rather than silently shrinking.
+ */
+export function readAiUsage(usage: {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}): AiUsage {
+  return {
+    inputTokens:
+      usage.input_tokens +
+      (usage.cache_creation_input_tokens ?? 0) +
+      (usage.cache_read_input_tokens ?? 0),
+    outputTokens: usage.output_tokens,
+  };
 }
 
 /**

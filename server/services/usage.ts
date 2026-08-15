@@ -1,6 +1,7 @@
 import { desc, sql } from 'drizzle-orm';
 import { usageCounters } from '../db/schema';
 import type { Db } from '../db/index';
+import { AI_INPUT_METRIC, AI_OUTPUT_METRIC, type AiUsage } from '../../shared/logic/usage';
 
 /**
  * Monthly usage counters for metered external services — the data behind /logs/usage.
@@ -41,6 +42,16 @@ export async function trackUsage(
         quantity: sql`${usageCounters.quantity} + ${quantity}`,
       },
     });
+}
+
+/**
+ * Track one Anthropic API call: two rows per month — input and output tokens — so the Usage
+ * card can price each side at its own rate. Both rows' `count` increments, so either one
+ * reads as "calls this month".
+ */
+export async function trackAiUsage(db: Db, month: string, usage: AiUsage): Promise<void> {
+  await trackUsage(db, AI_INPUT_METRIC, month, usage.inputTokens);
+  await trackUsage(db, AI_OUTPUT_METRIC, month, usage.outputTokens);
 }
 
 /** Every counter row, newest month first. The table grows by rows-per-metric per month. */

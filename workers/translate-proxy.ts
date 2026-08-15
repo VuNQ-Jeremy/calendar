@@ -1,6 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import * as enrichSvc from '../server/services/enrich';
 import * as generateSvc from '../server/services/generate';
+import { createDb } from '../server/db/index';
+import { trackAiUsage } from '../server/services/usage';
+import { ictDateOf } from '../shared/logic/tests';
+import type { AiUsage } from '../shared/logic/usage';
 import type { VocabEnrichItem, VocabGenerateInput } from '../shared/schemas';
 
 /**
@@ -31,18 +35,27 @@ export class TranslateProxy extends DurableObject<Env> {
     } catch {
       return Response.json({ error: 'invalid json' }, { status: 400 });
     }
+    // Token gauge for /logs/usage — off the response path. The DO shares the Worker's env, so
+    // D1 is reachable from here; Anthropic bills whether or not the words survive sanitizing,
+    // so the count happens right where the call returns.
+    const track = (usage: AiUsage) =>
+      this.ctx.waitUntil(
+        trackAiUsage(createDb(this.env), ictDateOf(new Date().toISOString()).slice(0, 7), usage),
+      );
     try {
       if (op === '/generate') {
-        const words = await generateSvc.generateVocabWords(
+        const { words, usage } = await generateSvc.generateVocabWords(
           this.env.ANTHROPIC_API_KEY,
           body as VocabGenerateInput,
         );
+        track(usage);
         return Response.json({ words });
       }
-      const words = await enrichSvc.enrichWords(
+      const { words, usage } = await enrichSvc.enrichWords(
         this.env.ANTHROPIC_API_KEY,
         body as VocabEnrichItem[],
       );
+      track(usage);
       return Response.json({ words });
     } catch (e) {
       console.error('[translate-do] failed', {

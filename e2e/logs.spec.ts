@@ -118,5 +118,11 @@ test.describe('logs: admin diagnostics', () => {
     await expect(card).toBeVisible();
     await expect(card).toContainText('0 clips · 0.0 min of audio');
     await expect(card).toContainText('of the 5-hour free month used');
+
+    // The Anthropic card renders too (also zero — the test env never reaches the real API),
+    // with its cost estimate line.
+    const ai = page.locator('.mochi-card', { hasText: 'AI generation (Claude API)' });
+    await expect(ai).toBeVisible();
+    await expect(ai).toContainText('0 calls · 0 in / 0 out tokens · ≈ $0.00');
   });
 });
