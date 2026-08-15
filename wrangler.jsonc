@@ -41,21 +41,6 @@
   "ai": {
     "binding": "AI",
   },
-  // Rate limiting for the unauthenticated auth endpoints (server/services/rate-limit.ts).
-  // Edge-local and storage-free, so throttling costs no D1 writes — see that file for why
-  // that matters. `period` accepts only 10 or 60.
-  //
-  // Deliberately NOT repeated in `env.test` below. Playwright runs specs in parallel from one
-  // IP, all signing in as the same seeded account; a live limiter would flake the suite. The
-  // logic is unit-tested with a stub instead, and allow() fails open. See docs/security.md.
-  "ratelimits": [
-    // Credential attempts, keyed ip+email: a person fumbling their own password gets ~8 tries
-    // a minute, an attacker gets 8 per account per minute per colo.
-    { "name": "AUTH_LIMITER", "namespace_id": "1001", "simple": { "limit": 8, "period": 60 } },
-    // Invite-code checks, keyed by IP alone. Generous for the one legitimate use (a family
-    // typing a code off a photo), ruinous for enumeration of a 32^6 space.
-    { "name": "INVITE_LIMITER", "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } },
-  ],
   // Durable Objects. Both are SQLite-backed classes so they work on the free
   // Workers plan (`new_sqlite_classes`, never `new_classes`).
   //   TRANSLATE_DO — region-pinned Anthropic egress (workers/translate-proxy.ts)
@@ -66,12 +51,17 @@
       { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },
       { "name": "LIVE_HUB", "class_name": "LiveHub" },
       { "name": "ZALO_POLLER", "class_name": "ZaloPoller" },
+      // Auth throttling, one instance per key (workers/rate-limiter.ts). Replaces the native
+      // `ratelimits` binding, which was bound and invoked but never refused a request — see
+      // that file and docs/security.md.
+      { "name": "RATE_LIMITER", "class_name": "RateLimiter" },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["TranslateProxy"] },
     { "tag": "v2", "new_sqlite_classes": ["LiveHub"] },
     { "tag": "v3", "new_sqlite_classes": ["ZaloPoller"] },
+    { "tag": "v4", "new_sqlite_classes": ["RateLimiter"] },
   ],
   // Phase 6 push notifications — handled by `scheduled()` in workers/app.ts, which branches on
   // event.cron. Cron Triggers are available on the free Workers plan.

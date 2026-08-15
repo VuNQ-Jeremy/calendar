@@ -16,6 +16,10 @@ export { LiveHub } from './live-hub';
 // requirement as the two above.
 export { ZaloPoller } from './zalo-poller';
 
+// Durable Object backing the auth rate limiter, one instance per key
+// (see workers/rate-limiter.ts). Same registration requirement.
+export { RateLimiter } from './rate-limiter';
+
 import { handleLiveUpgrade } from './live-hub';
 import { secure } from './security-headers';
 import { pollerStub } from './zalo-poller';

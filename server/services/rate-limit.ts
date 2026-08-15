@@ -3,29 +3,37 @@ import { requestMeta } from './audit';
 /**
  * Throttling for the unauthenticated auth endpoints.
  *
- * Backed by Cloudflare's native Rate Limiting binding (`ratelimits` in wrangler.jsonc):
- * edge-local, in-memory, no storage. That choice is load-bearing — a D1-backed counter would
- * write a row per attempt, and the single most realistic attack here is exhausting the free
- * plan's daily request and row-read quotas. Throttling must not itself consume quota.
+ * Backed by the RateLimiter Durable Object (workers/rate-limiter.ts), one instance per key.
  *
- * Consequences of the binding's design, per Cloudflare's docs:
- *   - counters are PER COLOCATION, not global, so a distributed attacker gets one bucket per
- *     edge location they reach. This raises the cost of brute force by orders of magnitude
- *     without being an exact accounting system, which is the correct trade here;
- *   - `simple.period` accepts only 10 or 60 seconds.
+ * **Why not Cloudflare's native rate limiting binding.** It was tried first and removed. The
+ * binding deployed correctly (visible in the dashboard, `AUTH_LIMITER` / `INVITE_LIMITER`) and
+ * `limit()` was called on every request without throwing — yet 40 concurrent requests against a
+ * limit of 15, all landing on one colo with one key, were every one of them allowed. Cloudflare
+ * documents it as "permissive, eventually consistent, and intentionally designed to not be used
+ * as an accurate accounting system", which makes it unfit for refusing a brute force. The DO is
+ * deterministic and test-worker/rate-limit.test.js proves the Nth call is refused.
  *
- * A WAF rate-limiting rule would be the complementary layer — it rejects before the Worker is
- * invoked at all, which is the only thing that protects the request quota itself. It is NOT
- * available on this deployment: WAF rules are configured per zone, and the app is served from
- * *.workers.dev, which is Cloudflare's zone rather than one this account owns. See
- * docs/security.md.
+ * **Why not D1.** A counter table writes a row per attempt, so the busier the attack the faster
+ * it burns the free plan's daily row quota — the limiter would amplify the exact denial of
+ * service it exists to prevent. The DO holds its count in instance memory and writes nothing.
  */
 
+/** How many attempts are allowed, and over what window. */
+export type LimitPolicy = { limit: number; periodMs: number };
+
+const MINUTE = 60_000;
+
 /**
- * Structural type for the binding. Declared here rather than using the generated `RateLimit`
- * so tests can pass a stub — and so this module is honest that the value may be absent.
+ * Credential attempts, keyed ip+email (see loginKey): a person fumbling their own password gets
+ * eight tries a minute. Comfortably above human error, far below anything useful to an attacker.
  */
-export type Limiter = { limit(options: { key: string }): Promise<{ success: boolean }> };
+export const LOGIN_POLICY: LimitPolicy = { limit: 8, periodMs: MINUTE };
+
+/**
+ * Invite-code checks, keyed by IP alone (see inviteKey). Generous for the one legitimate use — a
+ * family typing a code off a photo of a whiteboard — and ruinous for enumerating a 32^6 space.
+ */
+export const INVITE_POLICY: LimitPolicy = { limit: 15, periodMs: MINUTE };
 
 /** One log line per isolate, not one per request — a missing binding would otherwise flood. */
 let warnedMissing = false;
@@ -33,16 +41,18 @@ let warnedMissing = false;
 /**
  * Whether this attempt may proceed.
  *
- * FAILS OPEN in both degenerate cases — no binding, or a throwing binding. Locking every user
- * out of the app because a binding is misconfigured is a worse outcome than briefly losing
- * throttling, and it matches how every other optional dependency in this codebase degrades
- * (see globals.d.ts). The error log is what makes the degraded state visible.
+ * FAILS OPEN in both degenerate cases — no binding, or a throwing stub. Locking every user out
+ * of the app because a binding is misconfigured is a worse outcome than briefly losing
+ * throttling, and it matches how every other optional dependency here degrades (globals.d.ts).
+ * The error log is what makes the degraded state visible; its absence was what proved the native
+ * binding was being called and simply not refusing anything.
  *
- * The test deployment (calendar-test) genuinely has no limiters bound, so this path runs there
- * on every login — see docs/security.md.
+ * The e2e deployment (calendar-test) deliberately has no RATE_LIMITER bound, so it takes this
+ * path on every login — see docs/security.md.
  */
-export async function allow(limiter: Limiter | undefined, key: string): Promise<boolean> {
-  if (!limiter) {
+export async function allow(env: Env, key: string, policy: LimitPolicy): Promise<boolean> {
+  const ns = env.RATE_LIMITER;
+  if (!ns) {
     if (!warnedMissing) {
       warnedMissing = true;
       console.error('[ratelimit] no binding — auth endpoints are UNTHROTTLED in this environment');
@@ -50,9 +60,12 @@ export async function allow(limiter: Limiter | undefined, key: string): Promise<
     return true;
   }
   try {
-    const { success } = await limiter.limit({ key });
-    if (!success) console.log('[ratelimit] blocked', { key });
-    return success;
+    // idFromName(key), so each IP (and each ip+account pair) gets its own instance. A single
+    // global object would serialise every sign-in in the school and be a cheaper target than
+    // the endpoints it guards.
+    const ok = await ns.get(ns.idFromName(key)).check(policy.limit, policy.periodMs);
+    if (!ok) console.log('[ratelimit] blocked', { key });
+    return ok;
   } catch (err) {
     console.error('[ratelimit] limiter threw — allowing', { err: String(err) });
     return true;

@@ -51,47 +51,30 @@ in three places (`mobile/.env.example` and the `env` blocks of both the `develop
 `preview` profiles in `mobile/eas.json`), and `crudGuard()` in `e2e/crud-helpers.ts` skips the
 entire CRUD suite unless `E2E_BASE_URL` contains `calendar-test`. Plan it as its own change.
 
-## ⚠️ Status: the in-Worker limiter is NOT active in production
+## Why the native rate-limit binding was abandoned
 
-Measured against `calendar.ngqv0712.workers.dev` on 2026-08-15, immediately after deploying
-`d38fcb3`:
+The first implementation used Cloudflare's `ratelimits` binding. It was removed after measuring
+it in production on 2026-08-15.
 
-- 12 consecutive `POST /api/auth/login` with bad credentials → **twelve 401s, no 429**
-  (`AUTH_LIMITER`, limit 8).
-- 22 consecutive `POST /login` with `intent=redeem-check` → **twenty-two 400s, no 429**
-  (`INVITE_LIMITER`, limit 15).
+The binding was configured correctly and deployed: `AUTH_LIMITER` (namespace 1001) and
+`INVITE_LIMITER` (1002) were both visible in the dashboard Bindings tab. It was also being
+invoked without error — `allow()` logs `[ratelimit] no binding` when the binding is undefined and
+`[ratelimit] limiter threw` when it errors, and **neither line appeared anywhere in the logs**
+across 100+ requests. So `limit()` was called and returned `success: true` every time.
 
-Two independently-keyed limiters, neither trips. The security headers from the same commit range
-*are* live, so the deploy definitely carried this code — `allow()` is falling open, which is its
-designed behaviour when `env.AUTH_LIMITER` / `env.INVITE_LIMITER` are undefined.
+What it allowed:
 
-What has been ruled out:
+- 12 sequential `POST /api/auth/login` against a limit of 8 → twelve 401s, no 429
+- 22 sequential `POST /login` `intent=redeem-check` against a limit of 15 → twenty-two 400s
+- **40 concurrent** requests, one key, one colo (HKG) against a limit of 15 → forty 400s
 
-- The config key is correct. wrangler 4.110.0 compiles it (`case "ratelimit"` →
-  `configObj.ratelimits`), and `ratelimits` is in its config schema.
-- It is not an env-inheritance mistake in prod. `ratelimits` is `notInheritable`, which only
-  affects named environments; `env.test` omits it deliberately.
-- It is not a stale deploy. `cf29405` added the bindings and predates the header commit that is
-  demonstrably live.
+That is consistent with Cloudflare's own description of it as "permissive, eventually consistent,
+and intentionally designed to not be used as an accurate accounting system". Fine for shedding
+load; unfit for refusing a brute force.
 
-Still to check — needs an authenticated look at the deployed Worker:
-
-1. Whether Cloudflare Workers Builds (which performs the actual deploy — see the note in
-   `.github/workflows/main.yml`) emitted the two bindings, i.e. whether
-   `build/server/wrangler.json` from a **prod** build has a populated `ratelimits`. The only
-   copy on disk is a stale `CLOUDFLARE_ENV=test` build, where `ratelimits: []` is correct.
-2. Whether `namespace_id` 1001/1002 are accepted for this account.
-3. Failing both, switch to the `unsafe.bindings` form
-   (`{ "name": …, "type": "ratelimit", "namespace_id": …, "simple": {…} }`), which wrangler
-   also accepts, and redeploy.
-
-The Worker logs the exact cause once per isolate — `[ratelimit] no binding — auth endpoints are
-UNTHROTTLED in this environment`. `npx wrangler tail` while hitting `/login` will confirm it
-immediately.
-
-**Until this is resolved, the auth endpoints have no throttling at all** and the brute-force
-findings this work set out to close remain open. Nothing is broken for users — failing open was
-the deliberate choice — but the protection is not yet real.
+It was replaced by the `RateLimiter` Durable Object (`workers/rate-limiter.ts`), which is
+deterministic. `test-worker/rate-limit.test.js` asserts the Nth call is refused — an assertion
+that could not be written against the native binding.
 
 ## Deliberate gaps
 
@@ -101,21 +84,27 @@ ship (`frame-ancestors`, `base-uri`, `object-src`) cannot break a page. A nonce-
 `script-src` needs plumbing through the RR server entry plus live verification of every page —
 worth doing, not worth blocking this work on.
 
-**No rate limiters in `env.test`.** Playwright runs specs in parallel from one IP, all signing
-in as the same seeded account, so a live limiter would flake the suite. `calendar-test`
-therefore runs unthrottled and logs `[ratelimit] no binding` once per isolate. The logic is
-covered by `test-worker/rate-limit.test.js` with a stub limiter instead. This means **no e2e
-test exercises real throttling** — verify it by hand against production with the command below
-after any change to `rate-limit.ts`.
+**No `RATE_LIMITER` binding in `env.test`.** Playwright runs specs in parallel from one IP, all
+signing in as the same seeded account, so a live limiter would flake the suite. `calendar-test`
+therefore runs unthrottled and logs `[ratelimit] no binding` once per isolate. The counter itself
+is covered by `test-worker/rate-limit.test.js`, which drives the **real** Durable Object through
+`wrangler.test.jsonc` and asserts the Nth call is refused. This means **no e2e test exercises
+throttling end to end** — verify it by hand against production with the command below after any
+change to `rate-limit.ts` or `rate-limiter.ts`.
 
 **Password reset still has no email delivery** (`server/services/auth.ts`, `requestReset`). The
 endpoint is now throttled, but nobody can self-serve a reset in production. When that is wired
 up, it becomes the most-attacked endpoint in the app — keep the limiter on it.
 
-**Rate limiting is per colocation.** Cloudflare's binding is explicitly "permissive, eventually
-consistent, and intentionally designed to not be used as an accurate accounting system." A
-distributed attacker gets one bucket per edge location they reach. This raises the cost of
-brute force by orders of magnitude; it is not an exact quota.
+**The window is fixed, not sliding, and resets on eviction.** A caller can land up to `2 * limit`
+across a window boundary, which is irrelevant at these volumes. More significantly, the counter
+lives in Durable Object instance memory and writes nothing to storage, so an evicted instance
+forgets its count and the next caller opens a fresh window. Both err permissive, deliberately —
+the same direction every other failure here errs in.
+
+Note this is *global* per key, not per colocation: `idFromName(key)` resolves to one object
+worldwide, so an attacker rotating through edge locations shares a single counter. That is
+strictly better than the native binding it replaced.
 
 ## Verifying, without a device
 

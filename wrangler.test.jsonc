@@ -27,7 +27,14 @@
     "bindings": [
       { "name": "LIVE_HUB", "class_name": "LiveHub" },
       { "name": "ZALO_POLLER", "class_name": "ZaloPoller" },
+      // Bound here, unlike the calendar-test e2e env: these unit tests drive the real counter
+      // and assert the Nth call is refused, which is the whole point of replacing the native
+      // binding that never refused anything.
+      { "name": "RATE_LIMITER", "class_name": "RateLimiter" },
     ],
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveHub", "ZaloPoller"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["LiveHub", "ZaloPoller"] },
+    { "tag": "v2", "new_sqlite_classes": ["RateLimiter"] },
+  ],
 }

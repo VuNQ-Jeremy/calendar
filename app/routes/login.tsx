@@ -10,7 +10,13 @@ import { createDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
 import { NewPassword } from '../../shared/schemas';
-import { allow, loginKey, inviteKey } from '../../server/services/rate-limit';
+import {
+  allow,
+  loginKey,
+  inviteKey,
+  LOGIN_POLICY,
+  INVITE_POLICY,
+} from '../../server/services/rate-limit';
 import {
   getUser,
   login,
@@ -63,7 +69,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
     // Before the PBKDF2 verify, not after: a 100k-iteration derivation is the expensive part,
     // and an unthrottled attacker turning that into CPU burn is half of this endpoint's risk.
-    if (!(await allow(env.AUTH_LIMITER, loginKey(email)))) {
+    if (!(await allow(env, loginKey(email), LOGIN_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
     let result: { accountId: string } | null;
@@ -87,7 +93,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'redeem-check') {
     const code = (formData.get('code') as string) ?? '';
-    if (!(await allow(env.INVITE_LIMITER, inviteKey()))) {
+    if (!(await allow(env, inviteKey(), INVITE_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
     const invite = await findOpenInvite(db, code);
@@ -109,7 +115,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const name = (formData.get('name') as string) ?? '';
     const email = (formData.get('email') as string) ?? '';
     const password = (formData.get('password') as string) ?? '';
-    if (!(await allow(env.INVITE_LIMITER, inviteKey()))) {
+    if (!(await allow(env, inviteKey(), INVITE_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
     if (!name || !password) {
@@ -136,7 +142,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
     // Unauthenticated and it INSERTS a password_resets row per call — throttled for the D1
     // write as much as for the enumeration.
-    if (!(await allow(env.AUTH_LIMITER, loginKey(email)))) {
+    if (!(await allow(env, loginKey(email), LOGIN_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
     const result = await requestReset(db, email);

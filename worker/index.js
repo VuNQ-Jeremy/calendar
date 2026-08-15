@@ -12,6 +12,10 @@ export { LiveHub } from '../workers/live-hub';
 // vitest-pool-workers can only instantiate a Durable Object the entry module exports.
 export { ZaloPoller } from '../workers/zalo-poller';
 
+// Same reason: test-worker/rate-limit.test.js drives the real counter through the
+// RATE_LIMITER binding, which vitest-pool-workers can only build from this module.
+export { RateLimiter } from '../workers/rate-limiter';
+
 export default {
   async fetch(request, env) {
     if (new URL(request.url).pathname === '/ws') return handleLiveUpgrade(request, env);

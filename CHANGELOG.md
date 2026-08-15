@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0232 — 2026-08-15
+Replace the ineffective Cloudflare rate-limit binding with a RateLimiter Durable Object, so auth brute-force attempts are actually refused.
+
 ## v0.0230 — 2026-08-15
 Hardened authentication: rate-limited login, invite redemption and password reset; crypto-random invite codes; security headers; 8-character password floor.
 
