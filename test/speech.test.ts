@@ -65,9 +65,88 @@ describe('mapAzureAssessment', () => {
             { ipa: 'h', accuracy: 95 },
             { ipa: 'ə', accuracy: 40 },
           ],
+          syllables: [],
         },
       ],
     });
+  });
+
+  it('nests each phoneme into the syllable whose audio window contains its start', () => {
+    const out = mapAzureAssessment({
+      RecognitionStatus: 'Success',
+      NBest: [
+        {
+          Lexical: 'hello',
+          AccuracyScore: 91,
+          Words: [
+            {
+              Word: 'hello',
+              PronunciationAssessment: { AccuracyScore: 91, ErrorType: 'None' },
+              Syllables: [
+                {
+                  Syllable: 'hɛ',
+                  PronunciationAssessment: { AccuracyScore: 88 },
+                  Offset: 1000,
+                  Duration: 400,
+                },
+                {
+                  Syllable: 'loʊ',
+                  PronunciationAssessment: { AccuracyScore: 96 },
+                  Offset: 1400,
+                  Duration: 900,
+                },
+              ],
+              Phonemes: [
+                { Phoneme: 'h', PronunciationAssessment: { AccuracyScore: 90 }, Offset: 1000 },
+                { Phoneme: 'ɛ', PronunciationAssessment: { AccuracyScore: 86 }, Offset: 1200 },
+                { Phoneme: 'l', PronunciationAssessment: { AccuracyScore: 95 }, Offset: 1400 },
+                { Phoneme: 'oʊ', PronunciationAssessment: { AccuracyScore: 97 }, Offset: 1800 },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(out.words[0].syllables).toEqual([
+      {
+        ipa: 'hɛ',
+        accuracy: 88,
+        phonemes: [
+          { ipa: 'h', accuracy: 90 },
+          { ipa: 'ɛ', accuracy: 86 },
+        ],
+      },
+      {
+        ipa: 'loʊ',
+        accuracy: 96,
+        phonemes: [
+          { ipa: 'l', accuracy: 95 },
+          { ipa: 'oʊ', accuracy: 97 },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps a syllable with no matchable phonemes when offsets are missing', () => {
+    const out = mapAzureAssessment({
+      RecognitionStatus: 'Success',
+      NBest: [
+        {
+          Lexical: 'luck',
+          AccuracyScore: 80,
+          Words: [
+            {
+              Word: 'luck',
+              PronunciationAssessment: { AccuracyScore: 80, ErrorType: 'None' },
+              // No Offset/Duration anywhere — the syllable still arrives, just unnested.
+              Syllables: [{ Syllable: 'lʌk', PronunciationAssessment: { AccuracyScore: 80 } }],
+              Phonemes: [{ Phoneme: 'l', PronunciationAssessment: { AccuracyScore: 85 } }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(out.words[0].syllables).toEqual([{ ipa: 'lʌk', accuracy: 80, phonemes: [] }]);
   });
 
   it('fails a score under 70 without flagging noSpeech', () => {
@@ -100,12 +179,13 @@ describe('mapAzureAssessment', () => {
       ],
     });
     expect(out.words).toEqual([
-      { word: 'a', errorType: 'Insertion', accuracy: 0, phonemes: [] },
+      { word: 'a', errorType: 'Insertion', accuracy: 0, phonemes: [], syllables: [] },
       {
         word: 'whisker',
         errorType: 'Mispronunciation',
         accuracy: 60,
         phonemes: [{ ipa: 'w', accuracy: 0 }],
+        syllables: [],
       },
     ]);
   });

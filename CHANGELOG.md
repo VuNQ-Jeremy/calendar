@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0222 — 2026-08-15
+Pronounce game: per-syllable scores — Azure's syllable groups are mapped through /speech-assess and both games render syllable pills (phonemes inside, syllable score beneath); mobile mirrors the new header layout
+
 ## v0.0221 — 2026-08-15
 Pronounce game: coloured IPA breakdown now replaces the header IPA line after scoring; the meaning is hidden until the clip is scored
 

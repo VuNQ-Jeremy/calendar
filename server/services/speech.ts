@@ -6,7 +6,7 @@
  */
 
 import { PRONOUNCE_PASS } from '../../shared/logic/flashcards';
-import type { PronounceAssessment, PronounceWord } from '../../shared/schemas';
+import type { PronounceAssessment, PronouncePhoneme, PronounceWord } from '../../shared/schemas';
 
 /** The slice of Azure's short-audio `format=detailed` response the mapping reads. */
 export type AzureShortAudio = {
@@ -21,7 +21,21 @@ export type AzureShortAudio = {
     Words?: {
       Word?: string;
       PronunciationAssessment?: { AccuracyScore?: number; ErrorType?: string };
-      Phonemes?: { Phoneme?: string; PronunciationAssessment?: { AccuracyScore?: number } }[];
+      /**
+       * Syllable groups — Azure sends them for en-US alongside the phonemes. Offset/Duration
+       * are 100-ns ticks into the clip; they only exist here to nest phonemes into syllables.
+       */
+      Syllables?: {
+        Syllable?: string;
+        PronunciationAssessment?: { AccuracyScore?: number };
+        Offset?: number;
+        Duration?: number;
+      }[];
+      Phonemes?: {
+        Phoneme?: string;
+        PronunciationAssessment?: { AccuracyScore?: number };
+        Offset?: number;
+      }[];
     }[];
   }[];
 };
@@ -84,10 +98,32 @@ export function mapAzureAssessment(json: AzureShortAudio): PronounceAssessment {
       word: w.Word ?? '',
       errorType: (w.PronunciationAssessment?.ErrorType ?? 'None') as PronounceWord['errorType'],
       accuracy: w.PronunciationAssessment?.AccuracyScore ?? 0,
-      phonemes: (w.Phonemes ?? []).map((p) => ({
-        ipa: p.Phoneme ?? '',
-        accuracy: p.PronunciationAssessment?.AccuracyScore ?? 0,
+      phonemes: (w.Phonemes ?? []).map(mapPhoneme),
+      syllables: (w.Syllables ?? []).map((s) => ({
+        ipa: s.Syllable ?? '',
+        accuracy: s.PronunciationAssessment?.AccuracyScore ?? 0,
+        // A phoneme belongs to the syllable whose audio window contains its start tick. Azure
+        // sends both from the same alignment, so containment is exact — and if either side is
+        // missing its offsets, the syllable simply carries no phonemes and clients show its
+        // own IPA string instead.
+        phonemes: (w.Phonemes ?? [])
+          .filter(
+            (p) =>
+              p.Offset != null &&
+              s.Offset != null &&
+              s.Duration != null &&
+              p.Offset >= s.Offset &&
+              p.Offset < s.Offset + s.Duration,
+          )
+          .map(mapPhoneme),
       })),
     })),
   };
+}
+
+function mapPhoneme(p: {
+  Phoneme?: string;
+  PronunciationAssessment?: { AccuracyScore?: number };
+}): PronouncePhoneme {
+  return { ipa: p.Phoneme ?? '', accuracy: p.PronunciationAssessment?.AccuracyScore ?? 0 };
 }

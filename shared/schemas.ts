@@ -455,6 +455,19 @@ export type PronouncePhoneme = {
   accuracy: number;
 };
 
+/**
+ * One syllable group with its own score (Azure emits these for en-US only). The phonemes are
+ * the slice of the word's phonemes that fall inside this syllable, matched by audio offset on
+ * the server — so a client can render the word syllable-by-syllable without re-deriving it.
+ */
+export type PronounceSyllable = {
+  /** The syllable's IPA, e.g. 'bə'. */
+  ipa: string;
+  /** 0-100, aggregated by Azure from the syllable's phonemes. */
+  accuracy: number;
+  phonemes: PronouncePhoneme[];
+};
+
 /** One word of the reference (or an extra one the student inserted), with its phonemes. */
 export type PronounceWord = {
   word: string;
@@ -462,6 +475,11 @@ export type PronounceWord = {
   errorType: 'None' | 'Omission' | 'Insertion' | 'Mispronunciation';
   accuracy: number;
   phonemes: PronouncePhoneme[];
+  /**
+   * Syllable groups, empty when Azure sent none (non-en-US would). Appended after phonemes so a
+   * mobile build older than this field simply ignores it — read it as `syllables ?? []`.
+   */
+  syllables?: PronounceSyllable[];
 };
 
 /**

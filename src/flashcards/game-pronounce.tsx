@@ -397,13 +397,15 @@ const TIER_COLOR: Record<ReturnType<typeof phonemeTier>, string> = {
 };
 
 /**
- * The sound-by-sound verdict: the reference word's IPA, each symbol coloured by how clearly it
- * came out — green / amber / red, with no legend. Insertion entries are words the student added
- * on top of the reference; they carry no reference phonemes, so they are skipped.
+ * The sound-by-sound verdict, grouped the way the word is actually spoken: one pill per
+ * syllable, its phonemes each coloured by their own tier, the syllable underlined in its tier
+ * colour and its 0-100 score printed underneath. Falls back to the flat phoneme line when the
+ * response carries no syllable groups (Azure only sends them for en-US), and to the plain IPA
+ * when there are no phonemes either. Insertion entries are words the student added on top of
+ * the reference; they carry no reference IPA, so they are skipped.
  *
  * Rendered in the word header, taking the static IPA line's place once the clip is scored —
- * the same string in the same spot, just coloured. When the result carries no reference
- * phonemes at all, the plain IPA stays so the header never loses its pronunciation line.
+ * the same string in the same spot, just coloured and scored.
  */
 function PhonemeBreakdown({
   result,
@@ -412,9 +414,52 @@ function PhonemeBreakdown({
   result: PronounceAssessment;
   fallbackIpa?: string;
 }) {
-  const phonemes = (result.words ?? [])
-    .filter((wd) => wd.errorType !== 'Insertion')
-    .flatMap((wd) => wd.phonemes);
+  const spoken = (result.words ?? []).filter((wd) => wd.errorType !== 'Insertion');
+  const syllables = spoken.flatMap((wd) => wd.syllables ?? []);
+  const phonemes = spoken.flatMap((wd) => wd.phonemes);
+  if (syllables.length > 0) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
+          fontSize: 24,
+          fontWeight: 700,
+          letterSpacing: 1,
+        }}
+      >
+        <span>/</span>
+        {syllables.map((s, i) => {
+          const tier = TIER_COLOR[phonemeTier(s.accuracy)];
+          return (
+            <span
+              key={i}
+              style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}
+            >
+              <span style={{ borderBottom: `3px solid ${tier}`, padding: '0 2px 2px' }}>
+                {s.phonemes.length > 0 ? (
+                  s.phonemes.map((p, j) => (
+                    <span key={j} style={{ color: TIER_COLOR[phonemeTier(p.accuracy)] }}>
+                      {p.ipa}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ color: tier }}>{s.ipa}</span>
+                )}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: tier }}>
+                {Math.round(s.accuracy)}
+              </span>
+            </span>
+          );
+        })}
+        <span>/</span>
+      </div>
+    );
+  }
   if (phonemes.length === 0) {
     return fallbackIpa ? <div style={{ color: 'var(--text-muted)' }}>{fallbackIpa}</div> : null;
   }

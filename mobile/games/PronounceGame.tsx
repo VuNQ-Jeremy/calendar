@@ -273,8 +273,19 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
             <Volume2 size={22} color={th.color.textOnBrand} />
           </IconButton>
         </View>
-        {w.ipa ? <Muted>{w.ipa}</Muted> : null}
-        <Body style={{ textAlign: 'center' }}>{meaningOf(w)}</Body>
+        {phase === 'scored' && result ? (
+          <PhonemeBreakdown
+            result={result}
+            hint={t('fc_pron_ipa_hint')}
+            fallbackIpa={w.ipa ?? undefined}
+          />
+        ) : w.ipa ? (
+          <Muted>{w.ipa}</Muted>
+        ) : null}
+        {/* The meaning is the reveal — it stays hidden until the clip has been scored. */}
+        {phase === 'scored' && result ? (
+          <Body style={{ textAlign: 'center' }}>{meaningOf(w)}</Body>
+        ) : null}
       </View>
 
       {phase === 'scored' && result ? (
@@ -293,7 +304,6 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
           {result.recognized ? (
             <Body>{t('fc_pron_heard', { word: result.recognized })}</Body>
           ) : null}
-          <PhonemeBreakdown result={result} hint={t('fc_pron_ipa_hint')} />
           <View
             style={{
               flexDirection: 'row',
@@ -394,21 +404,91 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
 }
 
 /**
- * The sound-by-sound verdict: the reference word's IPA, each symbol coloured by how clearly it
- * came out. Insertion entries are words the student added on top of the reference — they have no
- * reference phonemes, and the "we heard …" line above already reports them.
+ * The sound-by-sound verdict, grouped the way the word is actually spoken: one pill per
+ * syllable, its phonemes each coloured by their own tier, the syllable underlined in its tier
+ * colour and its 0-100 score printed underneath. Falls back to the flat phoneme line when the
+ * response carries no syllable groups (Azure only sends them for en-US), and to the plain IPA
+ * when there are no phonemes either. Insertion entries are words the student added on top of
+ * the reference — they have no reference IPA, and the "we heard …" line already reports them.
+ *
+ * Rendered in the word header, taking the static IPA line's place once the clip is scored.
  */
-function PhonemeBreakdown({ result, hint }: { result: PronounceAssessment; hint: string }) {
+function PhonemeBreakdown({
+  result,
+  hint,
+  fallbackIpa,
+}: {
+  result: PronounceAssessment;
+  hint: string;
+  fallbackIpa?: string;
+}) {
   const th = useTheme();
   const tierColor = {
     good: th.status.success,
     close: th.status.warning,
     wrong: th.status.danger,
   };
-  const phonemes = (result.words ?? [])
-    .filter((wd) => wd.errorType !== 'Insertion')
-    .flatMap((wd) => wd.phonemes);
-  if (phonemes.length === 0) return null;
+  const spoken = (result.words ?? []).filter((wd) => wd.errorType !== 'Insertion');
+  const syllables = spoken.flatMap((wd) => wd.syllables ?? []);
+  const phonemes = spoken.flatMap((wd) => wd.phonemes);
+  if (syllables.length > 0) {
+    return (
+      <>
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            alignItems: 'flex-start',
+            gap: th.spacing[2],
+          }}
+        >
+          <Title style={{ fontSize: 24, lineHeight: 32 }}>{'/'}</Title>
+          {syllables.map((s, i) => {
+            const tier = tierColor[phonemeTier(s.accuracy)];
+            return (
+              <View key={i} style={{ alignItems: 'center' }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    borderBottomWidth: 3,
+                    borderBottomColor: tier,
+                    paddingHorizontal: 2,
+                    paddingBottom: 2,
+                  }}
+                >
+                  {s.phonemes.length > 0 ? (
+                    s.phonemes.map((p, j) => (
+                      <Title
+                        key={j}
+                        style={{
+                          fontSize: 24,
+                          lineHeight: 32,
+                          color: tierColor[phonemeTier(p.accuracy)],
+                        }}
+                      >
+                        {p.ipa}
+                      </Title>
+                    ))
+                  ) : (
+                    <Title style={{ fontSize: 24, lineHeight: 32, color: tier }}>{s.ipa}</Title>
+                  )}
+                </View>
+                <Muted style={{ fontSize: 12, lineHeight: 16, color: tier }}>
+                  {Math.round(s.accuracy)}
+                </Muted>
+              </View>
+            );
+          })}
+          <Title style={{ fontSize: 24, lineHeight: 32 }}>{'/'}</Title>
+        </View>
+        <Muted style={{ textAlign: 'center' }}>{hint}</Muted>
+      </>
+    );
+  }
+  if (phonemes.length === 0) {
+    return fallbackIpa ? <Muted>{fallbackIpa}</Muted> : null;
+  }
   return (
     <>
       <Title style={{ fontSize: 24, lineHeight: 32, letterSpacing: 1 }}>

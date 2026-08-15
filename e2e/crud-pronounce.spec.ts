@@ -38,6 +38,39 @@ const SCORED = {
           { ipa: 'ə', accuracy: 90 },
           { ipa: 'l', accuracy: 85 },
         ],
+        // Syllable groups as the server maps them: phonemes already nested per syllable.
+        syllables: [
+          {
+            ipa: 'ɪ',
+            accuracy: 95,
+            phonemes: [{ ipa: 'ɪ', accuracy: 95 }],
+          },
+          {
+            ipa: 'fɛ',
+            accuracy: 66,
+            phonemes: [
+              { ipa: 'f', accuracy: 40 },
+              { ipa: 'ɛ', accuracy: 92 },
+            ],
+          },
+          {
+            ipa: 'mə',
+            accuracy: 79,
+            phonemes: [
+              { ipa: 'm', accuracy: 70 },
+              { ipa: 'ə', accuracy: 88 },
+            ],
+          },
+          {
+            ipa: 'rəl',
+            accuracy: 86,
+            phonemes: [
+              { ipa: 'r', accuracy: 81 },
+              { ipa: 'ə', accuracy: 90 },
+              { ipa: 'l', accuracy: 85 },
+            ],
+          },
+        ],
       },
     ],
   },
@@ -120,8 +153,11 @@ test.describe('CRUD: pronounce game round', () => {
     // one-word round; the result posts as the end screen mounts, so arm the wait before clicking.
     await recordClip(page);
     await expect(page.getByText('85%', { exact: true })).toBeVisible();
-    // Each phoneme is its own coloured span; getByText matches the concatenated line.
-    await expect(page.getByText('/ɪfɛmərəl/')).toBeVisible();
+    // Syllable pills: each pill's phonemes are its own coloured spans (getByText matches the
+    // concatenated pill text), with the syllable's own 0-100 score printed beneath it.
+    await expect(page.getByText('fɛ', { exact: true })).toBeVisible();
+    await expect(page.getByText('rəl', { exact: true })).toBeVisible();
+    await expect(page.getByText('66', { exact: true })).toBeVisible();
     const post = k.posted(path);
     await page.getByRole('button', { name: 'Next' }).click();
     await post;
