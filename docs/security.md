@@ -51,10 +51,47 @@ in three places (`mobile/.env.example` and the `env` blocks of both the `develop
 `preview` profiles in `mobile/eas.json`), and `crudGuard()` in `e2e/crud-helpers.ts` skips the
 entire CRUD suite unless `E2E_BASE_URL` contains `calendar-test`. Plan it as its own change.
 
-**Until then, the in-Worker limiter is the entire defence.** It fully stops credential and
-invite brute force, which is what leads to an account takeover. It does not stop a determined
-attacker from exhausting the daily request quota — accept that risk knowingly, or move to a
-custom domain.
+## ⚠️ Status: the in-Worker limiter is NOT active in production
+
+Measured against `calendar.ngqv0712.workers.dev` on 2026-08-15, immediately after deploying
+`d38fcb3`:
+
+- 12 consecutive `POST /api/auth/login` with bad credentials → **twelve 401s, no 429**
+  (`AUTH_LIMITER`, limit 8).
+- 22 consecutive `POST /login` with `intent=redeem-check` → **twenty-two 400s, no 429**
+  (`INVITE_LIMITER`, limit 15).
+
+Two independently-keyed limiters, neither trips. The security headers from the same commit range
+*are* live, so the deploy definitely carried this code — `allow()` is falling open, which is its
+designed behaviour when `env.AUTH_LIMITER` / `env.INVITE_LIMITER` are undefined.
+
+What has been ruled out:
+
+- The config key is correct. wrangler 4.110.0 compiles it (`case "ratelimit"` →
+  `configObj.ratelimits`), and `ratelimits` is in its config schema.
+- It is not an env-inheritance mistake in prod. `ratelimits` is `notInheritable`, which only
+  affects named environments; `env.test` omits it deliberately.
+- It is not a stale deploy. `cf29405` added the bindings and predates the header commit that is
+  demonstrably live.
+
+Still to check — needs an authenticated look at the deployed Worker:
+
+1. Whether Cloudflare Workers Builds (which performs the actual deploy — see the note in
+   `.github/workflows/main.yml`) emitted the two bindings, i.e. whether
+   `build/server/wrangler.json` from a **prod** build has a populated `ratelimits`. The only
+   copy on disk is a stale `CLOUDFLARE_ENV=test` build, where `ratelimits: []` is correct.
+2. Whether `namespace_id` 1001/1002 are accepted for this account.
+3. Failing both, switch to the `unsafe.bindings` form
+   (`{ "name": …, "type": "ratelimit", "namespace_id": …, "simple": {…} }`), which wrangler
+   also accepts, and redeploy.
+
+The Worker logs the exact cause once per isolate — `[ratelimit] no binding — auth endpoints are
+UNTHROTTLED in this environment`. `npx wrangler tail` while hitting `/login` will confirm it
+immediately.
+
+**Until this is resolved, the auth endpoints have no throttling at all** and the brute-force
+findings this work set out to close remain open. Nothing is broken for users — failing open was
+the deliberate choice — but the protection is not yet real.
 
 ## Deliberate gaps
 
