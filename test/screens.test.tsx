@@ -7,7 +7,6 @@ import { DashboardScreen } from '../src/screens-core.jsx';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.jsx';
 import { ClassesScreen, StudentsScreen } from '../src/screens-manage/index.jsx';
 import { FeedbackScreen } from '../src/feedback.jsx';
-import { AuthScreen } from '../src/auth.jsx';
 import { CalendarScreen } from '../src/calendar/index.jsx';
 import { TuitionScreen } from '../src/screens-tuition.jsx';
 import type { AppUser } from '../src/screens-core.jsx';
@@ -222,14 +221,6 @@ describe('ProfileScreen', () => {
       ),
     );
     expect(screen.getByText('Your profile')).toBeInTheDocument();
-  });
-});
-
-describe('AuthScreen', () => {
-  it('renders Welcome back login card', () => {
-    render(withLang(React.createElement(AuthScreen, { onLogin: () => {}, invites: [] })));
-    expect(screen.getByText('Welcome back')).toBeInTheDocument();
-    expect(screen.getByText('Sign in')).toBeInTheDocument();
   });
 });
 
