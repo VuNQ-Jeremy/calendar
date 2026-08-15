@@ -141,8 +141,8 @@ type UsageLoaderData = {
 };
 
 /** Per-metric display strings; a metric without an entry still renders under its raw key. */
-const USAGE_METRIC_LABEL: Record<string, { title: string; hint: string }> = {
-  'speech-assess': { title: 'usage_speech_title', hint: 'usage_speech_hint' },
+const USAGE_METRIC_LABEL: Record<string, { title: string }> = {
+  'speech-assess': { title: 'usage_speech_title' },
 };
 
 const mins = (seconds: number) => (seconds / 60).toFixed(1);
@@ -231,15 +231,6 @@ export function LogsUsageScreen() {
                 </div>
               )}
 
-              {label && (
-                <p
-                  className="m-muted"
-                  style={{ margin: 0, fontSize: 13, lineHeight: 1.6, maxWidth: 720 }}
-                >
-                  {t(label.hint)}
-                </p>
-              )}
-
               {past.length > 0 && (
                 <div className="m-stack" style={{ gap: 4 }}>
                   <strong style={{ fontSize: 'var(--text-sm)' }}>{t('usage_prev_months')}</strong>
@@ -305,10 +296,6 @@ function AiUsageCard({ rows, month }: { rows: UsageRow[]; month: string }) {
       </div>
 
       <div style={{ fontVariantNumeric: 'tabular-nums' }}>{line(month)}</div>
-
-      <p className="m-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.6, maxWidth: 720 }}>
-        {t('usage_ai_hint')}
-      </p>
 
       {past.length > 0 && (
         <div className="m-stack" style={{ gap: 4 }}>
