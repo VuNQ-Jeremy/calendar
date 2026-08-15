@@ -76,6 +76,21 @@ It was replaced by the `RateLimiter` Durable Object (`workers/rate-limiter.ts`),
 deterministic. `test-worker/rate-limit.test.js` asserts the Nth call is refused — an assertion
 that could not be written against the native binding.
 
+**Verified live on 2026-08-15**, same method that exposed the old one:
+
+| Endpoint | Sent | Limit | Result |
+| --- | --- | --- | --- |
+| `POST /login` `intent=redeem-check` | 30 concurrent | 15 | 15 × 400, **15 × 429** |
+| `POST /login` `intent=login` | 20 concurrent | 8 | 8 × 400, **12 × 429** |
+| `POST /api/auth/login` | 20 concurrent | 8 | 8 × 401, **12 × 429** |
+
+The 429 body carries `error: auth_rate_limited`, confirming it is this code refusing the request
+and not an edge protection upstream. Real sign-in for `dev@mochi.edu` and `vunq@mochi.edu` was
+unaffected throughout, because login keys on ip+account and the bursts used throwaway addresses.
+
+One caveat when re-testing: allow a minute or two after a deploy. A burst run mid-rollout hits
+the old bundle and reports a false negative — that happened once during this work.
+
 ## Deliberate gaps
 
 **No `script-src` in the CSP.** `/docs/api` loads Scalar from `cdn.jsdelivr.net` and React
