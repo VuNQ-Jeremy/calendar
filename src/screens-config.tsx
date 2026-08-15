@@ -18,6 +18,7 @@ import type { TuitionPaymentInfo, TuitionSettings } from '../server/services/tui
 import type { RankingWeights } from '../shared/logic/rankings.js';
 import type { GardenSettings } from '../shared/logic/garden.js';
 import { CHECKIN_MAX_TIERS, type CheckinSettings } from '../shared/logic/checkin.js';
+import { PRONOUNCE_CURVES, type PronounceCurve } from '../shared/logic/flashcards.js';
 import type { ActivityTypeRow } from '../server/services/checkin-activity-types.js';
 import { TAB_BAR_STYLES } from '../shared/schemas.js';
 import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
@@ -36,6 +37,7 @@ interface ConfigLoaderData {
   rankingWeights: RankingWeights;
   gardenSettings: GardenSettings;
   reviewSettings: { intervals: number[] };
+  pronounceSettings: { curve: PronounceCurve };
   paymentInfo: TuitionPaymentInfo;
   checkinActivityTypes: ActivityTypeRow[];
   checkinSettings: CheckinSettings;
@@ -1281,6 +1283,66 @@ function ReviewSettingsSection({ intervals }: { intervals: number[] }) {
   );
 }
 
+/** i18n label per forgiveness preset — shared by the card summary and the select options. */
+const PRONOUNCE_CURVE_LABEL: Record<PronounceCurve, string> = {
+  off: 'cfg_pron_curve_off',
+  round5: 'cfg_pron_curve_round5',
+  boost5: 'cfg_pron_curve_boost5',
+  round10: 'cfg_pron_curve_round10',
+  squeeze: 'cfg_pron_curve_squeeze',
+};
+
+/**
+ * Pronounce scoring: one preset picker for the forgiveness curve the "Say it" game applies
+ * (shared/logic/flashcards.ts `forgiveScore`). Applied server-side in /speech-assess, so web,
+ * mobile and the pass mark all follow it the moment it is saved; the game's details drawer
+ * keeps showing Azure's raw numbers regardless.
+ */
+function PronounceSettingsSection({ curve }: { curve: PronounceCurve }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [draft, setDraft] = React.useState<PronounceCurve | null>(null);
+  const current = draft ?? curve;
+
+  const save = () => {
+    const fd = new FormData();
+    fd.set('intent', 'pronounce-settings');
+    fd.set('curve', current);
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+    setDraft(null);
+  };
+
+  return (
+    <>
+      <div className="m-row" style={{ gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="mochi-field" style={{ marginBottom: 0, minWidth: 280 }}>
+          <label className="mochi-field__label">{t('cfg_pron_curve_label')}</label>
+          <select
+            className="mochi-input"
+            value={current}
+            onChange={(e) => setDraft(e.target.value as PronounceCurve)}
+          >
+            {PRONOUNCE_CURVES.map((c) => (
+              <option key={c} value={c}>
+                {t(PRONOUNCE_CURVE_LABEL[c])}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Button onClick={save} disabled={!draft || draft === curve}>
+          {t('save')}
+        </Button>
+      </div>
+      <p
+        className="m-muted"
+        style={{ margin: '12px 0 0', fontSize: 13, lineHeight: 1.6, maxWidth: 560 }}
+      >
+        {t('cfg_pron_hint')}
+      </p>
+    </>
+  );
+}
+
 /**
  * Zalo connections.
  *
@@ -1586,6 +1648,7 @@ function SystemConfigScreen() {
     rankingWeights,
     gardenSettings,
     reviewSettings,
+    pronounceSettings,
     paymentInfo,
     parentPortal,
     checkinActivityTypes,
@@ -1718,6 +1781,15 @@ function SystemConfigScreen() {
           summary: reviewSettings.intervals.join(' · '),
           width: 760,
           render: () => <ReviewSettingsSection intervals={reviewSettings.intervals} />,
+        },
+        {
+          id: 'pronounce',
+          icon: 'mic',
+          title: t('cfg_pron_title'),
+          sub: t('cfg_pron_sub'),
+          summary: t(PRONOUNCE_CURVE_LABEL[pronounceSettings.curve]),
+          width: 560,
+          render: () => <PronounceSettingsSection curve={pronounceSettings.curve} />,
         },
         {
           id: 'checkin',

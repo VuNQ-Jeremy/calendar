@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../../app/load-context';
+import { createDb } from '../../server/db/index';
 import { requireLearnerCookieOrBearer } from '../../server/api/auth';
+import { getPronounceSettings } from '../../server/services/flashcards';
 import {
   mapAzureAssessment,
   pronunciationAssessmentHeader,
@@ -72,6 +74,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return Response.json({ error: 'disabled' }, { status: 503 });
   }
   if (!res.ok) return Response.json({ error: 'assess_failed' }, { status: 502 });
+  // The forgiveness curve (/config → Pronounce scoring). Loaded after the Azure round-trip on
+  // purpose: no point reading settings for a clip that failed upstream.
+  const { curve } = await getPronounceSettings(createDb(env));
   const json = (await res.json()) as AzureShortAudio;
   // The raw word/syllable/phoneme block, capped so a long miscue can't blow the log line.
   // Azure's response shape has already diverged from its docs once (flat vs nested scores) —
@@ -81,5 +86,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
     status: json.RecognitionStatus,
     words: JSON.stringify(json.NBest?.[0]?.Words ?? []).slice(0, 8_000),
   });
-  return Response.json({ data: mapAzureAssessment(json) });
+  return Response.json({ data: mapAzureAssessment(json, curve) });
 }

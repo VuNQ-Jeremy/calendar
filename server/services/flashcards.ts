@@ -22,10 +22,12 @@ import {
   type ReviewState,
 } from '../../shared/logic/review';
 import { ictDateOf } from '../../shared/logic/tests';
+import { PRONOUNCE_CURVES, type PronounceCurve } from '../../shared/logic/flashcards';
 import type {
   FlashcardTopicInput,
   FlashcardWordInput,
   FlashcardResultInput,
+  PronounceSettingsInput,
   ReviewSettingsInput,
 } from '../../shared/schemas';
 
@@ -619,6 +621,52 @@ export async function setReviewSettings(
       action: 'update',
       entityType: 'setting',
       entityId: REVIEW_SETTINGS_KEY,
+      before,
+      after,
+    });
+  }
+  return after;
+}
+
+const PRONOUNCE_SETTINGS_KEY = 'pronounce-settings';
+
+export type PronounceSettings = { curve: PronounceCurve };
+
+/**
+ * Which forgiveness curve the pronounce game applies (shared/logic/flashcards.ts
+ * `forgiveScore`). Same store and defaulting shape as `getReviewSettings`; the default is
+ * 'off' — raw Azure scores — until the admin turns a curve on from /config.
+ */
+export async function getPronounceSettings(db: Db): Promise<PronounceSettings> {
+  const rows = await db.select().from(settings).where(eq(settings.key, PRONOUNCE_SETTINGS_KEY));
+  const row = rows[0];
+  if (!row) return { curve: 'off' };
+  try {
+    const parsed = JSON.parse(row.value) as Partial<PronounceSettings>;
+    return parsed.curve && (PRONOUNCE_CURVES as readonly string[]).includes(parsed.curve)
+      ? { curve: parsed.curve }
+      : { curve: 'off' };
+  } catch {
+    return { curve: 'off' };
+  }
+}
+
+export async function setPronounceSettings(
+  db: Db,
+  input: PronounceSettingsInput,
+): Promise<PronounceSettings> {
+  const before = await getPronounceSettings(db);
+  const after = { curve: input.curve };
+  const value = JSON.stringify(after);
+  await db
+    .insert(settings)
+    .values({ key: PRONOUNCE_SETTINGS_KEY, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+  if (!sameJson(before, after)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: PRONOUNCE_SETTINGS_KEY,
       before,
       after,
     });

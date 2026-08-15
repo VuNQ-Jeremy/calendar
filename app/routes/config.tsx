@@ -32,6 +32,7 @@ import {
   SubjectInput,
   SubjectReorder,
   GardenSettingsInput,
+  PronounceSettingsInput,
   ReviewSettingsInput,
   GradeLevelInput,
   GradeLevelReorder,
@@ -66,6 +67,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     rankingWeights,
     gardenSettings,
     reviewSettings,
+    pronounceSettings,
     paymentInfo,
     zaloLinks,
     zaloCodes,
@@ -86,6 +88,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     rankingsSvc.getRankingWeights(db),
     gardenSvc.getGardenSettings(db),
     flashcardsSvc.getReviewSettings(db),
+    flashcardsSvc.getPronounceSettings(db),
     tuitionSvc.getPaymentInfo(db),
     zaloSvc.listLinks(db),
     zaloSvc.pendingCodes(db),
@@ -107,6 +110,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     rankingWeights,
     gardenSettings,
     reviewSettings,
+    pronounceSettings,
     paymentInfo,
     checkinActivityTypes,
     checkinSettings,
@@ -480,6 +484,15 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       }
       const reviewSettings = await flashcardsSvc.setReviewSettings(db, parsed.data);
       return { ok: true, reviewSettings };
+    }
+
+    if (intent === 'pronounce-settings') {
+      const parsed = PronounceSettingsInput.safeParse(raw);
+      if (!parsed.success) {
+        return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+      }
+      const pronounceSettings = await flashcardsSvc.setPronounceSettings(db, parsed.data);
+      return { ok: true, pronounceSettings };
     }
 
     if (intent === 'ui-prefs') {

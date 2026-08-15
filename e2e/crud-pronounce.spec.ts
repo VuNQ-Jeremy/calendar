@@ -15,13 +15,15 @@ import { crudGuard, signInStaff, ui } from './crud-helpers';
 
 const SCORED = {
   data: {
-    accuracy: 85,
+    // Raw 88 + the round5 curve → the big number shows 90% while the drawer keeps 88.
+    accuracy: 88,
     fluency: 90,
     completeness: 100,
-    pronScore: 88,
+    pronScore: 91,
     recognized: 'ephemeral',
     correct: true,
     noSpeech: false,
+    curve: 'round5',
     // Mixed tiers on purpose: the breakdown must render every phoneme, not just the bad ones.
     words: [
       {
@@ -152,12 +154,25 @@ test.describe('CRUD: pronounce game round', () => {
     // Stopping scores it — no second tap. The canned score renders, then Next finishes the
     // one-word round; the result posts as the end screen mounts, so arm the wait before clicking.
     await recordClip(page);
-    await expect(page.getByText('85%', { exact: true })).toBeVisible();
-    // Syllable pills: each pill's phonemes are its own coloured spans (getByText matches the
-    // concatenated pill text), with the syllable's own 0-100 score printed beneath it.
+    // The forgiveness curve echoed in the response (round5) lifts the displayed number:
+    // raw accuracy 88 renders as 90%.
+    await expect(page.getByText('90%', { exact: true })).toBeVisible();
+    // The scored screen stays simple — syllable pills carry colours only (getByText matches the
+    // concatenated phoneme spans), no numbers.
     await expect(page.getByText('fɛ', { exact: true })).toBeVisible();
     await expect(page.getByText('rəl', { exact: true })).toBeVisible();
-    await expect(page.getByText('66', { exact: true })).toBeVisible();
+
+    // The numbers live in the details drawer behind the chart icon — RAW, not curved: clip
+    // scores, per-syllable scores and per-phoneme scores.
+    await page.getByRole('button', { name: 'Detailed breakdown' }).click();
+    const drawer = page.getByRole('dialog');
+    await expect(drawer.getByText('Fluency')).toBeVisible();
+    await expect(drawer.getByText('88', { exact: true })).toBeVisible(); // raw accuracy, not 90
+    await expect(drawer.getByText('/fɛ/', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('66', { exact: true })).toBeVisible(); // that syllable's score
+    await expect(drawer.getByText('We heard: “ephemeral”')).toBeVisible();
+    await drawer.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     const post = k.posted(path);
     await page.getByRole('button', { name: 'Next' }).click();
     await post;
@@ -203,7 +218,7 @@ test.describe('CRUD: pronounce game round', () => {
 
     // The busy copy shows, then the single auto-retry (2s) succeeds on the stub's second call.
     await expect(page.getByText(/scoring service is busy/)).toBeVisible();
-    await expect(page.getByText('85%', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('90%', { exact: true })).toBeVisible({ timeout: 10_000 });
     const post = k.posted(path);
     await page.getByRole('button', { name: 'Next' }).click();
     await post;

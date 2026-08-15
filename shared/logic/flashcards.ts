@@ -90,6 +90,36 @@ export function phonemeTier(accuracy: number): 'good' | 'close' | 'wrong' {
   return accuracy >= 60 ? 'close' : 'wrong';
 }
 
+/**
+ * The forgiveness presets the admin can apply to pronounce scores (/config → Pronounce
+ * scoring). Kids record on cheap mics in noisy rooms, so raw Azure numbers read harsher than
+ * the pronunciation deserves; a curve lifts what is SHOWN and the pass mark follows it. The
+ * raw numbers stay in the DTO untouched — the details drawer and stored results keep the truth.
+ */
+export const PRONOUNCE_CURVES = ['off', 'round5', 'boost5', 'round10', 'squeeze'] as const;
+export type PronounceCurve = (typeof PRONOUNCE_CURVES)[number];
+
+/**
+ * Apply a forgiveness curve to one raw 0-100 score. 0 stays 0 on every curve — kindness is
+ * for attempts, and a silent clip must not earn points from a flat boost. Applied server-side
+ * to decide `correct`, and client-side to every kid-facing number and colour tier.
+ */
+export function forgiveScore(raw: number, curve: PronounceCurve): number {
+  if (raw <= 0) return 0;
+  switch (curve) {
+    case 'round5':
+      return Math.min(100, Math.ceil(raw / 5) * 5);
+    case 'boost5':
+      return Math.min(100, raw + 5);
+    case 'round10':
+      return Math.min(100, Math.ceil(raw / 10) * 10);
+    case 'squeeze':
+      return Math.round(100 - (100 - raw) * 0.75);
+    default:
+      return raw;
+  }
+}
+
 /** The number of pairs in one round of match. */
 export const MATCH_ROUND_SIZE = 6;
 

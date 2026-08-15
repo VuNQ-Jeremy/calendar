@@ -5,7 +5,7 @@ import { useLang } from '../lib/i18n.jsx';
 import { playWord } from './audio.js';
 import { createRecorder, type WebRecorder } from './recorder.js';
 import type { GameProps } from './game-utils.js';
-import { meaningOf, phonemeTier, pickRound } from '../../shared/logic/flashcards';
+import { forgiveScore, meaningOf, phonemeTier, pickRound } from '../../shared/logic/flashcards';
 import { MAX_CLIP_MS, MIN_CLIP_MS } from '../../shared/logic/wav';
 import { RoundGardenNote, type GardenRoundProps } from '../garden/garden-widget.jsx';
 import type { PronounceAssessment } from '../../shared/schemas';
@@ -61,6 +61,8 @@ export function PronounceGame({
   const retriedRef = React.useRef(false);
   // True while the single automatic 429 retry is pending — the manual button waits it out.
   const [autoRetrying, setAutoRetrying] = React.useState(false);
+  // The "detailed breakdown" drawer over the scored screen (all four score levels).
+  const [details, setDetails] = React.useState(false);
 
   const done = round.length > 0 && idx >= round.length;
   const score = answers.filter((a) => a.correct).length;
@@ -186,6 +188,7 @@ export function PronounceGame({
     setClip(null);
     setResult(null);
     setNoSpeech(false);
+    setDetails(false);
     setIdx((i) => i + 1);
   };
 
@@ -206,6 +209,7 @@ export function PronounceGame({
     setClip(null);
     setResult(null);
     setNoSpeech(false);
+    setDetails(false);
     setPhase('idle');
   };
 
@@ -277,7 +281,12 @@ export function PronounceGame({
           </FIB>
         </div>
         {phase === 'scored' && result ? (
-          <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
+          <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+            <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
+            <FIB label={t('fc_pron_details')} size="sm" onClick={() => setDetails(true)}>
+              <MIcon name="chart" size={18} />
+            </FIB>
+          </div>
         ) : (
           w.ipa && <div style={{ color: 'var(--text-muted)' }}>{w.ipa}</div>
         )}
@@ -296,7 +305,7 @@ export function PronounceGame({
               color: result.correct ? 'var(--green-600, #2e7d32)' : 'var(--red-600, #c0392b)',
             }}
           >
-            {Math.round(result.accuracy)}%
+            {Math.round(forgiveScore(result.accuracy, result.curve ?? 'off'))}%
           </div>
           <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
             {clip && (
@@ -311,6 +320,13 @@ export function PronounceGame({
               {t('fc_pron_next')}
             </FBtn>
           </div>
+          {details && (
+            <PronounceDetailsDrawer
+              result={result}
+              word={w.word}
+              onClose={() => setDetails(false)}
+            />
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -397,15 +413,16 @@ const TIER_COLOR: Record<ReturnType<typeof phonemeTier>, string> = {
 };
 
 /**
- * The sound-by-sound verdict, grouped the way the word is actually spoken: one pill per
- * syllable, its phonemes each coloured by their own tier, the syllable underlined in its tier
- * colour and its 0-100 score printed underneath. Falls back to the flat phoneme line when the
- * response carries no syllable groups (Azure only sends them for en-US), and to the plain IPA
- * when there are no phonemes either. Insertion entries are words the student added on top of
- * the reference; they carry no reference IPA, so they are skipped.
+ * The simple sound-by-sound verdict: one group per syllable, its phonemes each coloured by
+ * their own tier and the syllable underlined in its tier colour — colours only, no numbers.
+ * The numbers live in PronounceDetailsDrawer, behind the chart icon: two nearly-equal numbers
+ * on one screen (syllable 94 vs full-text 96) read as a contradiction, not detail. Falls back to
+ * the flat phoneme line when the response carries no syllable groups (Azure only sends them
+ * for en-US), and to the plain IPA when there are no phonemes either. Insertion entries are
+ * words the student added on top of the reference; they carry no reference IPA, so they are
+ * skipped here and reported in the drawer.
  *
- * Rendered in the word header, taking the static IPA line's place once the clip is scored —
- * the same string in the same spot, just coloured and scored.
+ * Rendered in the word header, taking the static IPA line's place once the clip is scored.
  */
 function PhonemeBreakdown({
   result,
@@ -414,6 +431,9 @@ function PhonemeBreakdown({
   result: PronounceAssessment;
   fallbackIpa?: string;
 }) {
+  // Colour tiers follow the forgiveness curve, like every other kid-facing number.
+  const curve = result.curve ?? 'off';
+  const tierOf = (raw: number) => TIER_COLOR[phonemeTier(forgiveScore(raw, curve))];
   const spoken = (result.words ?? []).filter((wd) => wd.errorType !== 'Insertion');
   const syllables = spoken.flatMap((wd) => wd.syllables ?? []);
   const phonemes = spoken.flatMap((wd) => wd.phonemes);
@@ -422,7 +442,7 @@ function PhonemeBreakdown({
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
+          alignItems: 'baseline',
           justifyContent: 'center',
           flexWrap: 'wrap',
           gap: 8,
@@ -432,30 +452,22 @@ function PhonemeBreakdown({
         }}
       >
         <span>/</span>
-        {syllables.map((s, i) => {
-          const tier = TIER_COLOR[phonemeTier(s.accuracy)];
-          return (
-            <span
-              key={i}
-              style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}
-            >
-              <span style={{ borderBottom: `3px solid ${tier}`, padding: '0 2px 2px' }}>
-                {s.phonemes.length > 0 ? (
-                  s.phonemes.map((p, j) => (
-                    <span key={j} style={{ color: TIER_COLOR[phonemeTier(p.accuracy)] }}>
-                      {p.ipa}
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ color: tier }}>{s.ipa}</span>
-                )}
-              </span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: tier }}>
-                {Math.round(s.accuracy)}
-              </span>
-            </span>
-          );
-        })}
+        {syllables.map((s, i) => (
+          <span
+            key={i}
+            style={{ borderBottom: `3px solid ${tierOf(s.accuracy)}`, padding: '0 2px 2px' }}
+          >
+            {s.phonemes.length > 0 ? (
+              s.phonemes.map((p, j) => (
+                <span key={j} style={{ color: tierOf(p.accuracy) }}>
+                  {p.ipa}
+                </span>
+              ))
+            ) : (
+              <span style={{ color: tierOf(s.accuracy) }}>{s.ipa}</span>
+            )}
+          </span>
+        ))}
         <span>/</span>
       </div>
     );
@@ -467,11 +479,173 @@ function PhonemeBreakdown({
     <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 1 }}>
       /
       {phonemes.map((p, i) => (
-        <span key={i} style={{ color: TIER_COLOR[phonemeTier(p.accuracy)] }}>
+        <span key={i} style={{ color: tierOf(p.accuracy) }}>
           {p.ipa}
         </span>
       ))}
       /
+    </div>
+  );
+}
+
+/** A 0-100 score, coloured by the same tier scale as the phonemes. */
+function ScoreNum({ v }: { v: number }) {
+  return (
+    <span
+      style={{
+        fontWeight: 700,
+        fontVariantNumeric: 'tabular-nums',
+        color: TIER_COLOR[phonemeTier(v)],
+      }}
+    >
+      {Math.round(v)}
+    </span>
+  );
+}
+
+const ERR_KEY = {
+  Insertion: 'fc_pron_err_insertion',
+  Omission: 'fc_pron_err_omission',
+  Mispronunciation: 'fc_pron_err_mispronunciation',
+} as const;
+
+/**
+ * The detailed breakdown behind the chart icon: every number Azure returned, at all four
+ * levels — clip scores (accuracy / fluency / completeness / overall), what was heard, then
+ * each word with its miscue tag, syllable scores and per-phoneme scores. The scored screen
+ * itself stays colours-plus-one-number; anyone who wants to know WHY opens this.
+ * docs/pronounce-scores.html is the long-form companion.
+ */
+function PronounceDetailsDrawer({
+  result,
+  word,
+  onClose,
+}: {
+  result: PronounceAssessment;
+  word: string;
+  onClose: () => void;
+}) {
+  const { t } = useLang();
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const clipScores: [string, number][] = [
+    [t('fc_pron_accuracy'), result.accuracy],
+    [t('fc_pron_fluency'), result.fluency],
+    [t('fc_pron_completeness'), result.completeness],
+    [t('fc_pron_overall'), result.pronScore],
+  ];
+
+  return (
+    <div
+      className="drawer-scrim"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <aside className="drawer" role="dialog" aria-modal="true">
+        <div className="drawer__head">
+          <h3 className="drawer__title">{word}</h3>
+          <FIB label={t('close')} size="sm" onClick={onClose}>
+            <MIcon name="x" size={18} />
+          </FIB>
+        </div>
+        <div className="drawer__body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {clipScores.map(([label, v]) => (
+              <div
+                key={label}
+                className="m-row"
+                style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+              >
+                <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+                <ScoreNum v={v} />
+              </div>
+            ))}
+          </div>
+          {result.recognized && (
+            <div style={{ color: 'var(--text-muted)' }}>
+              {t('fc_pron_heard', { word: result.recognized })}
+            </div>
+          )}
+          {(result.words ?? []).map((wd, i) => (
+            <div
+              key={i}
+              style={{
+                borderTop: '1.5px solid var(--border-subtle)',
+                paddingTop: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div className="m-row" style={{ justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ fontWeight: 700 }}>
+                  {wd.word}
+                  {wd.errorType !== 'None' && (
+                    <span style={{ color: 'var(--red-600, #c0392b)', fontWeight: 400 }}>
+                      {' '}
+                      · {t(ERR_KEY[wd.errorType])}
+                    </span>
+                  )}
+                </span>
+                <ScoreNum v={wd.accuracy} />
+              </div>
+              {(wd.syllables ?? []).map((s, j) => (
+                <div key={j} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, letterSpacing: 1 }}>/{s.ipa}/</span>
+                    <ScoreNum v={s.accuracy} />
+                  </div>
+                  {s.phonemes.length > 0 && (
+                    <div className="m-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                      {s.phonemes.map((p, k) => (
+                        <span
+                          key={k}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '2px 9px',
+                            borderRadius: 999,
+                            border: '1.5px solid var(--border-subtle)',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              color: TIER_COLOR[phonemeTier(p.accuracy)],
+                            }}
+                          >
+                            {p.ipa}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: 'var(--text-muted)',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {Math.round(p.accuracy)}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+          <div style={{ fontSize: 'var(--text-sm, 13px)', color: 'var(--text-muted)' }}>
+            {t('fc_pron_levels_note')}
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

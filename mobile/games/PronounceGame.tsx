@@ -1,9 +1,9 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { createAudioPlayer } from 'expo-audio';
-import { Mic, Play, Square, Volume2 } from 'lucide-react-native';
-import { meaningOf, phonemeTier, pickRound } from '@mochi/shared/logic/flashcards';
+import { BarChart3, Mic, Play, Square, Volume2, X } from 'lucide-react-native';
+import { forgiveScore, meaningOf, phonemeTier, pickRound } from '@mochi/shared/logic/flashcards';
 import { MAX_CLIP_MS, MIN_CLIP_MS } from '@mochi/shared/logic/wav';
 import type { PronounceAssessment } from '@mochi/shared/schemas';
 import * as api from '~/lib/endpoints';
@@ -12,7 +12,7 @@ import { useLang } from '~/lib/i18n';
 import { usePcmRecorder, type PcmClip } from '~/lib/use-pcm-recorder';
 import { useWordAudio } from '~/lib/use-word-audio';
 import { useTheme } from '~/theme';
-import { Body, Button, IconButton, Muted, Title } from '~/ui';
+import { Body, Button, Heading, IconButton, Muted, Title } from '~/ui';
 import type { GameProps } from './types';
 import { GameEnd } from './GameEnd';
 
@@ -55,6 +55,8 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
   const [result, setResult] = React.useState<PronounceAssessment | null>(null);
   const [noSpeech, setNoSpeech] = React.useState(false);
   const [autoRetrying, setAutoRetrying] = React.useState(false);
+  // The "detailed breakdown" sheet over the scored screen (all four score levels).
+  const [details, setDetails] = React.useState(false);
   const [answers, setAnswers] = React.useState<{ wordId: string; correct: boolean }[]>([]);
   const started = React.useRef(Date.now());
   const finished = React.useRef(false);
@@ -185,6 +187,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
     keepClip(null);
     setResult(null);
     setNoSpeech(false);
+    setDetails(false);
     setIdx((i) => i + 1);
   };
 
@@ -193,6 +196,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
     keepClip(null);
     setResult(null);
     setNoSpeech(false);
+    setDetails(false);
     setPhase('idle');
   };
 
@@ -274,11 +278,15 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
           </IconButton>
         </View>
         {phase === 'scored' && result ? (
-          <PhonemeBreakdown
-            result={result}
-            hint={t('fc_pron_ipa_hint')}
-            fallbackIpa={w.ipa ?? undefined}
-          />
+          <>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
+              <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
+              <IconButton label={t('fc_pron_details')} onPress={() => setDetails(true)}>
+                <BarChart3 size={20} color={th.color.textStrong} />
+              </IconButton>
+            </View>
+            <Muted style={{ textAlign: 'center' }}>{t('fc_pron_ipa_hint')}</Muted>
+          </>
         ) : w.ipa ? (
           <Muted>{w.ipa}</Muted>
         ) : null}
@@ -298,7 +306,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
               color: result.correct ? th.status.success : th.status.danger,
             }}
           >
-            {`${Math.round(result.accuracy)}%`}
+            {`${Math.round(forgiveScore(result.accuracy, result.curve ?? 'off'))}%`}
           </Title>
           <Muted>{t('fc_pron_accuracy')}</Muted>
           {result.recognized ? (
@@ -326,6 +334,13 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
             </Button>
             <Button onPress={next}>{t('fc_pron_next')}</Button>
           </View>
+          {details ? (
+            <PronounceDetailsSheet
+              result={result}
+              word={w.word}
+              onClose={() => setDetails(false)}
+            />
+          ) : null}
         </View>
       ) : phase === 'idle' || phase === 'recording' ? (
         <View style={{ alignItems: 'center', gap: th.spacing[3] }}>
@@ -403,107 +418,266 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
   );
 }
 
+/** The tier palette shared by the breakdown, the details sheet and their score numbers. */
+function useTierColor() {
+  const th = useTheme();
+  return {
+    good: th.status.success,
+    close: th.status.warning,
+    wrong: th.status.danger,
+  };
+}
+
 /**
- * The sound-by-sound verdict, grouped the way the word is actually spoken: one pill per
- * syllable, its phonemes each coloured by their own tier, the syllable underlined in its tier
- * colour and its 0-100 score printed underneath. Falls back to the flat phoneme line when the
- * response carries no syllable groups (Azure only sends them for en-US), and to the plain IPA
- * when there are no phonemes either. Insertion entries are words the student added on top of
- * the reference — they have no reference IPA, and the "we heard …" line already reports them.
+ * The simple sound-by-sound verdict: one group per syllable, its phonemes each coloured by
+ * their own tier and the syllable underlined in its tier colour — colours only, no numbers
+ * (the numbers live in PronounceDetailsSheet, behind the chart icon). Falls back to the flat
+ * phoneme line when the response carries no syllable groups (Azure only sends them for en-US),
+ * and to the plain IPA when there are no phonemes either. Insertion entries are words the
+ * student added on top of the reference — no reference IPA, reported in the details sheet.
  *
  * Rendered in the word header, taking the static IPA line's place once the clip is scored.
  */
 function PhonemeBreakdown({
   result,
-  hint,
   fallbackIpa,
 }: {
   result: PronounceAssessment;
-  hint: string;
   fallbackIpa?: string;
 }) {
+  const tierColor = useTierColor();
   const th = useTheme();
-  const tierColor = {
-    good: th.status.success,
-    close: th.status.warning,
-    wrong: th.status.danger,
-  };
+  // Colour tiers follow the forgiveness curve, like every other kid-facing number.
+  const curve = result.curve ?? 'off';
+  const tierOf = (raw: number) => tierColor[phonemeTier(forgiveScore(raw, curve))];
   const spoken = (result.words ?? []).filter((wd) => wd.errorType !== 'Insertion');
   const syllables = spoken.flatMap((wd) => wd.syllables ?? []);
   const phonemes = spoken.flatMap((wd) => wd.phonemes);
   if (syllables.length > 0) {
     return (
-      <>
-        <View
-          style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-            gap: th.spacing[2],
-          }}
-        >
-          <Title style={{ fontSize: 24, lineHeight: 32 }}>{'/'}</Title>
-          {syllables.map((s, i) => {
-            const tier = tierColor[phonemeTier(s.accuracy)];
-            return (
-              <View key={i} style={{ alignItems: 'center' }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    borderBottomWidth: 3,
-                    borderBottomColor: tier,
-                    paddingHorizontal: 2,
-                    paddingBottom: 2,
-                  }}
-                >
-                  {s.phonemes.length > 0 ? (
-                    s.phonemes.map((p, j) => (
-                      <Title
-                        key={j}
-                        style={{
-                          fontSize: 24,
-                          lineHeight: 32,
-                          color: tierColor[phonemeTier(p.accuracy)],
-                        }}
-                      >
-                        {p.ipa}
-                      </Title>
-                    ))
-                  ) : (
-                    <Title style={{ fontSize: 24, lineHeight: 32, color: tier }}>{s.ipa}</Title>
-                  )}
-                </View>
-                <Muted style={{ fontSize: 12, lineHeight: 16, color: tier }}>
-                  {Math.round(s.accuracy)}
-                </Muted>
-              </View>
-            );
-          })}
-          <Title style={{ fontSize: 24, lineHeight: 32 }}>{'/'}</Title>
-        </View>
-        <Muted style={{ textAlign: 'center' }}>{hint}</Muted>
-      </>
+      <View
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'baseline',
+          gap: th.spacing[2],
+        }}
+      >
+        <Title style={{ fontSize: 24, lineHeight: 32 }}>{'/'}</Title>
+        {syllables.map((s, i) => (
+          <View
+            key={i}
+            style={{
+              flexDirection: 'row',
+              borderBottomWidth: 3,
+              borderBottomColor: tierOf(s.accuracy),
+              paddingHorizontal: 2,
+              paddingBottom: 2,
+            }}
+          >
+            {s.phonemes.length > 0 ? (
+              s.phonemes.map((p, j) => (
+                <Title key={j} style={{ fontSize: 24, lineHeight: 32, color: tierOf(p.accuracy) }}>
+                  {p.ipa}
+                </Title>
+              ))
+            ) : (
+              <Title style={{ fontSize: 24, lineHeight: 32, color: tierOf(s.accuracy) }}>
+                {s.ipa}
+              </Title>
+            )}
+          </View>
+        ))}
+        <Title style={{ fontSize: 24, lineHeight: 32 }}>{'/'}</Title>
+      </View>
     );
   }
   if (phonemes.length === 0) {
     return fallbackIpa ? <Muted>{fallbackIpa}</Muted> : null;
   }
   return (
-    <>
-      <Title style={{ fontSize: 24, lineHeight: 32, letterSpacing: 1 }}>
-        {'/'}
-        {phonemes.map((p, i) => (
-          <Title
-            key={i}
-            style={{ fontSize: 24, lineHeight: 32, color: tierColor[phonemeTier(p.accuracy)] }}
+    <Title style={{ fontSize: 24, lineHeight: 32, letterSpacing: 1 }}>
+      {'/'}
+      {phonemes.map((p, i) => (
+        <Title key={i} style={{ fontSize: 24, lineHeight: 32, color: tierOf(p.accuracy) }}>
+          {p.ipa}
+        </Title>
+      ))}
+      {'/'}
+    </Title>
+  );
+}
+
+/** A 0-100 score, coloured by the same tier scale as the phonemes. */
+function ScoreNum({ v }: { v: number }) {
+  const tierColor = useTierColor();
+  const th = useTheme();
+  return (
+    <Body style={{ fontFamily: th.font.bodyBold, color: tierColor[phonemeTier(v)] }}>
+      {Math.round(v)}
+    </Body>
+  );
+}
+
+const ERR_KEY = {
+  Insertion: 'fc_pron_err_insertion',
+  Omission: 'fc_pron_err_omission',
+  Mispronunciation: 'fc_pron_err_mispronunciation',
+} as const;
+
+/**
+ * The detailed breakdown behind the chart icon, as a bottom sheet (same scrim pattern as
+ * MoveEventSheet): every number Azure returned at all four levels — clip scores, what was
+ * heard, then each word with its miscue tag, syllable scores and per-phoneme scores. The
+ * scored screen itself stays colours-plus-one-number. docs/pronounce-scores.html is the
+ * long-form companion.
+ */
+function PronounceDetailsSheet({
+  result,
+  word,
+  onClose,
+}: {
+  result: PronounceAssessment;
+  word: string;
+  onClose: () => void;
+}) {
+  const th = useTheme();
+  const { t } = useLang();
+  const tierColor = useTierColor();
+
+  const clipScores: [string, number][] = [
+    [t('fc_pron_accuracy'), result.accuracy],
+    [t('fc_pron_fluency'), result.fluency],
+    [t('fc_pron_completeness'), result.completeness],
+    [t('fc_pron_overall'), result.pronScore],
+  ];
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('close')}
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: 'rgba(60,40,25,0.45)', justifyContent: 'flex-end' }}
+      >
+        {/* An inner Pressable with no handler swallows taps so they do not reach the scrim. */}
+        <Pressable
+          style={{
+            backgroundColor: th.color.surfaceCard,
+            borderTopLeftRadius: th.radius.xl,
+            borderTopRightRadius: th.radius.xl,
+            padding: th.spacing[5],
+            paddingBottom: th.spacing[8],
+            maxHeight: '80%',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: th.spacing[4],
+            }}
           >
-            {p.ipa}
-          </Title>
-        ))}
-        {'/'}
-      </Title>
-      <Muted style={{ textAlign: 'center' }}>{hint}</Muted>
-    </>
+            <Heading>{word}</Heading>
+            <IconButton label={t('close')} onPress={onClose}>
+              <X size={20} color={th.color.textStrong} />
+            </IconButton>
+          </View>
+          <ScrollView contentContainerStyle={{ gap: th.spacing[4] }}>
+            <View style={{ gap: th.spacing[2] }}>
+              {clipScores.map(([label, v]) => (
+                <View
+                  key={label}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Muted>{label}</Muted>
+                  <ScoreNum v={v} />
+                </View>
+              ))}
+            </View>
+            {result.recognized ? (
+              <Muted>{t('fc_pron_heard', { word: result.recognized })}</Muted>
+            ) : null}
+            {(result.words ?? []).map((wd, i) => (
+              <View
+                key={i}
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: th.color.borderSubtle,
+                  paddingTop: th.spacing[3],
+                  gap: th.spacing[2],
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Body style={{ fontFamily: th.font.bodyBold }}>
+                    {wd.word}
+                    {wd.errorType !== 'None' ? (
+                      <Body style={{ color: th.status.danger }}> · {t(ERR_KEY[wd.errorType])}</Body>
+                    ) : null}
+                  </Body>
+                  <ScoreNum v={wd.accuracy} />
+                </View>
+                {(wd.syllables ?? []).map((s, j) => (
+                  <View key={j} style={{ gap: th.spacing[1] }}>
+                    <View
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}
+                    >
+                      <Body style={{ fontFamily: th.font.bodyBold, letterSpacing: 1 }}>
+                        /{s.ipa}/
+                      </Body>
+                      <ScoreNum v={s.accuracy} />
+                    </View>
+                    {s.phonemes.length > 0 ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: th.spacing[2] }}>
+                        {s.phonemes.map((p, k) => (
+                          <View
+                            key={k}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 5,
+                              paddingHorizontal: 9,
+                              paddingVertical: 2,
+                              borderRadius: 999,
+                              borderWidth: 1.5,
+                              borderColor: th.color.borderSubtle,
+                            }}
+                          >
+                            <Body
+                              style={{
+                                fontFamily: th.font.bodyBold,
+                                color: tierColor[phonemeTier(p.accuracy)],
+                              }}
+                            >
+                              {p.ipa}
+                            </Body>
+                            <Muted style={{ fontSize: 12, lineHeight: 16 }}>
+                              {Math.round(p.accuracy)}
+                            </Muted>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ))}
+            <Muted>{t('fc_pron_levels_note')}</Muted>
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }

@@ -141,6 +141,36 @@ test.describe('CRUD: config (criteria, billing, weights)', () => {
     await expect(attitude()).toHaveValue(original);
   });
 
+  test('pronounce scoring: pick a forgiveness curve, persist, restore to Off', async ({ page }) => {
+    const k = ui(page);
+    let card = await openConfigEntry(page, 'Pronounce scoring');
+    const picker = () => card.locator('select');
+    // Seeded default is Off — raw Azure scores.
+    await expect(picker()).toHaveValue('off');
+
+    await picker().selectOption('round5');
+    let post = k.posted('/config');
+    await card.getByRole('button', { name: 'Save' }).click();
+    await post;
+
+    // The row's summary carries the preset without being opened, and the choice persists.
+    await page.reload();
+    await expect(
+      page.locator('.cfg-row:has(.lrow__title:text-is("Pronounce scoring")) .cfg-row__value'),
+    ).toContainText('Round up to nearest 5');
+    card = await openConfigEntry(page, 'Pronounce scoring');
+    await expect(picker()).toHaveValue('round5');
+
+    // Restore the default so other specs (and the seeded env) see raw scores.
+    await picker().selectOption('off');
+    post = k.posted('/config');
+    await card.getByRole('button', { name: 'Save' }).click();
+    await post;
+    await page.reload();
+    card = await openConfigEntry(page, 'Pronounce scoring');
+    await expect(picker()).toHaveValue('off');
+  });
+
   test('reorder assessment types by drag, persist, restore', async ({ page }) => {
     const k = ui(page);
     let sec = await openConfigEntry(page, 'Assessment types');

@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest';
 import { mapAzureAssessment, pronunciationAssessmentHeader } from '../server/services/speech.js';
+import { forgiveScore } from '../shared/logic/flashcards.js';
+
+describe('forgiveScore', () => {
+  it('applies each curve preset', () => {
+    // [raw, off, round5, boost5, round10, squeeze]
+    const table: [number, number, number, number, number, number][] = [
+      [98, 98, 100, 100, 100, 99],
+      [92, 92, 95, 97, 100, 94],
+      [87, 87, 90, 92, 90, 90],
+      [71, 71, 75, 76, 80, 78],
+      [68, 68, 70, 73, 70, 76],
+      [60, 60, 60, 65, 60, 70],
+      [40, 40, 40, 45, 40, 55],
+      [100, 100, 100, 100, 100, 100],
+    ];
+    for (const [raw, off, round5, boost5, round10, squeeze] of table) {
+      expect(forgiveScore(raw, 'off')).toBe(off);
+      expect(forgiveScore(raw, 'round5')).toBe(round5);
+      expect(forgiveScore(raw, 'boost5')).toBe(boost5);
+      expect(forgiveScore(raw, 'round10')).toBe(round10);
+      expect(forgiveScore(raw, 'squeeze')).toBe(squeeze);
+    }
+  });
+
+  it('never lifts 0 — kindness is for attempts, not silence', () => {
+    for (const curve of ['off', 'round5', 'boost5', 'round10', 'squeeze'] as const) {
+      expect(forgiveScore(0, curve)).toBe(0);
+    }
+  });
+});
 
 describe('pronunciationAssessmentHeader', () => {
   it('base64-decodes to the exact assessment config', () => {
@@ -56,6 +86,7 @@ describe('mapAzureAssessment', () => {
       recognized: 'hello',
       correct: true,
       noSpeech: false,
+      curve: 'off',
       words: [
         {
           word: 'hello',
@@ -233,6 +264,22 @@ describe('mapAzureAssessment', () => {
     expect(out.noSpeech).toBe(false);
     expect(out.accuracy).toBe(42);
     expect(out.words).toEqual([]); // no Words in the payload — never undefined
+  });
+
+  it('passes on the FORGIVEN score but keeps the DTO raw', () => {
+    // raw 68 fails at 70; round5 lifts it to 70, so `correct` flips — but `accuracy`
+    // stays 68 (clients apply the echoed curve to what they display; the drawer shows raw).
+    const payload = {
+      RecognitionStatus: 'Success',
+      NBest: [{ Lexical: 'bird', AccuracyScore: 68 }],
+    };
+    const raw = mapAzureAssessment(payload);
+    expect(raw.correct).toBe(false);
+    expect(raw.curve).toBe('off');
+    const forgiven = mapAzureAssessment(payload, 'round5');
+    expect(forgiven.correct).toBe(true);
+    expect(forgiven.accuracy).toBe(68);
+    expect(forgiven.curve).toBe('round5');
   });
 
   it('keeps miscue words and defaults every missing score to 0', () => {

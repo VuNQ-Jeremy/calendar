@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { isValidModesCsv, normalizeModesCsv } from './logic/flashcards';
+import {
+  isValidModesCsv,
+  normalizeModesCsv,
+  PRONOUNCE_CURVES,
+  type PronounceCurve,
+} from './logic/flashcards';
 
 /**
  * Parse a partial update payload. Zod's `.partial()` still applies `.default()`
@@ -503,7 +508,21 @@ export type PronounceAssessment = {
    * build older than this field simply ignores it — read it as `words ?? []`.
    */
   words: PronounceWord[];
+  /**
+   * The forgiveness curve that was active when this clip was scored (/config → Pronounce
+   * scoring). Every number in this DTO is RAW; clients apply `forgiveScore(raw, curve)` to
+   * what the kid sees (big %, colour tiers) while the details drawer shows the raw numbers.
+   * `correct` is already decided server-side on the forgiven accuracy. Optional so a mobile
+   * build older than this field keeps working — read it as `curve ?? 'off'`.
+   */
+  curve?: PronounceCurve;
 };
+
+/** /config → Pronounce scoring: which forgiveness curve the pronounce game applies. */
+export const PronounceSettingsInput = z.object({
+  curve: z.enum(PRONOUNCE_CURVES),
+});
+export type PronounceSettingsInput = z.infer<typeof PronounceSettingsInput>;
 
 export const FlashcardResultInput = z.object({
   /**

@@ -1,0 +1,361 @@
+<!doctype html>
+<!-- Why the pronounce game's numbers differ: Azure scores every clip at four levels
+     (phoneme → syllable → word → full text), each aggregated then re-refined, so adjacent
+     levels land on different numbers. Companion doc for /speech-assess + the pronounce game.
+     Open directly in a browser. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>One Clip, Four Scores</title>
+<style>
+  :root {
+    --paper: #FBF6EC;
+    --card: #FFFDF7;
+    --ink: #3A2E24;
+    --ink-soft: #7A6A58;
+    --line: #E3D9C6;
+    --clay: #D97A2B;
+    --clay-soft: #F7E3CE;
+    --leaf: #2E7D32;
+    --amber: #B57F14;
+    --brick: #C0392B;
+    --code-bg: #F4EDDE;
+  }
+  :root:not([data-theme="light"]) { color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #211A12;
+      --card: #2A2218;
+      --ink: #EFE5D3;
+      --ink-soft: #B3A48D;
+      --line: #453927;
+      --clay: #F0A45B;
+      --clay-soft: #4A3620;
+      --leaf: #7BC67F;
+      --amber: #E4B75C;
+      --brick: #E8837A;
+      --code-bg: #191410;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #211A12;
+    --card: #2A2218;
+    --ink: #EFE5D3;
+    --ink-soft: #B3A48D;
+    --line: #453927;
+    --clay: #F0A45B;
+    --clay-soft: #4A3620;
+    --leaf: #7BC67F;
+    --amber: #E4B75C;
+    --brick: #E8837A;
+    --code-bg: #191410;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    line-height: 1.55;
+    margin: 0;
+    padding: 48px 20px 80px;
+  }
+  main { max-width: 740px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+
+  h1, h2 {
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 { font-size: 2rem; line-height: 1.15; }
+  h2 { font-size: 1.2rem; margin-bottom: 4px; }
+  p { margin: 0; max-width: 62ch; }
+  .kicker {
+    font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--clay); font-weight: 700; margin-bottom: 10px;
+  }
+  .lede { color: var(--ink-soft); margin-top: 10px; }
+
+  .answer {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--clay);
+    border-radius: 10px;
+    padding: 18px 22px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .answer strong { color: var(--clay); }
+
+  section { display: flex; flex-direction: column; gap: 14px; }
+  figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  figure svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  figcaption { font-size: 0.85rem; color: var(--ink-soft); margin-top: 14px; max-width: 62ch; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    margin: 0;
+    overflow-x: auto;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+  }
+  pre .dim { color: var(--ink-soft); }
+  pre .hit { font-weight: 700; }
+
+  .chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 17px; height: 17px; border-radius: 50%;
+    background: var(--clay); color: var(--paper);
+    font: 700 0.68rem/1 "Segoe UI", sans-serif;
+    vertical-align: 1px;
+  }
+  .chip.in-pre { margin-left: 8px; }
+
+  /* miniature of the scored game screen */
+  .mock {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+  .mock .word { font-size: 1.5rem; font-weight: 700; }
+  .mock .pillrow { font-size: 1.25rem; font-weight: 700; letter-spacing: 1px; display: flex; gap: 8px; align-items: flex-start; }
+  .mock .pill { display: inline-flex; flex-direction: column; align-items: center; }
+  .mock .pill .sounds { border-bottom: 3px solid var(--leaf); padding: 0 2px 2px; }
+  .mock .pill .num { font-size: 0.72rem; font-weight: 600; color: var(--leaf); }
+  .mock .meaning { color: var(--ink-soft); font-size: 0.9rem; }
+  .mock .big { font-size: 2.4rem; font-weight: 800; color: var(--leaf); }
+  .mock .p-good { color: var(--leaf); }
+  .mock .p-close { color: var(--amber); }
+  .anno { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--ink-soft); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-soft); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.85em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+
+  .foot { font-size: 0.8rem; color: var(--ink-soft); border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="kicker">Mochi · pronounce game · Azure pronunciation assessment</div>
+    <h1>One clip, four scores</h1>
+    <p class="lede">You said “dog”, the pill says 94, the big number says 96%. Neither is wrong —
+    they are two different scores Azure computes in the same response.</p>
+  </header>
+
+  <div class="answer">
+    <p><strong>The short answer:</strong> Azure grades every clip at four levels at once —
+    phoneme, syllable, word, full text. Each level is aggregated from the phonemes
+    <em>and then re-refined with its own weighting</em>, so adjacent levels land on slightly
+    different numbers. The pill shows the <strong>syllable’s</strong> score (94); the big
+    percentage shows the <strong>full-text</strong> score (96).</p>
+  </div>
+
+  <section>
+    <h2>Four levels, one recording</h2>
+    <figure>
+      <svg viewBox="0 0 720 250" role="img" aria-label="Phoneme scores aggregate into a syllable score, then a word score, then a full-text score; each arrow re-weights, so the numbers differ slightly.">
+        <defs>
+          <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g fill="none" stroke="currentColor" stroke-width="1.4">
+          <!-- phoneme chips -->
+          <rect x="20"  y="30"  width="110" height="46" rx="9"/>
+          <rect x="20"  y="102" width="110" height="46" rx="9"/>
+          <rect x="20"  y="174" width="110" height="46" rx="9"/>
+          <!-- syllable -->
+          <rect x="250" y="102" width="130" height="46" rx="9" stroke="var(--clay)" stroke-width="2.5"/>
+          <!-- word -->
+          <rect x="450" y="102" width="110" height="46" rx="9"/>
+          <!-- full text -->
+          <rect x="610" y="96" width="96" height="58" rx="9" stroke="var(--clay)" stroke-width="2.5"/>
+          <!-- converging arrows -->
+          <path d="M130,53  C 190,53  200,110 248,120" marker-end="url(#arr)"/>
+          <path d="M130,125 L 248,125" marker-end="url(#arr)"/>
+          <path d="M130,197 C 190,197 200,140 248,130" marker-end="url(#arr)"/>
+          <path d="M380,125 L 448,125" marker-end="url(#arr)"/>
+          <path d="M560,125 L 608,125" marker-end="url(#arr)"/>
+        </g>
+        <g font-family="Segoe UI, sans-serif" font-size="13" fill="currentColor">
+          <text x="75"  y="49"  text-anchor="middle">phoneme <tspan font-family="Consolas, monospace">d</tspan></text>
+          <text x="75"  y="66"  text-anchor="middle" font-weight="700" fill="var(--leaf)">98</text>
+          <text x="75"  y="121" text-anchor="middle">phoneme <tspan font-family="Consolas, monospace">ɔ</tspan></text>
+          <text x="75"  y="138" text-anchor="middle" font-weight="700" fill="var(--leaf)">95</text>
+          <text x="75"  y="193" text-anchor="middle">phoneme <tspan font-family="Consolas, monospace">g</tspan></text>
+          <text x="75"  y="210" text-anchor="middle" font-weight="700" fill="var(--amber)">90</text>
+
+          <text x="315" y="121" text-anchor="middle">syllable <tspan font-family="Consolas, monospace">dɔg</tspan></text>
+          <text x="315" y="139" text-anchor="middle" font-weight="800" fill="var(--clay)">94</text>
+
+          <text x="505" y="121" text-anchor="middle">word <tspan font-family="Consolas, monospace">dog</tspan></text>
+          <text x="505" y="138" text-anchor="middle" font-weight="700">94</text>
+
+          <text x="658" y="118" text-anchor="middle">full text</text>
+          <text x="658" y="140" text-anchor="middle" font-weight="800" fill="var(--clay)">96</text>
+        </g>
+        <g font-family="Segoe UI, sans-serif" font-size="11" fill="var(--ink-soft)">
+          <text x="188" y="94"  text-anchor="middle">aggregate</text>
+          <text x="188" y="108" text-anchor="middle">+ refine</text>
+          <text x="414" y="115" text-anchor="middle">re-weight</text>
+          <text x="584" y="115" text-anchor="middle">re-weight</text>
+          <text x="20"  y="243">phoneme numbers illustrative — the new [speech-assess] log shows the real ones</text>
+        </g>
+      </svg>
+      <figcaption>Every arrow is its own calculation, not an equals sign. Azure’s docs:
+      accuracy at syllable, word and full-text level is “aggregated from the phoneme-level
+      accuracy score, <em>and refined with assessment objectives</em>” — duration weighting and
+      per-level adjustment. That refinement is the whole reason 94 and 96 can coexist.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Which field feeds which pixel</h2>
+    <figure>
+      <div class="cols">
+<pre><span class="dim">// Azure response (flat REST shape)</span>
+{
+  "RecognitionStatus": "Success",
+  "NBest": [{
+    "Lexical": "dog",
+    <span class="hit">"AccuracyScore": 96</span>, <span class="chip in-pre">1</span>
+    "FluencyScore": 100,
+    "PronScore": 97,
+    "Words": [{
+      "Word": "dog",
+      "AccuracyScore": 94,
+      "ErrorType": "None",
+      "Syllables": [{
+        "Syllable": "dɔg",
+        <span class="hit">"AccuracyScore": 94</span> <span class="chip in-pre">2</span>
+      }],
+      "Phonemes": [
+        { "Phoneme": "d",
+          <span class="hit">"AccuracyScore": 98</span> }, <span class="chip in-pre">3</span>
+        …
+      ]
+    }]
+  }]
+}</pre>
+        <div class="mock">
+          <div class="word">dog 🔉</div>
+          <div class="pillrow">
+            <span>/</span>
+            <span class="pill">
+              <span class="sounds"><span class="p-good">d</span><span class="p-good">ɔ</span><span class="p-close">g</span> <span class="chip">3</span></span>
+              <span class="num">94&nbsp;<span class="chip">2</span></span>
+            </span>
+            <span>/</span>
+          </div>
+          <div class="meaning">con chó</div>
+          <div class="big">96% <span class="chip">1</span></div>
+          <div class="anno">pass/fail (≥ 70) is also judged on <span class="chip">1</span></div>
+        </div>
+      </div>
+      <figcaption>Same response, three different fields on screen. The letter colours
+      come from the phoneme scores <span class="chip">3</span>, the small number under the pill is
+      the syllable’s own score <span class="chip">2</span>, and the big percentage — plus the
+      correct/incorrect decision at <code>PRONOUNCE_PASS = 70</code> — is the full-text score
+      <span class="chip">1</span>. The word-level 94 is mapped but not displayed.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>When the gap gets big</h2>
+    <figure>
+      <svg viewBox="0 0 720 236" role="img" aria-label="A clean clip of dog scores 94 at syllable level and 96 at full text. Saying an extra word keeps the syllable at 94 but drags only the full-text score down.">
+        <defs>
+          <marker id="arr2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <!-- row A: clean clip -->
+        <g fill="none" stroke="currentColor" stroke-width="1.4">
+          <rect x="20"  y="34" width="150" height="46" rx="9"/>
+          <rect x="300" y="34" width="140" height="46" rx="9"/>
+          <rect x="540" y="34" width="140" height="46" rx="9"/>
+          <path d="M170,57 L 298,57" marker-end="url(#arr2)"/>
+          <path d="M440,57 L 538,57" marker-end="url(#arr2)"/>
+        </g>
+        <!-- row B: with insertion -->
+        <g fill="none" stroke="currentColor" stroke-width="1.4">
+          <rect x="20"  y="152" width="150" height="46" rx="9"/>
+          <rect x="300" y="152" width="140" height="46" rx="9"/>
+          <rect x="540" y="152" width="140" height="46" rx="9" stroke="var(--brick)" stroke-width="2.5"/>
+          <path d="M170,175 L 298,175" marker-end="url(#arr2)"/>
+          <path d="M440,175 L 538,175" marker-end="url(#arr2)"/>
+          <path d="M95,152 C 150,120 480,120 565,150" stroke="var(--brick)" stroke-dasharray="5 4" marker-end="url(#arr2)"/>
+        </g>
+        <g font-family="Segoe UI, sans-serif" font-size="13" fill="currentColor">
+          <text x="95"  y="53"  text-anchor="middle">you say “dog”</text>
+          <text x="95"  y="70"  text-anchor="middle" fill="var(--ink-soft)" font-size="11">clean clip</text>
+          <text x="370" y="53"  text-anchor="middle">syllable <tspan font-family="Consolas, monospace">dɔg</tspan></text>
+          <text x="370" y="70"  text-anchor="middle" font-weight="700">94</text>
+          <text x="610" y="53"  text-anchor="middle">full text</text>
+          <text x="610" y="70"  text-anchor="middle" font-weight="700">96</text>
+
+          <text x="95"  y="171" text-anchor="middle">you say “uh… dog”</text>
+          <text x="95"  y="188" text-anchor="middle" fill="var(--brick)" font-size="11">extra word = Insertion</text>
+          <text x="370" y="171" text-anchor="middle">syllable <tspan font-family="Consolas, monospace">dɔg</tspan></text>
+          <text x="370" y="188" text-anchor="middle" font-weight="700">still 94</text>
+          <text x="610" y="171" text-anchor="middle">full text</text>
+          <text x="610" y="188" text-anchor="middle" font-weight="800" fill="var(--brick)">~78</text>
+        </g>
+        <g font-family="Segoe UI, sans-serif" font-size="11" fill="var(--ink-soft)">
+          <text x="234" y="47" text-anchor="middle">aggregate</text>
+          <text x="489" y="47" text-anchor="middle">re-weight</text>
+          <text x="234" y="165" text-anchor="middle">aggregate</text>
+          <text x="489" y="165" text-anchor="middle">re-weight</text>
+          <text x="360" y="112" text-anchor="middle" fill="var(--brick)">miscue penalised here only</text>
+          <text x="20" y="228">full-text drop illustrative — EnableMiscue: True makes extra or skipped words count</text>
+        </g>
+      </svg>
+      <figcaption>A 2-point gap is normal weighting noise. A large gap means a miscue:
+      with <code>EnableMiscue: True</code>, extra words (Insertion) or skipped words (Omission)
+      punish the full-text score while each pronounced syllable keeps its own honest number.
+      That’s a feature — the pill tells the student the sound was fine, the big number tells
+      them the attempt wasn’t.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Cheat sheet</h2>
+    <figure>
+      <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>Level</th><th>Field in the response</th><th>Where it shows in the game</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Full text</td><td><code>NBest[0].AccuracyScore</code></td><td>the big % — and the pass mark (≥ 70)</td></tr>
+          <tr><td>Word</td><td><code>Words[n].AccuracyScore</code> + <code>ErrorType</code></td><td>not displayed; <code>ErrorType</code> filters Insertion words out of the pills</td></tr>
+          <tr><td>Syllable</td><td><code>Syllables[n].AccuracyScore</code></td><td>the number under each pill + its underline colour</td></tr>
+          <tr><td>Phoneme</td><td><code>Phonemes[n].AccuracyScore</code></td><td>the colour of each IPA letter</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <figcaption>All four come back in one response — the mapping lives in
+      <code>server/services/speech.ts</code>, and since v0.0226 the raw block is logged as
+      <code>[speech-assess]</code> on every scoring call.</figcaption>
+    </figure>
+  </section>
+
+  <p class="foot">Scores from your “dog” test (full text 96, syllable 94); phoneme values and the
+  miscue example are illustrative. Source: Azure Speech pronunciation assessment docs —
+  scripted assessment result parameters, en-US syllable groups.</p>
+</main>
+</body>
+</html>

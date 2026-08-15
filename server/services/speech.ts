@@ -5,7 +5,7 @@
  * without a Worker.
  */
 
-import { PRONOUNCE_PASS } from '../../shared/logic/flashcards';
+import { forgiveScore, PRONOUNCE_PASS, type PronounceCurve } from '../../shared/logic/flashcards';
 import type { PronounceAssessment, PronouncePhoneme, PronounceWord } from '../../shared/schemas';
 
 /**
@@ -82,8 +82,15 @@ export function pronunciationAssessmentHeader(referenceText: string): string {
  * FLAT on the NBest entry (not under a nested key). Silence and noise come back as
  * RecognitionStatus values like NoMatch / InitialSilenceTimeout — those become `noSpeech`
  * so the game offers a re-record instead of grading an empty clip.
+ *
+ * Every score in the DTO is Azure's RAW number. The forgiveness `curve` (/config → Pronounce
+ * scoring) is applied here only to the pass decision, and echoed back so clients apply the
+ * same curve to what they display — the details drawer keeps the raw numbers.
  */
-export function mapAzureAssessment(json: AzureShortAudio): PronounceAssessment {
+export function mapAzureAssessment(
+  json: AzureShortAudio,
+  curve: PronounceCurve = 'off',
+): PronounceAssessment {
   const best = json.RecognitionStatus === 'Success' ? json.NBest?.[0] : undefined;
   if (!best) {
     return {
@@ -95,6 +102,7 @@ export function mapAzureAssessment(json: AzureShortAudio): PronounceAssessment {
       correct: false,
       noSpeech: true,
       words: [],
+      curve,
     };
   }
   const accuracy = best.AccuracyScore ?? 0;
@@ -104,8 +112,9 @@ export function mapAzureAssessment(json: AzureShortAudio): PronounceAssessment {
     completeness: best.CompletenessScore ?? 0,
     pronScore: best.PronScore ?? 0,
     recognized: best.Lexical ?? '',
-    correct: accuracy >= PRONOUNCE_PASS,
+    correct: forgiveScore(accuracy, curve) >= PRONOUNCE_PASS,
     noSpeech: false,
+    curve,
     words: (best.Words ?? []).slice(0, MAX_ASSESSED_WORDS).map((w) => {
       const nested = nestPhonemes(w.Syllables ?? [], w.Phonemes ?? []);
       return {
