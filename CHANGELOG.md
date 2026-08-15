@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0221 — 2026-08-15
+Pronounce game: coloured IPA breakdown now replaces the header IPA line after scoring; the meaning is hidden until the clip is scored
+
 ## v0.0220 — 2026-08-14
 Calendar drag now snaps to 15 minutes, matching the event dialog's time picker, and snaps where the block lands so an off-grid time settles onto the grid.
 

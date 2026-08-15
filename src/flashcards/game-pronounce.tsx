@@ -276,8 +276,15 @@ export function PronounceGame({
             <MIcon name="volume" size={24} />
           </FIB>
         </div>
-        {w.ipa && <div style={{ color: 'var(--text-muted)' }}>{w.ipa}</div>}
-        <div style={{ color: 'var(--text-strong)' }}>{meaningOf(w)}</div>
+        {phase === 'scored' && result ? (
+          <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
+        ) : (
+          w.ipa && <div style={{ color: 'var(--text-muted)' }}>{w.ipa}</div>
+        )}
+        {/* The meaning is the reveal — it stays hidden until the clip has been scored. */}
+        {phase === 'scored' && result && (
+          <div style={{ color: 'var(--text-strong)' }}>{meaningOf(w)}</div>
+        )}
       </div>
 
       {phase === 'scored' && result ? (
@@ -291,7 +298,6 @@ export function PronounceGame({
           >
             {Math.round(result.accuracy)}%
           </div>
-          <PhonemeBreakdown result={result} />
           <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
             {clip && (
               <FBtn variant="ghost" onClick={playClip} iconLeft={<MIcon name="volume" size={16} />}>
@@ -394,24 +400,34 @@ const TIER_COLOR: Record<ReturnType<typeof phonemeTier>, string> = {
  * The sound-by-sound verdict: the reference word's IPA, each symbol coloured by how clearly it
  * came out — green / amber / red, with no legend. Insertion entries are words the student added
  * on top of the reference; they carry no reference phonemes, so they are skipped.
+ *
+ * Rendered in the word header, taking the static IPA line's place once the clip is scored —
+ * the same string in the same spot, just coloured. When the result carries no reference
+ * phonemes at all, the plain IPA stays so the header never loses its pronunciation line.
  */
-function PhonemeBreakdown({ result }: { result: PronounceAssessment }) {
+function PhonemeBreakdown({
+  result,
+  fallbackIpa,
+}: {
+  result: PronounceAssessment;
+  fallbackIpa?: string;
+}) {
   const phonemes = (result.words ?? [])
     .filter((wd) => wd.errorType !== 'Insertion')
     .flatMap((wd) => wd.phonemes);
-  if (phonemes.length === 0) return null;
+  if (phonemes.length === 0) {
+    return fallbackIpa ? <div style={{ color: 'var(--text-muted)' }}>{fallbackIpa}</div> : null;
+  }
   return (
-    <>
-      <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 1 }}>
-        /
-        {phonemes.map((p, i) => (
-          <span key={i} style={{ color: TIER_COLOR[phonemeTier(p.accuracy)] }}>
-            {p.ipa}
-          </span>
-        ))}
-        /
-      </div>
-    </>
+    <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 1 }}>
+      /
+      {phonemes.map((p, i) => (
+        <span key={i} style={{ color: TIER_COLOR[phonemeTier(p.accuracy)] }}>
+          {p.ipa}
+        </span>
+      ))}
+      /
+    </div>
   );
 }
 
