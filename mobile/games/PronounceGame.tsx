@@ -279,12 +279,7 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
         </View>
         {phase === 'scored' && result ? (
           <>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
-              <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
-              <IconButton label={t('fc_pron_details')} onPress={() => setDetails(true)}>
-                <BarChart3 size={20} color={th.color.textStrong} />
-              </IconButton>
-            </View>
+            <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
             <Muted style={{ textAlign: 'center' }}>{t('fc_pron_ipa_hint')}</Muted>
           </>
         ) : w.ipa ? (
@@ -318,8 +313,12 @@ export function PronounceGame({ words, roundSize, onExit, onFinish, endNote }: G
               flexWrap: 'wrap',
               gap: th.spacing[2],
               justifyContent: 'center',
+              alignItems: 'center',
             }}
           >
+            <IconButton label={t('fc_pron_details')} onPress={() => setDetails(true)}>
+              <BarChart3 size={20} color={th.color.textStrong} />
+            </IconButton>
             {clip ? (
               <Button
                 variant="ghost"

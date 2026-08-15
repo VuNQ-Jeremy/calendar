@@ -1722,6 +1722,23 @@ body {
     transform: translateX(100%);
   }
 }
+/* Closing plays the entrance in reverse; the component unmounts on the aside's animationend. */
+.drawer-scrim.is-closing {
+  animation: drawer-scrim-out var(--dur-slow) var(--ease-soft) forwards;
+}
+.drawer-scrim.is-closing .drawer {
+  animation: drawer-out var(--dur-slow) var(--ease-soft) forwards;
+}
+@keyframes drawer-scrim-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes drawer-out {
+  to {
+    transform: translateX(100%);
+  }
+}
 
 /* token search (type-ahead multi-select) */
 .tokensearch {

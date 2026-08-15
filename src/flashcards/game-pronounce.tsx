@@ -281,12 +281,7 @@ export function PronounceGame({
           </FIB>
         </div>
         {phase === 'scored' && result ? (
-          <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
-            <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
-            <FIB label={t('fc_pron_details')} size="sm" onClick={() => setDetails(true)}>
-              <MIcon name="chart" size={18} />
-            </FIB>
-          </div>
+          <PhonemeBreakdown result={result} fallbackIpa={w.ipa ?? undefined} />
         ) : (
           w.ipa && <div style={{ color: 'var(--text-muted)' }}>{w.ipa}</div>
         )}
@@ -307,7 +302,13 @@ export function PronounceGame({
           >
             {Math.round(forgiveScore(result.accuracy, result.curve ?? 'off'))}%
           </div>
-          <div className="m-row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div
+            className="m-row"
+            style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <FIB label={t('fc_pron_details')} size="md" onClick={() => setDetails(true)}>
+              <MIcon name="chart" size={18} />
+            </FIB>
             {clip && (
               <FBtn variant="ghost" onClick={playClip} iconLeft={<MIcon name="volume" size={16} />}>
                 {t('fc_pron_replay')}
@@ -526,13 +527,23 @@ function PronounceDetailsDrawer({
   onClose: () => void;
 }) {
   const { t } = useLang();
+  // Closing plays the slide-out first: `is-closing` runs the reverse animations (app.css) and
+  // the aside's animationend unmounts — with a timer fallback for reduced-motion environments,
+  // where the animation never fires.
+  const [closing, setClosing] = React.useState(false);
+  const close = React.useCallback(() => setClosing(true), []);
+  React.useEffect(() => {
+    if (!closing) return;
+    const timer = setTimeout(onClose, 500);
+    return () => clearTimeout(timer);
+  }, [closing, onClose]);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [close]);
 
   const clipScores: [string, number][] = [
     [t('fc_pron_accuracy'), result.accuracy],
@@ -543,15 +554,22 @@ function PronounceDetailsDrawer({
 
   return (
     <div
-      className="drawer-scrim"
+      className={`drawer-scrim${closing ? ' is-closing' : ''}`}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) close();
       }}
     >
-      <aside className="drawer" role="dialog" aria-modal="true">
+      <aside
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        onAnimationEnd={(e) => {
+          if (closing && e.target === e.currentTarget) onClose();
+        }}
+      >
         <div className="drawer__head">
           <h3 className="drawer__title">{word}</h3>
-          <FIB label={t('close')} size="sm" onClick={onClose}>
+          <FIB label={t('close')} size="sm" onClick={close}>
             <MIcon name="x" size={18} />
           </FIB>
         </div>
