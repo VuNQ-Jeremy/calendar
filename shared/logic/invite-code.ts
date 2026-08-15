@@ -12,8 +12,17 @@
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function makeInviteCode(): string {
+  // crypto.getRandomValues, not Math.random: redeeming a linked `Staff` invite attaches an
+  // account to an existing staff row, so a predictable code is a predictable admin login.
+  // V8's Math.random is xorshift128+ and its state is recoverable from a few observed outputs —
+  // and everyone who was legitimately handed a code has observed one.
+  //
+  // `% CHARS.length` is unbiased ONLY because 256 is a whole multiple of the alphabet size
+  // (32). Changing CHARS to a length that does not divide 256 silently reintroduces modulo
+  // bias toward the front of the alphabet; use rejection sampling if that ever happens.
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
   let s = '';
-  for (let i = 0; i < 6; i++) s += CHARS[Math.floor(Math.random() * CHARS.length)];
+  for (let i = 0; i < 6; i++) s += CHARS[bytes[i] % CHARS.length];
   return `${s.slice(0, 3)}-${s.slice(3)}`;
 }
 
