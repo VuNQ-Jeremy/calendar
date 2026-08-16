@@ -180,6 +180,7 @@ const ROUTE_FILES = new Map([
   ['api/profile', 'api.profile'],
   ['api/settings/theme', 'api.settings.theme'],
   ['api/settings/ui-prefs', 'api.settings.ui-prefs'],
+  ['api/settings/ui-prefs/me', 'api.settings.ui-prefs.me'],
   ['api/settings/notifications', 'api.settings.notifications'],
   ['api/settings/garden', 'api.settings.garden'],
   ['api/settings/parent-portal', 'api.settings.parent-portal'],

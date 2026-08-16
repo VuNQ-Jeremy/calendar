@@ -209,11 +209,12 @@ DOM-only. Materials open in a `WebView` when the platform can render them inline
 SVG) and are handed to Android's document viewers otherwise — including PDFs, which Android's
 WebView cannot display at all. See the comment at the top of `app/(app)/material/[id].tsx`.
 
-**Per-user notification preferences** (phase 6.5).
-The preferences are stored in the school-wide `settings` table, alongside the calendar theme and
-UI prefs, because that table is keyed by a single string. Per-account preferences need a
-`user_settings` table — a migration and a service, not a screen. Noted in
-`server/services/notif-prefs.ts` so the boundary is findable.
+**Per-user notification preferences** (phase 6.5) — SHIPPED, migration 0043.
+`user_settings(account_id, key, value)` holds one row per account, and reads resolve
+override → school-wide `settings` row → hardcoded default, which is how the calendar theme and the
+UI prefs moved over without any data being copied. The four notification switches are applied per
+recipient by both the sender and the forecast; `classLeadMinutes` and the Zalo audience stay
+school-wide, for reasons recorded in `server/services/notif-prefs.ts`.
 
 ## Things the phone does that the web cannot
 

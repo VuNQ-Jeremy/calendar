@@ -8,6 +8,8 @@ import * as materialsSvc from '../server/services/materials';
 import * as classMaterialsSvc from '../server/services/class-materials';
 import * as themeSvc from '../server/services/theme';
 import * as userSettingsSvc from '../server/services/user-settings';
+import * as uiPrefsSvc from '../server/services/ui-prefs';
+import * as notifPrefsSvc from '../server/services/notif-prefs';
 import * as feedbackSvc from '../server/services/feedback';
 import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
@@ -91,16 +93,44 @@ describe('classes service', () => {
 });
 
 describe('theme service', () => {
-  it('returns default theme when no settings', async () => {
-    const theme = await themeSvc.getTheme(db());
+  it('returns the default theme when nothing is stored', async () => {
+    const { accountId } = await seedStaffAccount(db(), {
+      email: `theme-a-${crypto.randomUUID()}@test.com`,
+      password: 'pw',
+    });
+    const theme = await themeSvc.getTheme(db(), accountId);
     expect(theme.bg).toBe('#FFFCF8');
     expect(theme.bgOpacity).toBe(0.12);
   });
 
-  it('persists theme patch', async () => {
-    await themeSvc.setTheme(db(), { bg: '#123456' });
-    const theme = await themeSvc.getTheme(db());
-    expect(theme.bg).toBe('#123456');
+  it('persists a patch against the account that made it', async () => {
+    const { accountId } = await seedStaffAccount(db(), {
+      email: `theme-b-${crypto.randomUUID()}@test.com`,
+      password: 'pw',
+    });
+    await themeSvc.setTheme(db(), accountId, { bg: '#123456' });
+    expect((await themeSvc.getTheme(db(), accountId)).bg).toBe('#123456');
+  });
+
+  it('one account recolouring does not recolour another — feedback F-19', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `theme-c-${stamp}@test.com`, password: 'pw' });
+    const b = await seedStaffAccount(db(), { email: `theme-d-${stamp}@test.com`, password: 'pw' });
+    await themeSvc.setTheme(db(), a.accountId, { bg: '#111111' });
+    expect((await themeSvc.getTheme(db(), a.accountId)).bg).toBe('#111111');
+    expect((await themeSvc.getTheme(db(), b.accountId)).bg).toBe('#FFFCF8');
+  });
+
+  it('a school-wide theme set before this shipped is still the starting point', async () => {
+    const { accountId } = await seedStaffAccount(db(), {
+      email: `theme-e-${crypto.randomUUID()}@test.com`,
+      password: 'pw',
+    });
+    await userSettingsSvc.writeSchoolJson(db(), 'theme', { bg: '#ABCDEF' });
+    const theme = await themeSvc.getTheme(db(), accountId);
+    expect(theme.bg).toBe('#ABCDEF');
+    // …and the untouched fields still come from DEFAULT_THEME.
+    expect(theme.header).toBe('#FDF6EC');
   });
 });
 
@@ -231,6 +261,69 @@ describe('user-settings service', () => {
       .from(userSettings)
       .where(eq(userSettings.accountId, a.accountId));
     expect(left).toHaveLength(0);
+  });
+});
+
+describe('ui-prefs service', () => {
+  it('an override wins over the school default, and only for that account', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `ui-a-${stamp}@test.com`, password: 'pw' });
+    const b = await seedStaffAccount(db(), { email: `ui-b-${stamp}@test.com`, password: 'pw' });
+
+    await uiPrefsSvc.setSchoolUiPrefs(db(), { scrollbar: 'inset' });
+    // Nobody has overridden yet: both follow the school.
+    expect((await uiPrefsSvc.getUiPrefs(db(), a.accountId)).scrollbar).toBe('inset');
+    expect((await uiPrefsSvc.getUiPrefs(db(), b.accountId)).scrollbar).toBe('inset');
+
+    await uiPrefsSvc.setUiPrefs(db(), a.accountId, { scrollbar: 'brand' });
+    expect((await uiPrefsSvc.getUiPrefs(db(), a.accountId)).scrollbar).toBe('brand');
+    expect((await uiPrefsSvc.getUiPrefs(db(), b.accountId)).scrollbar).toBe('inset');
+    // The System Config screen still shows the school's own value, not A's override.
+    expect((await uiPrefsSvc.getSchoolUiPrefs(db())).scrollbar).toBe('inset');
+    // The untouched half of the blob survives the patch.
+    expect((await uiPrefsSvc.getUiPrefs(db(), a.accountId)).mobileTabBar).toBe('pill');
+  });
+
+  it('clearing an override follows the school again, including later changes', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `ui-c-${stamp}@test.com`, password: 'pw' });
+
+    await uiPrefsSvc.setSchoolUiPrefs(db(), { scrollbar: 'slim' });
+    await uiPrefsSvc.setUiPrefs(db(), a.accountId, { scrollbar: 'ghost' });
+    expect((await uiPrefsSvc.getUiPrefs(db(), a.accountId)).scrollbar).toBe('ghost');
+
+    await uiPrefsSvc.clearUiPrefsOverride(db(), a.accountId);
+    expect((await uiPrefsSvc.getUiPrefs(db(), a.accountId)).scrollbar).toBe('slim');
+
+    // The point of deleting rather than copying: a LATER school change still reaches them.
+    await uiPrefsSvc.setSchoolUiPrefs(db(), { scrollbar: 'brand' });
+    expect((await uiPrefsSvc.getUiPrefs(db(), a.accountId)).scrollbar).toBe('brand');
+  });
+});
+
+describe('notif-prefs service', () => {
+  it('an account opting out does not opt the school out', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `np-a-${stamp}@test.com`, password: 'pw' });
+    const b = await seedStaffAccount(db(), { email: `np-b-${stamp}@test.com`, password: 'pw' });
+
+    await notifPrefsSvc.setSchoolNotifPrefs(db(), { classReminders: true, studyNudges: true });
+    await notifPrefsSvc.setNotifPrefs(db(), a.accountId, { studyNudges: false });
+
+    expect((await notifPrefsSvc.getNotifPrefs(db(), a.accountId)).studyNudges).toBe(false);
+    expect((await notifPrefsSvc.getNotifPrefs(db(), b.accountId)).studyNudges).toBe(true);
+    expect((await notifPrefsSvc.getSchoolNotifPrefs(db())).studyNudges).toBe(true);
+  });
+
+  it('the bulk read pairs the school baseline with the accounts that overrode it', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `np-c-${stamp}@test.com`, password: 'pw' });
+    await notifPrefsSvc.setSchoolNotifPrefs(db(), { gardenAlerts: true });
+    await notifPrefsSvc.setNotifPrefs(db(), a.accountId, { gardenAlerts: false });
+
+    const { school, byAccount } = await notifPrefsSvc.getNotifPrefsByAccount(db());
+    expect(school.gardenAlerts).toBe(true);
+    expect(byAccount.get(a.accountId)?.gardenAlerts).toBe(false);
   });
 });
 

@@ -7,7 +7,7 @@ import { previewLine, type ComposedPreview } from '../../shared/logic/preview';
 import * as classesSvc from './classes';
 import * as eventsSvc from './events';
 import * as gardenSvc from './garden';
-import { getNotifPrefs } from './notif-prefs';
+import { accountsWanting, getNotifPrefsByAccount, getSchoolNotifPrefs } from './notif-prefs';
 import * as previewSvc from './session-preview';
 import * as push from './push';
 import type { ExpoPushMessage } from './push';
@@ -263,7 +263,13 @@ export function gardenAlertPush(body: string): PushBody {
  * be notified for classes that are not happening, which is worse than not being notified at all.
  */
 export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
-  const prefs = await getNotifPrefs(db);
+  // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
+  // all and how wide its window is. `perAccount` decides who inside that window actually
+  // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
+  const [prefs, perAccount] = await Promise.all([
+    getSchoolNotifPrefs(db),
+    getNotifPrefsByAccount(db),
+  ]);
   if (!prefs.classReminders) return 0;
 
   const { dateIso, minutes: nowMin } = ictNow(at);
@@ -311,7 +317,11 @@ export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env
     const cls = classes.find((c) => c.id === ev.classId);
     if (!cls) continue;
 
-    const accountIds = await push.accountIdsForStudents(db, cls.studentIds);
+    const accountIds = accountsWanting(
+      perAccount,
+      await push.accountIdsForStudents(db, cls.studentIds),
+      'classReminders',
+    );
     const tokens = await push.tokensForAccounts(db, accountIds);
     // The key is marked done even when nobody is registered: the occurrence HAS been processed,
     // and re-processing it on the next tick would just re-find nobody.
@@ -349,7 +359,13 @@ export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env
 
 /** Job B — the daily digest. 01:00 UTC = 08:00 ICT, the `study` channel. */
 export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
-  const prefs = await getNotifPrefs(db);
+  // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
+  // all and how wide its window is. `perAccount` decides who inside that window actually
+  // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
+  const [prefs, perAccount] = await Promise.all([
+    getSchoolNotifPrefs(db),
+    getNotifPrefsByAccount(db),
+  ]);
   const { dateIso } = ictNow(at);
   const messages: ExpoPushMessage[] = [];
   const doneKeys: string[] = [];
@@ -379,7 +395,11 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
       const key = ledgerKey.study(s.id, weekKey);
       if (sent.has(key)) continue;
       doneKeys.push(key);
-      const accountIds = await push.accountIdsForStudents(db, [s.id]);
+      const accountIds = accountsWanting(
+        perAccount,
+        await push.accountIdsForStudents(db, [s.id]),
+        'studyNudges',
+      );
       const body = studyNudgePush();
       for (const to of await push.tokensForAccounts(db, accountIds)) {
         messages.push({ to, ...body });
@@ -411,7 +431,13 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
  * whole day, because the thing a teacher needs is the list, not five separate pings.
  */
 export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
-  const prefs = await getNotifPrefs(db);
+  // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
+  // all and how wide its window is. `perAccount` decides who inside that window actually
+  // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
+  const [prefs, perAccount] = await Promise.all([
+    getSchoolNotifPrefs(db),
+    getNotifPrefsByAccount(db),
+  ]);
   if (!prefs.previewEvening) return 0;
 
   const { dateIso } = ictNow(at);
@@ -450,7 +476,11 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
 
     const tokens = await push.tokensForAccounts(
       db,
-      await push.accountIdsForStudents(db, cls.studentIds),
+      accountsWanting(
+        perAccount,
+        await push.accountIdsForStudents(db, cls.studentIds),
+        'previewEvening',
+      ),
     );
     if (!tokens.length) continue;
 
@@ -467,7 +497,10 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
   if (!(await push.alreadySent(db, [staffKey])).has(staffKey)) {
     doneKeys.push(staffKey);
     const staffIds = (await db.select({ id: staff.id }).from(staff)).map((r) => r.id);
-    const tokens = await push.tokensForAccounts(db, await push.accountIdsForStaff(db, staffIds));
+    const tokens = await push.tokensForAccounts(
+      db,
+      accountsWanting(perAccount, await push.accountIdsForStaff(db, staffIds), 'previewEvening'),
+    );
     if (tokens.length) {
       const body = staffPreviewPush(occs.length, staffDaySummary(occs, classes, previews));
       for (const to of tokens) messages.push({ to, ...body });
@@ -526,7 +559,13 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
 export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<number> {
   const nowIso = at.toISOString();
   const sweep = await gardenSvc.runGardenSweep(db, nowIso);
-  const prefs = await getNotifPrefs(db);
+  // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
+  // all and how wide its window is. `perAccount` decides who inside that window actually
+  // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
+  const [prefs, perAccount] = await Promise.all([
+    getSchoolNotifPrefs(db),
+    getNotifPrefsByAccount(db),
+  ]);
   if (!prefs.gardenAlerts) return 0;
 
   const { dateIso } = ictNow(at);
@@ -545,7 +584,11 @@ export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<nu
     // Marked done even when the student has no device registered: the occurrence HAS been
     // processed, exactly as in the class sweep above.
     doneKeys.push(alert.key);
-    const accountIds = await push.accountIdsForStudents(db, [alert.studentId]);
+    const accountIds = accountsWanting(
+      perAccount,
+      await push.accountIdsForStudents(db, [alert.studentId]),
+      'gardenAlerts',
+    );
     const body = gardenAlertPush(alert.body);
     for (const to of await push.tokensForAccounts(db, accountIds)) {
       messages.push({ to, ...body });

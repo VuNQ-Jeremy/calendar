@@ -565,6 +565,7 @@ builds on 2026-07-28.
   to a class, so it is a feature rather than a fix. Recorded in
   [`docs/mobile-parity.md`](../mobile-parity.md) under "Knowingly not built". Its practical effect
   here is that push must be tested from a student account.
-- **Per-user notification preferences.** `settings` is a school-wide k/v store; per-user prefs need
-  a `user_settings` table. Documented at `server/services/notif-prefs.ts:6-14`.
+- ~~**Per-user notification preferences.**~~ Shipped in migration 0043: `user_settings` is the
+  per-account twin of the `settings` k/v store, and the school row is now the fallback rather than
+  the only value. Documented at `server/services/notif-prefs.ts`.
 - **iOS.** No `ios.googleServicesFile`, no APNs key, no Apple Developer account. Android only.

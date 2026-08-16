@@ -7,7 +7,7 @@ import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
 import * as gardenSvc from '../server/services/garden';
 import * as flashcardsSvc from '../server/services/flashcards';
-import { setNotifPrefs } from '../server/services/notif-prefs';
+import { setNotifPrefs, setSchoolNotifPrefs } from '../server/services/notif-prefs';
 import { runGardenAlerts, ledgerKey } from '../server/services/notify';
 import * as push from '../server/services/push';
 import {
@@ -99,6 +99,9 @@ async function seedStudentWithDevice(d, name, token) {
     platform: 'android',
     createdAt: new Date().toISOString(),
   });
+  // `accountId` rides along for the per-account preference tests (migration 0043); the older
+  // callers destructure the student fields and ignore it.
+  student.accountId = accountId;
   return student;
 }
 
@@ -150,7 +153,7 @@ describe('tick arithmetic', () => {
 describe('planNotifications() — class reminders', () => {
   it('predicts the tick, key, text and audience of a class reminder', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await seedStudentWithDevice(d, 'Mai', `ExponentPushToken[plan-${Date.now()}]`);
     const cls = await classesSvc.create(d, {
       name: `Plan Maths ${Date.now()}`,
@@ -182,7 +185,7 @@ describe('planNotifications() — class reminders', () => {
 
   it('puts a just-after-midnight class on the previous evening tick', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await seedStudentWithDevice(d, 'Nam', `ExponentPushToken[mid-${Date.now()}]`);
     const cls = await classesSvc.create(d, {
       name: `Midnight ${Date.now()}`,
@@ -205,7 +208,7 @@ describe('planNotifications() — class reminders', () => {
 
   it('marks a row already sent once the real job has run it', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await seedStudentWithDevice(d, 'Linh', `ExponentPushToken[sent-${Date.now()}]`);
     const cls = await classesSvc.create(d, {
       name: `Already ${Date.now()}`,
@@ -228,7 +231,7 @@ describe('planNotifications() — class reminders', () => {
 
   it('flags a class nobody can be reached about', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     // A student with no account, therefore no device.
     const student = await peopleSvc.createStudent(d, {
       name: 'Offline',
@@ -257,13 +260,13 @@ describe('planNotifications() — class reminders', () => {
 
   it('lists nothing for a job whose pref is off', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: false });
+    await setSchoolNotifPrefs(d, { classReminders: false });
     try {
       const plan = await planNotifications(d, undefined, utcForIct('2026-08-11', 10, 0));
       expect(rowsFor(plan, (p) => p.jobKind === 'class')).toEqual([]);
       expect(plan.prefs.classReminders).toBe(false);
     } finally {
-      await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+      await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     }
   });
 });
@@ -271,7 +274,7 @@ describe('planNotifications() — class reminders', () => {
 describe('planNotifications() — evening previews', () => {
   it('fires at 19:00 the day before, and adds one staff summary per day', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
     const student = await seedStudentWithDevice(d, 'Hoa', `ExponentPushToken[prev-${Date.now()}]`);
     const cls = await classesSvc.create(d, {
       name: `Preview ${Date.now()}`,
@@ -299,7 +302,7 @@ describe('planNotifications() — evening previews', () => {
 
   it('skips a day whose 19:00 slot has already gone', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
     const cls = await classesSvc.create(d, {
       name: `Past slot ${Date.now()}`,
       color: 'blue',
@@ -323,7 +326,7 @@ describe('planNotifications() — evening previews', () => {
 describe('planNotifications() — Zalo', () => {
   it('plans no Zalo rows without a bot token, and parent rows with one', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await seedStudentWithDevice(
       d,
       'Zalo Kid',
@@ -372,7 +375,7 @@ describe('planNotifications() — Zalo', () => {
 
   it('reports a class group chat as one recipient rather than each family', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
     const a = await seedStudentWithDevice(d, 'Group A', `ExponentPushToken[ga-${Date.now()}]`);
     const b = await seedStudentWithDevice(d, 'Group B', `ExponentPushToken[gb-${Date.now()}]`);
     const cls = await classesSvc.create(d, {
@@ -410,7 +413,7 @@ describe('planNotifications() — Zalo', () => {
 describe('planNotifications() — study nudges', () => {
   it('names a quiet student under the next run’s half-month bucket', async () => {
     const d = db();
-    await setNotifPrefs(d, { studyNudges: true });
+    await setSchoolNotifPrefs(d, { studyNudges: true });
     try {
       const student = await seedStudentWithDevice(d, 'Quiet', `ExponentPushToken[q-${Date.now()}]`);
       // Planning at 10:00 on the 11th: the next 08:00 run is the 12th, which is bucket A.
@@ -423,13 +426,34 @@ describe('planNotifications() — study nudges', () => {
       expect(row.fireAtIct).toBe('2026-08-12T08:00');
       expect(row.body).toBe('A few minutes of vocabulary?');
     } finally {
-      await setNotifPrefs(d, { studyNudges: false });
+      await setSchoolNotifPrefs(d, { studyNudges: false });
+    }
+  });
+
+  it('a student who switched nudges off is planned but has no device on the row', async () => {
+    const d = db();
+    await setSchoolNotifPrefs(d, { studyNudges: true });
+    try {
+      const token = `ExponentPushToken[optout-${Date.now()}]`;
+      const student = await seedStudentWithDevice(d, 'Opted out', token);
+      await setNotifPrefs(d, student.accountId, { studyNudges: false });
+
+      const plan = await planNotifications(d, undefined, utcForIct('2026-08-11', 10, 0));
+      const row = rowsFor(plan, (p) => p.key === ledgerKey.study(student.id, '2026-08-A'))[0];
+
+      // The school still wants nudges, so the row is still planned — but this account is not on
+      // it, which is what "per-recipient preference" has to mean for the forecast to be honest.
+      expect(row).toBeDefined();
+      expect(row.deliverable).toBe(false);
+      expect(row.target.devices).toBe(0);
+    } finally {
+      await setSchoolNotifPrefs(d, { studyNudges: false });
     }
   });
 
   it('uses bucket B for a run on or after the 15th', async () => {
     const d = db();
-    await setNotifPrefs(d, { studyNudges: true });
+    await setSchoolNotifPrefs(d, { studyNudges: true });
     try {
       const student = await seedStudentWithDevice(
         d,
@@ -441,13 +465,13 @@ describe('planNotifications() — study nudges', () => {
         1,
       );
     } finally {
-      await setNotifPrefs(d, { studyNudges: false });
+      await setSchoolNotifPrefs(d, { studyNudges: false });
     }
   });
 
   it('leaves out a student who has played recently', async () => {
     const d = db();
-    await setNotifPrefs(d, { studyNudges: true });
+    await setSchoolNotifPrefs(d, { studyNudges: true });
     try {
       const student = await seedStudentWithDevice(
         d,
@@ -477,7 +501,7 @@ describe('planNotifications() — study nudges', () => {
         rowsFor(plan, (p) => p.jobKind === 'digest' && p.subject.studentName === 'Active'),
       ).toEqual([]);
     } finally {
-      await setNotifPrefs(d, { studyNudges: false });
+      await setSchoolNotifPrefs(d, { studyNudges: false });
     }
   });
 });
@@ -540,7 +564,7 @@ describe('forecastGardenSweep()', () => {
 
   it('surfaces a predicted penalty as a garden row in the plan', async () => {
     const d = db();
-    await setNotifPrefs(d, { gardenAlerts: true });
+    await setSchoolNotifPrefs(d, { gardenAlerts: true });
     const student = await seedStudentWithDevice(
       d,
       'Garden Kid',
@@ -584,7 +608,7 @@ describe('forecastGardenSweep()', () => {
 describe('planNotifications() writes nothing at all', () => {
   it('leaves the ledger untouched and sends no message', async () => {
     const d = db();
-    await setNotifPrefs(d, {
+    await setSchoolNotifPrefs(d, {
       classReminders: true,
       classLeadMinutes: 30,
       previewEvening: true,
@@ -622,7 +646,7 @@ describe('planNotifications() writes nothing at all', () => {
       expect(sent).toEqual([]);
       expect(globalThis.fetch).not.toHaveBeenCalled();
     } finally {
-      await setNotifPrefs(d, {
+      await setSchoolNotifPrefs(d, {
         classReminders: true,
         classLeadMinutes: 30,
         previewEvening: true,
@@ -651,7 +675,7 @@ describe('planNotifications() writes nothing at all', () => {
 describe('sendPlannedNotification()', () => {
   /** A class one week out, with one enrolled device — one planned push row, not yet due. */
   async function seedFutureClass(d, label) {
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await seedStudentWithDevice(
       d,
       label,
@@ -713,7 +737,7 @@ describe('sendPlannedNotification()', () => {
 
   it('refuses a row with nobody to send to, and leaves the key unburned', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await peopleSvc.createStudent(d, {
       name: 'No device',
       email: `nd${crypto.randomUUID()}@example.test`,
@@ -743,7 +767,7 @@ describe('sendPlannedNotification()', () => {
 
   it('charges the stage before announcing it, so a garden penalty is not a lie', async () => {
     const d = db();
-    await setNotifPrefs(d, { gardenAlerts: true });
+    await setSchoolNotifPrefs(d, { gardenAlerts: true });
     const student = await seedStudentWithDevice(
       d,
       'Penalty',
@@ -797,7 +821,7 @@ describe('sendPlannedNotification()', () => {
 
   it('sends a Zalo row over Zalo, not over push', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const student = await seedStudentWithDevice(
       d,
       'ZaloSend',
@@ -914,7 +938,7 @@ describe('parseLedgerKey()', () => {
 describe('runGardenAlerts() still works after the sweep split', () => {
   it('sends an alert for a wilting plant exactly once', async () => {
     const d = db();
-    await setNotifPrefs(d, { gardenAlerts: true });
+    await setSchoolNotifPrefs(d, { gardenAlerts: true });
     const student = await seedStudentWithDevice(d, 'Wilting', `ExponentPushToken[w-${Date.now()}]`);
     // Plant last cared for long enough ago that today is its first wilted day.
     const settings = await gardenSvc.getGardenSettings(d);

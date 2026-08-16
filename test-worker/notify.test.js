@@ -4,7 +4,7 @@ import { createDb } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
-import { setNotifPrefs } from '../server/services/notif-prefs';
+import { setSchoolNotifPrefs } from '../server/services/notif-prefs';
 import { runClassReminders } from '../server/services/notify';
 import { accounts, pushTokens } from '../server/db/schema';
 
@@ -80,7 +80,7 @@ function utcForIct(dateIso, hh, mm) {
 describe('runClassReminders()', () => {
   it('notifies each enrolled device once, however many times the cron ticks', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
 
     const student = await seedStudentWithDevice(d, 'Mai', 'ExponentPushToken[mai]');
     const cls = await classesSvc.create(d, {
@@ -113,7 +113,7 @@ describe('runClassReminders()', () => {
 
   it('fires again on the next occurrence of a weekly class', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
 
     const student = await seedStudentWithDevice(d, 'Nam', 'ExponentPushToken[nam]');
     const cls = await classesSvc.create(d, {
@@ -139,7 +139,7 @@ describe('runClassReminders()', () => {
 
   it('sends nothing when class reminders are switched off', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: false });
+    await setSchoolNotifPrefs(d, { classReminders: false });
 
     const student = await seedStudentWithDevice(d, 'Linh', 'ExponentPushToken[linh]');
     const cls = await classesSvc.create(d, {
@@ -161,7 +161,7 @@ describe('runClassReminders()', () => {
 
   it('ignores a class that is further away than the lead time', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 15 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 15 });
 
     const student = await seedStudentWithDevice(d, 'Tuan', 'ExponentPushToken[tuan]');
     const cls = await classesSvc.create(d, {

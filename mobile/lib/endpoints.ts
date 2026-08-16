@@ -445,7 +445,10 @@ export const settings = {
     }),
   updateUiPrefs: (patch: Partial<UiPrefsInput>) =>
     apiFetch<UiPrefs>('/api/settings/ui-prefs', { method: 'PATCH', body: patch }),
-  /** What the cron jobs may send. School-wide today — see server/services/notif-prefs.ts. */
+  /**
+   * What the cron jobs may send YOU. Per account since migration 0043; `classLeadMinutes` is
+   * still school-wide — see server/services/notif-prefs.ts.
+   */
   getNotifPrefs: () => apiFetch<NotifPrefsInput>('/api/settings/notifications'),
   updateNotifPrefs: (patch: Partial<NotifPrefsInput>) =>
     apiFetch<NotifPrefsInput>('/api/settings/notifications', { method: 'PATCH', body: patch }),

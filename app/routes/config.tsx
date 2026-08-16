@@ -82,7 +82,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     levelsSvc.list(db),
     classLevelsSvc.list(db),
     subjectsSvc.list(db),
-    uiPrefsSvc.getUiPrefs(db),
+    // The SCHOOL default: this card is System Config, not a personal preference. An account's
+    // own override (if any) lives in `user_settings` and is applied by the _app.tsx layout.
+    uiPrefsSvc.getSchoolUiPrefs(db),
     parentPortalSvc.getParentPortal(db),
     tuitionSvc.getTuitionSettings(db),
     rankingsSvc.getRankingWeights(db),
@@ -500,7 +502,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       if (!parsed.success) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
-      const uiPrefs = await uiPrefsSvc.setUiPrefs(db, parsed.data);
+      const uiPrefs = await uiPrefsSvc.setSchoolUiPrefs(db, parsed.data);
       return { ok: true, uiPrefs };
     }
 

@@ -5,7 +5,7 @@ import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
 import * as previewSvc from '../server/services/session-preview';
-import { setNotifPrefs } from '../server/services/notif-prefs';
+import { setSchoolNotifPrefs } from '../server/services/notif-prefs';
 import { runClassReminders, runEveningPreview } from '../server/services/notify';
 import { accounts, pushTokens } from '../server/db/schema';
 
@@ -98,7 +98,7 @@ function utcForIct(dateIso, hh, mm) {
 describe('runEveningPreview()', () => {
   it("sends tomorrow's preview once, however many times the job is re-run", async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
 
     const student = await seedStudentWithDevice(d, 'Mai', 'ExponentPushToken[p-mai]');
     const cls = await classesSvc.create(d, {
@@ -139,7 +139,7 @@ describe('runEveningPreview()', () => {
 
   it('fires again for the next occurrence of a weekly class', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
 
     const student = await seedStudentWithDevice(d, 'Nam', 'ExponentPushToken[p-nam]');
     const cls = await classesSvc.create(d, {
@@ -164,7 +164,7 @@ describe('runEveningPreview()', () => {
 
   it('still sends when nobody wrote a preview, with a fallback body', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
 
     const student = await seedStudentWithDevice(d, 'Linh', 'ExponentPushToken[p-linh]');
     const cls = await classesSvc.create(d, {
@@ -186,7 +186,7 @@ describe('runEveningPreview()', () => {
 
   it('sends nothing when the evening preview is switched off', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: false });
+    await setSchoolNotifPrefs(d, { previewEvening: false });
 
     const student = await seedStudentWithDevice(d, 'Tuan', 'ExponentPushToken[p-tuan]');
     const cls = await classesSvc.create(d, {
@@ -208,7 +208,7 @@ describe('runEveningPreview()', () => {
 
   it('gives staff one summary of the whole day, not one message per class', async () => {
     const d = db();
-    await setNotifPrefs(d, { previewEvening: true });
+    await setSchoolNotifPrefs(d, { previewEvening: true });
 
     await seedStaffWithDevice(d, 'Cô Hương', 'ExponentPushToken[p-staff]');
     const a = await classesSvc.create(d, { name: 'Lớp A', color: 'green', studentIds: [] });
@@ -246,7 +246,7 @@ describe('runEveningPreview()', () => {
 describe('runClassReminders() with a preview', () => {
   it("appends the teacher's focus text to the 30-minute reminder", async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
 
     const student = await seedStudentWithDevice(d, 'Hà', 'ExponentPushToken[r-ha]');
     const cls = await classesSvc.create(d, {
@@ -275,7 +275,7 @@ describe('runClassReminders() with a preview', () => {
 
   it('leaves the reminder body alone when there is no preview', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
 
     const student = await seedStudentWithDevice(d, 'Bảo', 'ExponentPushToken[r-bao]');
     const cls = await classesSvc.create(d, {

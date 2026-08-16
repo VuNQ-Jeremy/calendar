@@ -248,5 +248,7 @@ paired to one bot is invisible to another, so switching bots means everyone re-p
 - **A student link is ambiguous** — the app cannot tell whether the parent or the student redeemed
   the code. That is why fee slips demand a `parents` record. If entering one per family proves too
   much friction, the alternative is to ask at pairing time who is redeeming and record it.
-- **No per-family preferences.** Notification settings are school-wide (`notif-prefs.ts`); a
-  family can only opt out by unlinking.
+- **No per-family preferences.** Push recipients get their own preferences since migration 0043,
+  but a Zalo chat is paired to a parent record or a class group — neither of which is an account —
+  so there is nothing to hang a preference on. Zalo still follows the school-wide values
+  (`notif-prefs.ts`), and a family can only opt out by unlinking.

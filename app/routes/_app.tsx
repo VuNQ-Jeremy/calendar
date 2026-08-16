@@ -75,7 +75,7 @@ function parentMayOpen(path: string, portalOn: boolean): boolean {
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireUser(request, env);
+  const { user, kind, account } = await requireUser(request, env);
   const db = createDb(env);
   // Only parents pay for this read; for everyone else the portal flag is not part of the answer.
   const parentPortal = kind === 'parent' ? (await getParentPortal(db)).enabled : false;
@@ -87,7 +87,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   // Anyone who is not staff gets the light payload: the badge counts are a staff view of
   // the school, and the queries behind them read the whole roster.
   if (kind !== 'staff') {
-    const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
+    const uiPrefs = await uiPrefsSvc.getUiPrefs(db, account.id);
     // The one badge a student has: how many vocabulary words have come round for review today.
     // Wrapped because a deploy can land before its migration and the app shell must not 500 over
     // a badge — same contract as the garden's reads on /vocabulary.
@@ -119,7 +119,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     await Promise.all([
       invitesSvc.countUnused(db),
       feedbackSvc.countUnresolved(db),
-      uiPrefsSvc.getUiPrefs(db),
+      uiPrefsSvc.getUiPrefs(db, account.id),
       testsSvc.attemptsSummary(db),
       getCheckinSettings(db),
     ]);

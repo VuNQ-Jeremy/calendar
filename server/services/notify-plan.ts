@@ -16,7 +16,14 @@ import { previewLine } from '../../shared/logic/preview';
 import * as classesSvc from './classes';
 import * as eventsSvc from './events';
 import * as gardenSvc from './garden';
-import { getNotifPrefs, type NotifPrefs } from './notif-prefs';
+import {
+  getNotifPrefsByAccount,
+  getSchoolNotifPrefs,
+  wantsNotif,
+  type NotifPrefs,
+  type NotifSwitch,
+  type ResolvedNotifPrefs,
+} from './notif-prefs';
 import * as previewSvc from './session-preview';
 import * as push from './push';
 import * as zalo from './zalo';
@@ -201,7 +208,20 @@ type AudienceIndex = {
    * how a preview and its delivery would end up disagreeing about who gets it.
    */
   tokensByStudentId: Map<string, string[]>;
+  /**
+   * Which account owns each student's devices, so a per-student row can find that student's
+   * notification preferences. `tokensByStudentId` deliberately flattens several accounts'
+   * devices together; this keeps the identity the preference filter needs.
+   */
+  accountIdByStudentId: Map<string, string>;
+  /**
+   * Staff devices grouped by owner. `staffTokens` below is the same set flattened, kept for the
+   * counts the forecast displays and for rows that are not per-recipient gated.
+   */
+  staffTokensByAccount: Map<string, string[]>;
   staffTokens: string[];
+  /** The school baseline plus every account that has overridden it (migration 0043). */
+  prefs: ResolvedNotifPrefs;
   staffNames: string[];
   parentChatsByStudentId: Map<string, string[]>;
   groupChatByClassId: Map<string, string>;
@@ -217,20 +237,22 @@ type AudienceIndex = {
 };
 
 async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
-  const [accountRows, tokenRows, studentRows, staffRows, links, parentLinks] = await Promise.all([
-    db
-      .select({ id: accounts.id, studentId: accounts.studentId, staffId: accounts.staffId })
-      .from(accounts),
-    db
-      .select({ accountId: pushTokens.accountId, expoToken: pushTokens.expoToken })
-      .from(pushTokens),
-    db.select({ id: students.id, name: students.name }).from(students),
-    db.select({ id: staff.id, name: staff.name }).from(staff),
-    zalo.listLinks(db),
-    db
-      .select({ parentId: parentStudents.parentId, studentId: parentStudents.studentId })
-      .from(parentStudents),
-  ]);
+  const [accountRows, tokenRows, studentRows, staffRows, links, parentLinks, prefs] =
+    await Promise.all([
+      db
+        .select({ id: accounts.id, studentId: accounts.studentId, staffId: accounts.staffId })
+        .from(accounts),
+      db
+        .select({ accountId: pushTokens.accountId, expoToken: pushTokens.expoToken })
+        .from(pushTokens),
+      db.select({ id: students.id, name: students.name }).from(students),
+      db.select({ id: staff.id, name: staff.name }).from(staff),
+      zalo.listLinks(db),
+      db
+        .select({ parentId: parentStudents.parentId, studentId: parentStudents.studentId })
+        .from(parentStudents),
+      getNotifPrefsByAccount(db),
+    ]);
 
   const tokensByAccount = new Map<string, string[]>();
   for (const t of tokenRows) {
@@ -238,9 +260,15 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
     tokensByAccount.set(t.accountId, [...(tokensByAccount.get(t.accountId) ?? []), t.expoToken]);
   }
 
+  // `accountIdByStudentId` is built from every account, not only the ones with a device: a
+  // student who has switched their nudges off but has no phone registered must still resolve to
+  // their own preferences, or a later device registration would silently ignore the choice.
+  const accountIdByStudentId = new Map<string, string>();
   const tokensByStudentId = new Map<string, string[]>();
+  const staffTokensByAccount = new Map<string, string[]>();
   const staffTokens: string[] = [];
   for (const a of accountRows) {
+    if (a.studentId) accountIdByStudentId.set(a.studentId, a.id);
     const tokens = tokensByAccount.get(a.id) ?? [];
     if (!tokens.length) continue;
     if (a.studentId)
@@ -248,7 +276,10 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
         ...(tokensByStudentId.get(a.studentId) ?? []),
         ...tokens,
       ]);
-    else if (a.staffId) staffTokens.push(...tokens);
+    else if (a.staffId) {
+      staffTokensByAccount.set(a.id, [...(staffTokensByAccount.get(a.id) ?? []), ...tokens]);
+      staffTokens.push(...tokens);
+    }
   }
 
   // The two routes `zalo.chatsForParentsOfStudents` unions: a chat paired to a parent RECORD that
@@ -291,7 +322,10 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
 
   return {
     tokensByStudentId,
+    accountIdByStudentId,
+    staffTokensByAccount,
     staffTokens,
+    prefs,
     staffNames: staffRows.map((s) => s.name),
     parentChatsByStudentId,
     groupChatByClassId,
@@ -313,13 +347,35 @@ async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
  */
 export type Recipients = { tokens: string[]; chatIds: string[] };
 
-/** Push target for a class roster: the students who could actually be reached. */
+// ---- Per-recipient preference filtering (migration 0043) ----
+
+/** Every staff device whose owner still wants `sw`. */
+function staffTokensWanting(idx: AudienceIndex, sw: NotifSwitch): string[] {
+  const out: string[] = [];
+  for (const [accountId, tokens] of idx.staffTokensByAccount) {
+    if (wantsNotif(idx.prefs, accountId, sw)) out.push(...tokens);
+  }
+  return out;
+}
+
+/** A student's devices, if that student still wants `sw`. */
+function studentTokensWanting(idx: AudienceIndex, studentId: string, sw: NotifSwitch): string[] {
+  if (!wantsNotif(idx.prefs, idx.accountIdByStudentId.get(studentId), sw)) return [];
+  return idx.tokensByStudentId.get(studentId) ?? [];
+}
+
+/**
+ * Push target for a class roster: the students who could actually be reached AND still want this
+ * kind of message. Someone who has switched it off drops out of both the token list and the
+ * count, so the forecast shows what will really be sent rather than what the roster allows.
+ */
 function studentsTarget(
   studentIds: string[],
   idx: AudienceIndex,
+  sw: NotifSwitch,
 ): { target: PlannedTarget; tokens: string[] } {
-  const withDevice = studentIds.filter((id) => (idx.tokensByStudentId.get(id) ?? []).length > 0);
-  const tokens = studentIds.flatMap((id) => idx.tokensByStudentId.get(id) ?? []);
+  const withDevice = studentIds.filter((id) => studentTokensWanting(idx, id, sw).length > 0);
+  const tokens = studentIds.flatMap((id) => studentTokensWanting(idx, id, sw));
   return {
     target: {
       kind: 'students',
@@ -393,8 +449,10 @@ async function buildPlan(
   const { dateIso: nowDateIso, minutes: nowMin } = ictNow(at);
   const zaloEnabled = !!env && zalo.isEnabled(env);
 
+  // The SCHOOL baseline. It decides whether each job runs at all and what the lead window is;
+  // who inside it actually hears about a row is decided per account, in the index's filters.
   const [prefs, idx, classes] = await Promise.all([
-    getNotifPrefs(db),
+    getSchoolNotifPrefs(db),
     buildAudienceIndex(db),
     classesSvc.list(db),
   ]);
@@ -492,7 +550,7 @@ function classRows(
       date: ev.date,
       start: ev.start,
     };
-    const { target, tokens } = studentsTarget(cls.studentIds, ctx.idx);
+    const { target, tokens } = studentsTarget(cls.studentIds, ctx.idx, 'classReminders');
     const composed = classReminderPush(cls, ev, focus);
     const key = ledgerKey.class(ev.id, ev.date);
     rec.set(key, { tokens, chatIds: [] });
@@ -557,7 +615,7 @@ function previewRows(
     const fireAtIct = ictStamp(addDaysIso(ev.date, -1), PREVIEW_MINUTE);
     const line = previewLine(previews.get(previewSvc.previewKey(ev.id, ev.date)) ?? EMPTY_PREVIEW);
     const subject = { className: cls.name, eventTitle: ev.title, date: ev.date, start: ev.start };
-    const { target, tokens } = studentsTarget(cls.studentIds, ctx.idx);
+    const { target, tokens } = studentsTarget(cls.studentIds, ctx.idx, 'previewEvening');
     const composed = previewPush(cls, ev, line);
     const key = ledgerKey.preview(ev.id, ev.date);
     rec.set(key, { tokens, chatIds: [] });
@@ -601,7 +659,11 @@ function previewRows(
     const composed = staffPreviewPush(dayOccs.length, summary);
     const subject = { date };
     const key = ledgerKey.previewStaff(date);
-    rec.set(key, { tokens: ctx.idx.staffTokens, chatIds: [] });
+    // Only the staff who still want the evening preview. `staffNames` stays the whole staff
+    // list: it labels who the digest is ABOUT, and it carries no per-account identity to filter
+    // by — `devices` below is the number that actually changes when someone opts out.
+    const staffPreviewTokens = staffTokensWanting(ctx.idx, 'previewEvening');
+    rec.set(key, { tokens: staffPreviewTokens, chatIds: [] });
     out.push({
       jobKind: 'preview-staff',
       channel: 'push',
@@ -609,11 +671,11 @@ function previewRows(
       fireAtIct,
       exactFire: true,
       alreadySent: false,
-      deliverable: ctx.idx.staffTokens.length > 0,
+      deliverable: staffPreviewTokens.length > 0,
       target: {
         kind: 'staff',
         count: ctx.idx.staffNames.length,
-        devices: ctx.idx.staffTokens.length,
+        devices: staffPreviewTokens.length,
         names: ctx.idx.staffNames.slice(0, NAME_CAP),
       },
       title: composed.title,
@@ -672,7 +734,7 @@ async function digestRows(
   const out: PlannedNotification[] = [];
   for (const [studentId, name] of ctx.idx.studentNameById) {
     if (active.has(studentId)) continue;
-    const tokens = ctx.idx.tokensByStudentId.get(studentId) ?? [];
+    const tokens = studentTokensWanting(ctx.idx, studentId, 'studyNudges');
     const key = ledgerKey.study(studentId, bucket);
     rec.set(key, { tokens, chatIds: [] });
     out.push({
@@ -716,7 +778,7 @@ async function gardenRows(
   const alerts = gardenAlertsFrom(sweep, runDateIso);
 
   return alerts.map((a) => {
-    const tokens = ctx.idx.tokensByStudentId.get(a.studentId) ?? [];
+    const tokens = studentTokensWanting(ctx.idx, a.studentId, 'gardenAlerts');
     const name = ctx.idx.studentNameById.get(a.studentId) ?? a.studentId;
     const composed = gardenAlertPush(a.body);
     rec.set(a.key, { tokens, chatIds: [] });

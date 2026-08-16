@@ -1158,15 +1158,49 @@ const settings: PathDoc[] = [
         method: 'get',
         auth: 'any',
         summary: 'Scrollbar and tab-bar styles',
-        description: 'Readable by everyone — the phone needs it to draw its tab bar.',
+        description:
+          'Readable by everyone — the phone needs it to draw its tab bar. Answers with what ' +
+          'the CALLER should apply: their own override if they have one, otherwise the school ' +
+          'default.',
         responses: { 200: ok(c.UiPrefs, 'Both styles, settled.') },
       },
       {
         method: 'patch',
         auth: 'admin',
-        summary: 'Change the UI styles',
+        summary: 'Change the school-wide UI styles',
+        description:
+          'Sets the default every account sees until it overrides it. Admin-only because the ' +
+          'blast radius is the whole school; for a personal override use ' +
+          '`/api/settings/ui-prefs/me`.',
         request: { schema: UiPrefsInput, patch: true },
         responses: { 200: ok(c.UiPrefs, 'The merged prefs.') },
+      },
+    ],
+  },
+  {
+    path: '/api/settings/ui-prefs/me',
+    routePattern: 'api/settings/ui-prefs/me',
+    tag: 'Settings',
+    operations: [
+      {
+        method: 'patch',
+        auth: 'any',
+        summary: 'Override the UI styles for yourself',
+        description:
+          'Stores a personal override that wins over the school default. Open to any signed-in ' +
+          'account because the blast radius is one account. Read it back from ' +
+          '`GET /api/settings/ui-prefs`, which already resolves the override.',
+        request: { schema: UiPrefsInput, patch: true },
+        responses: { 200: ok(c.UiPrefs, 'The merged prefs, as they now apply to you.') },
+      },
+      {
+        method: 'delete',
+        auth: 'any',
+        summary: 'Follow the school default again',
+        description:
+          'Removes the override rather than copying the current school values into it, so ' +
+          'later changes to the school default keep reaching you.',
+        responses: { 200: ok(c.UiPrefs, 'The school default, now in force for you.') },
       },
     ],
   },

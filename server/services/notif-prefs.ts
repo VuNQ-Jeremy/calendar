@@ -1,8 +1,13 @@
-import { eq } from 'drizzle-orm';
-import { settings } from '../db/schema';
 import type { Db } from '../db/index';
 import type { NotifPrefsInput } from '../../shared/schemas';
 import { record } from './audit';
+import {
+  readJson,
+  readJsonForAll,
+  readSchoolJson,
+  writeJson,
+  writeSchoolJson,
+} from './user-settings';
 
 function sameJson(a: unknown, b: unknown): boolean {
   try {
@@ -13,13 +18,18 @@ function sameJson(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Notification preferences, in the same `settings` k/v table that holds the calendar theme and
- * the UI prefs — and, like those, school-wide rather than per-user.
+ * Notification preferences — per account since migration 0043, with the school-wide `settings`
+ * row surviving as the default for anyone who has never chosen.
  *
- * That is a real limitation and it is deliberate for now: `settings` is keyed by a single string
- * and the app has one school in it. Per-user preferences need a `user_settings` table keyed on
- * account id, which is a migration and a service, not a screen. Written down here so the next
- * person changing this knows it is a known boundary rather than an oversight.
+ * The split between what is personal and what is not is not arbitrary. The four booleans are
+ * "do I want to receive this?", so the cron applies them per recipient (see notify-plan.ts).
+ * `classLeadMinutes` is not a preference in the same sense — it decides WHEN a sweep fires, and
+ * the ledger keys that make the cron idempotent (`class:<eventId>:<date>`, notify.ts) carry no
+ * recipient, so a per-person lead would mean a per-person ledger. It is read through
+ * `getSchoolNotifPrefs` and stays school-wide.
+ *
+ * The Zalo audience — parents and class group chats — are not accounts at all, so they keep the
+ * school-wide values for the same structural reason.
  */
 
 export type NotifPrefs = NotifPrefsInput;
@@ -33,34 +43,96 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   gardenAlerts: true,
 };
 
-const KEY = 'notif-prefs';
+export const NOTIF_PREFS_KEY = 'notif-prefs';
 
-export async function getNotifPrefs(db: Db): Promise<NotifPrefs> {
-  const rows = await db.select().from(settings).where(eq(settings.key, KEY));
-  const row = rows[0];
-  if (!row) return { ...DEFAULT_NOTIF_PREFS };
-  try {
-    return { ...DEFAULT_NOTIF_PREFS, ...(JSON.parse(row.value) as Partial<NotifPrefs>) };
-  } catch {
-    return { ...DEFAULT_NOTIF_PREFS };
-  }
+export async function getNotifPrefs(db: Db, accountId: string): Promise<NotifPrefs> {
+  return readJson(db, accountId, NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS);
 }
 
-export async function setNotifPrefs(db: Db, patch: Partial<NotifPrefs>): Promise<NotifPrefs> {
-  const current = await getNotifPrefs(db);
+export async function setNotifPrefs(
+  db: Db,
+  accountId: string,
+  patch: Partial<NotifPrefs>,
+): Promise<NotifPrefs> {
+  const current = await getNotifPrefs(db, accountId);
   const next = { ...current, ...patch };
-  await db
-    .insert(settings)
-    .values({ key: KEY, value: JSON.stringify(next) })
-    .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+  await writeJson(db, accountId, NOTIF_PREFS_KEY, next);
   if (!sameJson(current, next)) {
     record({
       action: 'update',
       entityType: 'setting',
-      entityId: KEY,
+      entityId: NOTIF_PREFS_KEY,
       before: current,
       after: next,
     });
   }
   return next;
+}
+
+/** The school-wide baseline: what a recipient with no preferences of their own gets. */
+export async function getSchoolNotifPrefs(db: Db): Promise<NotifPrefs> {
+  return readSchoolJson(db, NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS);
+}
+
+export async function setSchoolNotifPrefs(db: Db, patch: Partial<NotifPrefs>): Promise<NotifPrefs> {
+  const current = await getSchoolNotifPrefs(db);
+  const next = { ...current, ...patch };
+  await writeSchoolJson(db, NOTIF_PREFS_KEY, next);
+  if (!sameJson(current, next)) {
+    record({
+      action: 'update',
+      entityType: 'setting',
+      entityId: NOTIF_PREFS_KEY,
+      before: current,
+      after: next,
+    });
+  }
+  return next;
+}
+
+/**
+ * Everything the cron needs, in two queries: the school baseline, and every account that has
+ * overridden it. Never one SELECT per recipient — a sweep touches the whole school.
+ */
+export async function getNotifPrefsByAccount(db: Db): Promise<ResolvedNotifPrefs> {
+  const [school, byAccount] = await Promise.all([
+    getSchoolNotifPrefs(db),
+    readJsonForAll(db, NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS),
+  ]);
+  return { school, byAccount };
+}
+
+export type ResolvedNotifPrefs = { school: NotifPrefs; byAccount: Map<string, NotifPrefs> };
+
+/**
+ * The four switches that are genuinely personal.
+ *
+ * `classLeadMinutes` is deliberately not one of them: it decides when a sweep FIRES, and the
+ * ledger keys carry no recipient, so a per-person lead would mean a per-person ledger.
+ */
+export type NotifSwitch = 'classReminders' | 'studyNudges' | 'previewEvening' | 'gardenAlerts';
+
+/** Does this account still want `sw`? An account that never chose follows the school. */
+export function wantsNotif(
+  prefs: ResolvedNotifPrefs,
+  accountId: string | undefined,
+  sw: NotifSwitch,
+): boolean {
+  if (!accountId) return prefs.school[sw];
+  return (prefs.byAccount.get(accountId) ?? prefs.school)[sw];
+}
+
+/**
+ * Narrow a list of account ids to those still wanting `sw`.
+ *
+ * Both the sender (notify.ts) and the forecast (notify-plan.ts) go through this, so the row the
+ * /logs/notifications page shows and the message the cron actually delivers cannot disagree
+ * about who is on the list.
+ */
+export function accountsWanting(
+  prefs: ResolvedNotifPrefs,
+  accountIds: string[],
+  sw: NotifSwitch,
+): string[] {
+  return accountIds.filter((id) => wantsNotif(prefs, id, sw));
 }

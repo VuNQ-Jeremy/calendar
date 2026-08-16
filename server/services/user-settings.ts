@@ -83,6 +83,18 @@ export async function writeSchoolJson<T extends object>(
 }
 
 /**
+ * Drop an account's override, so reads fall back to the school row again.
+ *
+ * Deliberately a delete rather than a write of the current school values: copying them would
+ * freeze "follow the school" at whatever the school looked like that day.
+ */
+export async function deleteJson(db: Db, accountId: string, key: string): Promise<void> {
+  await db
+    .delete(userSettings)
+    .where(and(eq(userSettings.accountId, accountId), eq(userSettings.key, key)));
+}
+
+/**
  * Every account's value for one key, in a single query.
  *
  * For the notification cron, which needs each recipient's preferences and must not issue one

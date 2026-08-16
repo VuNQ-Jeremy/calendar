@@ -45,9 +45,11 @@ Ordered by how much they annoy, not by value.
 - **Ten audit checks still unverified** — `docs/audit-2026-07-29.md` has 18 of 28 done; the rest
   need a real device, emulator, browser or live round-trip rather than code. ~1 hour with a phone
   in hand.
-- **Per-user notification preferences** (phase 6.5) — prefs currently sit in the school-wide
-  `settings` table because it is keyed by one string. Per-account needs a `user_settings` table: a
-  migration and a service, not a screen. Boundary noted in `server/services/notif-prefs.ts`.
+- ~~**Per-user notification preferences** (phase 6.5)~~ — DONE, migration 0043. `user_settings`
+  now holds one row per (account, key) and the four switches are applied per recipient by the cron.
+  `classLeadMinutes` is deliberately still school-wide: it decides when a sweep FIRES, and the
+  ledger keys carry no recipient, so a per-person lead would mean a per-person ledger. The Zalo
+  audience stays school-wide for a structural reason — parents and group chats are not accounts.
 - **The i18n unused-key pass** — 83 keys in `docs/i18n-unused-keys.md`, most of them false
   positives from dynamic prefixes. Deliberately slow: hand-verify one family at a time and delete
   from both locales together. Do **not** bulk-prune. ~2 hours, low value.

@@ -21,7 +21,7 @@ export const loader = withAuth('any', async ({ user, db }) => {
   const identity = { user: { ...user.user, kind: user.kind }, account: user.account };
 
   if (user.kind !== 'staff') {
-    const uiPrefs = await uiPrefsSvc.getUiPrefs(db);
+    const uiPrefs = await uiPrefsSvc.getUiPrefs(db, user.account.id);
     return {
       ...identity,
       uiPrefs,
@@ -34,8 +34,8 @@ export const loader = withAuth('any', async ({ user, db }) => {
       classesSvc.list(db),
       peopleSvc.listStudents(db),
       assessmentTypesSvc.list(db),
-      uiPrefsSvc.getUiPrefs(db),
-      themeSvc.getTheme(db),
+      uiPrefsSvc.getUiPrefs(db, user.account.id),
+      themeSvc.getTheme(db, user.account.id),
       invitesSvc.countUnused(db),
       // `newFeedback` is the historical wire name; it counts unresolved (new + reviewed),
       // matching the web sidebar badge. Renaming the field would break shipped OTA bundles.

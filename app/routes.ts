@@ -104,6 +104,7 @@ export default [
   route('api/profile', 'routes/api.profile.tsx'),
   route('api/settings/theme', 'routes/api.settings.theme.tsx'),
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
+  route('api/settings/ui-prefs/me', 'routes/api.settings.ui-prefs.me.tsx'),
   route('api/settings/notifications', 'routes/api.settings.notifications.tsx'),
   route('api/settings/garden', 'routes/api.settings.garden.tsx'),
   route('api/settings/parent-portal', 'routes/api.settings.parent-portal.tsx'),

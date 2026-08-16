@@ -198,8 +198,9 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/flashcards/results` | **user** | See idempotency below |
 | GET | `/api/flashcards/stats` | staff | `?topicId=` for one topic's results, else per-student stats |
 | GET PATCH | `/api/profile` | user | `ProfileInput` — deliberately cannot change `role` |
-| GET PATCH | `/api/settings/theme` | staff | `ThemeInput`; nulls mean "leave unchanged" |
-| GET PATCH | `/api/settings/ui-prefs` | GET user, PATCH **admin** | `UiPrefsInput` — school-wide, so every client reads it but only an admin writes it. `scrollbar` is web-only, `mobileTabBar` phone-only |
+| GET PATCH | `/api/settings/theme` | staff | `ThemeInput`; nulls mean "leave unchanged". Per account since migration 0043 — falls back to the school-wide theme until you change something |
+| GET PATCH | `/api/settings/ui-prefs` | GET user, PATCH **admin** | `UiPrefsInput`. GET answers with what the CALLER should apply (own override, else the school default). PATCH sets the SCHOOL default, so it stays admin-only. `scrollbar` is web-only, `mobileTabBar` phone-only |
+| PATCH DELETE | `/api/settings/ui-prefs/me` | user | `UiPrefsInput` — a personal override of the row above; `any` level because the blast radius is one account. DELETE drops the override so later school changes reach you again |
 | POST | `/api/push/register` | user | `{ expoToken, platform }` — upserts, moving the token between accounts |
 | POST | `/api/push/unregister` | user | `{ expoToken }` |
 | POST | `/api/zalo/webhook` | **none** | Zalo's own delivery endpoint. Gated on the `X-Bot-Api-Secret-Token` header, not a session — Zalo's servers have neither cookie nor bearer. Always 200 on a verified update; 401 on a bad secret, 503 when `ZALO_WEBHOOK_SECRET` is unset |

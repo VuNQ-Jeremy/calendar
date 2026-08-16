@@ -6,7 +6,7 @@ import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
 import * as zalo from '../server/services/zalo';
-import { setNotifPrefs } from '../server/services/notif-prefs';
+import { setSchoolNotifPrefs } from '../server/services/notif-prefs';
 import { runClassReminders } from '../server/services/notify';
 import { zaloChats, zaloPairCodes } from '../server/db/schema';
 
@@ -499,7 +499,7 @@ describe('class reminders over Zalo', () => {
 
   it('messages the parent once, however many times the sweep runs', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const { at, cls } = await seedUpcomingClass(d);
 
     await runClassReminders(d, at, ON);
@@ -522,7 +522,7 @@ describe('class reminders over Zalo', () => {
    */
   it('still messages parents for an occurrence push has already handled', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     const { at } = await seedUpcomingClass(d);
 
     // A push-only run: no env, so the Zalo pass is skipped entirely.
@@ -536,7 +536,7 @@ describe('class reminders over Zalo', () => {
 
   it('sends nothing at all when the channel is unconfigured', async () => {
     const d = db();
-    await setNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
+    await setSchoolNotifPrefs(d, { classReminders: true, classLeadMinutes: 30 });
     await seedUpcomingClass(d).then(({ at }) => runClassReminders(d, at, {}));
     expect(calls).toHaveLength(0);
   });

@@ -47,7 +47,8 @@ export const qk = {
   /** The calendar theme (`--cal-bg` and friends), from /api/settings/theme. */
   calTheme: ['calTheme'] as const,
   /**
-   * School-wide UI preferences, from /api/settings/ui-prefs. Only `mobileTabBar` means anything
+   * UI preferences, from /api/settings/ui-prefs — this account's override if it has one, else
+   * the school default. Only `mobileTabBar` means anything
    * here (`scrollbar` is a web setting) and the signed-in shell reads it on every render, so this
    * is one of the few queries mounted for students as well as staff.
    */

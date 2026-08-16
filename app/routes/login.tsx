@@ -1,6 +1,10 @@
 import React from 'react';
 import { redirect, useFetcher } from 'react-router';
-import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
+import type {
+  LoaderFunctionArgs,
+  ActionFunctionArgs,
+  ClientActionFunctionArgs,
+} from 'react-router';
 import { Form, useLoaderData, useActionData } from 'react-router';
 import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
@@ -28,6 +32,7 @@ import {
   resetPassword,
 } from '../../server/services/auth';
 import { sessionCookie } from '../../server/session';
+import { clearCache } from '../../src/lib/cache.js';
 
 const { Button: LBtn, Switch: LSw, Tag: LTag } = DS;
 
@@ -182,15 +187,27 @@ function AuthField({
   );
 }
 
+/**
+ * Signing in starts from an empty client cache.
+ *
+ * `src/lib/cache.ts` is module state, so it survives a client-side navigation — and /login is
+ * reachable WITHOUT a logout: an expired session bounced here, or the invite "Join Mochi" form
+ * further down this same route. Since the calendar theme and the UI prefs became per account
+ * (migration 0043), a surviving `route:calendar` entry would paint the previous account's
+ * colours until something happened to invalidate it.
+ *
+ * Exactly the shape logout.tsx already uses, including returning `serverAction()` verbatim so
+ * the redirect and its Set-Cookie header pass straight through.
+ */
+export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
+  clearCache();
+  return serverAction();
+}
+
 // ---- Default export ----
 
 export default function Login() {
-  const {
-    next,
-    mode: urlMode,
-    resetToken,
-    resetDone,
-  } = useLoaderData<typeof loader>();
+  const { next, mode: urlMode, resetToken, resetDone } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { t } = useLang();
   const checkFetcher = useFetcher<typeof action>();
