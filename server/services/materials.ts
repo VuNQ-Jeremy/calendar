@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { materials, eventMaterials } from '../db/schema';
+import { materials, eventMaterials, classMaterials } from '../db/schema';
 import type { Db } from '../db/index';
 import type { MaterialInput } from '../../shared/schemas';
 import { record, recordCreate, recordDelete } from './audit';
@@ -16,13 +16,11 @@ export type MaterialRow = {
   id: string;
   title: string;
   type: string;
-  classId: string | null;
   url: string | null;
   fileName: string | null;
   fileKey: string | null;
   favorite: boolean;
   addedAt: string | null;
-  scope: string;
 };
 
 function map(r: typeof materials.$inferSelect): MaterialRow {
@@ -30,13 +28,11 @@ function map(r: typeof materials.$inferSelect): MaterialRow {
     id: r.id,
     title: r.title,
     type: r.type,
-    classId: r.classId,
     url: r.url,
     fileName: r.fileName,
     fileKey: r.fileKey,
     favorite: Boolean(r.favorite),
     addedAt: r.addedAt,
-    scope: r.scope,
   };
 }
 
@@ -71,13 +67,11 @@ export async function create(
       id,
       title: input.title,
       type: input.type,
-      classId: input.classId ?? null,
       url: input.url ?? null,
       fileName,
       fileKey,
       favorite: input.favorite,
       addedAt: input.addedAt ?? null,
-      scope: input.scope,
     });
   } catch (err) {
     if (fileKey && files) await files.delete(fileKey);
@@ -104,11 +98,9 @@ export async function update(
   const set: Partial<typeof materials.$inferInsert> = {};
   if (patch.title !== undefined) set.title = patch.title;
   if (patch.type !== undefined) set.type = patch.type;
-  if (patch.classId !== undefined) set.classId = patch.classId ?? null;
   if (patch.url !== undefined) set.url = patch.url ?? null;
   if (patch.favorite !== undefined) set.favorite = patch.favorite;
   if (patch.addedAt !== undefined) set.addedAt = patch.addedAt ?? null;
-  if (patch.scope !== undefined) set.scope = patch.scope;
 
   let newFileKey: string | null | undefined;
   if (file && files) {
@@ -125,12 +117,6 @@ export async function update(
     if (Object.keys(set).length) {
       await db.update(materials).set(set).where(eq(materials.id, id));
     }
-    // A scope change resets per-event attachments: an unattached class
-    // material must not resurface as an event material, and a promoted
-    // class material must not keep stale per-event rows either.
-    if (patch.scope !== undefined && current && patch.scope !== current.scope) {
-      await db.delete(eventMaterials).where(eq(eventMaterials.materialId, id));
-    }
     // Delete old R2 object after successful DB update
     if (newFileKey && files && current?.fileKey && current.fileKey !== newFileKey) {
       await files.delete(current.fileKey);
@@ -143,8 +129,8 @@ export async function update(
   const rows = await db.select().from(materials).where(eq(materials.id, id));
   const after = map(rows[0]);
   if (!sameJson(before, after)) {
-    // Fold in the scope-change/superseded-file side effects so a diff shows the whole picture,
-    // not just the columns `set` touched.
+    // Fold in the superseded-file side effect so a diff shows the whole picture, not just the
+    // columns `set` touched.
     record({
       action: 'update',
       entityType: 'material',
@@ -152,8 +138,6 @@ export async function update(
       before,
       after,
       meta: {
-        eventMaterialsCleared:
-          patch.scope !== undefined && current && patch.scope !== current.scope,
         supersededFileKey:
           newFileKey && current?.fileKey !== newFileKey ? (current?.fileKey ?? null) : null,
       },
@@ -169,7 +153,16 @@ export async function remove(db: Db, id: string, files?: R2Bucket): Promise<void
     .select({ eventId: eventMaterials.eventId })
     .from(eventMaterials)
     .where(eq(eventMaterials.materialId, id));
-  await recordDelete(db, 'material', materials, id, { eventIds: linked.map((r) => r.eventId) });
+  const linkedClasses = await db
+    .select({ classId: classMaterials.classId })
+    .from(classMaterials)
+    .where(eq(classMaterials.materialId, id));
+  // Both joins cascade with the row; folded into `extra` so the audit entry still says which
+  // classes and which sessions lost the material.
+  await recordDelete(db, 'material', materials, id, {
+    eventIds: linked.map((r) => r.eventId),
+    classIds: linkedClasses.map((r) => r.classId),
+  });
   if (files && row?.fileKey) await files.delete(row.fileKey);
   await db.delete(materials).where(eq(materials.id, id));
 }

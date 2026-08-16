@@ -149,15 +149,18 @@ export const ParentInput = z.object({
 });
 export type ParentInput = z.infer<typeof ParentInput>;
 
+/**
+ * A material is library content only — a title, a kind, and either a file or a link. Which
+ * classes and events carry it is not part of this input: those are the `class_materials` and
+ * `event_materials` joins, written from the class page and the event dialog.
+ */
 export const MaterialInput = z.object({
   title: z.string().trim().min(1).max(200),
   type: z.enum(['notes', 'worksheet', 'video', 'link', 'curriculum']).default('notes'),
-  classId: z.string().nullish(),
   url: z.string().max(2000).nullish(),
   fileName: z.string().max(500).nullish(),
   favorite: FormBool.default(false),
   addedAt: z.string().nullish(),
-  scope: z.enum(['class', 'event']).default('class'),
 });
 export type MaterialInput = z.infer<typeof MaterialInput>;
 
@@ -257,6 +260,13 @@ export const EventMaterialsSaveInput = z.object({
   materialIds: z.array(z.string().min(1)),
 });
 export type EventMaterialsSaveInput = z.infer<typeof EventMaterialsSaveInput>;
+
+/** Replace-set, same as the event twin: the submitted list becomes the class's whole set. */
+export const ClassMaterialsSaveInput = z.object({
+  classId: z.string().min(1),
+  materialIds: z.array(z.string().min(1)),
+});
+export type ClassMaterialsSaveInput = z.infer<typeof ClassMaterialsSaveInput>;
 
 export const BehaviorRecordInput = z.object({
   studentId: z.string().min(1),

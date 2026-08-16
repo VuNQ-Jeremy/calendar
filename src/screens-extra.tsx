@@ -15,12 +15,13 @@ const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Switch: XSw, Avatar:
 interface MaterialLoaderData {
   materials: MaterialRow[];
   classes: ClassLite[];
+  /** Read-only here: this page is the library, and attaching happens on the class page. */
+  classMaterials: { classId: string; materialId: string }[];
 }
 
 type MaterialDraft = Partial<MaterialRow> & {
   title: string;
   type: string;
-  classId: string;
   url: string;
   fileName: string;
   favorite: boolean;
@@ -30,20 +31,20 @@ type MaterialDraft = Partial<MaterialRow> & {
 // ============================================================ MATERIALS ============================================================
 interface MaterialCardProps {
   m: MaterialRow;
-  classes: ClassLite[];
+  /** Every class this material is filed under — a material can be shared by several. */
+  linkedClasses: ClassLite[];
   onEdit: () => void;
   onDelete: () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }
 
-function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
+function MaterialCard({ m, linkedClasses, onEdit, onDelete, t }: MaterialCardProps) {
   const favFetcher = useFetcher();
   const optimisticFav = favFetcher.formData
     ? favFetcher.formData.get('favorite') === 'true'
     : m.favorite;
   const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
   const isLink = m.type === 'link' || m.type === 'video';
-  const cls = classes.find((c) => c.id === m.classId);
 
   const toggleFav = () => {
     const fd = new FormData();
@@ -70,12 +71,17 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
       <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-md)' }}>{m.title}</h3>
       <div className="lrow__meta" style={{ marginBottom: 14 }}>
         <span className="mchip">{t(mt.tk)}</span>
-        <span className="mchip">
-          {t(m.scope === 'event' ? 'mat_scope_event' : 'mat_scope_class')}
-        </span>
-        <XTag dot color={cls?.color || 'neutral'}>
-          {cls?.name || t('mat_unfiled')}
-        </XTag>
+        {linkedClasses.length ? (
+          linkedClasses.map((c) => (
+            <XTag key={c.id} dot color={c.color || 'neutral'}>
+              {c.name}
+            </XTag>
+          ))
+        ) : (
+          <XTag dot color="neutral">
+            {t('mat_unfiled')}
+          </XTag>
+        )}
       </div>
       <div className="m-spread">
         {isLink ? (
@@ -115,7 +121,7 @@ function MaterialCard({ m, classes, onEdit, onDelete, t }: MaterialCardProps) {
 }
 
 function MaterialsScreen() {
-  const { materials: matList, classes } = useLoaderData() as MaterialLoaderData;
+  const { materials: matList, classes, classMaterials } = useLoaderData() as MaterialLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
   const [filterClass, setFilterClass] = React.useState('all');
@@ -138,8 +144,22 @@ function MaterialsScreen() {
     prevFetcherState.current = fetcher.state;
   }, [saving, fetcher.state, fetcher.data]);
 
+  // One material can be filed under several classes, so both the filter and the card chips read
+  // the join rather than a column on the row.
+  const classesOf = React.useCallback(
+    (id: string) =>
+      classMaterials
+        .filter((l) => l.materialId === id)
+        .map((l) => classes.find((c) => c.id === l.classId))
+        .filter((c): c is ClassLite => !!c),
+    [classMaterials, classes],
+  );
+
   let list = matList;
-  if (filterClass !== 'all') list = list.filter((m) => m.classId === filterClass);
+  if (filterClass !== 'all')
+    list = list.filter((m) =>
+      classMaterials.some((l) => l.materialId === m.id && l.classId === filterClass),
+    );
   if (filterType !== 'all') list = list.filter((m) => m.type === filterType);
   if (favOnly) list = list.filter((m) => m.favorite);
 
@@ -148,14 +168,10 @@ function MaterialsScreen() {
     setModal({
       title: '',
       type: 'notes',
-      // Unfiled, not the first class — the picker already offers `mat_unfiled` and
-      // `MaterialInput.classId` is .nullish().
-      classId: '',
       url: '',
       fileName: '',
       favorite: false,
       addedAt: iso(TODAY),
-      scope: 'class',
     });
   };
 
@@ -166,7 +182,6 @@ function MaterialsScreen() {
     if (f.id) fd.set('id', f.id);
     fd.set('title', title);
     fd.set('type', f.type);
-    fd.set('classId', f.classId);
     if (f.url) fd.set('url', f.url);
     if (f.fileField) {
       fd.set('file', f.fileField, f.fileField.name);
@@ -175,7 +190,6 @@ function MaterialsScreen() {
     }
     fd.set('favorite', String(!!f.favorite));
     if (f.addedAt) fd.set('addedAt', f.addedAt);
-    fd.set('scope', f.scope || 'class');
     // multipart is required whenever a File is attached: the urlencoded
     // default serializes File entries to plain strings and the upload is lost.
     fetcher.submit(fd, { action: '/materials', method: 'post', encType: 'multipart/form-data' });
@@ -235,14 +249,13 @@ function MaterialsScreen() {
             <MaterialCard
               key={m.id}
               m={m}
-              classes={classes}
+              linkedClasses={classesOf(m.id)}
               onEdit={() => {
                 setSaveFailed(false);
                 setModal({
                   ...m,
                   title: m.title,
                   type: m.type,
-                  classId: m.classId ?? '',
                   url: m.url ?? '',
                   fileName: m.fileName ?? '',
                   favorite: m.favorite,
@@ -265,7 +278,6 @@ function MaterialsScreen() {
           setDraft={setModal}
           onClose={() => setModal(null)}
           onSave={save}
-          classes={classes}
           busy={saving}
           error={saveFailed}
         />
@@ -274,25 +286,20 @@ function MaterialsScreen() {
   );
 }
 
+/**
+ * Pure CRUD over one library entry — title, kind, and either a link or a file. No class picker
+ * and no scope: which classes and events carry the material is decided on those pages.
+ */
 interface MaterialModalProps {
   draft: MaterialDraft;
   setDraft: React.Dispatch<React.SetStateAction<MaterialDraft | null>>;
   onClose: () => void;
   onSave: (f: MaterialDraft) => void;
-  classes: ClassLite[];
   busy: boolean;
   error: boolean;
 }
 
-function MaterialModal({
-  draft,
-  setDraft,
-  onClose,
-  onSave,
-  classes,
-  busy,
-  error,
-}: MaterialModalProps) {
+function MaterialModal({ draft, setDraft, onClose, onSave, busy, error }: MaterialModalProps) {
   const { t } = useLang();
   const set = <K extends keyof MaterialDraft>(k: K, v: MaterialDraft[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
@@ -340,34 +347,12 @@ function MaterialModal({
           onChange={(e) => set('title', e.target.value)}
         />
       </div>
-      <div className="m-grid cols-2" style={{ gap: 14 }}>
-        <MSelect
-          label={t('mat_type')}
-          value={draft.type}
-          onChange={(v) => set('type', v)}
-          options={Object.entries(MAT_TYPES).map(([k, v]) => ({ value: k, label: t(v.tk) }))}
-        />
-        <MSelect
-          label={t('class')}
-          value={draft.classId}
-          onChange={(v) => set('classId', v)}
-          options={[
-            { value: '', label: t('mat_unfiled') },
-            ...classes.map((c) => ({ value: c.id, label: c.name })),
-          ]}
-        />
-      </div>
-      <div className="m-grid cols-2" style={{ gap: 14 }}>
-        <MSelect
-          label={t('mat_scope')}
-          value={draft.scope || 'class'}
-          onChange={(v) => set('scope', v)}
-          options={[
-            { value: 'class', label: t('mat_scope_class') },
-            { value: 'event', label: t('mat_scope_event') },
-          ]}
-        />
-      </div>
+      <MSelect
+        label={t('mat_type')}
+        value={draft.type}
+        onChange={(v) => set('type', v)}
+        options={Object.entries(MAT_TYPES).map(([k, v]) => ({ value: k, label: t(v.tk) }))}
+      />
       {isLink ? (
         <div className="mochi-field">
           <label className="mochi-field__label">{t('mat_url')}</label>

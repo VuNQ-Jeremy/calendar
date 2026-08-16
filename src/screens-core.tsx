@@ -43,6 +43,7 @@ interface DashLoaderData {
   students: StudentRow[];
   materials: MaterialRow[];
   eventMaterials: { eventId: string; materialId: string }[];
+  classMaterials: { classId: string; materialId: string }[];
 }
 
 /**
@@ -129,6 +130,7 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
     students,
     materials,
     eventMaterials,
+    classMaterials,
   } = useLoaderData() as DashLoaderData;
   const { t, lang } = useLang();
   const fetcher = useFetcher();
@@ -349,6 +351,7 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
         students={students ?? []}
         materials={materials ?? []}
         eventMaterials={eventMaterials ?? []}
+        classMaterials={classMaterials ?? []}
         events={allEvents}
       />
       {scopeDialog}

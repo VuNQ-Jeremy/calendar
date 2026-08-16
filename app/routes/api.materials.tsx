@@ -17,7 +17,6 @@ function coerce(raw: Record<string, unknown>) {
   const out = { ...raw };
   delete out.file;
   if (typeof out.favorite === 'string') out.favorite = out.favorite === 'true';
-  if (out.classId === '') out.classId = null;
   return out;
 }
 

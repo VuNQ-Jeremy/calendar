@@ -124,11 +124,11 @@ export type { MutationDomain };
  *
  * Derived from what each route's loader reads:
  *   dashboard:   events(today + the next fortnight), attempts summary, classesLite, students,
- *                materials
- *   calendar:    events, classes, students, theme, materials, eventMaterials
- *   classes:     classes, students, materials
+ *                materials, eventMaterials, classMaterials
+ *   calendar:    events, classes, students, theme, materials, eventMaterials, classMaterials
+ *   classes:     classes, students, materials, classMaterials
  *   people:      students, staff, parents, invites, classesLite, flashcardStats
- *   materials:   materials, classesLite
+ *   materials:   materials, classesLite, classMaterials
  *   assessments: scores, behavior, remarks, students, classesLite, assessment types,
  *                remark criteria
  *   flashcards:  topics (list) / topic+words+results+mastery (slug pages)

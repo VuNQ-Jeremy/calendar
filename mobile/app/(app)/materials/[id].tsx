@@ -9,7 +9,7 @@ import { ScreenHeader } from '~/components/ScreenHeader';
 import { useLang } from '~/lib/i18n';
 import { iso, todayDate } from '~/lib/cal';
 import { MAT_TYPES, MAT_TYPE_IDS, isLinkType } from '~/lib/mat-types';
-import { useClasses, useMaterialMutations, useMaterials } from '~/lib/staff-data';
+import { useMaterialMutations, useMaterials } from '~/lib/staff-data';
 import { useTheme } from '~/theme';
 import { Body, Button, Card, Input, Muted, ProgressBar, Screen } from '~/ui';
 
@@ -46,14 +46,11 @@ export default function MaterialEditor() {
   const isNew = id === 'new';
 
   const { data: materials } = useMaterials();
-  const { data: classes } = useClasses();
   const { save } = useMaterialMutations();
   const existing = materials?.find((m) => m.id === id);
 
   const [title, setTitle] = React.useState('');
   const [type, setType] = React.useState('notes');
-  const [classId, setClassId] = React.useState('');
-  const [scope, setScope] = React.useState<'class' | 'event'>('class');
   const [url, setUrl] = React.useState('');
   const [favorite, setFavorite] = React.useState(false);
   const [fileName, setFileName] = React.useState('');
@@ -66,8 +63,6 @@ export default function MaterialEditor() {
     if (isNew || hydrated || !existing) return;
     setTitle(existing.title);
     setType(existing.type);
-    setClassId(existing.classId ?? '');
-    setScope(existing.scope);
     setUrl(existing.url ?? '');
     setFavorite(existing.favorite);
     setFileName(existing.fileName ?? '');
@@ -119,12 +114,10 @@ export default function MaterialEditor() {
     const input = {
       title: title.trim() || t('mat_untitled'),
       type: type as 'notes' | 'worksheet' | 'video' | 'link' | 'curriculum',
-      classId: classId || null,
       url: link ? url.trim() || null : null,
       fileName: link ? null : fileName || null,
       favorite,
       addedAt: existing?.addedAt ?? iso(todayDate()),
-      scope,
     };
 
     let form: FormData | undefined;
@@ -173,24 +166,6 @@ export default function MaterialEditor() {
             value={type}
             onChange={setType}
             options={MAT_TYPE_IDS.map((k) => ({ value: k, label: t(MAT_TYPES[k].tk) }))}
-          />
-          <ChipSelect
-            label={t('class')}
-            value={classId}
-            onChange={setClassId}
-            options={[
-              { value: '', label: t('mat_unfiled') },
-              ...(classes ?? []).map((c) => ({ value: c.id, label: c.name })),
-            ]}
-          />
-          <ChipSelect
-            label={t('mat_scope')}
-            value={scope}
-            onChange={(v) => setScope(v as 'class' | 'event')}
-            options={[
-              { value: 'class', label: t('mat_scope_class') },
-              { value: 'event', label: t('mat_scope_event') },
-            ]}
           />
         </Card>
 

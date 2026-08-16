@@ -11,6 +11,7 @@ import { useLang } from '~/lib/i18n';
 import { addMin, iso, RECURRENCES, RECURRENCE_TK, todayDate } from '~/lib/cal';
 import {
   useClasses,
+  useClassMaterials,
   useEventMaterials,
   useEventMutations,
   useEvents,
@@ -290,8 +291,12 @@ function EventMaterialsTab({ eventId, classId }: { eventId: string; classId: str
   const { t } = useLang();
   const { data: materials } = useMaterials();
   const { data: attachedIds } = useEventMaterials(eventId);
+  const { data: classLinks } = useClassMaterials(classId);
 
-  const isClassMat = (m: MaterialRow) => m.scope === 'class' && m.classId === classId;
+  // Membership comes from the class↔material join now — the same material may also be a class
+  // material somewhere else, which is exactly the point of the shared library.
+  const classMatIds = new Set(classLinks ?? []);
+  const isClassMat = (m: MaterialRow) => classMatIds.has(m.id);
   const classMats = (materials ?? []).filter(isClassMat);
   const eventMats = (attachedIds ?? [])
     .map((mid) => materials?.find((m) => m.id === mid))

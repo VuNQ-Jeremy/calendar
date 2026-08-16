@@ -20,6 +20,10 @@ test.describe('CRUD: materials', () => {
     const card = (t: string) => page.locator('.mochi-card', { hasText: t });
 
     await page.getByRole('button', { name: 'Add material' }).click();
+    // The library is CRUD-only since F-21: no owning class, no scope. Attaching lives on the
+    // class page and the event dialog (e2e/crud-class-materials.spec.ts, crud-event-tabs.spec.ts).
+    await expect(k.field('Class')).toHaveCount(0);
+    await expect(k.field('Scope')).toHaveCount(0);
     await k.textIn('Title').fill(title);
     await k.pickSel('Type', 'Link'); // switches the file zone to a URL field
     await k.textIn('URL').fill('https://example.com/e2e');

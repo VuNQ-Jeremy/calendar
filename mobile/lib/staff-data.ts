@@ -114,6 +114,20 @@ export function useEventMaterials(eventId: string | undefined) {
   });
 }
 
+/** The material ids linked to one class. Read-only on the phone — attaching is a web job. */
+export function useClassMaterials(classId: string | undefined) {
+  return useQuery({
+    queryKey: qk.classMaterials(classId ?? ''),
+    queryFn: () => api.listClassMaterials(classId!),
+    enabled: !!classId,
+  });
+}
+
+/** Every class↔material pair, for the library list's class chips and filter. */
+export function useAllClassMaterials() {
+  return useQuery({ queryKey: qk.allClassMaterials, queryFn: api.listAllClassMaterials });
+}
+
 /**
  * One occurrence's register. Both parts of the key matter: a weekly class has one row set per
  * (eventId, date), so caching by event alone would show Monday's register on Tuesday.
@@ -276,6 +290,8 @@ export function useMaterialMutations() {
     onSuccess: (_res, id) => {
       qc.setQueryData<MaterialRow[]>(qk.materials, (prev) => prev?.filter((m) => m.id !== id));
       void qc.invalidateQueries({ queryKey: ['eventMaterials'] });
+      // Both joins cascade with the row server-side, so both cached copies are now wrong.
+      void qc.invalidateQueries({ queryKey: ['classMaterials'] });
     },
   });
 

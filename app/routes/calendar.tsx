@@ -14,6 +14,7 @@ import * as peopleSvc from '../../server/services/people';
 import * as themeSvc from '../../server/services/theme';
 import * as materialsSvc from '../../server/services/materials';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
+import * as classMaterialsSvc from '../../server/services/class-materials';
 import type { Theme } from '../../server/services/theme';
 import { EventInput, EventEditScope, ThemeInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -21,17 +22,19 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
+  const sessionUser = await requireStaff(request, env);
   const db = createDb(env);
-  const [events, classes, students, theme, materials, eventMaterials] = await Promise.all([
-    eventsSvc.list(db),
-    classesSvc.list(db),
-    peopleSvc.listStudents(db),
-    themeSvc.getTheme(db),
-    materialsSvc.list(db),
-    eventMaterialsSvc.listAll(db),
-  ]);
-  return { events, classes, students, theme, materials, eventMaterials };
+  const [events, classes, students, theme, materials, eventMaterials, classMaterials] =
+    await Promise.all([
+      eventsSvc.list(db),
+      classesSvc.list(db),
+      peopleSvc.listStudents(db),
+      themeSvc.getTheme(db, sessionUser.account.id),
+      materialsSvc.list(db),
+      eventMaterialsSvc.listAll(db),
+      classMaterialsSvc.listAll(db),
+    ]);
+  return { events, classes, students, theme, materials, eventMaterials, classMaterials };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -41,7 +44,7 @@ clientLoader.hydrate = true as const;
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
+  const sessionUser = await requireStaff(request, env);
   const db = createDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
@@ -54,7 +57,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     const patch = Object.fromEntries(
       Object.entries(parsed.data).filter(([, v]) => v != null),
     ) as Partial<Theme>;
-    const theme = await themeSvc.setTheme(db, patch);
+    const theme = await themeSvc.setTheme(db, sessionUser.account.id, patch);
     return { ok: true, theme };
   }
 

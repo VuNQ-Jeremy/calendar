@@ -61,6 +61,12 @@ export const qk = {
   flashcardTopic: (slug: string) => ['flashcards', 'topic', slug] as const,
   attendance: (eventId: string, date: string) => ['attendance', eventId, date] as const,
   eventMaterials: (eventId: string) => ['eventMaterials', eventId] as const,
+  /**
+   * `allClassMaterials` is a PREFIX of every per-class key, so invalidating ['classMaterials']
+   * drops both the whole-table copy and each class's own.
+   */
+  classMaterials: (classId: string) => ['classMaterials', classId] as const,
+  allClassMaterials: ['classMaterials'] as const,
   /** Per-occurrence, same reasoning as `attendance` — web `prev:{eventId}:{date}`. */
   eventPreview: (eventId: string, date: string) => ['eventPreview', eventId, date] as const,
   /**

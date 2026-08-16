@@ -157,6 +157,7 @@ const ROUTE_FILES = new Map([
   ['api/subjects/:id?', 'api.subjects'],
   ['api/attendance', 'api.attendance'],
   ['api/event-materials', 'api.event-materials'],
+  ['api/class-materials', 'api.class-materials'],
   ['api/event-previews', 'api.event-previews'],
   ['api/my-sessions', 'api.my-sessions'],
   ['api/flashcards/topics/:id?', 'api.flashcards.topics'],

@@ -36,12 +36,13 @@ interface CalendarLoaderData {
   theme: Theme;
   materials: MaterialRow[];
   eventMaterials: { eventId: string; materialId: string }[];
+  classMaterials: { classId: string; materialId: string }[];
 }
 
 type ViewMode = 'day' | 'week' | 'month' | 'agenda';
 
 function CalendarScreen() {
-  const { events, classes, students, theme, materials, eventMaterials } =
+  const { events, classes, students, theme, materials, eventMaterials, classMaterials } =
     useLoaderData() as CalendarLoaderData;
   const fetcher = useFetcher();
   const { t, lang } = useLang();
@@ -224,6 +225,7 @@ function CalendarScreen() {
         students={students}
         materials={materials}
         eventMaterials={eventMaterials}
+        classMaterials={classMaterials}
         events={events}
       />
       {dialog}

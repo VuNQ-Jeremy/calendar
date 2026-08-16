@@ -11,6 +11,7 @@ import { requireStaff } from '../../server/services/auth';
 import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
+import * as classMaterialsSvc from '../../server/services/class-materials';
 import * as testsSvc from '../../server/services/tests';
 import * as levelsSvc from '../../server/services/grade-levels';
 import * as classLevelsSvc from '../../server/services/class-levels';
@@ -23,17 +24,27 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [classes, students, materials, tests, gradeLevels, classLevels, subjects] =
+  const [classes, students, materials, classMaterials, tests, gradeLevels, classLevels, subjects] =
     await Promise.all([
       classesSvc.list(db),
       peopleSvc.listStudents(db),
       materialsSvc.list(db),
+      classMaterialsSvc.listAll(db),
       testsSvc.list(db),
       levelsSvc.list(db),
       classLevelsSvc.list(db),
       subjectsSvc.list(db),
     ]);
-  return { classes, students, materials, tests, gradeLevels, classLevels, subjects };
+  return {
+    classes,
+    students,
+    materials,
+    classMaterials,
+    tests,
+    gradeLevels,
+    classLevels,
+    subjects,
+  };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {

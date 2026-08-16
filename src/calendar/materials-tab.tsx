@@ -10,9 +10,10 @@ interface MaterialsTabProps {
   eventId: string;
   classId: string;
   materials: MaterialRow[];
+  classMaterials: { classId: string; materialId: string }[];
 }
 
-export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps) {
+export function MaterialsTab({ eventId, classId, materials, classMaterials }: MaterialsTabProps) {
   const { t } = useLang();
   const { data: attachedData } = useCachedLoad<{ materialIds: string[] }>(
     `evmat:${eventId}`,
@@ -20,10 +21,14 @@ export function MaterialsTab({ eventId, classId, materials }: MaterialsTabProps)
   );
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
 
-  // Same grouping as EventMaterialsPicker in the details tab: class-scoped
-  // materials of this class, plus materials explicitly attached to the event.
+  // Same grouping as EventMaterialsPicker in the details tab: the materials linked to this
+  // class, plus the ones explicitly attached to this event.
   const attachedIds = attachedData?.materialIds ?? [];
-  const isClassMat = (m: MaterialRow) => m.scope === 'class' && m.classId === classId;
+  const classMatIds = React.useMemo(
+    () => new Set(classMaterials.filter((l) => l.classId === classId).map((l) => l.materialId)),
+    [classMaterials, classId],
+  );
+  const isClassMat = (m: MaterialRow) => classMatIds.has(m.id);
   const classMats = materials.filter(isClassMat);
   const eventMats = attachedIds
     .map((id) => materials.find((m) => m.id === id))

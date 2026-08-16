@@ -83,6 +83,7 @@ describe('ClassesScreen', () => {
         classes: [],
         students: [],
         materials: [],
+        classMaterials: [],
         gradeLevels: [],
         classLevels: [],
         subjects: [],
@@ -107,7 +108,7 @@ describe('StudentsScreen', () => {
 
 describe('MaterialsScreen', () => {
   it('renders Materials heading', async () => {
-    const Stub = makeStub({ materials: [], classes: [] }, MaterialsScreen);
+    const Stub = makeStub({ materials: [], classes: [], classMaterials: [] }, MaterialsScreen);
     await renderStub(Stub);
     expect(screen.getByRole('heading', { name: 'Materials' })).toBeInTheDocument();
   });

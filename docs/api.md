@@ -186,6 +186,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | POST | `/api/grade-levels/reorder` | admin | `{ ids: string[] }` |
 | GET POST | `/api/attendance` | staff | GET needs `?eventId=&date=`. POST is delete-then-insert: omitting a student unmarks them |
 | GET POST | `/api/event-materials` | staff | GET `?eventId=` for one event, omit for the whole join table |
+| GET POST | `/api/class-materials` | staff | GET `?classId=` for one class, omit for the whole join table. POST is replace-set — a material may belong to several classes at once |
 | GET POST | `/api/event-previews` | staff | "Preview buổi sau" for one occurrence. GET needs `?eventId=&date=` and replies `{ preview, topics }` (the vocabulary topics feed the picker). POST takes `SessionPreviewInput` and upserts on (eventId, date) |
 | GET | `/api/my-sessions` | **user** | Upcoming sessions with composed previews, `?days=` 1-14 (default 7). A student sees their own classes, staff see every class. Tests appear as title + window only. Computed against the server clock — do not cache |
 | GET | `/api/flashcards/topics/:id?` | **user** | Students play games |

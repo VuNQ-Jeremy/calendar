@@ -7,6 +7,7 @@ import {
   BehaviorRecordInput,
   ChangePasswordInput,
   ClassInput,
+  ClassMaterialsSaveInput,
   EventInput,
   EventMaterialsSaveInput,
   FeedbackInput,
@@ -559,12 +560,10 @@ const materialMultipart: Record<string, unknown> = {
     },
     title: { type: 'string', maxLength: 200 },
     type: { type: 'string', enum: ['notes', 'worksheet', 'video', 'link', 'curriculum'] },
-    classId: { type: 'string', description: 'Empty string is read as null.' },
     url: { type: 'string', maxLength: 2000 },
     fileName: { type: 'string', maxLength: 500 },
     favorite: { type: 'string', enum: ['true', 'false'] },
     addedAt: { type: 'string' },
-    scope: { type: 'string', enum: ['class', 'event'] },
   },
   required: ['title'],
 };
@@ -717,6 +716,34 @@ const scheduling: PathDoc[] = [
         auth: 'staff',
         summary: "Replace one event's material links",
         request: { schema: EventMaterialsSaveInput },
+        responses: { 200: ok(z.array(z.string()), 'The material ids now attached.') },
+      },
+    ],
+  },
+  {
+    path: '/api/class-materials',
+    routePattern: 'api/class-materials',
+    tag: 'Scheduling',
+    operations: [
+      {
+        method: 'get',
+        auth: 'staff',
+        summary: 'Which materials belong to which classes',
+        description:
+          'With `?classId=` the reply is that class’s material ids; without it, every link in ' +
+          'the school as `{ classId, materialId }` pairs. Materials are a shared library — one ' +
+          'material may belong to any number of classes, and to events besides.',
+        params: [{ name: 'classId', in: 'query' }],
+        responses: { 200: ok(c.ClassMaterialLinks, 'Ids, or pairs — see the description.') },
+      },
+      {
+        method: 'post',
+        auth: 'staff',
+        summary: "Replace one class's material links",
+        description:
+          'Replace-set: the ids you send become that class’s whole set. Other classes keep ' +
+          'their own links to the same material.',
+        request: { schema: ClassMaterialsSaveInput },
         responses: { 200: ok(z.array(z.string()), 'The material ids now attached.') },
       },
     ],
@@ -1106,14 +1133,17 @@ const settings: PathDoc[] = [
       {
         method: 'get',
         auth: 'staff',
-        summary: 'The calendar theme',
+        summary: 'Your calendar theme',
+        description: 'Per account. Falls back to the school-wide theme until you change something.',
         responses: { 200: ok(c.ThemeRow, 'Every colour, settled.') },
       },
       {
         method: 'patch',
         auth: 'staff',
-        summary: 'Change the calendar theme',
-        description: 'A null field means "leave this one alone"; it is stripped before saving.',
+        summary: 'Change your calendar theme',
+        description:
+          'A null field means "leave this one alone"; it is stripped before saving. Saves ' +
+          'against the calling account only.',
         request: { schema: ThemeInput, patch: true },
         responses: { 200: ok(c.ThemeRow, 'The merged theme.') },
       },

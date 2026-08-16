@@ -854,6 +854,15 @@ export const EventMaterialLinks = z
   .union([z.array(z.string()), z.array(z.object({ eventId: z.string(), materialId: z.string() }))])
   .meta({ id: 'EventMaterialLinks' });
 
+/**
+ * `GET /api/class-materials` answers in the same two shapes: with `?classId=` it is that class's
+ * material ids; without, every link in the school. Materials are a shared library, so one id may
+ * appear under several classes.
+ */
+export const ClassMaterialLinks = z
+  .union([z.array(z.string()), z.array(z.object({ classId: z.string(), materialId: z.string() }))])
+  .meta({ id: 'ClassMaterialLinks' });
+
 /* ── Push ──────────────────────────────────────────────────────────────────────────────────── */
 
 export const PushRunResult = z

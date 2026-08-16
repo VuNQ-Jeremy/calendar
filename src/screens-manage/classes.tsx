@@ -22,6 +22,8 @@ interface ClassesLoaderData {
   classes: ClassRow[];
   students: StudentRow[];
   materials: MaterialRow[];
+  /** The whole class↔material join; a material may appear under any number of classes. */
+  classMaterials: { classId: string; materialId: string }[];
   tests: TestRow[];
   gradeLevels: GradeLevelRow[];
   classLevels: ClassLevelRow[];
@@ -39,8 +41,16 @@ type ClassDraft = {
 };
 
 export function ClassesScreen() {
-  const { classes, students, materials, tests, gradeLevels, classLevels, subjects } =
-    useLoaderData() as ClassesLoaderData;
+  const {
+    classes,
+    students,
+    materials,
+    classMaterials,
+    tests,
+    gradeLevels,
+    classLevels,
+    subjects,
+  } = useLoaderData() as ClassesLoaderData;
   const fetcher = useFetcher();
   const { t } = useLang();
   const [modal, setModal] = React.useState<ClassDraft | null>(null);
@@ -199,6 +209,7 @@ export function ClassesScreen() {
           subjectName={subjectName.get(detail.subjectId ?? '')}
           students={students}
           materials={materials}
+          classMaterials={classMaterials}
           tests={tests}
           onClose={() => setDetail(null)}
           onEdit={() => {
@@ -221,6 +232,7 @@ interface ClassDetailModalProps {
   subjectName?: string;
   students: StudentRow[];
   materials: MaterialRow[];
+  classMaterials: { classId: string; materialId: string }[];
   tests: TestRow[];
   onClose: () => void;
   onEdit: () => void;
@@ -234,34 +246,43 @@ function ClassDetailModal({
   subjectName,
   students,
   materials,
+  classMaterials,
   tests,
   onClose,
   onEdit,
 }: ClassDetailModalProps) {
   const { t } = useLang();
   const matFetcher = useFetcher();
-  const [ov, setOv] = React.useState<
-    Record<string, { scope: 'class' | 'event'; classId: string | null }>
-  >({});
-  const effScope = (m: MaterialRow) => ov[m.id]?.scope ?? m.scope;
-  const effClassId = (m: MaterialRow) => (ov[m.id] ? ov[m.id].classId : m.classId);
-  const isClassMat = (m: MaterialRow) => effScope(m) === 'class' && effClassId(m) === cls.id;
+
+  // Server truth for this class, overridden locally while a save is in flight so the list reacts
+  // on the first click (the route's clientAction stales route:classes behind us).
+  const serverIds = React.useMemo(
+    () => classMaterials.filter((l) => l.classId === cls.id).map((l) => l.materialId),
+    [classMaterials, cls.id],
+  );
+  const [ov, setOv] = React.useState<string[] | null>(null);
+  const attachedIds = ov ?? serverIds;
 
   const roster = students.filter((s) => cls.studentIds.includes(s.id));
-  const clsMaterials = materials.filter(isClassMat);
+  const clsMaterials = attachedIds
+    .map((id) => materials.find((m) => m.id === id))
+    .filter((m): m is MaterialRow => !!m);
   const clsTests = tests.filter((x) => x.classId === cls.id && x.status === 'published').length;
 
-  const setScope = (m: MaterialRow, scope: 'class' | 'event', moveToClass = false) => {
-    setOv((p) => ({ ...p, [m.id]: { scope, classId: moveToClass ? cls.id : effClassId(m) } }));
+  // Replace-set, like the event dialog's picker: attaching here never detaches the material
+  // anywhere else — the library is shared.
+  const saveLinks = (next: string[]) => {
+    setOv(next);
     const fd = new FormData();
-    fd.set('intent', 'update');
-    fd.set('id', m.id);
-    fd.set('scope', scope);
-    if (moveToClass) fd.set('classId', cls.id);
-    matFetcher.submit(fd, { action: '/materials', method: 'post' });
+    fd.set('intent', 'save');
+    fd.set('classId', cls.id);
+    fd.set('materialIds', JSON.stringify(next));
+    matFetcher.submit(fd, { action: '/class-materials', method: 'post' });
   };
-  const attachClass = (m: MaterialRow) => setScope(m, 'class', effClassId(m) !== cls.id);
-  const detachClass = (m: MaterialRow) => setScope(m, 'event');
+  const attachClass = (m: MaterialRow) => {
+    if (!attachedIds.includes(m.id)) saveLinks([...attachedIds, m.id]);
+  };
+  const detachClass = (m: MaterialRow) => saveLinks(attachedIds.filter((x) => x !== m.id));
 
   const Stat = (icon: IconName, label: string, val: number) => (
     <div
@@ -351,12 +372,17 @@ function ClassDetailModal({
         {t('cls_materials_n', { n: clsMaterials.length })}
       </div>
       <MaterialSearchDropdown
-        items={materials.filter((m) => !isClassMat(m))}
+        items={materials.filter((m) => !attachedIds.includes(m.id))}
         placeholder={t('ev_mat_search_ph')}
-        hint={(m) => {
-          const src = effClassId(m);
-          return src && src !== cls.id ? (classes.find((c) => c.id === src)?.name ?? '') : '';
-        }}
+        // Which other classes already use it — sharing is the point, so say so rather than
+        // implying the material would be moved.
+        hint={(m) =>
+          classMaterials
+            .filter((l) => l.materialId === m.id && l.classId !== cls.id)
+            .map((l) => classes.find((c) => c.id === l.classId)?.name)
+            .filter(Boolean)
+            .join(' · ')
+        }
         renderAction={(m) => (
           <MBtn variant="secondary" size="sm" onClick={() => attachClass(m)}>
             {t('mat_btn_add')}

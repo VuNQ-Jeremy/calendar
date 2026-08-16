@@ -9,6 +9,7 @@ import { ChipSelect } from '~/components/ChipSelect';
 import { useLang } from '~/lib/i18n';
 import { MAT_TYPES, MAT_TYPE_IDS, isLinkType } from '~/lib/mat-types';
 import {
+  useAllClassMaterials,
   useClasses,
   useMaterialMutations,
   useMaterials,
@@ -36,6 +37,9 @@ export default function Materials() {
 
   const { data: materials, isLoading, isRefetching } = useMaterials();
   const { data: classes } = useClasses();
+  // A material can be filed under several classes, so the chips and the class filter read the
+  // join rather than a column on the row.
+  const { data: links } = useAllClassMaterials();
   const { remove, toggleFavorite } = useMaterialMutations();
 
   const [q, setQ] = React.useState('');
@@ -47,9 +51,16 @@ export default function Materials() {
     (m) =>
       matches(q, m.title, m.fileName, m.url) &&
       (type === 'all' || m.type === type) &&
-      (classId === 'all' || m.classId === classId) &&
+      (classId === 'all' ||
+        (links ?? []).some((l) => l.materialId === m.id && l.classId === classId)) &&
       (!favOnly || m.favorite),
   );
+
+  const classesOf = (id: string) =>
+    (links ?? [])
+      .filter((l) => l.materialId === id)
+      .map((l) => classes?.find((c) => c.id === l.classId))
+      .filter((c): c is NonNullable<typeof c> => !!c);
 
   const confirmDelete = (m: MaterialRow) =>
     Alert.alert(t('delete'), m.title, [
@@ -116,7 +127,7 @@ export default function Materials() {
         renderItem={({ item: m }) => {
           const mt = MAT_TYPES[m.type] ?? MAT_TYPES.notes;
           const Icon = mt.icon;
-          const cls = classes?.find((c) => c.id === m.classId);
+          const linked = classesOf(m.id);
           const cat = th.category[mt.color as keyof typeof th.category];
           const link = isLinkType(m.type);
 
@@ -150,10 +161,15 @@ export default function Materials() {
                   </Body>
                   <View style={{ flexDirection: 'row', gap: th.spacing[1], flexWrap: 'wrap' }}>
                     <Tag>{t(mt.tk)}</Tag>
-                    <Tag dot color={cls?.color}>
-                      {cls?.name ?? t('mat_unfiled')}
-                    </Tag>
-                    {m.scope === 'event' ? <Tag>{t('mat_scope_event')}</Tag> : null}
+                    {linked.length ? (
+                      linked.map((c) => (
+                        <Tag key={c.id} dot color={c.color}>
+                          {c.name}
+                        </Tag>
+                      ))
+                    ) : (
+                      <Tag dot>{t('mat_unfiled')}</Tag>
+                    )}
                   </View>
                 </Pressable>
 

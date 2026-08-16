@@ -10,6 +10,7 @@ import * as classesSvc from '../../server/services/classes';
 import * as peopleSvc from '../../server/services/people';
 import * as materialsSvc from '../../server/services/materials';
 import * as eventMaterialsSvc from '../../server/services/event-materials';
+import * as classMaterialsSvc from '../../server/services/class-materials';
 import { ictDateOf } from '../../shared/logic/tests';
 import { addDaysIso } from '../../server/services/notify';
 import { requireStaff } from '../../server/services/auth';
@@ -29,7 +30,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const today = ictDateOf(new Date().toISOString());
   // Both schedule cards open the same event dialog the calendar uses, so this loader has to feed
   // it too: full classes (its attendance and check-in tabs read `studentIds`), the student and
-  // material rows, and the event-material links. `listLite` was enough when the cards only showed
+  // material rows, and both material joins. `listLite` was enough when the cards only showed
   // a class name; it is not enough to edit an event.
   const [
     todayEvents,
@@ -39,6 +40,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     students,
     materials,
     eventMaterials,
+    classMaterials,
   ] = await Promise.all([
     eventsSvc.listForToday(db, today),
     // Tomorrow .. +UPCOMING_DAYS for the "Coming up" card. Recurring rows come back whatever
@@ -49,6 +51,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     peopleSvc.listStudents(db),
     materialsSvc.list(db),
     eventMaterialsSvc.listAll(db),
+    classMaterialsSvc.listAll(db),
   ]);
   return {
     todayEvents,
@@ -58,6 +61,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     students,
     materials,
     eventMaterials,
+    classMaterials,
     studentCount: students.length,
     materialCount: materials.length,
   };

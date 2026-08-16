@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0247 — 2026-08-16
+Materials are now a shared library: one file can belong to several classes and events. Attaching moved to the class page and the event dialog; the materials page is plain CRUD.
+
 ## v0.0245 — 2026-08-16
 Class subject picker now lists only the subjects configured in Config, with an honest "No subject" empty state instead of an invented "General" subject. Classes without a subject show no subject tag rather than a fake one.
 

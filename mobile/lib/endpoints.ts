@@ -214,6 +214,16 @@ export const saveEventMaterials = (input: EventMaterialsSaveInput) =>
   apiFetch<{ ok: true }>('/api/event-materials', { method: 'POST', body: input });
 
 /**
+ * Class↔material links, same two shapes as the event pair above. Read-only from the phone:
+ * attaching is done on the web's class page, which is where the picker lives.
+ */
+export const listClassMaterials = (classId: string) =>
+  apiFetch<string[]>('/api/class-materials', { query: { classId } });
+
+export const listAllClassMaterials = () =>
+  apiFetch<{ classId: string; materialId: string }[]>('/api/class-materials');
+
+/**
  * "Preview buổi sau" for one occurrence. GET brings the vocabulary topics along so the picker
  * does not need a request of its own.
  */

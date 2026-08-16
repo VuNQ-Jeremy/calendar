@@ -5,6 +5,7 @@ import { createDb } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as materialsSvc from '../server/services/materials';
+import * as classMaterialsSvc from '../server/services/class-materials';
 import * as themeSvc from '../server/services/theme';
 import * as userSettingsSvc from '../server/services/user-settings';
 import * as feedbackSvc from '../server/services/feedback';
@@ -690,7 +691,7 @@ describe('FK cascade — delete class', () => {
     expect(evRows[0]?.classId).toBeNull();
   });
 
-  it('sets materials.class_id to NULL (SET NULL)', async () => {
+  it('cascades class_materials rows but keeps the material itself', async () => {
     const d = db();
     const cls = await classesSvc.create(d, {
       name: 'Mat Class',
@@ -700,14 +701,66 @@ describe('FK cascade — delete class', () => {
     const mat = await materialsSvc.create(d, {
       title: 'Mat Item',
       type: 'notes',
-      classId: cls.id,
       favorite: false,
     });
+    await classMaterialsSvc.setForClass(d, cls.id, [mat.id]);
 
     await classesSvc.remove(d, cls.id);
 
+    expect(await classMaterialsSvc.listForClass(d, cls.id)).toEqual([]);
+    // The file survives the class — it is library content, not class content.
     const matRows = await d.select().from(materials).where(eq(materials.id, mat.id));
-    expect(matRows[0]?.classId).toBeNull();
+    expect(matRows).toHaveLength(1);
+  });
+});
+
+describe('class materials — the shared library', () => {
+  it('links one material to two classes, and replaces a class set wholesale', async () => {
+    const d = db();
+    const a = await classesSvc.create(d, { name: 'Class A', color: 'green', studentIds: [] });
+    const b = await classesSvc.create(d, { name: 'Class B', color: 'blue', studentIds: [] });
+    const m1 = await materialsSvc.create(d, { title: 'Shared', type: 'notes', favorite: false });
+    const m2 = await materialsSvc.create(d, { title: 'Other', type: 'notes', favorite: false });
+
+    await classMaterialsSvc.setForClass(d, a.id, [m1.id]);
+    await classMaterialsSvc.setForClass(d, b.id, [m1.id, m2.id]);
+
+    // Attaching to B did not steal it from A — that was the whole bug (feedback F-21).
+    expect(await classMaterialsSvc.listForClass(d, a.id)).toEqual([m1.id]);
+    expect(await classMaterialsSvc.listForClass(d, b.id)).toEqual([m1.id, m2.id]);
+
+    // Replace-set: the submitted list becomes the whole set, for that class only.
+    await classMaterialsSvc.setForClass(d, b.id, [m2.id]);
+    expect(await classMaterialsSvc.listForClass(d, b.id)).toEqual([m2.id]);
+    expect(await classMaterialsSvc.listForClass(d, a.id)).toEqual([m1.id]);
+  });
+
+  it('listAll returns every pair, across classes', async () => {
+    const d = db();
+    const a = await classesSvc.create(d, { name: 'Pairs A', color: 'green', studentIds: [] });
+    const b = await classesSvc.create(d, { name: 'Pairs B', color: 'blue', studentIds: [] });
+    const m = await materialsSvc.create(d, { title: 'Both', type: 'notes', favorite: false });
+    await classMaterialsSvc.setForClass(d, a.id, [m.id]);
+    await classMaterialsSvc.setForClass(d, b.id, [m.id]);
+
+    const pairs = await classMaterialsSvc.listAll(d);
+    expect(pairs).toEqual(
+      expect.arrayContaining([
+        { classId: a.id, materialId: m.id },
+        { classId: b.id, materialId: m.id },
+      ]),
+    );
+  });
+
+  it('deleting the material drops its class links', async () => {
+    const d = db();
+    const cls = await classesSvc.create(d, { name: 'Class C', color: 'violet', studentIds: [] });
+    const mat = await materialsSvc.create(d, { title: 'Doomed', type: 'notes', favorite: false });
+    await classMaterialsSvc.setForClass(d, cls.id, [mat.id]);
+
+    await materialsSvc.remove(d, mat.id);
+
+    expect(await classMaterialsSvc.listForClass(d, cls.id)).toEqual([]);
   });
 });
 

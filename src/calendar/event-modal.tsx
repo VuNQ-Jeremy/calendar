@@ -40,6 +40,7 @@ interface EventModalProps {
   students: StudentRow[];
   materials: MaterialRow[];
   eventMaterials: { eventId: string; materialId: string }[];
+  classMaterials: { classId: string; materialId: string }[];
   events: EventRow[];
 }
 
@@ -269,6 +270,7 @@ interface EventMaterialsPickerProps {
   classes: ClassRow[];
   materials: MaterialRow[];
   eventMaterials: { eventId: string; materialId: string }[];
+  classMaterials: { classId: string; materialId: string }[];
   events: EventRow[];
 }
 
@@ -278,6 +280,7 @@ function EventMaterialsPicker({
   classes,
   materials,
   eventMaterials,
+  classMaterials,
   events,
 }: EventMaterialsPickerProps) {
   const { t } = useLang();
@@ -294,7 +297,13 @@ function EventMaterialsPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  const isClassMat = (m: MaterialRow) => m.scope === 'class' && m.classId === classId;
+  // A material belongs to this event's class through the join — and may belong to other classes
+  // too, which is fine: it simply shows under each of them.
+  const classMatIds = React.useMemo(
+    () => new Set(classMaterials.filter((l) => l.classId === classId).map((l) => l.materialId)),
+    [classMaterials, classId],
+  );
+  const isClassMat = (m: MaterialRow) => classMatIds.has(m.id);
   const classMats = materials.filter(isClassMat);
   const attachedMats = ids
     .map((id) => materials.find((m) => m.id === id))
@@ -352,11 +361,12 @@ function EventMaterialsPicker({
         items={candidates}
         placeholder={t('ev_mat_search_ph')}
         hint={(m) => {
-          const srcClass =
-            m.classId && m.classId !== classId
-              ? (classes.find((c) => c.id === m.classId)?.name ?? '')
-              : '';
-          return [srcClass, usageLabel(m)].filter(Boolean).join(' · ');
+          const srcClasses = classMaterials
+            .filter((l) => l.materialId === m.id && l.classId !== classId)
+            .map((l) => classes.find((c) => c.id === l.classId)?.name)
+            .filter(Boolean)
+            .join(' · ');
+          return [srcClasses, usageLabel(m)].filter(Boolean).join(' · ');
         }}
         renderAction={(m) => (
           <CBtn variant="secondary" size="sm" onClick={() => pickEvent(m)}>
@@ -707,6 +717,7 @@ export function EventModal({
   students,
   materials,
   eventMaterials,
+  classMaterials,
   events,
 }: EventModalProps) {
   const { t } = useLang();
@@ -813,7 +824,12 @@ export function EventModal({
           />
         </div>
       ) : tab === 'materials' && showTabs ? (
-        <MaterialsTab eventId={f.id!} classId={f.classId || ''} materials={materials} />
+        <MaterialsTab
+          eventId={f.id!}
+          classId={f.classId || ''}
+          materials={materials}
+          classMaterials={classMaterials}
+        />
       ) : (
         <div className="evm-pane-scroll">
           <div
@@ -905,6 +921,7 @@ export function EventModal({
                   classes={classes}
                   materials={materials}
                   eventMaterials={eventMaterials}
+                  classMaterials={classMaterials}
                   events={events}
                 />
               )}

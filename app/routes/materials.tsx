@@ -10,6 +10,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as materialsSvc from '../../server/services/materials';
 import type { MaterialRow } from '../../server/services/materials';
+import * as classMaterialsSvc from '../../server/services/class-materials';
 import * as classesSvc from '../../server/services/classes';
 import { MaterialInput, parsePatch } from '../../shared/schemas';
 import { cacheGet, cacheSet, invalidate } from '../../src/lib/cache.js';
@@ -25,8 +26,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   await requireStaff(request, env);
   const db = createDb(env);
-  const [materials, classes] = await Promise.all([materialsSvc.list(db), classesSvc.listLite(db)]);
-  return { materials, classes };
+  const [materials, classes, classMaterials] = await Promise.all([
+    materialsSvc.list(db),
+    classesSvc.listLite(db),
+    classMaterialsSvc.listAll(db),
+  ]);
+  return { materials, classes, classMaterials };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -37,7 +42,6 @@ clientLoader.hydrate = true as const;
 function preprocessMatRaw(raw: Record<string, unknown>) {
   const out = { ...raw };
   if (typeof out.favorite === 'string') out.favorite = out.favorite === 'true';
-  if (out.classId === '') out.classId = null;
   return out;
 }
 

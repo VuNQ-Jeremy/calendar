@@ -164,17 +164,20 @@ export const remarkCriteria = sqliteTable('remark_criteria', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
+/**
+ * The file library. Deliberately free of any owner column: which classes and which events carry
+ * a material lives in the `class_materials` / `event_materials` joins, so one file can be shared
+ * by any number of both.
+ */
 export const materials = sqliteTable('materials', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
   type: text('type').notNull().default('notes'),
-  classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
   url: text('url'),
   fileName: text('file_name'),
   fileKey: text('file_key'),
   favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
   addedAt: text('added_at'),
-  scope: text('scope').notNull().default('class'),
 });
 
 export const eventMaterials = sqliteTable(
@@ -191,6 +194,24 @@ export const eventMaterials = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.eventId, t.materialId] }),
     index('idx_event_materials_material').on(t.materialId),
+  ],
+);
+
+/** Class ↔ material links. Many-to-many both ways: classes share materials, materials span classes. */
+export const classMaterials = sqliteTable(
+  'class_materials',
+  {
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    materialId: text('material_id')
+      .notNull()
+      .references(() => materials.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.classId, t.materialId] }),
+    index('idx_class_materials_material').on(t.materialId),
   ],
 );
 

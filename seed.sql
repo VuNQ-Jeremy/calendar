@@ -74,11 +74,15 @@ INSERT INTO assessment_types (id, name, active, sort_order) VALUES
   ('at5', 'Essay draft',      1, 5),
   ('at6', 'Essay final',      1, 6);
 
-INSERT INTO materials (id, title, type, class_id, url, file_name, favorite, added_at) VALUES
-  ('m1', 'Photosynthesis slides', 'notes',     'c1', '',                        'photosynthesis.pdf', 1, '2026-06-22'),
-  ('m2', 'Khan: Quadratics',      'link',      'c2', 'https://khanacademy.org', '',                   0, '2026-06-22'),
-  ('m3', 'Essay rubric',          'worksheet', 'c3', '',                        'rubric.docx',        1, '2026-06-22'),
-  ('m4', 'Intro to color theory', 'video',     'c4', 'https://youtube.com',     '',                   0, '2026-06-22');
+INSERT INTO materials (id, title, type, url, file_name, favorite, added_at) VALUES
+  ('m1', 'Photosynthesis slides', 'notes',     '',                        'photosynthesis.pdf', 1, '2026-06-22'),
+  ('m2', 'Khan: Quadratics',      'link',      'https://khanacademy.org', '',                   0, '2026-06-22'),
+  ('m3', 'Essay rubric',          'worksheet', '',                        'rubric.docx',        1, '2026-06-22'),
+  ('m4', 'Intro to color theory', 'video',     'https://youtube.com',     '',                   0, '2026-06-22');
+
+-- Which class carries which file — a join, so a material can be shared by several classes.
+INSERT INTO class_materials (class_id, material_id) VALUES
+  ('c1', 'm1'), ('c2', 'm2'), ('c3', 'm3'), ('c4', 'm4');
 
 INSERT INTO invites (id, code, role, name, class_id, created_at, used) VALUES
   ('i1', 'ABC-234', 'Student', 'Ivy Tran',        'c1', '2026-06-22', 0),

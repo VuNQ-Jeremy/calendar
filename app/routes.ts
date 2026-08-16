@@ -8,6 +8,7 @@ export default [
   route('attendance', 'routes/attendance.tsx'),
   route('checkin', 'routes/checkin.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
+  route('class-materials', 'routes/class-materials.tsx'),
   route('event-previews', 'routes/event-previews.tsx'),
   // Page-view beacon (src/lib/track.ts). NOT under api/: that prefix is bearer-only, and the
   // beacon is a browser fetch/sendBeacon carrying a session cookie, same split as zalo-send-card.
@@ -77,6 +78,7 @@ export default [
   route('api/subjects/:id?', 'routes/api.subjects.tsx'),
   route('api/attendance', 'routes/api.attendance.tsx'),
   route('api/event-materials', 'routes/api.event-materials.tsx'),
+  route('api/class-materials', 'routes/api.class-materials.tsx'),
   route('api/event-previews', 'routes/api.event-previews.tsx'),
   route('api/my-sessions', 'routes/api.my-sessions.tsx'),
   route('api/flashcards/topics/:id?', 'routes/api.flashcards.topics.tsx'),

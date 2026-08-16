@@ -45,6 +45,12 @@ DELETE FROM flashcard_words;
 DELETE FROM flashcard_topics;
 DELETE FROM session_previews;
 DELETE FROM event_materials;
+-- Class ↔ material links (migration 0044). Unlike event_materials, seed.sql DOES insert links,
+-- so this is a wipe-and-restore: a spec that fails mid-attach must not leave a stray link behind,
+-- and the four canonical ones must still be there for the next run.
+DELETE FROM class_materials;
+INSERT INTO class_materials (class_id, material_id) VALUES
+  ('c1', 'm1'), ('c2', 'm2'), ('c3', 'm3'), ('c4', 'm4');
 -- The notification idempotency ledger (migration 0015). Keyed by a synthetic `key`, never by an
 -- entity, so nothing cascades it away — and every row is a permanent "already sent" for that key.
 -- logs-notifications.spec.ts presses Send on a forecast row; without this sweep the SECOND run
