@@ -229,12 +229,19 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
     }, 0);
   };
 
-  /** The row id, for pasting into a query or a bug report — the "F-12" handle is on the card. */
-  const copyId = (id: string) => {
+  /**
+   * Both identifiers in one paste: "F-12 <uuid>".
+   *
+   * The handle is the half a human reads and the UUID is the half a query needs, and which one
+   * you want is not known at copy time — so copy both and let the paste be trimmed. A row with
+   * no ref (none since migration 0041 backfilled them) copies the bare id.
+   */
+  const copyId = (f: FeedbackRow) => {
+    const text = f.ref == null ? f.id : `F-${f.ref} ${f.id}`;
     // Optimistic tick, as the invite codes do (src/screens-manage/people.tsx). The catch is only
     // to keep a refused clipboard from surfacing as an unhandled rejection.
-    navigator.clipboard?.writeText(id).catch(() => {});
-    setCopied(id);
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopied(f.id);
     setTimeout(() => setCopied(null), 1500);
   };
 
@@ -448,7 +455,7 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                copyId(f.id);
+                                copyId(f);
                               }}
                             >
                               <MIcon name={copied === f.id ? 'check' : 'copy'} size={16} />
