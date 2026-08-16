@@ -10,7 +10,15 @@ import type { ClassLite } from '../server/services/classes.js';
 import type { MaterialRow } from '../server/services/materials.js';
 import type { AppUser } from './screens-core.jsx';
 
-const { Card: XC, Button: XBtn, IconButton: XIB, Tag: XTag, Switch: XSw, Avatar: XAvatar } = DS;
+const {
+  Card: XC,
+  Button: XBtn,
+  IconButton: XIB,
+  Tag: XTag,
+  Switch: XSw,
+  Avatar: XAvatar,
+  Tabs: XTabs,
+} = DS;
 
 interface MaterialLoaderData {
   materials: MaterialRow[];
@@ -493,6 +501,7 @@ interface Theme {
   header: string;
   bgImage: string;
   bgOpacity: number;
+  defaultView: 'day' | 'week' | 'month' | 'agenda';
 }
 
 export function CalendarThemePanel() {
@@ -530,6 +539,23 @@ export function CalendarThemePanel() {
 
   return (
     <div>
+      <div className="mochi-eyebrow" style={{ marginBottom: 4 }}>
+        {t('theme_defaultview')}
+      </div>
+      <div className="m-muted" style={{ fontSize: 'var(--text-xs)', marginBottom: 8 }}>
+        {t('theme_defaultview_sub')}
+      </div>
+      <XTabs
+        value={draft.defaultView || 'week'}
+        onChange={(v: string) => submitNow({ defaultView: v as Theme['defaultView'] })}
+        tabs={[
+          { id: 'day', label: t('view_day') },
+          { id: 'week', label: t('view_week') },
+          { id: 'month', label: t('view_month') },
+          { id: 'agenda', label: t('view_agenda') },
+        ]}
+        style={{ marginBottom: 20 }}
+      />
       <div className="mochi-eyebrow" style={{ marginBottom: 8 }}>
         {t('theme_presets')}
       </div>

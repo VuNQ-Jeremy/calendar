@@ -117,4 +117,57 @@ test.describe('CRUD: per-account calendar theme', () => {
     await deleted;
     await expect(row).toHaveCount(0);
   });
+
+  /**
+   * Feedback F-22 / issue #20: the default day/week/month view is a customization option.
+   * It rides on the same per-account theme blob, so per-account isolation is already proven
+   * above — this test covers the new write path and that the choice survives a reload.
+   */
+  test('default view chosen in Customize is how the calendar opens', async ({ page }) => {
+    await signInStaff(page);
+    await page.goto('/calendar');
+    await expect(page.locator('.calwrap')).toBeVisible();
+
+    // Fresh account state opens in week view: the time grid, not the month grid.
+    const toolbar = page.locator('.cal-toolbar');
+    await expect(toolbar.getByRole('tab', { name: 'Week' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // Pick Month as the default, through the drawer. Both the drawer and the toolbar have
+    // tabs named Month, so every tab click here is scoped to its container.
+    await page.getByRole('button', { name: 'Customize' }).click();
+    const drawer = themeDrawer(page);
+    await expect(drawer).toBeVisible();
+    const posted = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' && new URL(r.url()).pathname === '/calendar.data' && r.ok(),
+    );
+    await drawer.getByRole('tab', { name: 'Month' }).click();
+    await posted;
+    await drawer.getByRole('button', { name: 'Done' }).click();
+    await expect(drawer).toHaveCount(0);
+
+    // The calendar now OPENS in month view.
+    await page.reload();
+    await expect(page.locator('.calwrap')).toBeVisible();
+    await expect(page.locator('.calwrap .month')).toBeVisible();
+    await expect(toolbar.getByRole('tab', { name: 'Month' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // --- Put the seeded account back on week so reruns and other specs see a fresh state.
+    await page.getByRole('button', { name: 'Customize' }).click();
+    const drawer2 = themeDrawer(page);
+    const reverted = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' && new URL(r.url()).pathname === '/calendar.data' && r.ok(),
+    );
+    await drawer2.getByRole('tab', { name: 'Week' }).click();
+    await reverted;
+    await drawer2.getByRole('button', { name: 'Done' }).click();
+    await expect(drawer2).toHaveCount(0);
+  });
 });

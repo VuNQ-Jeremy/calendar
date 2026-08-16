@@ -651,6 +651,13 @@ export const ProfileInput = z.object({
 });
 export type ProfileInput = z.infer<typeof ProfileInput>;
 
+/**
+ * The web calendar's four view modes. Mobile's calendar has no week view, so its own enum stays
+ * separate — this one names what `src/calendar/index.tsx` can actually render.
+ */
+export const CALENDAR_VIEWS = ['day', 'week', 'month', 'agenda'] as const;
+export type CalendarView = (typeof CALENDAR_VIEWS)[number];
+
 export const ThemeInput = z.object({
   bg: z
     .string()
@@ -670,6 +677,7 @@ export const ThemeInput = z.object({
     .nullish(),
   bgImage: z.string().nullish(),
   bgOpacity: z.coerce.number().min(0).max(1).nullish(),
+  defaultView: z.enum(CALENDAR_VIEWS).nullish(),
 });
 export type ThemeInput = z.infer<typeof ThemeInput>;
 

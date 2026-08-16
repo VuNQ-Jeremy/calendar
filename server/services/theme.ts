@@ -1,4 +1,5 @@
 import type { Db } from '../db/index';
+import type { CalendarView } from '../../shared/schemas';
 import { record } from './audit';
 import { readJson, writeJson } from './user-settings';
 
@@ -17,6 +18,9 @@ export const DEFAULT_THEME = {
   header: '#FDF6EC',
   bgImage: '',
   bgOpacity: 0.12,
+  // Which view the calendar opens in (F-22). Rows written before this key existed fall back to
+  // it through the `{ ...default, ...stored }` merge in readJson.
+  defaultView: 'week' as CalendarView,
 };
 
 export type Theme = typeof DEFAULT_THEME;

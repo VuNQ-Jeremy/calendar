@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0249 — 2026-08-16
+Calendar: the view it opens in (day/week/month/agenda) is now a per-account choice in the Customize drawer. Fixes F-22.
+
 ## v0.0248 — 2026-08-16
 Per-account settings: your calendar theme, UI preferences and notification switches are now yours alone, falling back to the school-wide defaults. Fixes F-19.
 

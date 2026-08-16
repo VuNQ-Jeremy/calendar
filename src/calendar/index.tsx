@@ -27,6 +27,7 @@ interface Theme {
   header: string;
   bgImage: string | null;
   bgOpacity: number;
+  defaultView: ViewMode;
 }
 
 interface CalendarLoaderData {
@@ -47,7 +48,7 @@ function CalendarScreen() {
   const fetcher = useFetcher();
   const { t, lang } = useLang();
   const { months, monthsShort, dow } = getCal(lang);
-  const [view, setView] = React.useState<ViewMode>('week');
+  const [view, setView] = React.useState<ViewMode>(theme.defaultView || 'week');
   const [cursor, setCursor] = React.useState(() => new Date(TODAY));
   const [editor, setEditor] = React.useState<EventDraft | null>(null);
   const [themeOpen, setThemeOpen] = React.useState(false);
