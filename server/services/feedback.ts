@@ -1,4 +1,4 @@
-import { eq, ne, desc } from 'drizzle-orm';
+import { eq, ne, desc, max } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import type { Db } from '../db/index';
 import type { FeedbackInput } from '../../shared/schemas';
@@ -20,6 +20,8 @@ export type FeedbackRow = {
   status: string;
   createdAt: string | null;
   appVersion: string | null;
+  ref: number | null;
+  issueNumber: number | null;
 };
 
 function map(r: typeof feedback.$inferSelect): FeedbackRow {
@@ -31,6 +33,8 @@ function map(r: typeof feedback.$inferSelect): FeedbackRow {
     status: r.status,
     createdAt: r.createdAt,
     appVersion: r.appVersion,
+    ref: r.ref,
+    issueNumber: r.issueNumber,
   };
 }
 
@@ -39,10 +43,24 @@ export async function list(db: Db): Promise<FeedbackRow[]> {
   return rows.map(map);
 }
 
+/**
+ * The next short handle: one past the highest in use.
+ *
+ * Deliberately not a UNIQUE-violating race worry in practice — this is a single-school inbox that
+ * sees a few reports a day, and D1 serialises writes. Deleting the newest report does free its
+ * number for reuse, which is fine: no two *live* rows ever share one, and the audit log keeps the
+ * deleted row with the ref it had.
+ */
+async function nextRef(db: Db): Promise<number> {
+  const rows = await db.select({ max: max(feedback.ref) }).from(feedback);
+  return (rows[0]?.max ?? 0) + 1;
+}
+
 export async function create(db: Db, input: FeedbackInput): Promise<FeedbackRow> {
   const id = crypto.randomUUID();
   await db.insert(feedback).values({
     id,
+    ref: await nextRef(db),
     message: input.message,
     category: input.category,
     author: input.author ?? null,
@@ -81,6 +99,17 @@ export async function update(
     record({ action: 'update', entityType: 'feedback', entityId: id, before, after });
   }
   return after;
+}
+
+/**
+ * Record which GitHub issue this report became.
+ *
+ * Written from the same `waitUntil` that opens the issue, so it lands after the response the
+ * reporter already saw. No audit entry: nobody chose this, and it would double every feedback
+ * create in the log.
+ */
+export async function setIssueNumber(db: Db, id: string, issueNumber: number): Promise<void> {
+  await db.update(feedback).set({ issueNumber }).where(eq(feedback.id, id));
 }
 
 export async function remove(db: Db, id: string): Promise<void> {

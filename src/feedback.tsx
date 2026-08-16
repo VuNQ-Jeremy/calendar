@@ -33,6 +33,9 @@ const STATUS: Record<string, { tk: string; color: string }> = {
 /** Board columns, left to right — the order a report travels through. */
 const COLUMNS = ['new', 'reviewed', 'done'];
 
+/** Where a report's issue lives — the repo `server/services/github.ts` opens issues on. */
+const GH_REPO_URL = 'https://github.com/VuNQ-Jeremy/calendar';
+
 const ICON_TINT = (color: string) => {
   const c = colorOf(color);
   return { background: c.soft, color: c.ink };
@@ -349,7 +352,10 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                           >
                             <MIcon name={cat.icon} size={16} />
                           </div>
-                          <div className="kcard__msg">{f.message}</div>
+                          <div className="kcard__msg">
+                            {f.ref != null && <span className="kcard__ref">F-{f.ref}</span>}
+                            {f.message}
+                          </div>
                           <span
                             className="lrow__grip"
                             title={t('fb_drag_status')}
@@ -379,6 +385,22 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                             >
                               {f.appVersion}
                             </span>
+                          )}
+                          {f.issueNumber != null && (
+                            <a
+                              className="m-row kcard__issue"
+                              style={{ gap: 5 }}
+                              href={`${GH_REPO_URL}/issues/${f.issueNumber}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={t('fb_issue_title')}
+                              // The card is draggable; without this the anchor never gets a
+                              // plain click, the browser starts a link-drag instead.
+                              draggable={false}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MIcon name="link" size={13} />#{f.issueNumber}
+                            </a>
                           )}
                         </div>
                         <div className="kcard__foot">

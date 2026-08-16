@@ -84,9 +84,9 @@ INSERT INTO invites (id, code, role, name, class_id, created_at, used) VALUES
   ('i1', 'ABC-234', 'Student', 'Ivy Tran',        'c1', '2026-06-22', 0),
   ('i2', 'KLM-789', 'Parent',  'Mina Park (Leo)', NULL, '2026-06-22', 1);
 
-INSERT INTO feedback (id, message, category, author, status, created_at) VALUES
-  ('fb1', 'Love the calendar color themes — the per-class hues make my week so easy to scan.', 'praise', 'Priya Nair', 'reviewed', '2026-06-20'),
-  ('fb2', 'Could we get a print / PDF export of the month view for the staff room board?',      'idea',   'Sam Okafor', 'new',      '2026-06-21');
+INSERT INTO feedback (id, message, category, author, status, created_at, ref) VALUES
+  ('fb1', 'Love the calendar color themes — the per-class hues make my week so easy to scan.', 'praise', 'Priya Nair', 'reviewed', '2026-06-20', 1),
+  ('fb2', 'Could we get a print / PDF export of the month view for the staff room board?',      'idea',   'Sam Okafor', 'new',      '2026-06-21', 2);
 
 INSERT INTO settings (key, value) VALUES
   ('theme', '{"bg":"#FFFCF8","gridLine":"#ECE0CF","today":"#FFE7D1","header":"#FDF6EC","bgImage":"","bgOpacity":0.12}');

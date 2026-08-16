@@ -6,6 +6,7 @@ import {
   primaryKey,
   index,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
 export const staff = sqliteTable('staff', {
@@ -285,8 +286,12 @@ export const feedback = sqliteTable(
     status: text('status').notNull().default('new'),
     createdAt: text('created_at'),
     appVersion: text('app_version'),
+    /** Short human handle, shown as "F-12". Assigned on insert, backfilled by 0041. */
+    ref: integer('ref'),
+    /** The GitHub issue `notifyFeedbackIssue` opened for this row, once it answers. */
+    issueNumber: integer('issue_number'),
   },
-  (t) => [index('idx_feedback_status').on(t.status)],
+  (t) => [index('idx_feedback_status').on(t.status), uniqueIndex('idx_feedback_ref').on(t.ref)],
 );
 
 export const scoreRecords = sqliteTable(

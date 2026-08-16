@@ -32,6 +32,10 @@ test.describe('CRUD: feedback and profile', () => {
     await post;
     await expect(column('New').locator('.kcard', { hasText: msg })).toBeVisible();
 
+    // Every report gets a short handle ("F-12") to quote — the id itself is a UUID, which is
+    // useless in conversation. Assert the shape, not the number: it counts up per environment.
+    await expect(card(msg).locator('.kcard__ref')).toHaveText(/^F-\d+$/);
+
     // A long column scrolls inside itself: the card list is the scroll box and the
     // page around it stays put, so every column's drop target keeps its place.
     const overflow = await column('New')

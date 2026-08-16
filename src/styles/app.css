@@ -2126,6 +2126,23 @@ body {
   /* columns are narrow — a pasted URL in a bug report must not blow one out */
   overflow-wrap: anywhere;
 }
+/* The handle you quote when talking about a report ("fix F-12"). Inline with the message rather
+   than on its own row: it reads as a label on the text, and the card is already three rows tall. */
+.kcard__ref {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-right: 6px;
+}
+.kcard__issue {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.kcard__issue:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
 .kcard__foot {
   display: flex;
   align-items: center;

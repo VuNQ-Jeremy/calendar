@@ -184,6 +184,17 @@ export const FeedbackInput = z.object({
   createdAt: z.string().nullish(),
   /** Which build the report came from, e.g. "v0.0042 · a1b2c3d". Nullish: older clients omit it. */
   appVersion: z.string().max(100).nullish(),
+  /**
+   * The short handle the board shows as "F-12" — server-assigned on insert and ignored on write,
+   * like `createdAt`. Nullish only for rows written before migration 0041 backfilled it.
+   */
+  ref: z.coerce.number().int().nullish(),
+  /**
+   * The GitHub issue opened for this report, filled in after the fact: the issue is created in a
+   * `waitUntil` and the number only exists once GitHub answers. Null when the integration was off,
+   * when it failed, or for rows that predate it.
+   */
+  issueNumber: z.coerce.number().int().nullish(),
 });
 export type FeedbackInput = z.infer<typeof FeedbackInput>;
 

@@ -13,7 +13,7 @@ const routes = crud({
   list: ({ db }) => svc.list(db),
   create: async (input, ctx) => {
     const row = await svc.create(ctx.db, input);
-    notifyFeedbackIssue(ctx.env, ctx.ctx, row);
+    notifyFeedbackIssue(ctx.env, ctx.ctx, ctx.db, row);
     return row;
   },
   update: (id, patch, { db }) => svc.update(db, id, patch),

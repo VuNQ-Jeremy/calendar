@@ -49,7 +49,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     const parsed = FeedbackInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     const row = await feedbackSvc.create(db, parsed.data);
-    notifyFeedbackIssue(env, ctx, row);
+    notifyFeedbackIssue(env, ctx, db, row);
     return { ok: true };
   }
 

@@ -215,6 +215,9 @@ export default function Feedback() {
 
             <View style={{ flexDirection: 'row', gap: th.spacing[2], flexWrap: 'wrap' }}>
               <Tag color={CAT_COLOR[f.category]}>{t(`cat_${f.category}`)}</Tag>
+              {/* The handle to quote when reporting this on: the same one the web board and the
+                  GitHub issue title show. */}
+              {f.ref != null ? <Mono>F-{f.ref}</Mono> : null}
               {f.author ? <Muted>{f.author}</Muted> : null}
               {f.createdAt ? <Muted>{fmtStamp(f.createdAt, locale(lang))}</Muted> : null}
             </View>

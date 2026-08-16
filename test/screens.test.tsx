@@ -143,6 +143,9 @@ describe('FeedbackScreen board', () => {
     status,
     createdAt: null,
     appVersion: null,
+    // 'f3' -> 3: the board shows this as the "F-3" handle.
+    ref: Number(id.slice(1)),
+    issueNumber: null,
   });
   const ROWS = [
     row('f1', 'Fresh idea', 'new'),
