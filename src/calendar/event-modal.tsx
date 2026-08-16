@@ -822,7 +822,7 @@ export function EventModal({
           >
             <div>
               <div className="mochi-field">
-                <label className="mochi-field__label">{t('ev_title')}</label>
+                <label className="mochi-field__label is-required">{t('ev_title')}</label>
                 <input
                   className="mochi-input"
                   placeholder={t('ev_title_ph')}
@@ -836,6 +836,7 @@ export function EventModal({
                   label={t('ev_date')}
                   value={f.date || ''}
                   onChange={(v) => set('date', v)}
+                  required
                 />
                 <MTimePicker
                   label={t('ev_start')}

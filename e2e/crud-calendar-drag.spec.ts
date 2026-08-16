@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, eventTitleInput, signInStaff, ui } from './crud-helpers';
 
 /**
  * Dragging events between days, and the scope question a recurring event asks first.
@@ -29,7 +29,7 @@ const col = (page: Page, i: number) => page.locator('.tgrid__col').nth(i);
 async function createEvent(page: Page, title: string, dk: string, repeat?: string) {
   const k = ui(page);
   await page.getByRole('button', { name: 'New event' }).click();
-  await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+  await eventTitleInput(k.dlg).fill(title);
   // Portalled date picker: each day button is labelled with its ISO date.
   await k.field('Date').locator('button.m-select__trigger').click();
   // A date a week back can fall outside the month the picker opens on.
@@ -338,14 +338,14 @@ test.describe('CRUD: calendar drag and drop', () => {
     await expect(row).toContainText(title);
     await row.locator(`text=${title}`).first().click();
 
-    await k.dlg.first().locator('input[placeholder="e.g. Biology lab"]').fill(`${title} v2`);
+    await eventTitleInput(k.dlg.first()).fill(`${title} v2`);
     await k.dlg.first().locator('.m-dialog__foot .mochi-btn.is-primary').click();
     const chooser = k.dlgOf('Edit recurring event');
     await expect(chooser).toBeVisible();
     // Cancelling returns to the editor with the edit still in the field.
     await page.keyboard.press('Escape');
     await expect(chooser).toHaveCount(0);
-    await expect(k.dlg.first().locator('input[placeholder="e.g. Biology lab"]')).toHaveValue(
+    await expect(eventTitleInput(k.dlg.first())).toHaveValue(
       `${title} v2`,
     );
     await page.keyboard.press('Escape');

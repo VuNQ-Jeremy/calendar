@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, eventTitleInput, signInStaff, ui } from './crud-helpers';
 
 /**
  * The event dialog's secondary writes — attendance, event materials, session
@@ -22,7 +22,7 @@ test.describe('CRUD: event tabs and calendar theme', () => {
 
     // Create a class-bound event.
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     await k.pickSel('Class', 'Biology 9A');
     let post = k.posted('/calendar');
     await k.submit().click();

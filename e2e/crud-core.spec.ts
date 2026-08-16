@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, eventTitleInput, signInStaff, ui } from './crud-helpers';
 
 /**
  * UI-driven CRUD for the three core domains: calendar events, classes, and
@@ -22,7 +22,7 @@ test.describe('CRUD: core domains', () => {
     // Create. The date defaults to today, so the event lands in the current
     // agenda window without touching the (custom, portalled) date picker.
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     let post = k.posted('/calendar');
     await k.submit().click(); // "Add event"
     await post;
@@ -35,7 +35,7 @@ test.describe('CRUD: core domains', () => {
 
     // Edit: clicking the event opens the full editor.
     await event.click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(`${title} v2`);
+    await eventTitleInput(k.dlg).fill(`${title} v2`);
     post = k.posted('/calendar');
     await k.submit().click(); // "Save"
     await post;
@@ -59,7 +59,7 @@ test.describe('CRUD: core domains', () => {
     await page.goto('/calendar');
 
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     // The date picker is portalled to document.body; each day button is labelled with its ISO
     // date, so tomorrow is addressable even when it falls in the next month's leading cells.
     await k.field('Date').locator('button.m-select__trigger').click();
@@ -129,6 +129,46 @@ test.describe('CRUD: core domains', () => {
     await k.dlgOf('Delete class?').locator('.mochi-btn.is-danger').click();
     await post;
     await expect(card(`${name} v2`)).toHaveCount(0);
+  });
+
+  test("class delete: the class's events go with it", async ({ page }) => {
+    const k = ui(page);
+    const name = `E2E cascade class ${Date.now()}`;
+
+    await page.goto('/classes');
+    await page.getByRole('button', { name: 'New class' }).click();
+    await k.dlg.locator('input[placeholder="e.g. Biology 9A"]').fill(name);
+    await k.pickSel('Grade', 'Khối 6');
+    await k.pickSel('Level', 'Cơ bản');
+    let post = k.posted('/classes');
+    await k.submit().click();
+    await post;
+    const card = page.locator(`.mochi-card:has(h3:text-is("${name}"))`);
+    await expect(card).toBeVisible();
+
+    // An event on that class, dated today so the agenda window covers it. The title is left
+    // blank on purpose: an untitled class event is named after its class, not "Untitled".
+    await page.goto('/calendar');
+    await page.getByRole('button', { name: 'New event' }).click();
+    await k.pickSel('Class', name);
+    post = k.posted('/calendar');
+    await k.submit().click();
+    await post;
+    await page.getByRole('tab', { name: 'Agenda' }).click();
+    await expect(page.locator('.aev', { hasText: name })).toBeVisible();
+
+    // Deleting the class must take the event with it — before this cascade the
+    // event survived as an orphan with no class (events.class_id is SET NULL).
+    await page.goto('/classes');
+    await card.getByRole('button', { name: 'Delete' }).click();
+    post = k.posted('/classes');
+    await k.dlgOf('Delete class?').locator('.mochi-btn.is-danger').click();
+    await post;
+    await expect(card).toHaveCount(0);
+
+    await page.goto('/calendar');
+    await page.getByRole('tab', { name: 'Agenda' }).click();
+    await expect(page.locator('.aev', { hasText: name })).toHaveCount(0);
   });
 
   test('student: create enrolled in a class, edit, delete', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, eventTitleInput, signInStaff, ui } from './crud-helpers';
 
 /**
  * The classroom kiosk itself: name grid → personal board → tap → confetti + bag, and the
@@ -32,7 +32,7 @@ test.describe('CRUD: kiosk', () => {
     const title = `E2E kiosk session ${Date.now()}`;
     await page.goto('/calendar');
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     await k.pickSel('Class', 'Biology 9A');
     post = k.posted('/calendar');
     await k.submit().click();
@@ -124,7 +124,7 @@ test.describe('CRUD: kiosk', () => {
     await signInStaff(page);
     await page.goto('/calendar');
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     await k.pickSel('Class', 'Biology 9A');
     let post = k.posted('/calendar');
     await k.submit().click();
@@ -134,7 +134,7 @@ test.describe('CRUD: kiosk', () => {
     await page.goto('/dashboard');
     const dashRow = page.locator('.lrow', { hasText: title });
     await dashRow.click();
-    await expect(k.dlg.locator('input[placeholder="e.g. Biology lab"]')).toHaveValue(title);
+    await expect(eventTitleInput(k.dlg)).toHaveValue(title);
     await expect(k.dlg.getByRole('tab', { name: 'Check-in/out' })).toBeVisible();
     await page.keyboard.press('Escape');
 

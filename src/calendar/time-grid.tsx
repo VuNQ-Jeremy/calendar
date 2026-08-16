@@ -201,11 +201,7 @@ export function TimeGrid({
           const isToday = dk === today;
           const dayEvents = all.filter((e) => e.date === dk);
           return (
-            <div
-              key={ci}
-              className={'tgrid__col' + (isToday ? ' is-today' : '')}
-              onMouseDown={(e) => onColDown(e, dk)}
-            >
+            <div key={ci} className="tgrid__col" onMouseDown={(e) => onColDown(e, dk)}>
               {HOURS.map((h) => (
                 <div key={h} className="tgrid__hourline" />
               ))}

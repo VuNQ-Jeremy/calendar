@@ -2,7 +2,7 @@ import React from 'react';
 import { useLoaderData, useFetcher, useNavigate } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
-import { PageHeader, Empty, Modal, MDatePicker, useConfirm } from './ui.jsx';
+import { PageHeader, Empty, Modal, MDatePicker, MSelect, useConfirm } from './ui.jsx';
 import { useLang } from './lib/i18n.jsx';
 import { ATTENDANCE_META } from '../shared/logic/assess.js';
 import type { AttendanceStatusId } from '../shared/logic/assess.js';
@@ -40,9 +40,15 @@ function useMonthLabel() {
   return (month: string) => monthLabel(month, lang);
 }
 
-/** Digits only — money is integer VND, and a stray separator must not become a different amount. */
+/**
+ * Digits only — money is integer VND, and a stray separator must not become a different amount.
+ *
+ * No sign: a minus never survived typing anyway (the field is controlled, so a lone '-' parsed to
+ * NaN → 0 and was erased before a digit could follow, and phone number pads have no minus key at
+ * all). Direction is a choice the adjustment dialog makes explicitly instead.
+ */
 function parseVnd(raw: string): number {
-  const digits = raw.replace(/[^\d-]/g, '');
+  const digits = raw.replace(/\D/g, '');
   const n = Number(digits);
   return Number.isFinite(n) ? n : 0;
 }
@@ -109,8 +115,22 @@ function LineRows({ lines }: { lines: TuitionLine[] }) {
 }
 
 type PaymentDraft = { studentId: string; paidVnd: number; paidAt: string; paymentNote: string };
-type AdjustmentDraft = { studentId: string; adjustmentVnd: number; adjustmentNote: string };
+/**
+ * The adjustment as the dialog edits it: a direction and a positive amount, which the save folds
+ * back into the one signed `adjustment_vnd` column. `customNote` remembers that "Other…" is
+ * selected, so clearing the free-text box doesn't snap the picker back to the preset list.
+ */
+type AdjustmentDraft = {
+  studentId: string;
+  kind: 'discount' | 'surcharge';
+  amountVnd: number;
+  adjustmentNote: string;
+  customNote: boolean;
+};
 type PriceDraft = { classId: string; priceVnd: number; effectiveFrom: string };
+
+/** Sentinel for the reason picker's "Other…" row; never stored. */
+const REASON_OTHER = '__other__';
 
 /** Per-class price list with its effective-date history. */
 function PricesModal({
@@ -347,13 +367,46 @@ function TuitionScreen() {
     setPayment(null);
   };
 
+  /**
+   * The preset reasons, stored as the text they read as: `adjustment_note` is free text that the
+   * fee slip prints verbatim, so there is no id to resolve back into a label later.
+   */
+  const reasonPresets = React.useMemo(
+    () => [
+      t('tuition_reason_sibling'),
+      t('tuition_reason_promo'),
+      t('tuition_reason_makeup'),
+      t('tuition_reason_materials'),
+      t('tuition_reason_hardship'),
+    ],
+    [t],
+  );
+
+  const openAdjustment = (row: {
+    studentId: string;
+    adjustmentVnd: number;
+    adjustmentNote?: string | null;
+  }) => {
+    const note = row.adjustmentNote ?? '';
+    setAdjustment({
+      studentId: row.studentId,
+      // A month with no adjustment yet opens on "surcharge", which is what a bare positive number
+      // has always meant here — the direction only ever changes when it is chosen.
+      kind: row.adjustmentVnd < 0 ? 'discount' : 'surcharge',
+      amountVnd: Math.abs(row.adjustmentVnd),
+      adjustmentNote: note,
+      customNote: !!note && !reasonPresets.includes(note),
+    });
+  };
+
   const saveAdjustment = () => {
     if (!adjustment) return;
     const fd = new FormData();
     fd.set('intent', 'save-adjustment');
     fd.set('month', month);
     fd.set('studentId', adjustment.studentId);
-    fd.set('adjustmentVnd', String(adjustment.adjustmentVnd));
+    const signed = adjustment.kind === 'discount' ? -adjustment.amountVnd : adjustment.amountVnd;
+    fd.set('adjustmentVnd', String(signed));
     fd.set('adjustmentNote', adjustment.adjustmentNote);
     submit(fd);
     setAdjustment(null);
@@ -526,17 +579,7 @@ function TuitionScreen() {
                   {isOpen && canExpand && <LineRows lines={row.lines} />}
                 </div>
                 <div className="lrow__actions">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      setAdjustment({
-                        studentId: row.studentId,
-                        adjustmentVnd: row.adjustmentVnd,
-                        adjustmentNote: row.adjustmentNote ?? '',
-                      })
-                    }
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => openAdjustment(row)}>
                     {t('tuition_adjustment')}
                   </Button>
                   <Button
@@ -629,23 +672,55 @@ function TuitionScreen() {
             </>
           }
         >
+          <MSelect
+            label={t('tuition_adjustment_kind')}
+            value={adjustment.kind}
+            onChange={(kind: string) =>
+              setAdjustment((a) => (a ? { ...a, kind: kind as AdjustmentDraft['kind'] } : a))
+            }
+            options={[
+              { value: 'discount', label: t('tuition_adjustment_discount') },
+              { value: 'surcharge', label: t('tuition_adjustment_surcharge') },
+            ]}
+          />
           <VndField
             label={t('tuition_adjustment')}
-            value={adjustment.adjustmentVnd}
+            value={adjustment.amountVnd}
             autoFocus
             hint={t('tuition_adjustment_hint')}
-            onChange={(adjustmentVnd) => setAdjustment((a) => (a ? { ...a, adjustmentVnd } : a))}
+            onChange={(amountVnd) => setAdjustment((a) => (a ? { ...a, amountVnd } : a))}
           />
-          <div className="mochi-field">
-            <label className="mochi-field__label">{t('tuition_adjustment_note')}</label>
-            <input
-              className="mochi-input"
-              value={adjustment.adjustmentNote}
-              onChange={(e) =>
-                setAdjustment((a) => (a ? { ...a, adjustmentNote: e.target.value } : a))
-              }
-            />
-          </div>
+          <MSelect
+            label={t('tuition_adjustment_note')}
+            value={adjustment.customNote ? REASON_OTHER : adjustment.adjustmentNote}
+            onChange={(v: string) =>
+              setAdjustment((a) =>
+                a
+                  ? v === REASON_OTHER
+                    ? { ...a, customNote: true, adjustmentNote: '' }
+                    : { ...a, customNote: false, adjustmentNote: v }
+                  : a,
+              )
+            }
+            options={[
+              { value: '', label: t('tuition_reason_none') },
+              ...reasonPresets.map((r) => ({ value: r, label: r })),
+              { value: REASON_OTHER, label: t('tuition_reason_other') },
+            ]}
+          />
+          {adjustment.customNote && (
+            <div className="mochi-field">
+              <input
+                className="mochi-input"
+                autoFocus
+                placeholder={t('tuition_adjustment_note')}
+                value={adjustment.adjustmentNote}
+                onChange={(e) =>
+                  setAdjustment((a) => (a ? { ...a, adjustmentNote: e.target.value } : a))
+                }
+              />
+            </div>
+          )}
         </Modal>
       )}
 

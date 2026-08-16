@@ -1,6 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import { classes, classStudents } from '../db/schema';
+import { classes, classStudents, events } from '../db/schema';
 import * as subjectsSvc from './subjects';
 import type { Db } from '../db/index';
 import type { ClassInput } from '../../shared/schemas';
@@ -172,9 +172,18 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
 
 export async function remove(db: Db, id: string): Promise<void> {
   // ON DELETE CASCADE handles class_schedule and class_students rows (folded into `extra` via
-  // the roster already on `before`). The events and tests FKs are ON DELETE SET NULL.
+  // the roster already on `before`). The events and tests FKs are ON DELETE SET NULL, so the
+  // class's events are deleted here first — left to the FK they would survive as orphaned
+  // personal events on everyone's calendar. Their ids go into `extra` so the audit row still
+  // says which ones went. Rows hanging off an event (event_materials, attendance_records,
+  // session_previews, checklist_items) cascade with it.
   const before = await get(db, id);
-  await recordDelete(db, 'class', classes, id, { studentIds: before?.studentIds ?? [] });
+  const owned = await db.select({ id: events.id }).from(events).where(eq(events.classId, id));
+  await recordDelete(db, 'class', classes, id, {
+    studentIds: before?.studentIds ?? [],
+    eventIds: owned.map((r) => r.id),
+  });
+  await db.delete(events).where(eq(events.classId, id));
   await db.delete(classes).where(eq(classes.id, id));
 }
 

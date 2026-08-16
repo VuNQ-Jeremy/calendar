@@ -2,6 +2,7 @@ import React from 'react';
 import { useLoaderData, useNavigate } from 'react-router';
 import { DS } from './ds/index.js';
 import { PageHeader, Empty, MSelect } from './ui.jsx';
+import { MIcon } from './icons.jsx';
 import { colorOf } from './lib/core.js';
 import { useLang } from './lib/i18n.jsx';
 import { scoreColorId } from './lib/assess.js';
@@ -347,11 +348,31 @@ export function RankingsScreen() {
   const rankNumClass = (rank: number | null) =>
     'rank-num' + (rank != null && rank <= 3 ? ` rank-num--${rank}` : '');
 
+  /**
+   * The podium marker for the top three. Every row renders the slot, medal or not, so the names
+   * below still line up under each other.
+   */
+  const rankTrophy = (rank: number | null) => (
+    <span className="rank-trophy">
+      {rank != null && rank <= 3 && (
+        <MIcon name="trophy" size={16} className={`rank-trophy--${rank}`} />
+      )}
+    </span>
+  );
+
+  /** The total, as a tinted chip — the same treatment `ScoreChip` gives the other numbers. */
+  const totalStyle = (v: number | null) => {
+    if (v == null) return undefined;
+    const c = colorOf(scoreColorId(v));
+    return { background: c.soft, color: c.ink };
+  };
+
   const row = (s: StudentRanking) => {
     const student = byId.get(s.studentId);
     if (!student) return null;
     return (
       <div key={s.studentId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
+        {rankTrophy(s.rank)}
         <span className={rankNumClass(s.rank)}>{s.rank ?? '—'}</span>
         <Avatar name={student.name} color={student.color} size="sm" />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -360,10 +381,7 @@ export function RankingsScreen() {
         </div>
         <ScoreChip label={t('rank_col_attitude')} value={s.attitude} />
         <ScoreChip label={t('rank_col_avg')} value={s.avgScore} />
-        <span
-          className="rank-total"
-          style={s.total != null ? { color: colorOf(scoreColorId(s.total)).ink } : undefined}
-        >
+        <span className="rank-total" style={totalStyle(s.total)}>
           {s.total ?? '—'}
         </span>
       </div>
@@ -443,6 +461,7 @@ export function RankingsScreen() {
             if (!cls) return null;
             return (
               <div key={c.classId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
+                {rankTrophy(c.rank)}
                 <span className={rankNumClass(c.rank)}>{c.rank ?? '—'}</span>
                 <Avatar name={cls.name} color={cls.color} size="sm" />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -454,12 +473,7 @@ export function RankingsScreen() {
                     })}
                   </div>
                 </div>
-                <span
-                  className="rank-total"
-                  style={
-                    c.average != null ? { color: colorOf(scoreColorId(c.average)).ink } : undefined
-                  }
-                >
+                <span className="rank-total" style={totalStyle(c.average)}>
                   {c.average ?? '—'}
                 </span>
               </div>

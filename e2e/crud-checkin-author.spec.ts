@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, pickDay, signInStaff, ui } from './crud-helpers';
+import { crudGuard, eventTitleInput, pickDay, signInStaff, ui } from './crud-helpers';
 
 /**
  * The event dialog's Check-in/out tab: authoring this session's check-in list, a
@@ -34,7 +34,7 @@ test.describe('CRUD: check-in/out authoring', () => {
     const title = `E2E checkin session ${Date.now()}`;
     await page.goto('/calendar');
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     await k.pickSel('Class', 'Biology 9A');
     await k.pickSel('Repeat', 'Every week');
     post = k.posted('/calendar');
@@ -117,7 +117,7 @@ test.describe('CRUD: check-in/out authoring', () => {
     await signInStaff(page);
     await page.goto('/calendar');
     await page.getByRole('button', { name: 'New event' }).click();
-    await k.dlg.locator('input[placeholder="e.g. Biology lab"]').fill(title);
+    await eventTitleInput(k.dlg).fill(title);
     await k.pickSel('Class', 'Biology 9A');
     let post = k.posted('/calendar');
     await k.submit().click();

@@ -90,6 +90,11 @@ interface EventWritesOpts {
   editor: EventDraft | null;
   setEditor: (e: EventDraft | null) => void;
   /**
+   * Only to name an event whose title was left blank: a class event is called after its class,
+   * and "Untitled" is kept for the personal ones that have no class to borrow a name from.
+   */
+  classes?: { id: string; name: string }[];
+  /**
    * Called for moves that commit straight away, so the caller can hold the event at its new slot
    * until the loader catches up. Not called for recurring moves — those wait on an answer, and
    * only the server knows what a split or a detach does to the series.
@@ -105,11 +110,20 @@ interface EventWritesOpts {
  * Returns the three handlers plus the dialog node — render it after the event modal so it stacks
  * above, both visually and in Modal's Escape ordering.
  */
-export function useEventWrites({ fetcher, editor, setEditor, onDirectMove }: EventWritesOpts) {
+export function useEventWrites({
+  fetcher,
+  editor,
+  setEditor,
+  onDirectMove,
+  classes,
+}: EventWritesOpts) {
   const { t } = useLang();
   const [pending, setPending] = React.useState<Pending | null>(null);
 
   const post = (fd: FormData) => fetcher.submit(fd, { action: '/calendar', method: 'post' });
+
+  const fallbackTitle = (f: EventDraft) =>
+    (f.classId && classes?.find((c) => c.id === f.classId)?.name) || t('ev_untitled');
 
   const submitMove = (p: Extract<Pending, { kind: 'move' }>, scope?: RecurScope) => {
     const fd = new FormData();
@@ -172,7 +186,7 @@ export function useEventWrites({ fetcher, editor, setEditor, onDirectMove }: Eve
     }
     // `editor` still holds the draft as it was opened — the modal edits its own copy — so it is
     // the occurrence date the teacher started from.
-    post(eventFormData(f, t('ev_untitled'), editor?.date));
+    post(eventFormData(f, fallbackTitle(f), editor?.date));
     setEditor(null);
   };
 
@@ -195,7 +209,7 @@ export function useEventWrites({ fetcher, editor, setEditor, onDirectMove }: Eve
       submitMove(p, scope);
     } else if (p.kind === 'save') {
       // No `fromDate` here — `scope` plus `occurrenceDate` is the newer, fuller spelling of it.
-      const fd = eventFormData(p.draft, t('ev_untitled'));
+      const fd = eventFormData(p.draft, fallbackTitle(p.draft));
       fd.set('scope', scope);
       fd.set('occurrenceDate', p.occurrenceDate);
       post(fd);

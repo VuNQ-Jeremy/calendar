@@ -95,6 +95,17 @@ export async function pickDay(page: Page, label: string, iso: string) {
   await day.click();
 }
 
+/**
+ * The event dialog's title input, located by placeholder.
+ *
+ * The app has no `name=` attributes and no label/input association, so the placeholder is the
+ * only stable handle — and it is user-facing copy that gets reworded. Kept in one place so a
+ * copy change costs one line here instead of a sweep through every calendar spec.
+ */
+export function eventTitleInput(root: Locator): Locator {
+  return root.locator('input[placeholder="Leave blank to use the class name"]');
+}
+
 /** The seeded student account (vunq@mochi.edu = Leo Park, in Biology 9A). */
 export async function signInStudent(page: Page) {
   await signIn(

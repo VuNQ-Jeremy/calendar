@@ -294,9 +294,11 @@ interface DatePickerProps {
   onChange: (v: string) => void;
   hint?: string;
   clearable?: boolean;
+  /** Draws the required star (.is-required) on the label. */
+  required?: boolean;
 }
 
-function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps) {
+function DatePicker({ label, value, onChange, hint, clearable, required }: DatePickerProps) {
   const { t, lang } = useLang();
   const { months, monthsShort, dowMon } = getCal(lang);
   const [open, setOpen] = React.useState(false);
@@ -390,7 +392,9 @@ function DatePicker({ label, value, onChange, hint, clearable }: DatePickerProps
 
   return (
     <div className="mochi-field">
-      {label && <label className="mochi-field__label">{label}</label>}
+      {label && (
+        <label className={'mochi-field__label' + (required ? ' is-required' : '')}>{label}</label>
+      )}
       <button
         type="button"
         ref={triggerRef}

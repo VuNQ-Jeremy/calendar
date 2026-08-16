@@ -109,7 +109,9 @@ export default function EventDetail() {
 
   const save = () => {
     const input: EventInput = {
-      title: draft.title.trim() || t('ev_untitled'),
+      // Same fallback the web editor uses (src/calendar/scope-dialog.tsx): a class event left
+      // untitled takes its class's name; "Untitled" is only for personal ones.
+      title: draft.title.trim() || cls?.name || t('ev_untitled'),
       date: draft.date,
       start: draft.start || null,
       end: draft.end || null,

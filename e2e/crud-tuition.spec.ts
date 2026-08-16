@@ -43,13 +43,19 @@ test.describe('CRUD: tuition', () => {
     await post;
     await expect(leo.getByText('Paid in full')).toBeVisible();
 
-    // A negative adjustment (discount) for the second student.
+    // A discount for the second student. The sign is a dropdown, not a typed minus: the amount
+    // field takes digits only (a '-' never survived typing, and phone keypads have no minus key).
     const mia = page.locator('.lrow', { hasText: 'Mia Chen' });
     await mia.getByRole('button', { name: 'Adjustment' }).click();
-    await k.dlgOf('Adjustment').locator('input.mochi-input').first().fill('-50000');
-    await k.dlgOf('Adjustment').locator('input.mochi-input').last().fill('E2E discount');
+    const adjDlg = k.dlgOf('Adjustment');
+    const adj = k.on(adjDlg);
+    await adj.pickSel('Type', 'Discount — take off');
+    await adj.textIn('Adjustment').fill('50000');
+    // "Other…" swaps the preset list for a free-text box, which has no label of its own.
+    await adj.pickSel('Reason', 'Other…');
+    await adjDlg.locator('input.mochi-input[placeholder="Reason"]').fill('E2E discount');
     post = k.posted('/tuition/2026-06');
-    await k.dlgOf('Adjustment').locator('.m-dialog__foot .mochi-btn.is-primary').click();
+    await adjDlg.locator('.m-dialog__foot .mochi-btn.is-primary').click();
     await post;
     // Anchor on the labelled line — a bare "50.000" is a substring of the
     // "150.000 ₫" amounts elsewhere in the row.

@@ -119,6 +119,7 @@ function CalendarScreen() {
     editor,
     setEditor,
     onDirectMove: setOptimistic,
+    classes,
   });
 
   const calStyle = {

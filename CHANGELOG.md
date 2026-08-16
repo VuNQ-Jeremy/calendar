@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0240 — 2026-08-16
+Feedback quick-wins: drop the week-view today tint, cascade a class's events on delete, event dialog required-star + class-name title fallback, ranking total as a tinted chip with podium trophies, and a discount/surcharge picker for tuition adjustments.
+
 ## v0.0239 — 2026-08-15
 chore(logs): drop the explanatory hint paragraphs under both Usage cards
 

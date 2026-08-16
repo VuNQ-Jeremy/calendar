@@ -181,7 +181,7 @@ function DashboardScreen({ user, onNav }: { user: AppUser; onNav: (route: string
     save: saveEvent,
     del: deleteEvent,
     dialog: scopeDialog,
-  } = useEventWrites({ fetcher, editor, setEditor });
+  } = useEventWrites({ fetcher, editor, setEditor, classes });
   /** Both cards' rows, deduped — the dialog only reads this to date-label shared materials. */
   const allEvents = React.useMemo(() => {
     const byId = new Map<string, EventRow>();
