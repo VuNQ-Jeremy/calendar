@@ -483,6 +483,28 @@ export const pushTokens = sqliteTable(
 );
 
 /**
+ * Per-account preferences — see migrations/0043_user_settings.sql.
+ *
+ * The per-user twin of `settings` above. Same JSON-blob-per-key shape, keyed on the account
+ * too, so one teacher's calendar theme is theirs alone (feedback F-19). Reads fall back to the
+ * `settings` row of the same key — that fallback is what let this ship without copying data.
+ *
+ * Declared here rather than next to `settings` because the FK callback must not run before
+ * `accounts` exists.
+ */
+export const userSettings = sqliteTable(
+  'user_settings',
+  {
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.key] })],
+);
+
+/**
  * Zalo Bot channel — see migrations/0027_zalo.sql.
  *
  * One row per paired Zalo conversation, keyed on Zalo's own `chat_id`. Exactly one of

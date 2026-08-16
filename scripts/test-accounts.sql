@@ -13,6 +13,12 @@
 -- rows are deleted in-test; the accounts have no UI delete path).
 DELETE FROM accounts WHERE email LIKE 'e2e-redeem-%';
 
+-- Per-account preferences (migration 0043). The cascade off `accounts` above only reaches the
+-- redeemed e2e accounts — dev@mochi.edu's account SURVIVES a reset, so without this a theme set
+-- by crud-user-settings.spec.ts would still be there on the next run and its "a fresh account
+-- sees the school default" assertion would fail.
+DELETE FROM user_settings;
+
 -- Activity log (migration 0035). Append-only and unrelated to any spec's own assertions, but a
 -- leaked prior run's rows would make crud-activity.spec.ts's row-count-based checks (e.g. "exactly
 -- 3 events for this entity id") fragile across reruns against the same test database.

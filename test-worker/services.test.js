@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { createDb } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as materialsSvc from '../server/services/materials';
 import * as themeSvc from '../server/services/theme';
+import * as userSettingsSvc from '../server/services/user-settings';
 import * as feedbackSvc from '../server/services/feedback';
 import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
@@ -35,6 +36,7 @@ import {
   behaviorRecords,
   attendanceRecords,
   settings,
+  userSettings,
   questions as questionsTable,
   tests as testsTable,
   testQuestions,
@@ -145,6 +147,91 @@ async function seedStaffAccount(db, { email, password, name = 'Test User' } = {}
   });
   return { accountId, staffId: staffRow.id };
 }
+
+// ---- Per-account settings (migration 0043) ----
+
+describe('user-settings service', () => {
+  it('falls back to the global settings row, then to defaults', async () => {
+    const stamp = crypto.randomUUID();
+    const { accountId } = await seedStaffAccount(db(), {
+      email: `us-fallback-${stamp}@test.com`,
+      password: 'pw',
+    });
+    const key = `probe-${stamp}`;
+    const defaults = { a: 1, b: 'x' };
+
+    // Nothing anywhere -> defaults.
+    expect(await userSettingsSvc.readJson(db(), accountId, key, defaults)).toEqual(defaults);
+
+    // Global row only -> global, merged over defaults (b survives).
+    await userSettingsSvc.writeSchoolJson(db(), key, { a: 2 });
+    expect(await userSettingsSvc.readJson(db(), accountId, key, defaults)).toEqual({
+      a: 2,
+      b: 'x',
+    });
+
+    // My row wins over the global row.
+    await userSettingsSvc.writeJson(db(), accountId, key, { a: 3, b: 'mine' });
+    expect(await userSettingsSvc.readJson(db(), accountId, key, defaults)).toEqual({
+      a: 3,
+      b: 'mine',
+    });
+    // …and the global row is untouched by that write.
+    expect(await userSettingsSvc.readSchoolJson(db(), key, defaults)).toEqual({ a: 2, b: 'x' });
+  });
+
+  it('keeps two accounts independent', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `us-a-${stamp}@test.com`, password: 'pw' });
+    const b = await seedStaffAccount(db(), { email: `us-b-${stamp}@test.com`, password: 'pw' });
+    const key = `k-${stamp}`;
+    const defaults = { v: 0 };
+
+    await userSettingsSvc.writeJson(db(), a.accountId, key, { v: 1 });
+    expect(await userSettingsSvc.readJson(db(), a.accountId, key, defaults)).toEqual({ v: 1 });
+    expect(await userSettingsSvc.readJson(db(), b.accountId, key, defaults)).toEqual({ v: 0 });
+  });
+
+  it('upserts rather than duplicating, and bulk-reads every account at once', async () => {
+    const stamp = crypto.randomUUID();
+    const key = `bulk-${stamp}`;
+    const a = await seedStaffAccount(db(), { email: `us-c-${stamp}@test.com`, password: 'pw' });
+    await userSettingsSvc.writeJson(db(), a.accountId, key, { v: 1 });
+    await userSettingsSvc.writeJson(db(), a.accountId, key, { v: 2 });
+
+    const rows = await db()
+      .select()
+      .from(userSettings)
+      .where(and(eq(userSettings.accountId, a.accountId), eq(userSettings.key, key)));
+    expect(rows).toHaveLength(1);
+
+    const all = await userSettingsSvc.readJsonForAll(db(), key, { v: 0 });
+    expect(all.get(a.accountId)).toEqual({ v: 2 });
+  });
+
+  it('a corrupt row degrades to the fallback instead of throwing', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `us-d-${stamp}@test.com`, password: 'pw' });
+    await db()
+      .insert(userSettings)
+      .values({ accountId: a.accountId, key: `bad-${stamp}`, value: 'not json' });
+    expect(await userSettingsSvc.readJson(db(), a.accountId, `bad-${stamp}`, { v: 7 })).toEqual({
+      v: 7,
+    });
+  });
+
+  it('deleting the account takes its preferences with it', async () => {
+    const stamp = crypto.randomUUID();
+    const a = await seedStaffAccount(db(), { email: `us-e-${stamp}@test.com`, password: 'pw' });
+    await userSettingsSvc.writeJson(db(), a.accountId, `casc-${stamp}`, { v: 1 });
+    await db().delete(accounts).where(eq(accounts.id, a.accountId));
+    const left = await db()
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.accountId, a.accountId));
+    expect(left).toHaveLength(0);
+  });
+});
 
 describe('auth service — login', () => {
   it('returns null for bad credentials', async () => {
