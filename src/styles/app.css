@@ -1575,68 +1575,136 @@ body {
   }
 }
 
-/* rankings (bảng xếp hạng): a plain .lrow list, with the rank number carrying the only
-   ornament — a medal fill for the top three. */
-.rank-num {
-  width: 28px;
-  height: 28px;
+/* rankings (bảng xếp hạng): an .lrow list where two things are colour-coded and they mean
+   different things — the ROW says where you placed (medal tint, top three only), the CHIPS say
+   how you scored (the green/orange/rose score bands used everywhere else in the app). Keeping
+   them on separate surfaces is what lets a 2nd-place row carry a rose total without the two
+   signals fighting. Everything below rank 3 stays on the plain card. */
+
+/* literal hexes throughout: the palette has no medal colours, and gold/silver/bronze are the
+   point. Each metal gets a fill (the number disc), a stroke (trophy + laurel) and a row wash.
+   Qualified with .lrow deliberately: `.lrow` sets its own background further down this file, so
+   a bare .rank-row--n would lose on source order and the tint would silently never appear. */
+.lrow.rank-row--1 {
+  background: linear-gradient(90deg, #fdf3d7, var(--surface-card) 60%);
+  border-color: #f0d68a;
+}
+.lrow.rank-row--2 {
+  background: linear-gradient(90deg, #f1f3f6, var(--surface-card) 60%);
+  border-color: #d8dce2;
+}
+.lrow.rank-row--3 {
+  background: linear-gradient(90deg, #fbeadb, var(--surface-card) 60%);
+  border-color: #ecc7a3;
+}
+
+/* The podium badge: laurel branches around a trophy, rank number on the cup as a medal disc.
+   One element replaces what used to be a separate trophy slot and number pill. */
+.rank-badge {
+  position: relative;
+  width: 62px;
+  height: 40px;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-pill);
-  font-weight: 800;
-  color: var(--text-muted);
 }
-/* literal hexes: the palette has no medal colours, and gold/silver/bronze are the point */
-.rank-num--1 {
+/* Thinner than MIcon's default 2: the branch is a background flourish, not a peer of the trophy. */
+.rank-badge__laurel {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  stroke-width: 1.7;
+}
+.rank-badge__laurel--l {
+  left: 0;
+}
+/* One icon, mirrored — a wreath is symmetric, so a second path would only be a place to drift. */
+.rank-badge__laurel--r {
+  right: 0;
+  transform: translateY(-50%) scaleX(-1);
+}
+.rank-badge__trophy {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  margin-left: -14px;
+}
+/* Filled, not bare text: at 12px a digit sitting on the cup's own strokes was unreadable. */
+.rank-badge__num {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  margin-left: -9px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+}
+.rank-badge--1 {
+  color: #d3a017;
+}
+.rank-badge--1 .rank-badge__num {
   background: #f6c445;
   color: #5c4300;
 }
-.rank-num--2 {
+.rank-badge--2 {
+  color: #9aa0a8;
+}
+.rank-badge--2 .rank-badge__num {
   background: #d9dce1;
   color: #4a4f57;
 }
-.rank-num--3 {
+.rank-badge--3 {
+  color: #b9793f;
+}
+.rank-badge--3 .rank-badge__num {
   background: #e8b27d;
   color: #5c3a10;
 }
-/* Always rendered, empty below rank 3, so the rows stay aligned on the name column. */
-.rank-trophy {
-  width: 16px;
+/* Rank 4 and below: no badge, just the number in the same slot so the name column stays aligned. */
+.rank-num {
+  width: 62px;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-muted);
 }
-/* Darker than the .rank-num--n fills: these are 2px strokes on the card, not filled pills. */
-.rank-trophy--1 {
-  color: #d3a017;
-}
-.rank-trophy--2 {
-  color: #9aa0a8;
-}
-.rank-trophy--3 {
-  color: #b9793f;
-}
+
 .rank-chip {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   min-width: 64px;
 }
 .rank-chip__label {
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
-/* A tinted chip rather than coloured text: the total is the number the board is sorted by, and
-   the attitude/average chips beside it were already louder than it was. */
+/* The score chips and the total share one treatment so they read as one row of measurements.
+   The ring is mixed from the chip's own ink, which the inline score-band style already set —
+   that keeps a single source of colour per chip instead of passing base and ink separately. */
+.rank-chip .mchip,
+.rank-total {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
+}
+.rank-chip .mchip {
+  font-size: var(--text-md);
+  padding: 3px 12px;
+}
+/* The number the board is sorted by — the loudest thing in the row after the badge. */
 .rank-total {
   font-weight: 800;
-  font-size: var(--text-lg);
-  min-width: 56px;
+  font-size: var(--text-xl);
+  min-width: 62px;
   text-align: center;
-  padding: 2px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-pill);
 }
 .rank-breakdown {
@@ -1662,12 +1730,20 @@ body {
   padding: 11px 0;
   line-height: var(--text-md);
 }
-/* narrow: the three numbers are the ranking, the prose breakdown is not */
+/* narrow: the three numbers are the ranking, the prose breakdown is not. The laurel goes too —
+   it is the first thing to become texture at this width, and the trophy still reads. */
 @media (max-width: 720px) {
   .rank-chip {
     min-width: 48px;
   }
   .rank-breakdown {
+    display: none;
+  }
+  .rank-badge,
+  .rank-num {
+    width: 34px;
+  }
+  .rank-badge__laurel {
     display: none;
   }
 }

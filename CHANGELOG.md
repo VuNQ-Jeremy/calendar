@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0242 — 2026-08-16
+feat(rankings): podium badge (laurel + trophy + rank number), medal-tinted top-three rows, louder score chips
+
 ## v0.0241 — 2026-08-16
 Feedback reports get a short handle (F-12) and a link to their GitHub issue, both backfilled for existing rows.
 

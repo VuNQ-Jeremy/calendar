@@ -104,6 +104,11 @@ const M_ICONS = {
   // The rankings board's top three.
   trophy:
     '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  // Half a laurel wreath — the left branch. The rankings badge renders it twice, mirroring the
+  // second with scaleX(-1), so the wreath can never drift out of symmetry. Leaves are filled
+  // rather than stroked: at the ~4px they occupy on the board, an outlined leaf is a smudge.
+  laurel:
+    '<path d="M15.8 2.6C10 6.3 7.3 11 7.3 15.2c0 3.5 2.5 5.8 6.2 6.8"/><g fill="currentColor" stroke="none"><path transform="translate(12.4 6.2) rotate(-26) scale(1.28)" d="M0 0q-3.4-1.3-3-4.8 3.4 1.3 3 4.8Z"/><path transform="translate(8.9 11.8) rotate(2) scale(1.28)" d="M0 0q-3.4-1.3-3-4.8 3.4 1.3 3 4.8Z"/><path transform="translate(9.6 18.6) rotate(32) scale(1.28)" d="M0 0q-3.4-1.3-3-4.8 3.4 1.3 3 4.8Z"/></g>',
 } as const;
 
 export type IconName = keyof typeof M_ICONS;

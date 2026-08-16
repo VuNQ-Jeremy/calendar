@@ -72,6 +72,31 @@ function aggregateCheckin(tallies: TuiMuMonthTally[]): TuiMuMonthTally | null {
   };
 }
 
+/**
+ * The podium marker: laurel branches around a trophy, with the rank number sitting on the cup as
+ * a medal disc. Ranks 4 and below render the bare number in a slot of the same width, so every
+ * name on the board still starts on the same vertical line.
+ *
+ * Colour here means PLACE (gold/silver/bronze), which is deliberately a different axis from the
+ * score chips beside it — those keep the app-wide green/orange/rose bands and mean PERFORMANCE.
+ * A second-place row with a middling total should look exactly like that, and it does.
+ */
+function RankBadge({ rank }: { rank: number | null }) {
+  if (rank == null || rank > 3) return <span className="rank-num">{rank ?? '—'}</span>;
+  return (
+    <span className={`rank-badge rank-badge--${rank}`}>
+      <MIcon name="laurel" size={24} className="rank-badge__laurel rank-badge__laurel--l" />
+      <MIcon name="trophy" size={28} className="rank-badge__trophy" />
+      <MIcon name="laurel" size={24} className="rank-badge__laurel rank-badge__laurel--r" />
+      <span className="rank-badge__num">{rank}</span>
+    </span>
+  );
+}
+
+/** Medal wash on the row itself for the top three; everything below sits on the plain card. */
+const rankRowClass = (rank: number | null) =>
+  'lrow' + (rank != null && rank <= 3 ? ` rank-row--${rank}` : '');
+
 /** A labelled score chip. `null` shows an em dash rather than a misleading zero. */
 function ScoreChip({ label, value }: { label: string; value: number | null }) {
   const c = value == null ? null : colorOf(scoreColorId(value));
@@ -345,21 +370,6 @@ export function RankingsScreen() {
     return parts.join(' · ');
   };
 
-  const rankNumClass = (rank: number | null) =>
-    'rank-num' + (rank != null && rank <= 3 ? ` rank-num--${rank}` : '');
-
-  /**
-   * The podium marker for the top three. Every row renders the slot, medal or not, so the names
-   * below still line up under each other.
-   */
-  const rankTrophy = (rank: number | null) => (
-    <span className="rank-trophy">
-      {rank != null && rank <= 3 && (
-        <MIcon name="trophy" size={16} className={`rank-trophy--${rank}`} />
-      )}
-    </span>
-  );
-
   /** The total, as a tinted chip — the same treatment `ScoreChip` gives the other numbers. */
   const totalStyle = (v: number | null) => {
     if (v == null) return undefined;
@@ -371,9 +381,12 @@ export function RankingsScreen() {
     const student = byId.get(s.studentId);
     if (!student) return null;
     return (
-      <div key={s.studentId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
-        {rankTrophy(s.rank)}
-        <span className={rankNumClass(s.rank)}>{s.rank ?? '—'}</span>
+      <div
+        key={s.studentId}
+        className={rankRowClass(s.rank)}
+        style={{ alignItems: 'center', gap: 10 }}
+      >
+        <RankBadge rank={s.rank} />
         <Avatar name={student.name} color={student.color} size="sm" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{student.name}</div>
@@ -460,9 +473,12 @@ export function RankingsScreen() {
             const cls = board.byId.get(c.classId);
             if (!cls) return null;
             return (
-              <div key={c.classId} className="lrow" style={{ alignItems: 'center', gap: 10 }}>
-                {rankTrophy(c.rank)}
-                <span className={rankNumClass(c.rank)}>{c.rank ?? '—'}</span>
+              <div
+                key={c.classId}
+                className={rankRowClass(c.rank)}
+                style={{ alignItems: 'center', gap: 10 }}
+              >
+                <RankBadge rank={c.rank} />
                 <Avatar name={cls.name} color={cls.color} size="sm" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{cls.name}</div>
