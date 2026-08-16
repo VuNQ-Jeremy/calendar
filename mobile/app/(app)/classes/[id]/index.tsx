@@ -98,7 +98,7 @@ export default function ClassDetail() {
     <Screen edges={{ top: true }}>
       <ScreenHeader
         title={isNew ? t('cls_new_class') : t('cls_edit_class')}
-        subtitle={isNew ? undefined : subjectName || t('cls_general')}
+        subtitle={isNew ? undefined : subjectName || undefined}
       />
 
       <ScrollView
@@ -116,9 +116,9 @@ export default function ClassDetail() {
           value={subjectId}
           onChange={setSubjectId}
           options={[
-            { value: '', label: t('cls_general') },
+            { value: '', label: t('cls_no_subject') },
             // A deactivated subject stays offered on a class that already uses it, so editing
-            // the name does not silently move the class to "General".
+            // the name does not silently strip the class of its subject.
             ...(subjects ?? [])
               .filter((s) => s.active || s.id === subjectId)
               .map((s) => ({ value: s.id, label: s.name })),

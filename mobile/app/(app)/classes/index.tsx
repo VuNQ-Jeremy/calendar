@@ -96,18 +96,18 @@ export default function ClassesList() {
                   <ChevronRight size={18} color={th.color.textDisabled} />
                 </View>
 
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: th.spacing[3],
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <Tag color={c.color}>
-                    {subjectName.get(c.subjectId ?? '') || t('cls_general')}
-                  </Tag>
-                </View>
+                {subjectName.get(c.subjectId ?? '') ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: th.spacing[3],
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Tag color={c.color}>{subjectName.get(c.subjectId ?? '')}</Tag>
+                  </View>
+                ) : null}
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[3] }}>
                   {/* Overlapping avatars, as on the web's `.avatar-stack`. */}

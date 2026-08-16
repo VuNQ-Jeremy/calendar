@@ -129,9 +129,9 @@ export function ClassesScreen() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h3 style={{ margin: '0 0 6px', fontSize: 'var(--text-lg)' }}>{c.name}</h3>
                     <div className="m-row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                      <MTag color={c.color}>
-                        {subjectName.get(c.subjectId ?? '') || t('cls_general')}
-                      </MTag>
+                      {subjectName.get(c.subjectId ?? '') && (
+                        <MTag color={c.color}>{subjectName.get(c.subjectId ?? '')}</MTag>
+                      )}
                       {gradeName.get(c.gradeLevelId ?? '') && (
                         <MTag color="blue">{gradeName.get(c.gradeLevelId ?? '')}</MTag>
                       )}
@@ -317,7 +317,7 @@ function ClassDetailModal({
       }
     >
       <div className="m-row" style={{ gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <MTag color={cls.color}>{subjectName || t('cls_general')}</MTag>
+        {subjectName && <MTag color={cls.color}>{subjectName}</MTag>}
         {gradeName && <MTag color="blue">{gradeName}</MTag>}
         {levelName && <MTag color="violet">{levelName}</MTag>}
       </div>
@@ -457,7 +457,9 @@ function ClassModal({
           value={draft.subjectId ?? ''}
           onChange={(v: string) => set('subjectId', v || null)}
           options={[
-            { value: '', label: t('cls_general') },
+            // Only the subjects configured in Config, plus the honest empty state — there is no
+            // implicit "General" subject a class can belong to.
+            { value: '', label: t('cls_no_subject') },
             ...subjects
               .filter((s) => s.active || s.id === draft.subjectId)
               .map((s) => ({ value: s.id, label: s.name })),

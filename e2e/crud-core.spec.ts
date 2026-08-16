@@ -118,10 +118,18 @@ test.describe('CRUD: core domains', () => {
     // re-picked here: Save staying enabled proves both ids round-tripped into the draft.
     await card(name).getByRole('button', { name: 'Edit' }).click();
     await k.dlg.locator('input[placeholder="e.g. Biology 9A"]').fill(`${name} v2`);
+    // The subject picker offers the configured subjects and nothing else — there is no invented
+    // "General" entry standing in for "no subject" any more.
+    await k.field('Subject').locator('button.m-select__trigger').click();
+    await expect(page.getByRole('option', { name: 'General', exact: true })).toHaveCount(0);
+    await page.getByRole('option', { name: 'No subject', exact: true }).click();
     post = k.posted('/classes');
     await k.submit().click();
     await post;
     await expect(card(`${name} v2`)).toBeVisible();
+    // Cleared subject means no subject tag at all; the cohort tags are untouched.
+    await expect(card(`${name} v2`).locator('.mochi-tag', { hasText: 'Science' })).toHaveCount(0);
+    await expect(card(`${name} v2`).locator('.mochi-tag', { hasText: 'Khối 6' })).toBeVisible();
 
     // Delete — confirms with "Delete class?".
     await card(`${name} v2`).getByRole('button', { name: 'Delete' }).click();

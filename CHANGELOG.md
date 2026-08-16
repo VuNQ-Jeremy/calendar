@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0245 — 2026-08-16
+Class subject picker now lists only the subjects configured in Config, with an honest "No subject" empty state instead of an invented "General" subject. Classes without a subject show no subject tag rather than a fake one.
+
 ## v0.0243 — 2026-08-16
 Feedback board: click a card anywhere to edit it, and copy its id from the card.
 

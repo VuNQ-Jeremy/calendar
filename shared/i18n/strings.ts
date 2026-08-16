@@ -662,7 +662,7 @@ const en_strings = {
   cls_view_details: 'View class details',
   cls_delete_q: 'Delete class?',
   cls_delete_msg: '"{name}" and its calendar events will be removed. Students stay in the system.',
-  cls_general: 'General',
+  cls_no_subject: 'No subject',
   cls_stat_tests: 'Tests',
   cls_roster_n: 'Roster · {n}',
   cls_no_students_assigned: 'No students assigned.',
@@ -2253,7 +2253,7 @@ export const STRINGS = {
     cls_delete_q: 'Xóa lớp?',
     cls_delete_msg:
       '"{name}" và các sự kiện trên lịch của lớp sẽ bị xóa. Học sinh vẫn ở trong hệ thống.',
-    cls_general: 'Chung',
+    cls_no_subject: 'Không có môn',
     cls_stat_tests: 'Bài kiểm tra',
     cls_roster_n: 'Danh sách · {n}',
     cls_no_students_assigned: 'Chưa có học sinh.',
