@@ -22,8 +22,19 @@ const calBg = (page: Page) =>
 /** The theme drawer is a `.drawer`, not one of the `.m-dialog` modals the helper kit locates. */
 const themeDrawer = (page: Page) => page.locator('.drawer[role="dialog"]');
 
-/** Apply whichever preset is not currently selected, and wait for the write to land. */
-async function pickAnotherPreset(page: Page) {
+/** The seeded school-wide theme (seed.sql), which is what an account with no theme of its own sees. */
+const SCHOOL_DEFAULT_BG = '#FFFCF8'; // preset "Cream"
+const DUSK_BG = '#2E2A33';
+
+/**
+ * Apply a preset BY NAME and wait for the write to land.
+ *
+ * Named rather than "whichever one isn't active": picking relatively means the colour an account
+ * ends up with depends on the colour it started with, so a retry — where account A is still
+ * wearing the colour the failed attempt gave it — can land it back on the school default and make
+ * the isolation assertions compare two identical colours.
+ */
+async function pickPreset(page: Page, name: string) {
   await page.getByRole('button', { name: 'Customize' }).click();
   const drawer = themeDrawer(page);
   await expect(drawer).toBeVisible();
@@ -31,7 +42,7 @@ async function pickAnotherPreset(page: Page) {
     (r) =>
       r.request().method() === 'POST' && new URL(r.url()).pathname === '/calendar.data' && r.ok(),
   );
-  await drawer.locator('.preset:not(.is-active)').first().click();
+  await drawer.locator('.preset', { hasText: name }).click();
   await posted;
   await drawer.getByRole('button', { name: 'Done' }).click();
   await expect(drawer).toHaveCount(0);
@@ -53,12 +64,9 @@ test.describe('CRUD: per-account calendar theme', () => {
     // --- Account A picks a distinctive colour through the Customize drawer.
     await page.goto('/calendar');
     await expect(page.locator('.calwrap')).toBeVisible();
-    const aBefore = await calBg(page);
-
-    await pickAnotherPreset(page);
-    await expect.poll(() => calBg(page)).not.toBe(aBefore);
-    const aColor = await calBg(page);
-    expect(aColor).toBeTruthy();
+    await pickPreset(page, 'Dusk');
+    await expect.poll(() => calBg(page)).toBe(DUSK_BG);
+    const aColor = DUSK_BG;
 
     // --- Mint account B: add a teacher, take the invite code it produces.
     await page.goto('/people');
@@ -94,14 +102,14 @@ test.describe('CRUD: per-account calendar theme', () => {
     await expect(other.locator('.calwrap')).toBeVisible();
     // THE assertion this spec exists for: a brand new account sees the school default, not the
     // colour A chose a moment ago.
-    const bBefore = await calBg(other);
-    expect(bBefore).not.toBe(aColor);
+    expect(await calBg(other)).toBe(SCHOOL_DEFAULT_BG);
 
     // --- B picks its own, and A is untouched by it.
-    await pickAnotherPreset(other);
-    await expect.poll(() => calBg(other)).not.toBe(bBefore);
+    await pickPreset(other, 'Meadow');
+    await expect.poll(() => calBg(other)).not.toBe(SCHOOL_DEFAULT_BG);
 
-    await page.reload();
+    // `page` was left on /people by the invite step above, so this has to navigate, not reload.
+    await page.goto('/calendar');
     await expect(page.locator('.calwrap')).toBeVisible();
     expect(await calBg(page)).toBe(aColor);
 

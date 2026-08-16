@@ -167,7 +167,9 @@ test.describe('CRUD: pronounce game round', () => {
     await page.getByRole('button', { name: 'Detailed breakdown' }).click();
     const drawer = page.getByRole('dialog');
     await expect(drawer.getByText('Fluency')).toBeVisible();
-    await expect(drawer.getByText('88', { exact: true })).toBeVisible(); // raw accuracy, not 90
+    // Scoped to the clip-score row: the fixture also gives the schwa a phoneme score of 88, so a
+    // bare getByText('88') matches the per-phoneme breakdown too and fails strict mode.
+    await expect(drawer.locator('.m-row', { hasText: 'Accuracy' })).toContainText('88'); // not 90
     await expect(drawer.getByText('/fɛ/', { exact: true })).toBeVisible();
     await expect(drawer.getByText('66', { exact: true })).toBeVisible(); // that syllable's score
     await expect(drawer.getByText('We heard: “ephemeral”')).toBeVisible();

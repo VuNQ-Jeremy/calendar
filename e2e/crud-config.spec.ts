@@ -87,10 +87,11 @@ test.describe('CRUD: config', () => {
   test('every setting is a row that opens into its modal', async ({ page }) => {
     const row = (title: string) => page.locator(`.cfg-row:has(.lrow__title:text-is("${title}"))`);
 
-    // Sixteen settings, grouped. The summary is the point — it is what replaces scrolling.
+    // Seventeen settings, grouped. The summary is the point — it is what replaces scrolling.
     // This count is deliberately exact: adding a setting without a row would otherwise pass
-    // silently. Bump it when you add one (13 -> 16 came with check-in and túi mù).
-    await expect(page.locator('.cfg-row')).toHaveCount(16);
+    // silently. Bump it when you add one (13 -> 16 came with check-in and túi mù, 17 with
+    // the pronunciation forgiveness curve).
+    await expect(page.locator('.cfg-row')).toHaveCount(17);
     await expect(row('Assessment types').locator('.cfg-row__value')).toHaveText(/of \d+ active/);
     await expect(row('Ranking weights').locator('.cfg-row__value')).toHaveText(/^\d+ \/ \d+$/);
 

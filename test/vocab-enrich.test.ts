@@ -51,6 +51,11 @@ describe('enrichWords request', () => {
     );
 
   const stubFetch = (res: Response) => {
+    // enrichWords only ever runs inside a Durable Object, where there is no `window`. These tests
+    // run under the suite's jsdom environment, which has one — and the SDK constructor refuses to
+    // build a client in anything that looks like a browser (it would expose the API key). Removing
+    // `window` restores the Worker's shape; afterEach unstubs it.
+    vi.stubGlobal('window', undefined);
     const mock = vi.fn(async (_url: unknown, _init?: RequestInit) => res);
     vi.stubGlobal('fetch', mock);
     return mock;

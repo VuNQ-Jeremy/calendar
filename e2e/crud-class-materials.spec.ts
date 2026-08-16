@@ -26,6 +26,11 @@ test.describe('CRUD: class materials', () => {
       await expect(dlg).toBeVisible();
       return dlg;
     };
+    // The dialog shell always renders its own "Close" icon button in the header, so a bare
+    // getByRole('button', { name: 'Close' }) matches two elements and fails strict mode. The
+    // footer button is the one a user reaches for.
+    const closeClass = (dlg: ReturnType<typeof k.dlgOf>) =>
+      dlg.locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
 
     // --- Create it on the materials page, which is now plain CRUD ---
     await signInStaff(page);
@@ -55,14 +60,14 @@ test.describe('CRUD: class materials', () => {
         .click();
       await attached;
       await expect(dlg.locator('.lrow', { hasText: title })).toBeVisible();
-      await dlg.getByRole('button', { name: 'Close' }).click();
+      await closeClass(dlg);
     }
 
     // --- The first class kept it. Sharing, not moving: this is the F-21 regression ---
     await page.reload();
     const bio = await openClass('Biology 9A');
     await expect(bio.locator('.lrow', { hasText: title })).toBeVisible();
-    await bio.getByRole('button', { name: 'Close' }).click();
+    await closeClass(bio);
 
     // --- Both classes show as read-only chips on the library page ---
     await page.goto('/materials');
@@ -79,7 +84,7 @@ test.describe('CRUD: class materials', () => {
       .click();
     await detached;
     await expect(algebra.locator('.lrow', { hasText: title })).toHaveCount(0);
-    await algebra.getByRole('button', { name: 'Close' }).click();
+    await closeClass(algebra);
 
     await page.goto('/materials');
     await expect(card()).toContainText('Biology 9A');

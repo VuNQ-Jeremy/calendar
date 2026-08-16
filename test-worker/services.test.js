@@ -764,7 +764,7 @@ describe('FK cascade — delete class', () => {
     expect(linkAfter.length).toBe(0);
   });
 
-  it('sets events.class_id to NULL (SET NULL)', async () => {
+  it('deletes the class events rather than orphaning them on every calendar', async () => {
     const d = db();
     const cls = await classesSvc.create(d, {
       name: 'Event Class',
@@ -777,11 +777,22 @@ describe('FK cascade — delete class', () => {
       classId: cls.id,
       recurrence: 'none',
     });
+    const personal = await eventsSvc.create(d, {
+      title: 'Personal Event',
+      date: '2024-01-15',
+      classId: null,
+      recurrence: 'none',
+    });
 
     await classesSvc.remove(d, cls.id);
 
+    // The FK is ON DELETE SET NULL, but classesSvc.remove deletes the owned events first — left to
+    // the FK they would survive as untitled personal events on everyone's calendar.
     const evRows = await d.select().from(events).where(eq(events.id, ev.id));
-    expect(evRows[0]?.classId).toBeNull();
+    expect(evRows).toHaveLength(0);
+
+    const personalRows = await d.select().from(events).where(eq(events.id, personal.id));
+    expect(personalRows).toHaveLength(1);
   });
 
   it('cascades class_materials rows but keeps the material itself', async () => {

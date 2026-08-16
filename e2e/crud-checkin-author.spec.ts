@@ -93,7 +93,13 @@ test.describe('CRUD: check-in/out authoring', () => {
     // Cleanup: delete the event, then the throwaway activity type.
     await k.dlg.getByRole('tab', { name: 'Details' }).click();
     post = k.posted('/calendar');
-    await k.dlg.locator('.m-dialog__foot .mochi-btn.is-danger').click();
+    // This event repeats weekly, so Delete raises the scope chooser instead of posting: nothing
+    // reaches the server until a scope is picked, and waitForResponse simply stays pending in
+    // between. (The rescheduling test below deletes a one-off event and is never asked.)
+    const chooser = k.dlgOf('Delete recurring event');
+    await k.dlg.first().locator('.m-dialog__foot .mochi-btn.is-danger').click();
+    await chooser.getByRole('radio', { name: 'All events' }).check();
+    await chooser.locator('.m-dialog__foot .mochi-btn.is-danger').click();
     await post;
 
     await page.goto('/config');
