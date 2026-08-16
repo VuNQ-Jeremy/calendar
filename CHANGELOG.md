@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0243 — 2026-08-16
+Feedback board: click a card anywhere to edit it, and copy its id from the card.
+
 ## v0.0242 — 2026-08-16
 feat(rankings): podium badge (laurel + trophy + rank number), medal-tinted top-three rows, louder score chips
 

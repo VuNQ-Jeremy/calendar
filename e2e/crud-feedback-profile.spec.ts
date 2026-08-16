@@ -52,7 +52,12 @@ test.describe('CRUD: feedback and profile', () => {
     await post;
     await expect(column('Resolved').locator('.kcard', { hasText: msg })).toBeVisible();
 
-    await card(msg).getByRole('button', { name: 'Edit' }).click();
+    // The whole card opens the editor — there is no edit button any more. The action buttons
+    // beside it must NOT open it, which is why each stops its own click.
+    await expect(card(msg).getByRole('button', { name: 'Copy feedback id' })).toBeVisible();
+    // Aim at the message rather than the card's centre: the centre can land on the meta row,
+    // where the issue link would swallow the click (and open a tab) on a report that has one.
+    await card(msg).locator('.kcard__msg').click();
     await k.textIn('Your feedback').fill(`${msg} v2`);
     post = k.posted('/feedback');
     await k.submit().click(); // "Save"

@@ -211,6 +211,32 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
   const [changelogOpen, setChangelogOpen] = React.useState(false);
   const [dragId, setDragId] = React.useState<string | null>(null);
   const [overCol, setOverCol] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState<string | null>(null);
+
+  /**
+   * The whole card opens the editor, so a drop must not also open it.
+   *
+   * Native HTML5 drag-and-drop does not dispatch a click after a drop, but a cancelled drag on
+   * some browsers does — and the same race already bites the calendar's mouse-driven drag, where
+   * the editor pops open over the event that was just moved. One tick of suppression costs
+   * nothing and closes it here.
+   */
+  const suppressClickRef = React.useRef(false);
+  const suppressNextClick = () => {
+    suppressClickRef.current = true;
+    setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  };
+
+  /** The row id, for pasting into a query or a bug report — the "F-12" handle is on the card. */
+  const copyId = (id: string) => {
+    // Optimistic tick, as the invite codes do (src/screens-manage/people.tsx). The catch is only
+    // to keep a refused clipboard from surfacing as an unhandled rejection.
+    navigator.clipboard?.writeText(id).catch(() => {});
+    setCopied(id);
+    setTimeout(() => setCopied(null), 1500);
+  };
 
   // A status change is a round trip, and the loader keeps the old value until it lands.
   // Reading the in-flight FormData lets the card sit in its new column the moment it is
@@ -334,6 +360,7 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                       <div
                         key={f.id}
                         className={'kcard' + (dragId === f.id ? ' is-dragging' : '')}
+                        title={t('fb_open_hint')}
                         draggable
                         onDragStart={(e) => {
                           setDragId(f.id);
@@ -341,8 +368,13 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                           e.dataTransfer.setData('text/plain', f.id);
                         }}
                         onDragEnd={() => {
+                          suppressNextClick();
                           setDragId(null);
                           setOverCol(null);
+                        }}
+                        onClick={() => {
+                          if (suppressClickRef.current) return;
+                          setModal({ ...f });
                         }}
                       >
                         <div className="kcard__top">
@@ -405,18 +437,40 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                         </div>
                         <div className="kcard__foot">
                           <FTag color={cat.color as 'blue'}>{t(cat.tk)}</FTag>
+                          {/* Each button stops its own click. NOT the container: a
+                              stopPropagation on `.lrow__actions` makes a dead zone over the
+                              card's own click target, which is a bug this codebase has had
+                              before. Editing lives on the card itself, so there is no edit
+                              button here — only the three things a click on the card can't do. */}
                           <div className="lrow__actions">
+                            <FIB
+                              label={copied === f.id ? t('copied') : t('fb_copy_id')}
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyId(f.id);
+                              }}
+                            >
+                              <MIcon name={copied === f.id ? 'check' : 'copy'} size={16} />
+                            </FIB>
                             <FIB
                               label={done ? t('fb_reopen') : t('fb_resolve')}
                               size="sm"
-                              onClick={() => toggleDone(f)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleDone(f);
+                              }}
                             >
                               <MIcon name="check" size={16} />
                             </FIB>
-                            <FIB label={t('edit')} size="sm" onClick={() => setModal({ ...f })}>
-                              <MIcon name="edit" size={16} />
-                            </FIB>
-                            <FIB label={t('delete')} size="sm" onClick={() => removeFeedback(f.id)}>
+                            <FIB
+                              label={t('delete')}
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFeedback(f.id);
+                              }}
+                            >
                               <MIcon name="trash" size={16} />
                             </FIB>
                           </div>

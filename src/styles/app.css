@@ -2177,7 +2177,10 @@ body {
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--border-subtle);
   background: var(--surface-card);
-  cursor: grab;
+  /* `pointer`, not `grab`: clicking the card to edit is the common action and dragging it to
+     another column the occasional one. The drag still works, and the grip icon still advertises
+     it — same trade Trello-style boards make. */
+  cursor: pointer;
   transition: box-shadow var(--dur-fast) var(--ease-out);
 }
 .kcard:hover {
