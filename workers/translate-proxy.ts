@@ -5,7 +5,7 @@ import { createRawDb } from '../server/db/internal';
 import { trackAiUsage } from '../server/services/usage';
 import { ictDateOf } from '../shared/logic/tests';
 import type { AiUsage } from '../shared/logic/usage';
-import type { VocabEnrichItem, VocabGenerateInput } from '../shared/schemas';
+import type { VocabEnrichInput, VocabGenerateInput } from '../shared/schemas';
 
 /**
  * Durable Object that performs Anthropic API calls from a fixed region.
@@ -53,7 +53,7 @@ export class TranslateProxy extends DurableObject<Env> {
       }
       const { words, usage } = await enrichSvc.enrichWords(
         this.env.ANTHROPIC_API_KEY,
-        body as VocabEnrichItem[],
+        body as VocabEnrichInput,
       );
       track(usage);
       return Response.json({ words });

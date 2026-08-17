@@ -1,12 +1,33 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AiUsage } from '../../shared/logic/usage';
-import type { EnrichedWord, VocabEnrichItem } from '../../shared/schemas';
+import type { EnrichedWord, VocabEnrichInput, VocabEnrichQuality } from '../../shared/schemas';
 import { exampleContainsAnswer } from '../../shared/logic/flashcards';
 
-// Claude Haiku 4.5 — cheap, fast, and supports structured outputs. This is a
-// short, non-agentic classification-style call, so no thinking/effort/sampling
-// params (effort would error on this pre-4.7 model).
-const MODEL = 'claude-haiku-4-5';
+/**
+ * The two tiers `VocabEnrichQuality` selects between. Ids live here, never in a client payload.
+ *
+ * `fast` — Claude Haiku 4.5: cheap and quick, for the interactive auto-fill a teacher reviews.
+ * `best` — Claude Opus 5: for bulk backfills of material that ships as-is, where a wrong Vietnamese
+ * gloss becomes a wrong flashcard nobody re-reads. Roughly 15x the cost per word, hence opt-in.
+ *
+ * THE TWO MODELS NEED DIFFERENT PARAMETERS, and getting it wrong is a 400 or a truncation:
+ *
+ *  - Haiku 4.5 predates `effort` — sending it errors. So no thinking or effort params at all.
+ *  - Opus 5 accepts the full effort ladder AND HAS THINKING ON BY DEFAULT (unlike Haiku, and unlike
+ *    Opus 4.8/4.7 where omitting the field meant no thinking). Thinking output is billed and counted
+ *    against the same `max_tokens` ceiling as the answer, so the budget below is raised for this
+ *    tier — otherwise a full batch truncates and `stop_reason: 'max_tokens'` throws.
+ *  - Neither tier may send `temperature`/`top_p`/`top_k` or `thinking.budget_tokens`: both are
+ *    removed on Opus 5 and return a 400.
+ *
+ * Thinking is deliberately left ON for `best` rather than disabled at low effort. Disabling it is
+ * legal at effort `high` or below, but on Opus 5 a thinking-disabled request can leak `<thinking>`
+ * tags into the response text — and this response IS the JSON we parse.
+ */
+const MODELS: Record<VocabEnrichQuality, string> = {
+  fast: 'claude-haiku-4-5',
+  best: 'claude-opus-5',
+};
 
 /**
  * Explicit request timeout, which ALSO lifts an SDK guard we need lifted.
@@ -65,17 +86,27 @@ Rules:
  */
 export async function enrichWords(
   apiKey: string,
-  items: VocabEnrichItem[],
+  input: VocabEnrichInput,
 ): Promise<{ words: EnrichedWord[]; usage: AiUsage }> {
+  const { items, quality } = input;
   const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS });
+  const best = quality === 'best';
   const response = await client.messages.create({
-    model: MODEL,
+    model: MODELS[quality],
     // Six fields per word instead of the one the old translate call returned, so ~100 output
     // tokens per word (the example sentence roughly doubled it). Sized for the schema's 200-item
     // ceiling with headroom — above the SDK's non-streaming limit, hence TIMEOUT_MS.
-    max_tokens: 32000,
+    //
+    // Doubled for `best`, because Opus 5 thinks by default and thinking is charged against this
+    // same ceiling. 64000 still sits inside TIMEOUT_MS's 10 minutes for the 50-word chunks callers
+    // actually send.
+    max_tokens: best ? 64000 : 32000,
     system: SYSTEM,
     output_config: {
+      // `effort` only on the tier whose model has it — Haiku 4.5 400s on this field. `low` is right
+      // for a fill-in-the-fields call: the work is recall, not reasoning, and low effort keeps the
+      // thinking spend (and latency) down on a tier that is already the expensive one.
+      ...(best ? { effort: 'low' as const } : {}),
       format: {
         type: 'json_schema',
         schema: {

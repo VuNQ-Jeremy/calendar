@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0257 — 2026-08-17
+Vocabulary enrichment can run on a higher-quality model tier for bulk backfills, and platform admins can now correct words in the shared library.
+
 ## v0.0256 — 2026-08-17
 Seed the Tiếng Anh 9 Global Success book into the shared library: 6 units, 381 words, with a re-runnable import driver.
 

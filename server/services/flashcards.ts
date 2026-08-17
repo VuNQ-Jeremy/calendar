@@ -133,6 +133,27 @@ function writableTopicIds(db: TenantDb) {
 }
 
 /**
+ * The same set, widened to the platform library for a platform admin.
+ *
+ * `writableTopicIds` alone made the library *immutable rather than read-only*: it is `own`-scoped, so
+ * a library deck (`tenant_id NULL`) matched nobody — a platform admin included. That was invisible
+ * until a book was actually imported into the library and a word in it needed a correction, at which
+ * point `updateWord` silently updated zero rows and returned success.
+ *
+ * `pool` for a platform admin, `own` for everyone else. The caller must pass the flag from the
+ * session — a service has no session, and defaulting it to false keeps every existing call site
+ * (school staff) exactly as strict as it was.
+ */
+function editableTopicIds(db: TenantDb, isPlatformAdmin: boolean) {
+  return isPlatformAdmin
+    ? db.raw
+        .select({ id: flashcardTopics.id })
+        .from(flashcardTopics)
+        .where(db.pool(flashcardTopics))
+    : writableTopicIds(db);
+}
+
+/**
  * Refuse a topic this school may not write to, before inserting words into it.
  *
  * An insert has no `where` to fence, so the ownership test has to be its own read. `own`, not
@@ -514,7 +535,9 @@ export async function updateWord(
   db: TenantDb,
   id: string,
   patch: Partial<FlashcardWordInput>,
+  opts: { isPlatformAdmin?: boolean } = {},
 ): Promise<void> {
+  const editable = editableTopicIds(db, opts.isPlatformAdmin ?? false);
   const set: Partial<typeof flashcardWords.$inferInsert> = {};
   if (patch.word !== undefined) set.word = patch.word;
   if (patch.meaningVi !== undefined) set.meaningVi = patch.meaningVi;
@@ -531,7 +554,7 @@ export async function updateWord(
     await db.raw
       .update(flashcardWords)
       .set(set)
-      .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, writableTopicIds(db))));
+      .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, editable)));
   }
   // Only when the caller actually sent tags: a PATCH that omits `topicIds` must leave them alone,
   // which is why this is not folded into the `set` block above.
@@ -540,7 +563,7 @@ export async function updateWord(
     const owned = await db.raw
       .select({ id: flashcardWords.id })
       .from(flashcardWords)
-      .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, writableTopicIds(db))))
+      .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, editable)))
       .limit(1);
     if (owned[0]) {
       const tagIds = await resolveTagIds(db, patch.topicIds ?? []);

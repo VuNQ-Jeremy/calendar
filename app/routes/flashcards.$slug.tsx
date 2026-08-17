@@ -123,7 +123,9 @@ async function actionImpl({ request, params, context }: ActionFunctionArgs) {
       preprocessWord(Object.fromEntries(formData) as Record<string, unknown>),
     );
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await flashcardsSvc.updateWord(db, id, parsed.data);
+    // A platform admin may correct a word in the shared library; school staff may not (the deck is
+    // not theirs). Without this flag the update silently matches zero rows — see `editableTopicIds`.
+    await flashcardsSvc.updateWord(db, id, parsed.data, { isPlatformAdmin: su.isPlatformAdmin });
     return { ok: true };
   }
 

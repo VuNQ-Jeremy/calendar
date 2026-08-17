@@ -76,15 +76,23 @@ describe('enrichWords request', () => {
     ];
     const mock = stubFetch(reply({ content: [{ type: 'text', text: JSON.stringify({ words }) }] }));
 
-    const out = await enrichWords('sk-ant-test', [{ word: 'dog', definitionEn: null }]);
+    const out = await enrichWords('sk-ant-test', {
+      items: [{ word: 'dog', definitionEn: null }],
+      quality: 'fast',
+    });
 
     expect(mock).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(mock.mock.calls[0][1]?.body)) as {
+      model: string;
       max_tokens: number;
       stream?: boolean;
+      output_config?: { effort?: string };
     };
+    expect(body.model).toBe('claude-haiku-4-5');
     expect(body.max_tokens).toBe(32000);
     expect(body.stream ?? false).toBe(false);
+    // Haiku 4.5 predates `effort` and 400s on it — the fast tier must not send one.
+    expect(body.output_config?.effort).toBeUndefined();
     expect(out.words[0].word).toBe('dog');
     expect(out.usage).toEqual({ inputTokens: 12, outputTokens: 34 });
   });
@@ -97,9 +105,46 @@ describe('enrichWords request', () => {
       }),
     );
 
-    await expect(enrichWords('sk-ant-test', [{ word: 'dog', definitionEn: null }])).rejects.toThrow(
-      /truncated at max_tokens/,
-    );
+    await expect(
+      enrichWords('sk-ant-test', {
+        items: [{ word: 'dog', definitionEn: null }],
+        quality: 'fast',
+      }),
+    ).rejects.toThrow(/truncated at max_tokens/);
+  });
+
+  it('sends Opus 5 with low effort and a doubled ceiling on the best tier', async () => {
+    const words = [
+      {
+        word: 'dog',
+        meaningVi: 'con chó',
+        definitionEn: 'a common pet animal',
+        ipa: '/dɔːɡ/',
+        exampleEn: 'The dog barks loudly at night.',
+        exampleAnswer: 'dog',
+      },
+    ];
+    const mock = stubFetch(reply({ content: [{ type: 'text', text: JSON.stringify({ words }) }] }));
+
+    await enrichWords('sk-ant-test', {
+      items: [{ word: 'dog', definitionEn: null }],
+      quality: 'best',
+    });
+
+    const body = JSON.parse(String(mock.mock.calls[0][1]?.body)) as {
+      model: string;
+      max_tokens: number;
+      output_config?: { effort?: string };
+      thinking?: unknown;
+      temperature?: unknown;
+    };
+    expect(body.model).toBe('claude-opus-5');
+    // Opus 5 thinks by default and thinking is billed against max_tokens, so the ceiling doubles.
+    expect(body.max_tokens).toBe(64000);
+    expect(body.output_config?.effort).toBe('low');
+    // Both of these return a 400 on Opus 5 — the request must never carry them.
+    expect(body.thinking).toBeUndefined();
+    expect(body.temperature).toBeUndefined();
   });
 });
 

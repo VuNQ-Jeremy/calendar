@@ -420,8 +420,22 @@ export const VocabEnrichItem = z.object({
 });
 export type VocabEnrichItem = z.infer<typeof VocabEnrichItem>;
 
+/**
+ * Which model tier fills the fields in.
+ *
+ * A tier name rather than a model id: the id stays server-side (a client must not be able to name
+ * an arbitrary model, and swapping ids should not be a client change).
+ *
+ * `fast` is the interactive default — the word dialog's debounced auto-fill and the paste importer,
+ * where latency is felt and a teacher reviews every row before saving. `best` is for bulk backfills
+ * of material that ships as-is: ~15x the cost per word, so it is opt-in per request, never a default.
+ */
+export const VocabEnrichQuality = z.enum(['fast', 'best']);
+export type VocabEnrichQuality = z.infer<typeof VocabEnrichQuality>;
+
 export const VocabEnrichInput = z.object({
   items: z.array(VocabEnrichItem).min(1).max(200),
+  quality: VocabEnrichQuality.default('fast'),
 });
 export type VocabEnrichInput = z.infer<typeof VocabEnrichInput>;
 
