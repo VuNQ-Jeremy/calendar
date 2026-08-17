@@ -32,7 +32,16 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify('v0.0000'),
     __GIT_SHA__: JSON.stringify('test'),
-    __CHANGELOG__: JSON.stringify([{ version: 'v0.0001', date: '2026-01-01', body: 'Test entry' }]),
+    // 12 entries on purpose: the changelog modal paginates at 10, so the stub has to be long
+    // enough for a second page to exist. Newest first, like the real file.
+    __CHANGELOG__: JSON.stringify([
+      { version: 'v0.0001', date: '2026-01-01', body: 'Test entry' },
+      ...Array.from({ length: 11 }, (_, i) => ({
+        version: `v0.${String(i + 2).padStart(4, '0')}`,
+        date: '2026-01-01',
+        body: `Older entry ${i + 1}`,
+      })),
+    ]),
   },
   test: {
     environment: 'jsdom',

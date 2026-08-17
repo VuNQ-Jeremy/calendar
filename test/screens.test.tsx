@@ -133,6 +133,23 @@ describe('FeedbackScreen', () => {
     expect(screen.getByText('v0.0001')).toBeInTheDocument();
     expect(screen.queryByLabelText('Mark resolved')).not.toBeInTheDocument();
   });
+
+  it('pages the changelog ten entries at a time', async () => {
+    const Stub = makeStub({ feedback: [] }, FeedbackScreen, { user: TEST_USER });
+    await renderStub(Stub);
+    await act(async () => {
+      screen.getByText('Changelog').click();
+    });
+    // The stub holds 12 entries: "Test entry" plus "Older entry 1..11".
+    expect(screen.getByText('Older entry 9')).toBeInTheDocument();
+    expect(screen.queryByText('Older entry 10')).not.toBeInTheDocument();
+    // jsdom has no IntersectionObserver, so the scroll sentinel doubles as a button.
+    await act(async () => {
+      screen.getByText('Show older (2)').click();
+    });
+    expect(screen.getByText('Older entry 11')).toBeInTheDocument();
+    expect(screen.queryByText(/Show older/)).not.toBeInTheDocument();
+  });
 });
 
 describe('FeedbackScreen board', () => {

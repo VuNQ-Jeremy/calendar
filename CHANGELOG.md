@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0253 — 2026-08-17
+Changelog modal now shows 10 release notes and loads the next batch as you scroll to the end (with a Show older button as fallback).
+
 ## v0.0252 — 2026-08-17
 Vocabulary curriculum foundation: global topic tags, a grade-to-curriculum-to-unit spine, stable word numbering for batch homework, and the Tiếng Anh 9 Global Success book as importable data.
 

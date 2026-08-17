@@ -161,10 +161,39 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** How many release notes the changelog shows at a time; scrolling to the end reveals the next batch. */
+const CHANGELOG_PAGE = 10;
+
 function ChangelogList() {
+  const [shown, setShown] = React.useState(CHANGELOG_PAGE);
+  const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const more = shown < CHANGELOG.length;
+
+  /**
+   * Reveal the next batch when the end of the list scrolls into view.
+   *
+   * `root` stays null even though the scroll container is `.m-dialog__body`: viewport
+   * intersection already accounts for an ancestor's clipping, and the ref for the body is not
+   * ours to reach. Re-running on `shown` re-observes the moved sentinel, so one long scroll
+   * keeps loading instead of stopping after a single batch. Guarded for jsdom, which has no
+   * IntersectionObserver — the button below is the fallback there.
+   */
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !more || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((x) => x.isIntersecting)) setShown((n) => n + CHANGELOG_PAGE);
+      },
+      { rootMargin: '160px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [more, shown]);
+
   return (
     <div className="m-stack">
-      {CHANGELOG.map((e) => (
+      {CHANGELOG.slice(0, shown).map((e) => (
         <div key={e.version} className="lrow" style={{ alignItems: 'flex-start' }}>
           <div className="iconwrap" style={{ width: 40, height: 40, ...ICON_TINT('blue') }}>
             <MIcon name="sparkle" size={18} />
@@ -199,6 +228,19 @@ function ChangelogList() {
           </div>
         </div>
       ))}
+      {more && (
+        <div
+          ref={sentinelRef}
+          className="m-row"
+          style={{ justifyContent: 'center', paddingTop: 'var(--space-2)' }}
+        >
+          <FBtn
+            variant="secondary"
+            size="sm"
+            onClick={() => setShown((n) => n + CHANGELOG_PAGE)}
+          >{`Show older (${CHANGELOG.length - shown})`}</FBtn>
+        </div>
+      )}
     </div>
   );
 }
