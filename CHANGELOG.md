@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0256 — 2026-08-17
+Seed the Tiếng Anh 9 Global Success book into the shared library: 6 units, 381 words, with a re-runnable import driver.
+
 ## v0.0255 — 2026-08-17
 Vocabulary gets a curriculum rail: create books per grade, file units under them, and import a whole workbook from CSV or Excel.
 
