@@ -1,5 +1,39 @@
 # Project instructions
 
+## Spending my money
+
+- **Never trigger a paid API call as part of doing a task unless I asked for
+  that, in this session, in so many words.** The keys in this project bill a
+  real account of mine. There is no "it's only a dollar" — I did not agree to
+  the dollar. This is not covered by any standing authorization, and unlike a
+  bad commit it cannot be reverted.
+- **"Use the session model" / "use the in-session model" / "don't use haiku"
+  means YOU generate the content yourself, in the conversation, and write it to
+  a file.** It does NOT mean "call the API with a better model id". If I wanted
+  an API call I would have said which endpoint. When I name a model in a
+  sentence about generating content, I am telling you *who is writing it*, not
+  configuring a request.
+- **Never add product code whose purpose is to enable a paid path** (a model
+  override, a quality tier, a "just this once" flag) so that a task can be
+  finished. Ask instead. Building the switch and then flipping it is worse than
+  asking, not better.
+- **The paid paths in this repo**, so there is no guessing:
+  - Anthropic — `/enrich-vocab` and `/generate-vocab`, both through the
+    `TranslateProxy` DO. Billed per token, no free tier.
+  - Workers AI — `/vocab-image-generate` (`@cf/leonardo/phoenix-1.0`, Flux
+    fallback). Billed per image.
+  - Azure Speech — `/speech-assess`. F0 free tier with a monthly cap; going over
+    it is a real charge and the cap is per-subscription, not per-school.
+  - Free, and fine to use without asking: Openverse image search (no key),
+    Pixabay (free tier), the Google Docs export endpoints.
+- **Before any bulk run that would hit a paid API more than once, tell me the
+  request count and the estimated cost, then wait.** Not "I'm about to…" in the
+  middle of a tool sequence — stop and let me answer. `--dry-run` first if the
+  script has one.
+- **A backfill or migration of content is the high-risk case**, because the
+  per-call cost looks trivial and the loop runs hundreds of times. Two calls to
+  check a format is fine; the same call over 400 rows is a purchase.
+
 ## Git
 
 - **Push to `main` only.** Commit and push work to the `main` branch; do not

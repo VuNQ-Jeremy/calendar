@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0259 — 2026-08-17
+Project instructions now forbid spending the API key without explicit per-task permission.
+
 ## v0.0258 — 2026-08-17
 Backfill fills pictures only for nouns a photo can actually depict, and the AI cost estimate is documented as a floor now that a pricier tier exists.
 
