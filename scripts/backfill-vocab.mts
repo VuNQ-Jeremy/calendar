@@ -56,6 +56,23 @@ if (!email || !password || (!doText && !doImages)) {
 /** Words per enrich request. The route caps a batch at 200; 50 is what the web client sends. */
 const CHUNK = 50;
 
+/**
+ * Is this a word a photograph can actually depict?
+ *
+ * Image search returns *something* for any query, so "a candidate was found" says nothing about
+ * whether the picture is right — and a wrong picture is worse than none, because the `picture` game
+ * uses the image as the PROMPT and would teach the wrong association. Concrete nouns are the subset
+ * a stock photo can carry; `break down`, `pass down` and `take (rubbish) away` have no depictable
+ * referent and are better left blank.
+ *
+ * The source book spells the part of speech four ways for nouns — `n`, `N`, `(n)`, `noun` — so this
+ * strips punctuation and case rather than comparing literals.
+ */
+function depictable(partOfSpeech: string): boolean {
+  const pos = partOfSpeech.replace(/[^a-z]/gi, '').toLowerCase();
+  return pos === 'n' || pos === 'noun';
+}
+
 let cookie = '';
 
 async function login() {
@@ -82,6 +99,7 @@ function candidates(): {
   slug: string;
   word: string;
   meaningVi: string;
+  partOfSpeech: string;
   hasDefinition: boolean;
   hasExample: boolean;
   hasImage: boolean;
@@ -91,6 +109,7 @@ function candidates(): {
     : 't.curriculum_id IS NOT NULL';
   const sql =
     `SELECT w.id, t.slug, w.word, w.meaning_vi AS meaningVi, ` +
+    `COALESCE(w.part_of_speech, '') AS partOfSpeech, ` +
     `(w.definition_en IS NOT NULL) AS hasDefinition, ` +
     `(w.example_en IS NOT NULL) AS hasExample, ` +
     `(w.image_key IS NOT NULL) AS hasImage ` +
@@ -107,6 +126,7 @@ function candidates(): {
     slug: String(r.slug),
     word: String(r.word),
     meaningVi: String(r.meaningVi ?? ''),
+    partOfSpeech: String(r.partOfSpeech ?? ''),
     hasDefinition: Boolean(Number(r.hasDefinition)),
     hasExample: Boolean(Number(r.hasExample)),
     hasImage: Boolean(Number(r.hasImage)),
@@ -204,8 +224,15 @@ if (doText) {
 }
 
 if (doImages) {
-  const todo = all.filter((w) => !w.hasImage).slice(0, limit);
-  console.log(`\nimages: ${todo.length} words with no picture`);
+  const missing = all.filter((w) => !w.hasImage);
+  // `--all-pos` turns the noun filter off, for a caller who would rather review a wrong picture than
+  // have none. Default is nouns only — see `depictable` for why.
+  const eligible = flag('all-pos') ? missing : missing.filter((w) => depictable(w.partOfSpeech));
+  const todo = eligible.slice(0, limit);
+  console.log(
+    `\nimages: ${missing.length} with no picture, ${eligible.length} depictable` +
+      `${flag('all-pos') ? ' (--all-pos: filter off)' : ''}, doing ${todo.length}`,
+  );
 
   let attached = 0;
   let none = 0;

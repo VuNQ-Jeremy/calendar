@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0258 — 2026-08-17
+Backfill fills pictures only for nouns a photo can actually depict, and the AI cost estimate is documented as a floor now that a pricier tier exists.
+
 ## v0.0257 — 2026-08-17
 Vocabulary enrichment can run on a higher-quality model tier for bulk backfills, and platform admins can now correct words in the shared library.
 
