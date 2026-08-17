@@ -19,7 +19,17 @@ import type {
   StaffGardenData,
   StudentGardenData,
 } from '../garden/garden-widget.jsx';
-import type { FlashcardTopicRow } from '../../server/services/flashcards.js';
+import type { FlashcardTopicRow, VocabTopicRow } from '../../server/services/flashcards.js';
+import type { VocabCurriculumRow } from '../../server/services/vocab-curricula.js';
+import {
+  CurriculumImportModal,
+  CurriculumModal,
+  CurriculumRail,
+  draftOf,
+  emptyCurriculum,
+  type CurriculumDraft,
+  type RailValue,
+} from './curriculum.jsx';
 import type { VocabAssignmentRow } from '../../server/services/garden.js';
 import type { TuiMuMonthTally } from '../../shared/logic/checkin.js';
 
@@ -30,6 +40,12 @@ const DANGER = colorOf('rose');
 
 type LoaderData = {
   topics: FlashcardTopicRow[];
+  curricula: VocabCurriculumRow[];
+  /** `topicId -> { curriculumId, unitNo }` for every deck filed as a unit. */
+  units: Record<string, { curriculumId: string; unitNo: number | null }>;
+  vocabTopics: VocabTopicRow[];
+  gradeLevels: { id: string; name: string; active: boolean }[];
+  isPlatformAdmin: boolean;
   kind: 'staff' | 'student';
   canUseAi: boolean;
   /** Student only, and null while the garden's tables are missing — see the route's loadGarden. */
@@ -113,13 +129,28 @@ interface TopicDraft {
 }
 
 export function FlashcardTopicsScreen() {
-  const { topics, kind, canUseAi, garden, gardenStaff, review, tuiMu } =
-    useLoaderData() as LoaderData;
+  const {
+    topics,
+    curricula,
+    units,
+    vocabTopics,
+    gradeLevels,
+    isPlatformAdmin,
+    kind,
+    canUseAi,
+    garden,
+    gardenStaff,
+    review,
+    tuiMu,
+  } = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useLang();
   const [modal, setModal] = React.useState<TopicDraft | null>(null);
   const [generating, setGenerating] = React.useState(false);
+  const [rail, setRail] = React.useState<RailValue>({ kind: 'all' });
+  const [curriculumModal, setCurriculumModal] = React.useState<CurriculumDraft | null>(null);
+  const [importing, setImporting] = React.useState(false);
   const [assigning, setAssigning] = React.useState<{
     topic: { id: string; name: string };
     existing: VocabAssignmentRow | null;
@@ -227,6 +258,17 @@ export function FlashcardTopicsScreen() {
           )
         }
       />
+      {/* Above the grid, so filtering reads as "which book am I looking at". Students see it too:
+          a book is how they think about their units, they just cannot create one. */}
+      <CurriculumRail
+        curricula={curricula}
+        value={rail}
+        onChange={setRail}
+        canManage={isStaff}
+        onNew={() => setCurriculumModal(emptyCurriculum())}
+        onEdit={(c) => setCurriculumModal(draftOf(c))}
+        onImport={() => setImporting(true)}
+      />
       {!isStaff && <GardenWidget data={garden} />}
       {!isStaff && tuiMu && (tuiMu.bags > 0 || tuiMu.misses > 0) && (
         <div
@@ -252,129 +294,142 @@ export function FlashcardTopicsScreen() {
             gap: 16,
           }}
         >
-          {topics.map((topic) => {
-            const c = colorOf(topic.color);
-            return (
-              <FC
-                key={topic.id}
-                interactive={true}
-                onClick={() => navigate(`/vocabulary/${topic.slug ?? topic.id}`)}
-                style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
-              >
-                <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
-                  <span
-                    style={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: 999,
-                      background: c.base,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      color: 'var(--text-strong)',
-                      fontSize: 'var(--text-md)',
-                      flex: 1,
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {topic.name}
+          {topics
+            .filter((tp) => {
+              if (rail.kind === 'all') return true;
+              const u = units[tp.id];
+              if (rail.kind === 'loose') return !u;
+              return u?.curriculumId === rail.id;
+            })
+            // Inside a book, unit order is the book's order. Elsewhere the server's order stands.
+            .sort((a, b) =>
+              rail.kind === 'curriculum'
+                ? (units[a.id]?.unitNo ?? 0) - (units[b.id]?.unitNo ?? 0)
+                : 0,
+            )
+            .map((topic) => {
+              const c = colorOf(topic.color);
+              return (
+                <FC
+                  key={topic.id}
+                  interactive={true}
+                  onClick={() => navigate(`/vocabulary/${topic.slug ?? topic.id}`)}
+                  style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
+                >
+                  <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
+                    <span
+                      style={{
+                        width: 12,
+                        height: 12,
+                        borderRadius: 999,
+                        background: c.base,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        color: 'var(--text-strong)',
+                        fontSize: 'var(--text-md)',
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {topic.name}
+                    </div>
                   </div>
-                </div>
-                {isStaff && (
-                  // Own row below the name: the icons crowded the title into an ellipsis at the
-                  // card's 240px minimum.
-                  //
-                  // The card itself navigates on click, so every BUTTON here stops the event —
-                  // opening a dialog must not also leave the page. Deliberately per-button and
-                  // not on this container: with three icons the container's own dead space sits
-                  // right under the middle of the card, and swallowing clicks there turned "click
-                  // the card to open the topic" into a coin flip.
-                  <div
-                    className="lrow__actions"
-                    // -6 against the card's 10px column gap: the buttons should read as belonging
-                    // to the title above them, not float equidistant between title and description.
-                    style={{ alignSelf: 'flex-start', marginTop: -6 }}
-                  >
-                    {gardenStaff && (
+                  {isStaff && (
+                    // Own row below the name: the icons crowded the title into an ellipsis at the
+                    // card's 240px minimum.
+                    //
+                    // The card itself navigates on click, so every BUTTON here stops the event —
+                    // opening a dialog must not also leave the page. Deliberately per-button and
+                    // not on this container: with three icons the container's own dead space sits
+                    // right under the middle of the card, and swallowing clicks there turned "click
+                    // the card to open the topic" into a coin flip.
+                    <div
+                      className="lrow__actions"
+                      // -6 against the card's 10px column gap: the buttons should read as belonging
+                      // to the title above them, not float equidistant between title and description.
+                      style={{ alignSelf: 'flex-start', marginTop: -6 }}
+                    >
+                      {gardenStaff && (
+                        <FIB
+                          label={t('garden_assign')}
+                          size="sm"
+                          onClick={(e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            setAssigning({
+                              topic: { id: topic.id, name: topic.name },
+                              existing: null,
+                            });
+                          }}
+                        >
+                          <MIcon name="sprout" size={16} />
+                        </FIB>
+                      )}
                       <FIB
-                        label={t('garden_assign')}
+                        label={t('edit')}
                         size="sm"
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
-                          setAssigning({
-                            topic: { id: topic.id, name: topic.name },
-                            existing: null,
+                          setModal({
+                            id: topic.id,
+                            name: topic.name,
+                            description: topic.description ?? '',
+                            color: topic.color,
                           });
                         }}
                       >
-                        <MIcon name="sprout" size={16} />
+                        <MIcon name="edit" size={16} />
                       </FIB>
-                    )}
-                    <FIB
-                      label={t('edit')}
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        setModal({
-                          id: topic.id,
-                          name: topic.name,
-                          description: topic.description ?? '',
-                          color: topic.color,
-                        });
+                      <FIB
+                        label={t('delete')}
+                        size="sm"
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          del(topic);
+                        }}
+                      >
+                        <MIcon name="trash" size={16} />
+                      </FIB>
+                    </div>
+                  )}
+                  {topic.description && (
+                    <div
+                      style={{
+                        color: 'var(--text-muted)',
+                        fontSize: 'var(--text-sm)',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'],
+                        overflow: 'hidden',
                       }}
                     >
-                      <MIcon name="edit" size={16} />
-                    </FIB>
-                    <FIB
-                      label={t('delete')}
-                      size="sm"
-                      onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        del(topic);
-                      }}
-                    >
-                      <MIcon name="trash" size={16} />
-                    </FIB>
+                      {topic.description}
+                    </div>
+                  )}
+                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                    {t('fc_word_count', { n: topic.wordCount })}
                   </div>
-                )}
-                {topic.description && (
-                  <div
-                    style={{
-                      color: 'var(--text-muted)',
-                      fontSize: 'var(--text-sm)',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'],
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {topic.description}
-                  </div>
-                )}
-                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                  {t('fc_word_count', { n: topic.wordCount })}
-                </div>
-                {(openByTopic.get(topic.id) ?? []).length > 0 && (
-                  <span style={{ alignSelf: 'flex-start' }}>
-                    <Tag color="orange" dot={false}>
-                      {t('garden_assigned_tag', {
-                        date: formatDmyTime(
-                          openByTopic.get(topic.id)![0].deadline,
-                          openByTopic.get(topic.id)![0].deadlineTime,
-                        ),
-                      })}
-                    </Tag>
-                  </span>
-                )}
-              </FC>
-            );
-          })}
+                  {(openByTopic.get(topic.id) ?? []).length > 0 && (
+                    <span style={{ alignSelf: 'flex-start' }}>
+                      <Tag color="orange" dot={false}>
+                        {t('garden_assigned_tag', {
+                          date: formatDmyTime(
+                            openByTopic.get(topic.id)![0].deadline,
+                            openByTopic.get(topic.id)![0].deadlineTime,
+                          ),
+                        })}
+                      </Tag>
+                    </span>
+                  )}
+                </FC>
+              );
+            })}
         </div>
       ) : (
         <FC>
@@ -409,6 +464,22 @@ export function FlashcardTopicsScreen() {
         />
       )}
       {generating && <GenerateTopicModal fetcher={fetcher} onClose={() => setGenerating(false)} />}
+      {curriculumModal && (
+        <CurriculumModal
+          draft={curriculumModal}
+          grades={gradeLevels}
+          isPlatformAdmin={isPlatformAdmin}
+          onClose={() => setCurriculumModal(null)}
+        />
+      )}
+      {importing && (
+        <CurriculumImportModal
+          curricula={curricula}
+          vocabTopics={vocabTopics}
+          isPlatformAdmin={isPlatformAdmin}
+          onClose={() => setImporting(false)}
+        />
+      )}
       {assigning && gardenStaff && (
         <AssignModal
           topic={assigning.topic}

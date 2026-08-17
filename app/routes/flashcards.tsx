@@ -11,12 +11,17 @@ import { requireLearner, requireStaff, type SessionUser } from '../../server/ser
 import * as flashcardsSvc from '../../server/services/flashcards';
 import * as gardenSvc from '../../server/services/garden';
 import * as classesSvc from '../../server/services/classes';
+import * as curriculaSvc from '../../server/services/vocab-curricula';
+import * as gradeLevelsSvc from '../../server/services/grade-levels';
 import * as checkinSvc from '../../server/services/checkin';
 import {
   FlashcardTopicInput,
   FlashcardTopicWithWordsInput,
   PlantPatchInput,
   VocabAssignmentInput,
+  VocabCurriculumInput,
+  VocabImportInput,
+  VocabUnitInput,
   parsePatch,
 } from '../../shared/schemas';
 import { plantView, monthOfVn } from '../../shared/logic/garden';
@@ -141,11 +146,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const su = await requireLearner(request, env);
   const db = tenantDbFor(env, su);
   const topics = await flashcardsSvc.listTopics(db);
-  const [{ garden, gardenStaff }, review, tuiMu] = await Promise.all([
-    loadGarden(db, su),
-    loadReview(db, su),
-    loadTuiMu(db, su),
-  ]);
+  const [{ garden, gardenStaff }, review, tuiMu, curricula, units, vocabTopics, gradeLevels] =
+    await Promise.all([
+      loadGarden(db, su),
+      loadReview(db, su),
+      loadTuiMu(db, su),
+      // Not wrapped in a degrade-to-null like the garden: the curriculum rail is part of the topics
+      // list, and the tables have shipped, so a failure here is a real fault worth seeing.
+      curriculaSvc.list(db),
+      curriculaSvc.unitsByTopic(db),
+      flashcardsSvc.listVocabTopics(db),
+      // `db.raw`: khối is global since 0049, so the service takes a plain Db and there is no fence.
+      gradeLevelsSvc.list(db.raw),
+    ]);
   // Gates the AI generator in the UI — same flag the topic page passes down.
   return {
     topics,
@@ -155,6 +168,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     gardenStaff,
     review,
     tuiMu,
+    curricula,
+    /** `topicId -> { curriculumId, unitNo }` for every deck that is filed as a unit. */
+    units,
+    /** The global tag catalog, for the word dialog and the import review screen. */
+    vocabTopics,
+    /** Global khối, for the curriculum dialog's grade picker. */
+    gradeLevels,
+    /** Only a platform admin may write the shared library tier. */
+    isPlatformAdmin: su.isPlatformAdmin,
   };
 }
 
@@ -215,6 +237,66 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   const raw = Object.fromEntries(formData) as Record<string, unknown>;
   if (raw.description === '') raw.description = null;
   if (raw.note === '') raw.note = null;
+
+  /* ── Curriculum ──────────────────────────────────────────────────────────────────────────────
+   *
+   * `intoLibrary` and `isPlatformAdmin` are passed explicitly rather than read inside the service:
+   * a service has no session, and making the caller name the tier keeps "this write targets the
+   * shared library" visible at the route, which is where a reviewer looks.
+   */
+
+  if (intent === 'curriculum-create') {
+    const parsed = VocabCurriculumInput.safeParse(raw);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    const row = await curriculaSvc.create(db, parsed.data, {
+      intoLibrary: raw.intoLibrary === 'true',
+      isPlatformAdmin: staff.isPlatformAdmin,
+    });
+    return { ok: true, id: row.id };
+  }
+
+  if (intent === 'curriculum-update') {
+    if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+    const parsed = parsePatch(VocabCurriculumInput, raw);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    await curriculaSvc.update(db, id, parsed.data, { isPlatformAdmin: staff.isPlatformAdmin });
+    return { ok: true };
+  }
+
+  if (intent === 'curriculum-delete') {
+    if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+    await curriculaSvc.remove(db, id, { isPlatformAdmin: staff.isPlatformAdmin });
+    return { ok: true };
+  }
+
+  /** File one deck as unit N of a curriculum, or unfile it with an empty `curriculumId`. */
+  if (intent === 'unit-attach') {
+    if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+    const parsed = VocabUnitInput.safeParse(raw);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    await curriculaSvc.setUnit(db, id, parsed.data);
+    return { ok: true };
+  }
+
+  /**
+   * A whole workbook in one POST. The payload is JSON in a form field rather than form fields,
+   * because it is a nested units/words tree — the same shape the question importer posts.
+   */
+  if (intent === 'curriculum-import') {
+    let payload: unknown;
+    try {
+      payload = JSON.parse((formData.get('payload') as string) ?? '{}');
+    } catch {
+      return Response.json({ error: 'bad payload json' }, { status: 400 });
+    }
+    const parsed = VocabImportInput.safeParse(payload);
+    if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
+    const result = await curriculaSvc.importUnits(db, parsed.data.curriculumId, parsed.data.units, {
+      isPlatformAdmin: staff.isPlatformAdmin,
+      intoLibrary: raw.intoLibrary === 'true',
+    });
+    return { ok: true, ...result };
+  }
 
   if (intent === 'assign-create') {
     const parsed = VocabAssignmentInput.safeParse(raw);
