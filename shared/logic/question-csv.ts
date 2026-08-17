@@ -18,6 +18,7 @@
  * sees exactly what would be imported before anything is saved.
  */
 
+import { ExtractInputError } from './import-error';
 import { MAX_IMPORT_QUESTIONS } from '../schemas';
 import {
   sanitizeQuestion,
@@ -53,12 +54,11 @@ export const TEMPLATE_CSV: string =
  * parser below throws it too and shared/ cannot import from src/, so the dependency has to run this
  * way round. import-extract.ts re-exports it, which is why its own callers did not have to change.
  */
-export class ExtractInputError extends Error {
-  constructor(key: string) {
-    super(key);
-    this.name = 'ExtractInputError';
-  }
-}
+/**
+ * Re-exported, not defined here: the vocabulary workbook importer throws it too, so it moved to
+ * `shared/logic/import-error.ts`. Callers that already import it from this module keep working.
+ */
+export { ExtractInputError };
 
 export type ParsedCsv = {
   drafts: ImportedQuestionDraft[];

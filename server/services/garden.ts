@@ -6,6 +6,7 @@ import {
   classes,
   flashcardResults,
   flashcardTopics,
+  flashcardWords,
   gardenEvents,
   gardenPlants,
   gardenSnapshots,
@@ -14,7 +15,15 @@ import {
   students,
   vocabAssignments,
 } from '../db/schema';
-import type { TenantDb } from '../db/index';
+import { chunk, SCOPED_MAX_BOUND_PARAMS, type TenantDb } from '../db/index';
+import {
+  BATCH_SIZE,
+  deckBatches,
+  foldDeckLearnt,
+  type DeckBatch,
+  type DeckLearnt,
+  type LearntBlock,
+} from '../../shared/logic/vocab-batches';
 import type {
   GardenSettingsInput,
   PlantPatchInput,
@@ -244,6 +253,12 @@ export type VocabAssignmentRow = {
   note: string | null;
   /** CSV of game modes that count, canonical order; null = any (see 0034). */
   modes: string | null;
+  /**
+   * CSV of index ranges over `flashcardWords.sortOrder` this assignment covers ('1-10,21-30'), or
+   * null for the whole deck — which is what every row before 0048 means. See
+   * shared/logic/vocab-batches.ts.
+   */
+  batches: string | null;
   createdAt: string;
 };
 
@@ -272,6 +287,7 @@ export async function listAssignments(
         deadlineTime: vocabAssignments.deadlineTime,
         note: vocabAssignments.note,
         modes: vocabAssignments.modes,
+        batches: vocabAssignments.batches,
         createdAt: vocabAssignments.createdAt,
       })
       .from(vocabAssignments)
@@ -302,6 +318,7 @@ export async function getAssignment(db: TenantDb, id: string): Promise<VocabAssi
       deadlineTime: vocabAssignments.deadlineTime,
       note: vocabAssignments.note,
       modes: vocabAssignments.modes,
+      batches: vocabAssignments.batches,
       createdAt: vocabAssignments.createdAt,
     })
     .from(vocabAssignments)
@@ -329,6 +346,7 @@ export async function createAssignment(
     deadlineTime: input.deadlineTime ?? null,
     note: input.note ?? null,
     modes: input.modes ?? null,
+    batches: input.batches ?? null,
     createdAt: new Date().toISOString(),
   });
   return id;
@@ -349,6 +367,7 @@ export async function updateAssignment(
   if (patch.deadlineTime !== undefined) set.deadlineTime = patch.deadlineTime ?? null;
   if (patch.note !== undefined) set.note = patch.note ?? null;
   if (patch.modes !== undefined) set.modes = patch.modes ?? null;
+  if (patch.batches !== undefined) set.batches = patch.batches ?? null;
   if (Object.keys(set).length) {
     await db.update(vocabAssignments, set, eq(vocabAssignments.id, id));
   }
@@ -356,6 +375,116 @@ export async function updateAssignment(
 
 export async function deleteAssignment(db: TenantDb, id: string): Promise<void> {
   await db.delete(vocabAssignments, eq(vocabAssignments.id, id));
+}
+
+/* ── Batches ────────────────────────────────────────────────────────────────────────────────────
+ *
+ * A deck of a hundred words is handed out ten at a time, and a batch already given to a class is
+ * never offered again. All of that is derived at read time from two facts: how many live words sit in
+ * each ten-window of a deck, and which windows the class's existing assignments already cover.
+ *
+ * Nothing is materialised. The pure rules live in shared/logic/vocab-batches.ts so the web app, the
+ * Expo app and the unit tests share one definition — the same relationship shared/logic/review.ts
+ * has with the review functions above.
+ */
+
+/**
+ * Per-batch live word counts for a set of decks. Returns `topicId -> counts[]`, index 0 = words 1-10.
+ *
+ * Grouped in SQL rather than in memory: a school's decks add up to thousands of words but only a few
+ * hundred batches, and every number this feature reports is a sum over batches. That is exact rather
+ * than approximate only because a stored range is always a union of whole windows, which
+ * `VocabAssignmentInput` is what guarantees.
+ *
+ * tenant-unscoped: `flashcard_words` carries no `tenant_id` — a word is fenced by its deck — and
+ * every id here comes from an already `own`-scoped assignment or topic read.
+ */
+export async function deckBatchCounts(
+  db: TenantDb,
+  topicIds: string[],
+): Promise<Record<string, number[]>> {
+  const out: Record<string, number[]> = {};
+  const wanted = [...new Set(topicIds)];
+  if (!wanted.length) return out;
+  // Integer division in SQLite, because both operands are INTEGER. BATCH_SIZE is interpolated from
+  // the shared module so there is one source of truth for the window width.
+  const batchExpr = sql<number>`(${flashcardWords.sortOrder} - 1) / ${BATCH_SIZE}`;
+  for (const ids of chunk(wanted, SCOPED_MAX_BOUND_PARAMS)) {
+    const rows = await db.raw
+      .select({ topicId: flashcardWords.topicId, batch: batchExpr, n: sql<number>`count(*)` })
+      .from(flashcardWords)
+      .where(inArray(flashcardWords.topicId, ids))
+      .groupBy(flashcardWords.topicId, batchExpr);
+    for (const r of rows) {
+      const list = (out[r.topicId] ??= []);
+      // A window emptied by deletions leaves a gap in the grouping, so backfill it as zero rather
+      // than leaving a hole an array index would read as `undefined`.
+      const at = Number(r.batch);
+      while (list.length <= at) list.push(0);
+      list[at] = Number(r.n);
+    }
+  }
+  return out;
+}
+
+/**
+ * What the assign dialog needs for one class and deck: every batch, its live size, and whether an
+ * existing assignment already covers it.
+ *
+ * `excludeAssignmentId` is what makes EDITING an assignment possible — its own batches are not a
+ * duplicate of themselves, and without this the dialog could not be saved unchanged.
+ */
+export async function deckAssignState(
+  db: TenantDb,
+  topicId: string,
+  classId: string,
+  opts: { excludeAssignmentId?: string } = {},
+): Promise<{
+  batches: DeckBatch[];
+  totalWords: number;
+  assignedWords: number;
+  unassignedWords: number;
+}> {
+  const [counts, covers] = await Promise.all([
+    deckBatchCounts(db, [topicId]),
+    db.raw
+      .select({ id: vocabAssignments.id, batches: vocabAssignments.batches })
+      .from(vocabAssignments)
+      .where(
+        db.own(
+          vocabAssignments,
+          eq(vocabAssignments.classId, classId),
+          eq(vocabAssignments.topicId, topicId),
+        ),
+      ),
+  ]);
+  const list = counts[topicId] ?? [];
+  const others = covers
+    .filter((c) => c.id !== opts.excludeAssignmentId)
+    .map((c) => c.batches);
+  const batches = deckBatches(list, others);
+  const totalWords = list.reduce((a, c) => a + c, 0);
+  const assignedWords = batches.filter((b) => b.assigned).reduce((a, b) => a + b.wordCount, 0);
+  return { batches, totalWords, assignedWords, unassignedWords: totalWords - assignedWords };
+}
+
+/**
+ * "30 learnt · 70 left to assign", for every class-and-deck pair the teacher has homework on.
+ *
+ * Adds ONE statement to a loader regardless of how many assignments there are: completion is
+ * `done >= requiredCount`, which the caller has already computed for its progress table, and a
+ * batch's size comes from the single grouped read above. So there is nothing to materialise and
+ * nothing to keep in sync — raising `minScorePct` re-reads honestly, exactly as the progress counts
+ * already do.
+ *
+ * Keyed `${classId}:${topicId}`.
+ */
+export async function deckLearntFor(
+  db: TenantDb,
+  blocks: readonly LearntBlock[],
+): Promise<Record<string, DeckLearnt>> {
+  const counts = await deckBatchCounts(db, blocks.map((b) => b.topicId));
+  return foldDeckLearnt(blocks, counts);
 }
 
 /**

@@ -605,11 +605,55 @@ export const flashcardTopics = sqliteTable(
     slug: text('slug'),
     description: text('description'),
     color: text('color').notNull().default('violet'),
+    /**
+     * The book this deck is a unit of, or NULL for a free-standing deck — which is every row that
+     * predates 0047. The deck IS the curriculum unit; there is no separate units table, because
+     * everything downstream (games, assignments, garden, mastery, the mobile bundle) keys on this
+     * row's id and inserting a level above it would repoint all of them for no visible gain.
+     */
+    curriculumId: text('curriculum_id').references(() => vocabCurricula.id, {
+      onDelete: 'set null',
+    }),
+    /** Unit number within `curriculumId`. Meaningless without it, hence both nullable together. */
+    unitNo: integer('unit_no'),
     createdAt: text('created_at'),
   },
   (t) => [
     index('idx_flashcard_topics_slug').on(t.slug),
     index('idx_flashcard_topics_tenant').on(t.tenantId),
+    index('idx_flashcard_topics_curriculum').on(t.curriculumId, t.unitNo),
+  ],
+);
+
+/**
+ * A book a grade is taught from — "Tiếng Anh 9 Global Success", "i-Learn Smart World 9".
+ *
+ * Two-tier like `flashcardTopics`: `tenantId` NULL is the platform library that every school reads
+ * through `db.pool()`, and a non-null value is that school's own private book. Writes to a library
+ * row are refused in the service unless the caller is a platform admin — "can see it" and "may edit
+ * it" are different questions.
+ *
+ * No `subjectId`: `subjects` is a per-school managed enum, so a platform-library row could not
+ * point at one. Vocabulary is English here by construction.
+ */
+export const vocabCurricula = sqliteTable(
+  'vocab_curricula',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id'),
+    gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, { onDelete: 'set null' }),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    publisher: text('publisher'),
+    description: text('description'),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: text('created_at'),
+  },
+  (t) => [
+    index('idx_vocab_curricula_tenant').on(t.tenantId),
+    index('idx_vocab_curricula_grade').on(t.gradeLevelId),
+    index('idx_vocab_curricula_slug').on(t.slug),
   ],
 );
 
@@ -625,10 +669,22 @@ export const flashcardWords = sqliteTable(
     topicId: text('topic_id')
       .notNull()
       .references(() => flashcardTopics.id, { onDelete: 'cascade' }),
+    /**
+     * 1-based position inside its topic — the deck's numbering, and the only input to a batch label
+     * ("1-10"). Written once by the INSERT (see `nextIndex` in services/flashcards.ts) and never
+     * rewritten: a delete leaves a hole on purpose, so an assignment's "11-20" keeps meaning the
+     * same words for as long as it exists. See migrations/0048_vocab_batches.sql.
+     *
+     * Do NOT order by `createdAt` instead — `insertWords` stamps one timestamp for a whole import,
+     * so it is not an order. And do not tiebreak on `rowid`: VACUUM may renumber it.
+     */
+    sortOrder: integer('sort_order').notNull().default(0),
     word: text('word').notNull(),
     meaningVi: text('meaning_vi').notNull(),
     definitionEn: text('definition_en'),
     ipa: text('ipa'),
+    /** 'n', 'adj', 'phr.v' … — as printed in the source textbook. Free text, not an enum. */
+    partOfSpeech: text('part_of_speech'),
     /** One simple example sentence containing the word, or null. See 0036_vocab_examples.sql. */
     exampleEn: text('example_en'),
     /** The exact form of the word as used in exampleEn (may be inflected), or null. */
@@ -638,7 +694,53 @@ export const flashcardWords = sqliteTable(
     imageKey: text('image_key'),
     createdAt: text('created_at'),
   },
-  (t) => [index('idx_flashcard_words_topic').on(t.topicId)],
+  (t) => [
+    index('idx_flashcard_words_topic').on(t.topicId),
+    uniqueIndex('uq_flashcard_words_order').on(t.topicId, t.sortOrder),
+  ],
+);
+
+/**
+ * The global semantic topic set — ONE list for the whole deployment (migration 0046).
+ *
+ * Not to be confused with `flashcardTopics`, which is a playable DECK. This is a TAG on a word:
+ * Food, Travel, Environment. Deliberately has no `tenantId` — not even the nullable two-tier kind
+ * `flashcardTopics` uses — because "Food & Cooking" means the same thing at every school. That also
+ * keeps it out of the tripwire's TENANT_TABLES, so reads here need no `own()`/`pool()` fence.
+ *
+ * Seeded from VOCAB_TOPICS in shared/logic/vocab-topics.ts, which stays the source of record;
+ * test/vocab-topics.test.ts fails if the two drift.
+ */
+export const vocabTopics = sqliteTable('vocab_topics', {
+  id: text('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  nameEn: text('name_en').notNull(),
+  nameVi: text('name_vi').notNull(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+/**
+ * A word's tags. No `tenantId`: reached only through a word, whose deck is already fenced — the
+ * same reasoning that leaves `flashcardWords` without one.
+ *
+ * `vocabTopicId`, not `topicId`: everywhere else in this schema `topicId` means a DECK, so a join
+ * that confuses the two compiles, runs, and quietly returns nothing.
+ */
+export const vocabWordTopics = sqliteTable(
+  'vocab_word_topics',
+  {
+    wordId: text('word_id')
+      .notNull()
+      .references(() => flashcardWords.id, { onDelete: 'cascade' }),
+    vocabTopicId: text('vocab_topic_id')
+      .notNull()
+      .references(() => vocabTopics.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.wordId, t.vocabTopicId] }),
+    index('idx_vocab_word_topics_topic').on(t.vocabTopicId),
+  ],
 );
 
 export const flashcardResults = sqliteTable(
@@ -1199,6 +1301,20 @@ export const vocabAssignments = sqliteTable(
     minScorePct: integer('min_score_pct').notNull().default(70),
     /** Questions per round (5-30) for every mode but flip; NULL = default round sizes. */
     questionCount: integer('question_count'),
+    /**
+     * Which slices of the deck this covers: a canonical CSV of 1-based ranges over
+     * `flashcardWords.sortOrder`, e.g. '1-10,21-30'. NULL and '' both mean the whole deck — which is
+     * what every row written before 0048 means, so nothing was backfilled and no open homework
+     * changed meaning. Same NULL-means-everything shape as `modes` below.
+     *
+     * Ranges, not batch numbers: '2,4' only means "batch 2 and 4" while the batch size is ten,
+     * whereas '11-20' is self-describing. Always unions of whole windows — that invariant is what
+     * lets every count downstream be a grouped per-batch query instead of a per-word list.
+     *
+     * Batches narrow what the student is asked to STUDY, not which rounds COUNT: a result records a
+     * score, not a word list, so completion logic is untouched by this column.
+     */
+    batches: text('batches'),
     /** ICT YYYY-MM-DD, inclusive. */
     deadline: text('deadline').notNull(),
     /**

@@ -17,14 +17,17 @@ import { EXIT_MS } from '../shared/logic/flip-gesture';
 const word = (id: string, text: string, ipa: string, en: string, vi: string) => ({
   id,
   topicId: 't1',
+  sortOrder: 0,
   word: text,
   ipa,
+  partOfSpeech: null,
   meaningEn: en,
   meaningVi: vi,
   definitionEn: '',
   exampleEn: null,
   exampleAnswer: null,
   audioUrl: '',
+  topicIds: [],
   // No picture: these assertions are about which word is in the DOM when, and an image element
   // would only add noise. The imageless card is also still the common case.
   imageKey: null,

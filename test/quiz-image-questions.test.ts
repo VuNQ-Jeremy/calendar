@@ -14,14 +14,17 @@ function word(id: string, w: string, imageKey: string | null): FlashcardWordRow 
   return {
     id,
     topicId: 't1',
+    sortOrder: 0,
     word: w,
     meaningVi: `nghĩa ${w}`,
     definitionEn: null,
     ipa: null,
+    partOfSpeech: null,
     exampleEn: null,
     exampleAnswer: null,
     audioUrl: null,
     imageKey,
+    topicIds: [],
     createdAt: null,
   };
 }

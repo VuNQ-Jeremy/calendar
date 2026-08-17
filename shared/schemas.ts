@@ -5,6 +5,7 @@ import {
   PRONOUNCE_CURVES,
   type PronounceCurve,
 } from './logic/flashcards';
+import { isValidRangesCsv, normalizeRangesCsv } from './logic/vocab-batches';
 
 /**
  * Parse a partial update payload. Zod's `.partial()` still applies `.default()`
@@ -303,6 +304,8 @@ export const FlashcardWordInput = z.object({
   meaningVi: z.string().trim().max(500).default(''),
   definitionEn: z.string().max(1000).nullish(),
   ipa: z.string().max(200).nullish(),
+  /** 'n', 'adj', 'phr.v' … as printed in the source textbook. Free text, deliberately not an enum. */
+  partOfSpeech: z.string().trim().max(20).nullish(),
   exampleEn: z.string().max(300).nullish(),
   exampleAnswer: z.string().max(100).nullish(),
   audioUrl: z.string().max(2000).nullish(),
@@ -311,6 +314,23 @@ export const FlashcardWordInput = z.object({
   // prefix of the bucket (materials/, zalo/) even before the serving route's own guard, and a
   // cleared picker — which arrives as '' from a form, not as a missing key — becomes null.
   imageKey: FlashcardImageKey.nullish().or(z.literal('').transform(() => null)),
+  /**
+   * Global semantic tags (`vocab_topics.id`) — Food, Travel, Environment. Five is plenty for one
+   * word and keeps the junction insert inside a single statement.
+   *
+   * Accepts a real array (JSON clients) or a comma-separated string (the web form). Ids the catalog
+   * does not know are dropped in the service rather than rejected here: a CSV import with one typo'd
+   * tag must still land its word.
+   */
+  topicIds: z
+    .union([z.array(z.string()), z.string()])
+    .nullish()
+    .transform((v) => {
+      if (v == null) return [];
+      const list = typeof v === 'string' ? v.split(',') : v;
+      return [...new Set(list.map((s) => s.trim()).filter(Boolean))];
+    })
+    .pipe(z.array(z.string().min(1).max(60)).max(5)),
 });
 export type FlashcardWordInput = z.infer<typeof FlashcardWordInput>;
 
@@ -318,6 +338,56 @@ export const FlashcardImportInput = z.object({
   words: z.array(FlashcardWordInput).min(1).max(200),
 });
 export type FlashcardImportInput = z.infer<typeof FlashcardImportInput>;
+
+/**
+ * A book a grade is taught from. `gradeLevelId` is nullish because a curriculum can be filed before
+ * anyone decides which khối it belongs to, and because `grade_levels` rows can be deleted
+ * (ON DELETE SET NULL).
+ */
+export const VocabCurriculumInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  gradeLevelId: z
+    .string()
+    .nullish()
+    .transform((v) => (v == null || v === '' ? null : v)),
+  publisher: z.string().trim().max(200).nullish(),
+  description: z.string().max(1000).nullish(),
+  active: FormBool.default(true),
+  sortOrder: z.coerce.number().int().nullish(),
+});
+export type VocabCurriculumInput = z.infer<typeof VocabCurriculumInput>;
+
+/**
+ * File a deck as unit N of a curriculum, or unfile it. Both fields clear together: a unit number
+ * without a curriculum means nothing, so `curriculumId: null` drops `unitNo` too in the service.
+ */
+export const VocabUnitInput = z.object({
+  curriculumId: z
+    .string()
+    .nullish()
+    .transform((v) => (v == null || v === '' ? null : v)),
+  unitNo: z.coerce.number().int().min(1).max(200).nullish(),
+});
+export type VocabUnitInput = z.infer<typeof VocabUnitInput>;
+
+/** One unit of a workbook import: its number, its title, and the words parsed out of its table. */
+export const VocabImportUnit = z.object({
+  unitNo: z.coerce.number().int().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
+  words: z.array(FlashcardWordInput).min(1).max(200),
+});
+export type VocabImportUnit = z.infer<typeof VocabImportUnit>;
+
+/**
+ * A whole book in one request. The per-unit 200-word cap is the one `FlashcardImportInput` already
+ * uses, so both import paths agree; 20 units bounds the request. The English 9 Global Success book
+ * is 6 units and ~451 words, so both leave room.
+ */
+export const VocabImportInput = z.object({
+  curriculumId: z.string().min(1),
+  units: z.array(VocabImportUnit).min(1).max(20),
+});
+export type VocabImportInput = z.infer<typeof VocabImportInput>;
 
 /** Backfill payload for the "Generate sentences" button: per-word example fields only. */
 export const FlashcardExampleFillInput = z.object({
@@ -1159,6 +1229,24 @@ export const VocabAssignmentInput = z.object({
     .nullish()
     .refine((v) => v == null || isValidModesCsv(v), { message: 'Unknown game mode' })
     .transform((v) => (v == null ? null : normalizeModesCsv(v.split(',')))),
+  /**
+   * Which slices of the deck this covers: a canonical CSV of 1-based ranges over
+   * `flashcardWords.sortOrder` — '1-10,21-30'. NULL and '' both mean the whole deck, which is what
+   * every row written before 0048 means and what the dialog posts when the picker is cleared. Same
+   * shape and same NULL semantics as `modes` above.
+   *
+   * A range that does not line up with a batch window is a 400 rather than a silent snap: every
+   * count the teacher sees is computed per batch, so a misaligned range would make "70 words left to
+   * assign" quietly wrong.
+   */
+  batches: z
+    .string()
+    .max(600)
+    .nullish()
+    .refine((v) => v == null || isValidRangesCsv(v), {
+      message: 'Expected batch ranges like 1-10,21-30',
+    })
+    .transform((v) => (v == null ? null : normalizeRangesCsv(v))),
 });
 export type VocabAssignmentInput = z.infer<typeof VocabAssignmentInput>;
 

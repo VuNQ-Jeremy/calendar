@@ -65,8 +65,17 @@ DELETE FROM class_trees;
 DELETE FROM garden_plants;
 DELETE FROM flashcard_mastery;
 DELETE FROM flashcard_results;
+-- Word tags (migration 0046). `vocab_topics` itself is NOT swept: it is global reference data that
+-- only a migration writes, so a failed run cannot dirty it, and re-inserting its 24 catalog rows on
+-- every reset would be pure cost. The junction is a different matter — a spec that tags a word leaks
+-- a row otherwise.
+DELETE FROM vocab_word_topics;
 DELETE FROM flashcard_words;
 DELETE FROM flashcard_topics;
+-- Curriculum spine (migration 0047). Decks reference it ON DELETE SET NULL, so it does not cascade
+-- off the topic wipe above and has to be explicit. Ordered after flashcard_topics so the decks are
+-- already gone and the SET NULL has nothing to do.
+DELETE FROM vocab_curricula;
 DELETE FROM session_previews;
 DELETE FROM event_materials;
 -- Class ↔ material links (migration 0044). Unlike event_materials, seed.sql DOES insert links,

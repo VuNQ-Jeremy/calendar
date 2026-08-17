@@ -1,4 +1,4 @@
-import { eq, or, and, desc, sql, isNotNull, inArray, lte } from 'drizzle-orm';
+import { eq, or, and, asc, desc, sql, isNotNull, inArray, lte } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   flashcardTopics,
@@ -8,8 +8,10 @@ import {
   settings,
   students,
   staff,
+  vocabTopics,
+  vocabWordTopics,
 } from '../db/schema';
-import type { TenantDb } from '../db/index';
+import { chunk, SCOPED_MAX_BOUND_PARAMS, type TenantDb } from '../db/index';
 import * as gardenSvc from './garden';
 import type { GardenOutcome } from './garden';
 import { record, recordCreate, recordDelete } from './audit';
@@ -149,16 +151,31 @@ async function assertWritableTopic(db: TenantDb, topicId: string): Promise<void>
 export type FlashcardWordRow = {
   id: string;
   topicId: string;
+  /** 1-based position inside the deck — what a batch label like "11-20" is computed from. */
+  sortOrder: number;
   word: string;
   meaningVi: string;
   definitionEn: string | null;
   ipa: string | null;
+  partOfSpeech: string | null;
   exampleEn: string | null;
   exampleAnswer: string | null;
   audioUrl: string | null;
   /** R2 object key for the word's picture, or null. Resolve with `flashcardImagePath`. */
   imageKey: string | null;
+  /** Global semantic tags (`vocab_topics.id`). */
+  topicIds: string[];
   createdAt: string | null;
+};
+
+/** The global tag catalog. No `tenantId` on the table — it is one list for the deployment. */
+export type VocabTopicRow = {
+  id: string;
+  slug: string;
+  nameEn: string;
+  nameVi: string;
+  active: boolean;
+  sortOrder: number;
 };
 
 export type FlashcardResultRow = {
@@ -193,20 +210,113 @@ export type StudentFlashcardStats = {
   lastPlayedAt: string | null;
 };
 
-function mapWord(r: typeof flashcardWords.$inferSelect): FlashcardWordRow {
+/** `tags` is the whole deck's junction, fetched once by `listWords`; absent means "no tags read". */
+function mapWord(
+  r: typeof flashcardWords.$inferSelect,
+  tags?: Map<string, string[]>,
+): FlashcardWordRow {
   return {
     id: r.id,
     topicId: r.topicId,
+    sortOrder: r.sortOrder,
     word: r.word,
     meaningVi: r.meaningVi,
     definitionEn: r.definitionEn,
     ipa: r.ipa,
+    partOfSpeech: r.partOfSpeech,
     exampleEn: r.exampleEn,
     exampleAnswer: r.exampleAnswer,
     audioUrl: r.audioUrl,
     imageKey: r.imageKey,
+    topicIds: tags?.get(r.id) ?? [],
     createdAt: r.createdAt,
   };
+}
+
+/**
+ * The next free index in `topicId`, as a SQL expression rather than a value.
+ *
+ * Computed inside the INSERT so there is no read-modify-write to race. D1 runs a batch's statements
+ * sequentially inside one transaction, so the N inserts of an import each see the previous one's row
+ * and land on N consecutive indexes; and two teachers adding a word in the same instant cannot both
+ * claim the same number, because the loser of the race reads the winner's max. That is also what lets
+ * `uq_flashcard_words_order` be UNIQUE with no application-level locking.
+ *
+ * Aliased `w` rather than using the qualified column names drizzle would emit, so nothing in the
+ * subquery can be read as referring to the row being inserted.
+ */
+const nextIndex = (topicId: string) =>
+  sql<number>`(select coalesce(max(w.sort_order), 0) + 1 from flashcard_words w where w.topic_id = ${topicId})`;
+
+/**
+ * The global tag catalog, active rows first in catalog order.
+ *
+ * tenant-unscoped: `vocab_topics` has no `tenant_id` — it is one list for the whole deployment
+ * (migration 0046), so there is nothing to fence.
+ */
+export async function listVocabTopics(db: TenantDb): Promise<VocabTopicRow[]> {
+  return db.raw
+    .select()
+    .from(vocabTopics)
+    .orderBy(desc(vocabTopics.active), asc(vocabTopics.sortOrder), asc(vocabTopics.nameEn));
+}
+
+/**
+ * Tag ids that actually exist. Unknown ids are DROPPED, not rejected: a workbook import with one
+ * typo'd tag must still land its word, and the review screen already flags the row.
+ *
+ * tenant-unscoped: `vocab_topics` is global reference data with no `tenant_id`.
+ */
+async function resolveTagIds(db: TenantDb, ids: string[]): Promise<string[]> {
+  const wanted = [...new Set(ids)].slice(0, 5);
+  if (!wanted.length) return [];
+  const rows = await db.raw
+    .select({ id: vocabTopics.id })
+    .from(vocabTopics)
+    .where(inArray(vocabTopics.id, wanted));
+  const ok = new Set(rows.map((r) => r.id));
+  return wanted.filter((id) => ok.has(id));
+}
+
+/** Every tag of every given word, as `wordId -> topicIds`. One query, never one per word. */
+async function tagsFor(db: TenantDb, wordIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!wordIds.length) return out;
+  for (const ids of chunk(wordIds, SCOPED_MAX_BOUND_PARAMS)) {
+    // tenant-unscoped: no `tenant_id` on `vocab_word_topics`; the ids come from an already-fenced
+    // word read, and a word is reachable only through its deck.
+    const rows = await db.raw
+      .select({ wordId: vocabWordTopics.wordId, tagId: vocabWordTopics.vocabTopicId })
+      .from(vocabWordTopics)
+      .where(inArray(vocabWordTopics.wordId, ids));
+    for (const r of rows) {
+      const list = out.get(r.wordId) ?? [];
+      list.push(r.tagId);
+      out.set(r.wordId, list);
+    }
+  }
+  return out;
+}
+
+/**
+ * Replace-set semantics, like `class_materials`: delete then insert, in one batch.
+ *
+ * Returns the ops rather than running them, so a caller writing several words can put every tag
+ * change in the same batch as the words themselves.
+ */
+function setTagOps(db: TenantDb, wordId: string, tagIds: string[]): BatchItem<'sqlite'>[] {
+  // tenant-unscoped: no `tenant_id` on `vocab_word_topics`; the word's deck is the fence.
+  const ops: BatchItem<'sqlite'>[] = [
+    db.raw.delete(vocabWordTopics).where(eq(vocabWordTopics.wordId, wordId)),
+  ];
+  if (tagIds.length) {
+    ops.push(
+      db.raw
+        .insert(vocabWordTopics)
+        .values(tagIds.map((vocabTopicId) => ({ wordId, vocabTopicId }))),
+    );
+  }
+  return ops;
 }
 
 // ---- Topics ----
@@ -355,8 +465,17 @@ export async function listWords(db: TenantDb, topicId: string): Promise<Flashcar
         inArray(flashcardWords.topicId, readableTopicIds(db)),
       ),
     )
-    .orderBy(flashcardWords.createdAt);
-  return rows.map(mapWord);
+    // By `sortOrder`, NOT `createdAt`: `insertWords` stamps one timestamp for a whole import, so a
+    // hundred-word paste has a hundred identical timestamps and `createdAt` is not an order at all.
+    // The `id` tiebreak is unreachable given `uq_flashcard_words_order`, and is here so a straggler
+    // still at the default 0 lists deterministically instead of shuffling between reads. Deliberately
+    // not `rowid`: VACUUM may renumber it for a table whose primary key is TEXT.
+    .orderBy(asc(flashcardWords.sortOrder), asc(flashcardWords.id));
+  const tags = await tagsFor(
+    db,
+    rows.map((r) => r.id),
+  );
+  return rows.map((r) => mapWord(r, tags));
 }
 
 export async function createWord(
@@ -365,20 +484,30 @@ export async function createWord(
   input: FlashcardWordInput,
 ): Promise<void> {
   await assertWritableTopic(db, topicId);
+  const id = crypto.randomUUID();
+  const tagIds = await resolveTagIds(db, input.topicIds ?? []);
   // tenant-unscoped: no `tenant_id` on the row; the check above is the fence.
-  await db.raw.insert(flashcardWords).values({
-    id: crypto.randomUUID(),
-    topicId,
-    word: input.word,
-    meaningVi: input.meaningVi,
-    definitionEn: input.definitionEn ?? null,
-    ipa: input.ipa ?? null,
-    exampleEn: input.exampleEn ?? null,
-    exampleAnswer: input.exampleAnswer ?? null,
-    audioUrl: input.audioUrl ?? null,
-    imageKey: input.imageKey ?? null,
-    createdAt: new Date().toISOString(),
-  });
+  const ops: BatchItem<'sqlite'>[] = [
+    db.raw.insert(flashcardWords).values({
+      id,
+      topicId,
+      sortOrder: nextIndex(topicId),
+      word: input.word,
+      meaningVi: input.meaningVi,
+      definitionEn: input.definitionEn ?? null,
+      ipa: input.ipa ?? null,
+      partOfSpeech: input.partOfSpeech ?? null,
+      exampleEn: input.exampleEn ?? null,
+      exampleAnswer: input.exampleAnswer ?? null,
+      audioUrl: input.audioUrl ?? null,
+      imageKey: input.imageKey ?? null,
+      createdAt: new Date().toISOString(),
+    }),
+  ];
+  // The word has to exist before the junction can reference it, and one batch is one transaction, so
+  // a word can never be left tagless by a half-failure.
+  if (tagIds.length) ops.push(...setTagOps(db, id, tagIds).slice(1));
+  await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 }
 
 export async function updateWord(
@@ -391,6 +520,7 @@ export async function updateWord(
   if (patch.meaningVi !== undefined) set.meaningVi = patch.meaningVi;
   if (patch.definitionEn !== undefined) set.definitionEn = patch.definitionEn ?? null;
   if (patch.ipa !== undefined) set.ipa = patch.ipa ?? null;
+  if (patch.partOfSpeech !== undefined) set.partOfSpeech = patch.partOfSpeech ?? null;
   if (patch.exampleEn !== undefined) set.exampleEn = patch.exampleEn ?? null;
   if (patch.exampleAnswer !== undefined) set.exampleAnswer = patch.exampleAnswer ?? null;
   if (patch.audioUrl !== undefined) set.audioUrl = patch.audioUrl ?? null;
@@ -402,6 +532,21 @@ export async function updateWord(
       .update(flashcardWords)
       .set(set)
       .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, writableTopicIds(db))));
+  }
+  // Only when the caller actually sent tags: a PATCH that omits `topicIds` must leave them alone,
+  // which is why this is not folded into the `set` block above.
+  if (patch.topicIds !== undefined) {
+    // Re-check ownership, since the junction write does not go through `writableTopicIds`.
+    const owned = await db.raw
+      .select({ id: flashcardWords.id })
+      .from(flashcardWords)
+      .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, writableTopicIds(db))))
+      .limit(1);
+    if (owned[0]) {
+      const tagIds = await resolveTagIds(db, patch.topicIds ?? []);
+      const ops = setTagOps(db, id, tagIds);
+      await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+    }
   }
 }
 
@@ -428,23 +573,44 @@ async function insertWords(
   topicId: string,
   words: FlashcardWordInput[],
 ): Promise<void> {
+  // One timestamp for the whole import — which is exactly why `sort_order` exists. Do not "fix" this
+  // by stamping per row: the order would still not be recoverable from it, and the column is the
+  // answer.
   const now = new Date().toISOString();
+  const wanted = [...new Set(words.flatMap((w) => w.topicIds ?? []))];
+  const known = new Set(await resolveTagIds(db, wanted.slice(0, 100)));
+
   // tenant-unscoped: no `tenant_id` on the row; the caller's ownership check is the fence.
-  const ops: BatchItem<'sqlite'>[] = words.map((w) =>
-    db.raw.insert(flashcardWords).values({
-      id: crypto.randomUUID(),
-      topicId,
-      word: w.word,
-      meaningVi: w.meaningVi,
-      definitionEn: w.definitionEn ?? null,
-      ipa: w.ipa ?? null,
-      exampleEn: w.exampleEn ?? null,
-      exampleAnswer: w.exampleAnswer ?? null,
-      audioUrl: w.audioUrl ?? null,
-      imageKey: w.imageKey ?? null,
-      createdAt: now,
-    }),
-  );
+  const ops: BatchItem<'sqlite'>[] = [];
+  for (const w of words) {
+    const id = crypto.randomUUID();
+    ops.push(
+      db.raw.insert(flashcardWords).values({
+        id,
+        topicId,
+        // Each statement sees the previous one's row, so N words land on N consecutive indexes.
+        sortOrder: nextIndex(topicId),
+        word: w.word,
+        meaningVi: w.meaningVi,
+        definitionEn: w.definitionEn ?? null,
+        ipa: w.ipa ?? null,
+        partOfSpeech: w.partOfSpeech ?? null,
+        exampleEn: w.exampleEn ?? null,
+        exampleAnswer: w.exampleAnswer ?? null,
+        audioUrl: w.audioUrl ?? null,
+        imageKey: w.imageKey ?? null,
+        createdAt: now,
+      }),
+    );
+    const tagIds = (w.topicIds ?? []).filter((t) => known.has(t)).slice(0, 5);
+    if (tagIds.length) {
+      ops.push(
+        db.raw
+          .insert(vocabWordTopics)
+          .values(tagIds.map((vocabTopicId) => ({ wordId: id, vocabTopicId }))),
+      );
+    }
+  }
   if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
 }
 

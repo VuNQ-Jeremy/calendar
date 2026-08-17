@@ -1,10 +1,16 @@
 /**
- * Curated topics offered by the AI vocabulary generator, shared by the web app and the mobile
- * app so both show the same list.
+ * The global semantic topic catalog — the seed source of record for the `vocab_topics` table
+ * (migration 0046), and still shared by the web and mobile apps so a generator picker can render
+ * before its loader resolves.
  *
- * Purely a UI convenience: `VocabGenerateInput.topic` is any string, so adding or removing an
- * entry here needs no schema, migration, or server change. `en` is what the model sees (it
- * generates English words); `vi` is display only.
+ * These are TAGS on a word (Food, Travel, Environment), not decks. `flashcard_topics` is the deck.
+ *
+ * Adding an entry here no longer just changes a dropdown: since 0046 there is a row behind each id,
+ * so a new topic needs a row too (a migration, or the platform screen). `test/vocab-topics.test.ts`
+ * asserts this array and the 0046 seed agree, so the two cannot drift silently.
+ *
+ * `en` is also what the AI generator sends the model (it generates English words); `vi` is display
+ * only. `id` doubles as the slug, so it must stay URL-safe.
  */
 
 export interface VocabTopic {
