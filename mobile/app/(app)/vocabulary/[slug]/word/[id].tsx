@@ -110,7 +110,9 @@ export default function WordEditor() {
       };
       if (isNew) {
         if (!bundle) throw new ApiError(0, 'no_topic', 'err_generic_msg');
-        await api.flashcards.createWord(bundle.topic.id, payload);
+        // A new word carries no semantic tags yet. Sent ONLY on create: `updateWord` takes a
+        // partial, and including an empty list there would clear the tags the word already has.
+        await api.flashcards.createWord(bundle.topic.id, { ...payload, topicIds: [] });
       } else {
         await api.flashcards.updateWord(id, payload);
       }

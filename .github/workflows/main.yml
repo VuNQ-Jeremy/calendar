@@ -63,6 +63,28 @@ jobs:
         run: npm run typecheck
         working-directory: mobile
 
+      # Node 24 for the mobile suite only: its `expo-sqlite` stub is backed by `node:sqlite`,
+      # which needs --experimental-sqlite on 22. The root project above stays on 22 deliberately
+      # — this is not the place to change the runtime everything else is verified against.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Test mobile
+        run: npm test
+        working-directory: mobile
+
+      # The packaging gate, and the reason it lives in THIS workflow rather than ci.yml: it
+      # guards what actually ships. EXPO_PUBLIC_API_URL is inlined into the bundle at export
+      # time, and an export without it produces an app that boots with no server to talk to
+      # (2026-07-29, a pre-frame crash that expo-updates then silently rolled back). Locally the
+      # value comes from .env.local, which is gitignored and therefore absent here.
+      - name: Check the mobile bundle carries its API URL
+        run: npm run test:bundle
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://calendar.ngqv0712.workers.dev
+
       # Prints the CI token's account + permission scopes into the log.
       # The migrations step below needs the "Account -> D1 -> Edit" scope.
       - name: Check Cloudflare auth

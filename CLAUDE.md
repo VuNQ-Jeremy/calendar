@@ -117,7 +117,21 @@
   line and let me decide — don't run it and don't wait on an answer.
 - **What you may run freely** is the fast static checks: `npx tsc --noEmit -p
   tsconfig.json` (or `npm run typecheck`), `npm run lint`, `npm run check:i18n`,
-  `npm run format`. Those are the checks to lean on before a commit.
+  `npm run format`. Those are the checks to lean on before a commit. The mobile
+  logic suite — `cd mobile && npm test` — belongs in that list too: it is vitest in
+  plain Node, runs in about a second, and touches nothing outside the process.
+- **The mobile app has its own three layers** (`docs/mobile/TESTING.md`), and only
+  the first is free:
+  - `cd mobile && npm test` — free, ~1s. Needs Node 24 (`node:sqlite`).
+  - `cd mobile && npm run test:bundle` — an `expo export` plus the packaging guard,
+    about a minute. Fine to run when packaging or `app.config.ts` changed; not part
+    of the routine.
+  - `cd mobile && npm run test:device` — Maestro on an emulator. **Manual-trigger
+    only**, exactly like the e2e suite. Never run it unasked.
+- **A change under `mobile/lib/` ships with a mobile test in the same commit**, the
+  same rule the web features follow above. `lib/` is where the offline queue and the
+  HTTP client live: the two places where a silent regression costs a student their
+  finished work rather than showing an error.
 - **Use the helper kit in `e2e/crud-helpers.ts`** — it encodes the app's UI
   contract: no `<form>`/`name=` attributes (locate inputs structurally by their
   `.mochi-field` label), combobox/date menus portalled to `document.body` (locate

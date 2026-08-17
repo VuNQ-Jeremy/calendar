@@ -1,0 +1,17 @@
+# Cold launch reaches a real frame.
+#
+# THE flow of this set. On 2026-07-29 an OTA bundle published without EXPO_PUBLIC_API_URL threw
+# before the first frame; expo-updates' error recovery rolled back silently, so the app on the
+# phone looked fine and the update simply "never arrived". Nothing in the unit suite can see
+# that, and `npm run test:bundle` only proves the URL was inlined — this proves the app that was
+# built with it actually renders.
+#
+# Run against a build installed on a running emulator: npm run test:device
+appId: com.mochi.lms
+---
+- clearState
+- launchApp:
+    clearKeychain: true
+# `assertVisible` polls, so this doubles as the wait for the splash screen to hand over. If the
+# bundle crashes pre-frame the app dies here rather than showing an email field.
+- assertVisible: 'you@school.edu'

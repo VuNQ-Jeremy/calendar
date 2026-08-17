@@ -55,7 +55,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
   },
   "scripts": {
     "start": "expo start",
@@ -63,8 +64,12 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "icons": "node scripts/make-icons.mjs",
     "bundle": "expo export --platform android --output-dir .expo/export-check",
+    "test:bundle": "expo export --platform android --output-dir .expo/export-check --clear && node scripts/check-bundle.mjs .expo/export-check",
+    "test:device": "maestro test .maestro",
     "build:preview": "npx eas-cli build -p android --profile preview",
     "build:dev": "npx eas-cli build -p android --profile development",
     "update:preview": "npx eas-cli update --branch preview --platform android --environment preview"

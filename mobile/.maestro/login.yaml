@@ -1,0 +1,31 @@
+# Signing in reaches the app.
+#
+# Proves the whole vertical slice the unit tests can only mock: a real bundle, a real network
+# call to the Worker, a real token stored in expo-secure-store, and the router leaving /login.
+#
+# Uses the shared staff test account. It is a REAL account on the deployed environment this
+# build points at — check EXPO_PUBLIC_API_URL before running it against anything but staging.
+appId: com.mochi.lms
+---
+- clearState
+- launchApp:
+    clearKeychain: true
+
+- assertVisible: 'you@school.edu'
+- tapOn: 'you@school.edu'
+- inputText: 'dev@mochi.edu'
+
+- tapOn:
+    below: 'you@school.edu'
+    index: 0
+- inputText: 'mochi123'
+
+- hideKeyboard
+- tapOn:
+    text: 'Sign in'
+
+# The login screen is gone and a signed-in surface has taken its place. Generous timeout: this
+# is a cold network call to a Worker that may be cold-starting too.
+- extendedWaitUntil:
+    notVisible: 'you@school.edu'
+    timeout: 30000

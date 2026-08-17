@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0260 — 2026-08-17
+Add a test suite for the mobile app: a fast vitest logic suite over lib/, a packaging guard that fails a bundle built without its API URL, and Maestro emulator flows. Also fixes mobile's typecheck and four stale tests.
+
 ## v0.0259 — 2026-08-17
 Project instructions now forbid spending the API key without explicit per-task permission.
 

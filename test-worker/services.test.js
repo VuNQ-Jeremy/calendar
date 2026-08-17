@@ -1268,9 +1268,13 @@ describe('materials service — R2 file storage', () => {
 
 // ---- WP1.5: Tests module Phase 1 services ----
 
+// Grade levels are GLOBAL, not per-school (377fa86), so this is the one service in this file
+// that takes the raw handle rather than the scoped `TenantDb` — exactly as the routes call it
+// (`gradeLevelsSvc.list(db.raw)` in app/routes/questions.tsx). Passing `db()` here throws
+// `db.select is not a function`, because TenantDb deliberately exposes no query surface of its own.
 describe('grade levels', () => {
   it('create then list — new level appears after the seeded Khối 6..9', async () => {
-    const d = db();
+    const d = db().raw;
     const created = await gradeLevelsSvc.create(d, { name: 'Khối 10', active: true });
     expect(created.id).toBeTruthy();
 
@@ -1292,7 +1296,7 @@ describe('grade levels', () => {
   });
 
   it('create without sortOrder computes max + 1', async () => {
-    const d = db();
+    const d = db().raw;
     // Storage is shared across tests in this file, so compute the baseline instead of hardcoding
     // the seeded max of 4.
     const baseMax = (await gradeLevelsSvc.list(d)).reduce((m, g) => Math.max(m, g.sortOrder), 0);
@@ -1311,7 +1315,7 @@ describe('grade levels', () => {
   });
 
   it('update renames and toggles active as a real boolean', async () => {
-    const d = db();
+    const d = db().raw;
     const created = await gradeLevelsSvc.create(d, { name: 'Khối 11', active: true });
     expect(created.active).toBe(true);
 
@@ -1330,7 +1334,7 @@ describe('grade levels', () => {
   });
 
   it('reorder rewrites sortOrder to 1..n in the given order', async () => {
-    const d = db();
+    const d = db().raw;
     const ids = ['gl9', 'gl6', 'gl8', 'gl7'];
     await gradeLevelsSvc.reorder(d, ids);
 
@@ -1341,7 +1345,7 @@ describe('grade levels', () => {
   });
 
   it('remove deletes the row', async () => {
-    const d = db();
+    const d = db().raw;
     const created = await gradeLevelsSvc.create(d, { name: 'Temp Level', active: true });
     expect((await gradeLevelsSvc.list(d)).some((g) => g.id === created.id)).toBe(true);
 

@@ -37,8 +37,11 @@ test.describe('CRUD: vocabulary curriculum', () => {
 
     await makeCurriculum(page, name);
     // The rail chip carries the unit count, which is zero for a brand-new book.
+    // `span.m-row` (the chip), not `.m-row` — the rail's own wrapper carries that class too, so
+    // the bare selector matches both and fails strict mode. The rest of this spec already scopes
+    // to the span; this line was the one that did not.
     await expect(page.getByText(name, { exact: false })).toBeVisible();
-    await expect(page.locator('.m-row', { hasText: name })).toContainText('0 units');
+    await expect(page.locator('span.m-row', { hasText: name })).toContainText('0 units');
 
     // Rename through the pencil beside its chip.
     await page

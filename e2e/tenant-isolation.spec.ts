@@ -60,9 +60,15 @@ test.describe('tenant isolation', () => {
     await post;
     await expect(pageB.locator(`text=${CANARY_CLASS}`)).toBeVisible();
 
-    // The seeded defaults arrived with the school.
+    // The seeded defaults arrived with the school. `/config` is rows that open into modals, so
+    // the type NAMES are not on the page itself — only a "6 of 6 active" summary. Open the row.
     await pageB.goto('/config');
-    await expect(pageB.locator('text=Kiểm tra miệng')).toHaveCount(1);
+    await pageB.locator('.cfg-row', { hasText: 'Assessment types' }).click();
+    await expect(
+      pageB
+        .locator('.m-dialog:has(.m-dialog__title:text-is("Assessment types"))')
+        .locator('text=Kiểm tra miệng'),
+    ).toHaveCount(1);
 
     // ---- School A (the seeded original): the canary must not exist anywhere. ----
     const ctxA = await browser.newContext();
@@ -133,7 +139,13 @@ test.describe('tenant isolation', () => {
     await page.click('form[action="/login"] button[type="submit"]');
     await page.waitForURL(/\/(dashboard|vocabulary)/, { timeout: 30_000 });
 
-    const res = await page.goto('/platform');
-    expect(res?.status()).not.toBe(200);
+    // `page.goto` FOLLOWS redirects, so it reports the 200 of wherever the bounce landed and can
+    // never see the refusal. `requirePlatformAdmin` calls `requireAdmin` first, and that redirects
+    // a student (302 → /vocabulary) before the 403 is ever reached — so the check has to be made
+    // without following. `page.request` carries the browser context's session cookie.
+    const res = await page.request.get('/platform', { maxRedirects: 0 });
+    expect(res.status()).not.toBe(200);
+    // And the bounce must be a real refusal, not a 404 that happens to hide the page.
+    expect([302, 303, 403]).toContain(res.status());
   });
 });

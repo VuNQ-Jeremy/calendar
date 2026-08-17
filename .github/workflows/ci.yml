@@ -31,3 +31,15 @@ jobs:
       - name: Typecheck mobile
         run: npm run typecheck
         working-directory: mobile
+
+      # Node 24 for the mobile suite only: its `expo-sqlite` stub is backed by `node:sqlite`,
+      # which needs --experimental-sqlite on 22. Everything above stays on 22.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      # The logic suite only (~1s). The packaging check runs `expo export` and takes about a
+      # minute, so it lives in main.yml, on the path to what actually ships.
+      - name: Test mobile
+        run: npm test
+        working-directory: mobile

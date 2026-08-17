@@ -121,6 +121,8 @@ export default function ImportWords() {
           meaningVi: r.meaningVi.trim(),
           definitionEn: r.definitionEn.trim() || null,
           ipa: r.ipa.trim() || null,
+          // Imported words arrive untagged; the catalog tags are applied on the web.
+          topicIds: [],
         })),
       });
     },

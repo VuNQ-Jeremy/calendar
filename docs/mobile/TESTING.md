@@ -2,6 +2,79 @@
 
 Hands-on verification for each phase: exact commands, what to click, what failure looks like.
 
+> **Looking for the automated suites?** They are the section immediately below. Everything after
+> it is manual, by-hand verification, and stays that way — a person swiping a flashcard is still
+> the only way to check that a gesture feels right.
+
+---
+
+## Automated tests (added 2026-08-17)
+
+Three layers, fastest first. Run from `mobile/`.
+
+| Layer | Command | Speed | In CI |
+| --- | --- | --- | --- |
+| Logic | `npm test` | ~1s | yes |
+| Packaging | `npm run test:bundle` | ~1 min | yes |
+| Device | `npm run test:device` | minutes | **no — manual only** |
+
+### Logic — `npm test`
+
+Vitest in plain Node, covering `lib/`: the HTTP client, the offline outbox, the local topic cache
+and the calendar helpers.
+
+It deliberately does **not** render components. That needs `jest-expo` +
+`@testing-library/react-native`, and that stack cannot currently be installed here: react-native
+0.86 pins `@react-native/jest-preset` to exactly `0.86.0` while `jest-expo` requires `^0.86.2`,
+and `--legacy-peer-deps` "resolves" it by removing `@react-native/babel-preset` and
+`@react-native/metro-babel-transformer` — the packages Metro needs to bundle the app. The games'
+logic lives in `@mochi/shared/logic/flashcards`, which the repo-root suite covers. Revisit when
+the peer ranges line up.
+
+**Needs Node 24.** The `expo-sqlite` stub is backed by `node:sqlite`, which requires a flag on
+Node 22 — hence the separate Node version for the mobile steps in CI while the root stays on 22.
+
+Native modules are replaced by `test/stubs/`, wired in `vitest.config.mts`. Stubbing at the
+*native* boundary rather than mocking `lib/db.ts` is deliberate: it means `lib/db.ts` runs for
+real, so the outbox tests execute the actual schema and the actual `WHERE` clauses instead of a
+fake that could never disagree with them.
+
+### Packaging — `npm run test:bundle`
+
+Exports an Android bundle and asserts the API base URL was inlined into it. This is the check
+that would have caught 2026-07-29, when a bundle published without `EXPO_PUBLIC_API_URL` threw
+before the first frame and expo-updates silently rolled back.
+
+`--clear` is **not** optional. Metro caches the transformed module the `EXPO_PUBLIC_*` value was
+inlined into, so re-exporting with a different variable reuses the old bundle — verified on
+2026-08-17, when two exports with deliberately different URLs produced byte-identical output. A
+cached bundle would pass the check on a URL the current environment never supplied.
+
+Locally the URL comes from `.env.local` (gitignored); CI passes it explicitly.
+
+### Device — `npm run test:device`
+
+[Maestro](https://maestro.mobile.dev) flows in `mobile/.maestro/`. **Manual-trigger only**, the
+same rule the web e2e suite follows in `CLAUDE.md` — never part of a commit routine.
+
+- `boot.yaml` — a cold launch reaches a real frame. The on-device half of the packaging check:
+  the bundle guard proves the URL was inlined, this proves the app built with it renders.
+- `login.yaml` — sign in as the staff test account and leave `/login`.
+
+**Not yet runnable on this machine, so these two flows are written but unverified.** Maestro is a
+JVM tool: it needs a JDK, and on Windows it runs under WSL (native Windows support is not
+official). As of 2026-08-17 neither Java nor Maestro is installed here.
+
+```bash
+winget install --id EclipseAdoptium.Temurin.21.JDK   # 1. a JVM
+curl -Ls "https://get.maestro.mobile.dev" | bash      # 2. Maestro (under WSL on Windows)
+"$LOCALAPPDATA/Android/Sdk/emulator/emulator.exe" -avd mochi_dev   # 3. the emulator
+cd mobile && npm run test:device                      # 4. after installing a build on it
+```
+
+The flows target `appId: com.mochi.lms` and drive real screens, so they need a development or
+preview build installed on the emulator — not Expo Go.
+
 Commands are given for a POSIX shell (Git Bash / macOS / Linux). On Windows PowerShell, `curl`
 is an alias for `Invoke-WebRequest` — use `curl.exe` explicitly, which ships with Windows 10
 1803+.
