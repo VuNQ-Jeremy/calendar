@@ -54,7 +54,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
     rankingsSvc.getRankingWeights(db),
-    levelsSvc.list(db),
+    levelsSvc.list(db.raw),
     classLevelsSvc.list(db),
   ]);
 

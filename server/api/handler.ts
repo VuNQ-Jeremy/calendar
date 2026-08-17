@@ -11,6 +11,7 @@ import {
   requireApiParent,
   requireApiStaff,
   requireApiAdmin,
+  requireApiPlatformAdmin,
 } from './auth';
 import { eq } from 'drizzle-orm';
 import { notifyLive } from '../live';
@@ -41,7 +42,7 @@ const COARSE_ACTION_FOR_METHOD: Record<string, 'create' | 'update' | 'delete'> =
  *   everything to `parent_students`, so no other kind has an answer here. Each one still asks
  *   parent-portal.ts whether the portal is switched on — this level is identity, not access.
  */
-export type AuthLevel = 'any' | 'user' | 'parent' | 'staff' | 'admin';
+export type AuthLevel = 'any' | 'user' | 'parent' | 'staff' | 'admin' | 'platform';
 
 /**
  * 'any' sees every kind; 'parent' sees exactly one; the rest have already turned parents away
@@ -90,6 +91,9 @@ export function corsPreflight(): Response {
 }
 
 async function resolveUser(level: AuthLevel, request: Request, env: Env): Promise<SessionUser> {
+  // Above 'admin': the deployment's owner, not a school's. Checked first so it cannot fall through
+  // to the school-Admin branch.
+  if (level === 'platform') return requireApiPlatformAdmin(request, env);
   if (level === 'admin') return requireApiAdmin(request, env);
   if (level === 'staff') return requireApiStaff(request, env);
   if (level === 'user') return requireApiLearner(request, env);

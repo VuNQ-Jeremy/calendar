@@ -488,7 +488,9 @@ const collections: PathDoc[] = [
     routePattern: 'api/grade-levels/:id?',
     base: '/api/grade-levels',
     tag: 'Config',
-    level: 'admin',
+    // Global since 0049: everyone reads it, only a platform admin writes it.
+    level: 'platform',
+    readLevel: 'staff',
     input: GradeLevelInput,
     row: c.GradeLevelRow,
     entity: 'grade level',
@@ -626,14 +628,21 @@ const materials: PathDoc[] = [
 
 /* ── Config reordering ─────────────────────────────────────────────────────────────────────── */
 
-const reorder = (path: string, routePattern: string, schema: z.ZodType, what: string): PathDoc => ({
+const reorder = (
+  path: string,
+  routePattern: string,
+  schema: z.ZodType,
+  what: string,
+  /** `platform` for the global lists (khối, since 0049); school-managed enums stay `admin`. */
+  auth: DocAuthLevel = 'admin',
+): PathDoc => ({
   path,
   routePattern,
   tag: 'Config',
   operations: [
     {
       method: 'post',
-      auth: 'admin',
+      auth,
       summary: `Reorder ${what}`,
       description: 'Send every id in the order you want; positions are rewritten to match.',
       request: { schema },
@@ -660,6 +669,7 @@ const reorders: PathDoc[] = [
     'api/grade-levels/reorder',
     GradeLevelReorder,
     'grade levels',
+    'platform',
   ),
 ];
 

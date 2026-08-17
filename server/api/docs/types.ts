@@ -18,7 +18,15 @@ import type { z } from 'zod';
  * asserts the two stay in step.
  */
 export type DocAuthLevel =
-  'any' | 'user' | 'parent' | 'staff' | 'admin' | 'public' | 'webhook-secret';
+  | 'any'
+  | 'user'
+  | 'parent'
+  | 'staff'
+  | 'admin'
+  /** A platform admin, above a school Admin — the global tables (`grade_levels`, since 0049). */
+  | 'platform'
+  | 'public'
+  | 'webhook-secret';
 
 export type ParamDoc = {
   name: string;

@@ -393,6 +393,8 @@ const en_strings = {
   qi_err_too_many_on_test: 'A test can hold at most 100 questions.',
   gl_title: 'Grade levels',
   gl_subtitle: 'Used to categorize questions and tests',
+  cfg_global_list:
+    'Shared by every school — khối 6-9 is the same everywhere, so this list is managed centrally and read-only here.',
   gl_add: 'Add grade level',
   gl_name_ph: 'Grade level name',
   gl_empty: 'No grade levels yet',
@@ -2022,6 +2024,8 @@ export const STRINGS = {
     qi_err_too_many_on_test: 'Một bài kiểm tra chỉ chứa được tối đa 100 câu hỏi.',
     gl_title: 'Khối lớp',
     gl_subtitle: 'Dùng để phân loại câu hỏi và đề kiểm tra',
+    cfg_global_list:
+      'Dùng chung cho mọi trường — khối 6-9 giống nhau ở mọi nơi, nên danh sách này do hệ thống quản lý và chỉ xem được ở đây.',
     gl_add: 'Thêm khối lớp',
     gl_name_ph: 'Tên khối lớp',
     gl_empty: 'Chưa có khối lớp nào',

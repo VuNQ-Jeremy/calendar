@@ -20,10 +20,10 @@ import type { DocAuthLevel, OperationDoc, ParamDoc, PathDoc } from './types';
 type Json = Record<string, unknown>;
 
 /** Levels that mean "a bearer token must be present". */
-const NEEDS_TOKEN: DocAuthLevel[] = ['any', 'user', 'parent', 'staff', 'admin'];
+const NEEDS_TOKEN: DocAuthLevel[] = ['any', 'user', 'parent', 'staff', 'admin', 'platform'];
 
 /** Levels that can also refuse a perfectly valid token because of who is holding it. */
-const CAN_403: DocAuthLevel[] = ['user', 'parent', 'staff', 'admin'];
+const CAN_403: DocAuthLevel[] = ['user', 'parent', 'staff', 'admin', 'platform'];
 
 const WHO: Record<string, string> = {
   any: 'Any signed-in account, parents included.',

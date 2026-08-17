@@ -1,6 +1,6 @@
 import type { BatchItem } from 'drizzle-orm/batch';
 import type { Db } from '../db';
-import { assessmentTypes, classLevels, gradeLevels, remarkCriteria } from '../db/schema';
+import { assessmentTypes, classLevels, remarkCriteria } from '../db/schema';
 
 /**
  * What a brand-new school starts with.
@@ -24,6 +24,13 @@ import { assessmentTypes, classLevels, gradeLevels, remarkCriteria } from '../db
  *
  * Guessing a curriculum for someone else's school would be worse than an empty list with an
  * obvious "add one" button, so both start empty.
+ *
+ * And one is not seeded for the opposite reason: `grade_levels` (khối) went GLOBAL in migration
+ * 0049. Khối 6-9 is a national concept, identical at every school, and the vocabulary curriculum
+ * library keys curricula by it — so there is one shared list rather than a copy per school. A new
+ * school inherits it simply by reading it: there is nothing to seed, and nothing it may edit. Note
+ * the contrast with `subjects`, which starts EMPTY because no canonical list exists; khối is
+ * pre-populated globally because one does.
  */
 
 /** migrations/0007_assessment_types_attendance_grades.sql */
@@ -44,18 +51,12 @@ export const DEFAULT_REMARK_CRITERIA = [
   'Tiến bộ',
 ] as const;
 
-/** Khối — migrations/0017_tests.sql */
-export const DEFAULT_GRADE_LEVELS = ['Khối 6', 'Khối 7', 'Khối 8', 'Khối 9'] as const;
-
 /** Trình độ — migrations/0029_class_cohort.sql */
 export const DEFAULT_CLASS_LEVELS = ['Cơ bản', 'Nâng cao'] as const;
 
 /** How many rows `seedTenantDefaults` inserts, so a test can assert the whole set at once. */
 export const DEFAULT_ROW_COUNT =
-  DEFAULT_ASSESSMENT_TYPES.length +
-  DEFAULT_REMARK_CRITERIA.length +
-  DEFAULT_GRADE_LEVELS.length +
-  DEFAULT_CLASS_LEVELS.length;
+  DEFAULT_ASSESSMENT_TYPES.length + DEFAULT_REMARK_CRITERIA.length + DEFAULT_CLASS_LEVELS.length;
 
 /**
  * Batch items seeding one school's starter rows. Returned rather than executed so the caller
@@ -78,7 +79,6 @@ export function seedTenantDefaults(db: Db, tenantId: string): BatchItem<'sqlite'
   return [
     db.insert(assessmentTypes).values(rows(DEFAULT_ASSESSMENT_TYPES)),
     db.insert(remarkCriteria).values(rows(DEFAULT_REMARK_CRITERIA)),
-    db.insert(gradeLevels).values(rows(DEFAULT_GRADE_LEVELS)),
     db.insert(classLevels).values(rows(DEFAULT_CLASS_LEVELS)),
   ];
 }

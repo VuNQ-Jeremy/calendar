@@ -40,7 +40,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       peopleSvc.listStudents(db),
       testsSvc.listAttempts(db, id),
       classesSvc.list(db),
-      glSvc.list(db),
+      glSvc.list(db.raw),
       typesSvc.list(db),
       testsSvc.totalPoints(db, id),
     ]);

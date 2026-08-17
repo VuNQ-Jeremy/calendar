@@ -79,7 +79,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   ] = await Promise.all([
     typesSvc.list(db),
     criteriaSvc.list(db),
-    levelsSvc.list(db),
+    levelsSvc.list(db.raw),
     classLevelsSvc.list(db),
     subjectsSvc.list(db),
     // The SCHOOL default: this card is System Config, not a personal preference. An account's
@@ -104,6 +104,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     types,
     remarkCriteria,
     gradeLevels,
+    /** Khối is global since 0049, so only a platform admin may edit it. */
+    canEditGradeLevels: user.isPlatformAdmin,
     classLevels,
     subjects,
     uiPrefs,
@@ -154,6 +156,25 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   const id = formData.get('id') as string | null;
 
   const raw = preprocessRaw(Object.fromEntries(formData) as Record<string, unknown>);
+
+  /**
+   * Khối went GLOBAL in migration 0049: one shared list, so a rename here lands at every school, on
+   * every existing class, test and question. `requireAdmin` above is a SCHOOL admin; these four
+   * intents need the tier above it. The /config UI renders the section read-only for everyone else,
+   * but that is cosmetic — this is the check.
+   *
+   * Returned BEFORE the `try`, whose catch turns everything into `{ error: 'duplicate' }` with a 400:
+   * a 403 must not be laundered into "that name is taken".
+   */
+  const PLATFORM_INTENTS = new Set([
+    'create-level',
+    'update-level',
+    'delete-level',
+    'reorder-levels',
+  ]);
+  if (PLATFORM_INTENTS.has(intent) && !admin.isPlatformAdmin) {
+    return Response.json({ error: 'platform_admin_required' }, { status: 403 });
+  }
 
   try {
     // ---- Zalo ----
@@ -267,7 +288,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       if (!parsed.success) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
-      await levelsSvc.create(db, parsed.data);
+      await levelsSvc.create(db.raw, parsed.data);
       return { ok: true };
     }
 
@@ -277,13 +298,13 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       if (!parsed.success) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
-      await levelsSvc.update(db, id, parsed.data);
+      await levelsSvc.update(db.raw, id, parsed.data);
       return { ok: true };
     }
 
     if (intent === 'delete-level') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-      await levelsSvc.remove(db, id);
+      await levelsSvc.remove(db.raw, id);
       return { ok: true };
     }
 
@@ -298,7 +319,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       if (!parsed.success) {
         return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
       }
-      await levelsSvc.reorder(db, parsed.data.ids);
+      await levelsSvc.reorder(db.raw, parsed.data.ids);
       return { ok: true };
     }
 

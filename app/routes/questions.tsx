@@ -28,7 +28,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = tenantDbFor(env, session);
   const [questions, gradeLevels, usage] = await Promise.all([
     questionsSvc.list(db),
-    gradeLevelsSvc.list(db),
+    gradeLevelsSvc.list(db.raw),
     questionsSvc.usageCounts(db),
   ]);
   return { questions, gradeLevels, usage };

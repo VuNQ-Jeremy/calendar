@@ -24,7 +24,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     testsSvc.list(db),
     testsSvc.listQuestionLinks(db),
     classesSvc.list(db),
-    glSvc.list(db),
+    glSvc.list(db.raw),
     typesSvc.list(db),
     testsSvc.attemptsSummary(db),
   ]);

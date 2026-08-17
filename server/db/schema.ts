@@ -935,19 +935,21 @@ export const flashcardMastery = sqliteTable(
  * `test_questions.questionId` deliberately has NO cascade: deleting a question that is still on a
  * test must fail at the service layer rather than silently reshape a published test.
  */
-export const gradeLevels = sqliteTable(
-  'grade_levels',
-  {
-    id: text('id').primaryKey(),
-    tenantId: text('tenant_id')
-      .notNull()
-      .references(() => tenants.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    active: integer('active', { mode: 'boolean' }).notNull().default(true),
-    sortOrder: integer('sort_order').notNull().default(0),
-  },
-  (t) => [unique().on(t.tenantId, t.name)],
-);
+/**
+ * Khối — ONE global list for the whole deployment, not a per-school managed enum (migration 0049).
+ *
+ * Deliberately has no `tenantId`, so it is absent from the tripwire's TENANT_TABLES and reads need no
+ * `own()`/`pool()` fence. Khối 6-9 is a national concept, identical at every school, and the
+ * vocabulary curriculum library keys curricula by it — a platform-library curriculum could not point
+ * at one school's copy. Writes are platform-admin-only; a school Admin sees the list read-only on
+ * /config. `classes`, `tests` and `questions` all reference it ON DELETE SET NULL.
+ */
+export const gradeLevels = sqliteTable('grade_levels', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
 
 /** The second two-tier pool, with the same NULL-means-platform-library rule as flashcardTopics. */
 export const questions = sqliteTable(

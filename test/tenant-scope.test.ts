@@ -134,5 +134,13 @@ describe('tenant scoping', () => {
     // Reached only through a scoped parent, so deliberately absent.
     expect(TENANT_TABLES.has('flashcardWords')).toBe(false);
     expect(TENANT_TABLES.has('userSettings')).toBe(false);
+    // Global BY DECISION, not by omission: khối 6-9 is a national concept and the vocabulary
+    // curriculum library keys curricula by it (migration 0049), so there is one shared list and
+    // writes are platform-admin-only. Without this line, someone re-adding `tenantId` in a merge
+    // would silently re-fence the table and nothing would complain.
+    expect(TENANT_TABLES.has('gradeLevels')).toBe(false);
+    // The tag catalog is global for the same kind of reason: "Food & Cooking" is not per-school.
+    expect(TENANT_TABLES.has('vocabTopics')).toBe(false);
+    expect(TENANT_TABLES.has('vocabWordTopics')).toBe(false);
   });
 });

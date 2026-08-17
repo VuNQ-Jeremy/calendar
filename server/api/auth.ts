@@ -117,6 +117,24 @@ export async function requireApiAdmin(request: Request, env: Env): Promise<Sessi
 }
 
 /**
+ * The rung above Admin: a school Admin runs their own school, a platform admin runs the deployment.
+ *
+ * The JSON twin of `requirePlatformAdmin`. It exists because a few tables are genuinely global —
+ * `grade_levels` since migration 0049 — so editing one is not a school's business even when the actor
+ * is that school's Admin: renaming Khối 6 renames it everywhere.
+ *
+ * @throws {Response} 403 for a school Admin who does not own the platform.
+ */
+export async function requireApiPlatformAdmin(
+  request: Request,
+  env: Env,
+): Promise<SessionUser> {
+  const u = await requireApiAdmin(request, env);
+  if (!u.isPlatformAdmin) throw Response.json({ error: 'forbidden' }, { status: 403 });
+  return u;
+}
+
+/**
  * Staff guard for routes serving BOTH clients — the R2 file streams and the translate proxy.
  *
  * Dispatches on the credential the caller actually presented: a bearer token gets JSON

@@ -140,6 +140,28 @@ ON CONFLICT(id) DO UPDATE SET
   active     = 1,
   sort_order = excluded.sort_order;
 
+-- Khối (grade levels). GLOBAL since migration 0049: no tenant_id, one shared list, writable only by
+-- a platform admin. This block is new because the safety net it replaces is gone — a second school's
+-- khối rows used to be swept for free by `DELETE FROM tenants WHERE id <> 'tnt_mochi_0001'` cascading
+-- through 0045's `REFERENCES tenants(id)`. There is now nothing per-school to sweep, but
+-- crud-config*.spec.ts creates, renames and deletes REAL GLOBAL rows, and a run that fails mid-test
+-- would leak one into the list crud-core and crud-rankings pick 'Khối 6' from.
+--
+-- The DELETE must precede the INSERT: `ON CONFLICT(id)` cannot help with a leaked row that holds the
+-- NAME 'Khối 6' under a different id, and UNIQUE(name) would abort the statement. Deleting the
+-- non-canonical ids first guarantees the four names are free.
+--
+-- Scoped by id rather than a blanket wipe on purpose: `classes.grade_level_id` is ON DELETE SET NULL,
+-- so clearing all four rows would silently unlink every seeded class from its cohort and break the
+-- rankings specs.
+DELETE FROM grade_levels WHERE id NOT IN ('gl6','gl7','gl8','gl9');
+INSERT INTO grade_levels (id, name, active, sort_order) VALUES
+  ('gl6','Khối 6',1,1),('gl7','Khối 7',1,2),('gl8','Khối 8',1,3),('gl9','Khối 9',1,4)
+ON CONFLICT(id) DO UPDATE SET
+  name       = excluded.name,
+  active     = 1,
+  sort_order = excluded.sort_order;
+
 INSERT INTO accounts (id, email, password_hash, staff_id, created_at) VALUES
   ('acc-e2e-staff-0001', 'dev@mochi.edu',
    'pbkdf2$100000$ZQrMNwfYI5HbKc9oTdJeRg==$Qmp9WzepoERgWRkmJyiMaJ0y4w6Wmkc/lroLZVvW8GQ=',

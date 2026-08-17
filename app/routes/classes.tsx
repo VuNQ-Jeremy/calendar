@@ -31,7 +31,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       materialsSvc.list(db),
       classMaterialsSvc.listAll(db),
       testsSvc.list(db),
-      levelsSvc.list(db),
+      levelsSvc.list(db.raw),
       classLevelsSvc.list(db),
       subjectsSvc.list(db),
     ]);

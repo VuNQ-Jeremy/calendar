@@ -29,6 +29,8 @@ interface ConfigLoaderData {
   types: AssessmentTypeRow[];
   remarkCriteria: RemarkCriterionRow[];
   gradeLevels: GradeLevelRow[];
+  /** Khối is global since 0049; only a platform admin may edit it. */
+  canEditGradeLevels: boolean;
   classLevels: ClassLevelRow[];
   subjects: SubjectRow[];
   uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
@@ -185,7 +187,25 @@ const LIST_SPECS = {
  * Each instance still owns its own drag/modal state because only one list is mounted at a time
  * (inside its row's modal), and remounting on close is what discards a half-typed draft.
  */
-function ManagedListSection({ rows, spec }: { rows: ManagedRow[]; spec: ManagedListSpec }) {
+/**
+ * `readOnly` is a PROP rather than a `ManagedListSpec` field: `LIST_SPECS` is a module-level const,
+ * while "may this actor edit this list" is a per-request fact. Khối is the first global managed list
+ * (migration 0049) and there will be more.
+ *
+ * It suppresses only the affordances — the list itself stays visible, because a school Admin needs to
+ * see WHY the class form offers exactly these options, and a vanished row is a support ticket. Same
+ * principle `TenantDb.pool` states for the content library: "can see it" and "may edit it" are
+ * different questions.
+ */
+function ManagedListSection({
+  rows,
+  spec,
+  readOnly = false,
+}: {
+  rows: ManagedRow[];
+  spec: ManagedListSpec;
+  readOnly?: boolean;
+}) {
   const fetcher = useFetcher<{ error?: string }>();
   const { t } = useLang();
   const [confirm, confirmNode] = useConfirm();
@@ -281,28 +301,36 @@ function ManagedListSection({ rows, spec }: { rows: ManagedRow[]; spec: ManagedL
 
   return (
     <>
-      <div className="m-row" style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
-        <Button
-          variant="primary"
-          iconLeft={<MIcon name="plus" size={18} />}
-          onClick={() => setModal({ name: '' })}
-        >
-          {t(spec.addLabel)}
-        </Button>
-      </div>
+      {readOnly ? (
+        <p className="m-muted" style={{ marginBottom: 12 }}>
+          {t('cfg_global_list')}
+        </p>
+      ) : (
+        <div className="m-row" style={{ justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button
+            variant="primary"
+            iconLeft={<MIcon name="plus" size={18} />}
+            onClick={() => setModal({ name: '' })}
+          >
+            {t(spec.addLabel)}
+          </Button>
+        </div>
+      )}
       {ordered.length ? (
         <div className="m-stack">
           {ordered.map((row) => (
             <div
               key={row.id}
               className={'lrow' + (dragId === row.id ? ' is-dragging' : '')}
-              draggable
+              draggable={!readOnly}
               onDragStart={(e) => {
+                if (readOnly) return;
                 setDragId(row.id);
                 e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', row.id);
               }}
               onDragOver={(e) => {
+                if (readOnly) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 if (dragId && dragId !== row.id) previewMove(dragId, row.id);
@@ -310,30 +338,34 @@ function ManagedListSection({ rows, spec }: { rows: ManagedRow[]; spec: ManagedL
               onDrop={(e) => e.preventDefault()}
               onDragEnd={commitOrder}
             >
-              <span className="lrow__grip" title={t('cfg_drag_reorder')} aria-hidden="true">
-                <MIcon name="grip" size={16} />
-              </span>
+              {!readOnly && (
+                <span className="lrow__grip" title={t('cfg_drag_reorder')} aria-hidden="true">
+                  <MIcon name="grip" size={16} />
+                </span>
+              )}
               <div className="m-row" style={{ flex: 1, gap: 10 }}>
                 <span className="lrow__title">{row.name}</span>
                 <Badge color={row.active ? 'green' : 'neutral'}>
                   {row.active ? t('cfg_active') : t('cfg_inactive')}
                 </Badge>
               </div>
-              <div className="lrow__actions">
-                <IconButton
-                  label={t('cfg_rename')}
-                  size="sm"
-                  onClick={() => setModal({ id: row.id, name: row.name })}
-                >
-                  <MIcon name="edit" size={16} />
-                </IconButton>
-                <Button variant="secondary" size="sm" onClick={() => toggleActive(row)}>
-                  {row.active ? t('cfg_deactivate') : t('cfg_activate')}
-                </Button>
-                <IconButton label={t('delete')} size="sm" onClick={() => del(row)}>
-                  <MIcon name="trash" size={16} />
-                </IconButton>
-              </div>
+              {!readOnly && (
+                <div className="lrow__actions">
+                  <IconButton
+                    label={t('cfg_rename')}
+                    size="sm"
+                    onClick={() => setModal({ id: row.id, name: row.name })}
+                  >
+                    <MIcon name="edit" size={16} />
+                  </IconButton>
+                  <Button variant="secondary" size="sm" onClick={() => toggleActive(row)}>
+                    {row.active ? t('cfg_deactivate') : t('cfg_activate')}
+                  </Button>
+                  <IconButton label={t('delete')} size="sm" onClick={() => del(row)}>
+                    <MIcon name="trash" size={16} />
+                  </IconButton>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1641,6 +1673,7 @@ function SystemConfigScreen() {
     types,
     remarkCriteria,
     gradeLevels,
+    canEditGradeLevels,
     classLevels,
     subjects,
     uiPrefs,
@@ -1691,7 +1724,13 @@ function SystemConfigScreen() {
           sub: t('gl_subtitle'),
           summary: listSummary(gradeLevels),
           width: 640,
-          render: () => <ManagedListSection rows={gradeLevels} spec={LIST_SPECS.gradeLevels} />,
+          render: () => (
+            <ManagedListSection
+              rows={gradeLevels}
+              spec={LIST_SPECS.gradeLevels}
+              readOnly={!canEditGradeLevels}
+            />
+          ),
         },
         {
           id: 'classLevels',
