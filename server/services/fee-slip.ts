@@ -1,4 +1,4 @@
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import * as tuitionSvc from './tuition';
 import * as peopleSvc from './people';
 import { studentFees } from '../../shared/logic/tuition';
@@ -16,7 +16,7 @@ import { studentFees } from '../../shared/logic/tuition';
  * @returns null when the student does not exist. Callers decide the status code — the document
  *   route 404s, the API fails with `unknown_student`.
  */
-export async function buildFeeSlip(db: Db, studentId: string, month: string) {
+export async function buildFeeSlip(db: TenantDb, studentId: string, month: string) {
   const [report, students, parents] = await Promise.all([
     tuitionSvc.getMonthReport(db, month),
     peopleSvc.listStudents(db),

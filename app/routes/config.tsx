@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { SystemConfigScreen } from '../../src/screens-config.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as typesSvc from '../../server/services/assessment-types';
@@ -53,8 +53,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
-  const db = createDb(env);
+  const user = await requireAdmin(request, env);
+  const db = tenantDbFor(env, user);
   const [
     types,
     remarkCriteria,
@@ -148,7 +148,7 @@ function preprocessRaw(raw: Record<string, unknown>) {
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const admin = await requireAdmin(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, admin);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

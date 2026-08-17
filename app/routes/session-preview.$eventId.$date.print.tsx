@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { PreviewSlipView } from '../../src/preview/preview-slip.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as eventsSvc from '../../server/services/events';
@@ -19,8 +19,8 @@ import * as previewSvc from '../../server/services/session-preview';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
 
   const date = params.date ?? '';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date))

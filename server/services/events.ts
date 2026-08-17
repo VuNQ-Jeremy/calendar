@@ -1,6 +1,6 @@
 import { eq, and, gte, inArray, lte, or, ne } from 'drizzle-orm';
 import { events, eventMaterials, checklistItems } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type { EventInput } from '../../shared/schemas';
 import { addDaysVn, daysBetweenVn } from '../../shared/logic/garden';
 import { record, recordCreate, recordDelete } from './audit';
@@ -58,18 +58,19 @@ function map(r: typeof events.$inferSelect): EventRow {
   };
 }
 
-export async function list(db: Db): Promise<EventRow[]> {
-  const rows = await db.select().from(events);
+export async function list(db: TenantDb): Promise<EventRow[]> {
+  const rows = await db.raw.select().from(events).where(db.own(events));
   return rows.map(map);
 }
 
 // Recurring events are always included; non-recurring events are filtered by date range.
-export async function listRange(db: Db, fromIso: string, toIso: string): Promise<EventRow[]> {
-  const rows = await db
+export async function listRange(db: TenantDb, fromIso: string, toIso: string): Promise<EventRow[]> {
+  const rows = await db.raw
     .select()
     .from(events)
     .where(
-      and(
+      db.own(
+        events,
         lte(events.date, toIso),
         or(ne(events.recurrence, 'none'), and(gte(events.date, fromIso))),
       ),
@@ -77,7 +78,7 @@ export async function listRange(db: Db, fromIso: string, toIso: string): Promise
   return rows.map(map);
 }
 
-export async function create(db: Db, input: EventInput): Promise<EventRow> {
+export async function create(db: TenantDb, input: EventInput): Promise<EventRow> {
   const id = crypto.randomUUID();
   await db.insert(events).values({
     id,
@@ -91,7 +92,10 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
     recurrence: input.recurrence,
     notes: input.notes || null,
   });
-  const rows = await db.select().from(events).where(eq(events.id, id));
+  const rows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   const row = map(rows[0]);
   recordCreate('event', id, row);
   return row;
@@ -113,9 +117,13 @@ export async function create(db: Db, input: EventInput): Promise<EventRow> {
  * Deliberately not applied to attendance_records / session_previews (the orphan caveat documented
  * in attendance.ts stands — a mark describes a session that already happened) nor to tui_mu_events,
  * an append-only ledger of moments a kid already celebrated.
+ *
+ * tenant-unscoped: checklist_items carries no tenant_id — every row is reached through
+ * `eventId`, and every caller below resolved that id with a `db.own(events, …)` read first, so
+ * the event lookup is what fences this sweep.
  */
 async function moveChecklistItems(
-  db: Db,
+  db: TenantDb,
   eventId: string,
   opts: { days: number; fromDate?: string; onDate?: string; toEventId?: string },
 ): Promise<number> {
@@ -124,7 +132,7 @@ async function moveChecklistItems(
     : opts.onDate
       ? eq(checklistItems.date, opts.onDate)
       : undefined;
-  const rows = await db
+  const rows = await db.raw
     .select({ id: checklistItems.id, date: checklistItems.date })
     .from(checklistItems)
     .where(
@@ -140,7 +148,8 @@ async function moveChecklistItems(
     else byDate.set(r.date, [r.id]);
   }
   for (const [date, ids] of byDate) {
-    await db
+    // tenant-unscoped: see the note on moveChecklistItems.
+    await db.raw
       .update(checklistItems)
       .set({
         date: opts.days === 0 ? date : addDaysVn(date, opts.days),
@@ -151,16 +160,16 @@ async function moveChecklistItems(
   return rows.length;
 }
 
-async function shiftChecklistDates(db: Db, eventId: string, days: number): Promise<number> {
+async function shiftChecklistDates(db: TenantDb, eventId: string, days: number): Promise<number> {
   return moveChecklistItems(db, eventId, { days });
 }
 
 /** Clone a series' material attachments onto a row split or detached out of it. */
-async function cloneMaterials(db: Db, fromEventId: string, toEventId: string): Promise<void> {
-  const mats = await db
+async function cloneMaterials(db: TenantDb, fromEventId: string, toEventId: string): Promise<void> {
+  const mats = await db.raw
     .select({ materialId: eventMaterials.materialId, sortOrder: eventMaterials.sortOrder })
     .from(eventMaterials)
-    .where(eq(eventMaterials.eventId, fromEventId));
+    .where(db.own(eventMaterials, eq(eventMaterials.eventId, fromEventId)));
   if (!mats.length) return;
   await db
     .insert(eventMaterials)
@@ -183,7 +192,7 @@ function merged(before: EventRow, patch: Partial<EventInput>) {
 }
 
 export async function update(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<EventInput>,
   /**
@@ -196,7 +205,10 @@ export async function update(
    */
   fromDate?: string,
 ): Promise<EventRow> {
-  const beforeRows = await db.select().from(events).where(eq(events.id, id));
+  const beforeRows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   const before = beforeRows[0] ? map(beforeRows[0]) : undefined;
 
   const set: Partial<typeof events.$inferInsert> = {};
@@ -222,10 +234,13 @@ export async function update(
   // A real no-op path: an empty set means nothing on the row actually changed, so skip the DB
   // write AND the audit row for it (the activity log must not log a patch that changed nothing).
   if (Object.keys(set).length) {
-    await db.update(events).set(set).where(eq(events.id, id));
+    await db.update(events, set, eq(events.id, id));
   }
   const shifted = shiftDays === 0 ? 0 : await shiftChecklistDates(db, id, shiftDays);
-  const rows = await db.select().from(events).where(eq(events.id, id));
+  const rows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   const after = map(rows[0]);
   if (!sameJson(before, after)) {
     record({
@@ -252,12 +267,15 @@ export async function update(
  * anchor (the whole series is "following", so it degrades to a plain delta update).
  */
 export async function updateFollowing(
-  db: Db,
+  db: TenantDb,
   id: string,
   occurrenceDate: string,
   patch: Partial<EventInput>,
 ): Promise<{ series: EventRow; created: EventRow | null }> {
-  const beforeRows = await db.select().from(events).where(eq(events.id, id));
+  const beforeRows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   if (!beforeRows[0]) throw new Error('event not found');
   const before = map(beforeRows[0]);
 
@@ -287,13 +305,14 @@ export async function updateFollowing(
   });
 
   // The head: capped the day before the boundary, keeping only the holes in its own window.
-  await db
-    .update(events)
-    .set({
+  await db.update(
+    events,
+    {
       until: addDaysVn(occurrenceDate, -1),
       exdates: JSON.stringify(before.exdates.filter((d) => d < occurrenceDate).sort()),
-    })
-    .where(eq(events.id, id));
+    },
+    eq(events.id, id),
+  );
 
   const movedChecklist = await moveChecklistItems(db, id, {
     days: shiftDays,
@@ -303,8 +322,14 @@ export async function updateFollowing(
   await cloneMaterials(db, id, newId);
 
   const [seriesRows, createdRows] = await Promise.all([
-    db.select().from(events).where(eq(events.id, id)),
-    db.select().from(events).where(eq(events.id, newId)),
+    db.raw
+      .select()
+      .from(events)
+      .where(db.own(events, eq(events.id, id))),
+    db.raw
+      .select()
+      .from(events)
+      .where(db.own(events, eq(events.id, newId))),
   ]);
   const series = map(seriesRows[0]);
   const created = map(createdRows[0]);
@@ -330,12 +355,15 @@ export async function updateFollowing(
  * non-recurring row carrying the series' fields merged with the patch.
  */
 export async function updateSingle(
-  db: Db,
+  db: TenantDb,
   id: string,
   occurrenceDate: string,
   patch: Partial<EventInput>,
 ): Promise<{ series: EventRow; created: EventRow | null }> {
-  const beforeRows = await db.select().from(events).where(eq(events.id, id));
+  const beforeRows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   if (!beforeRows[0]) throw new Error('event not found');
   const before = map(beforeRows[0]);
 
@@ -346,10 +374,7 @@ export async function updateSingle(
 
   // Set-dedup so a double submit cannot grow the array.
   const exdates = [...new Set([...before.exdates, occurrenceDate])].sort();
-  await db
-    .update(events)
-    .set({ exdates: JSON.stringify(exdates) })
-    .where(eq(events.id, id));
+  await db.update(events, { exdates: JSON.stringify(exdates) }, eq(events.id, id));
 
   const newId = crypto.randomUUID();
   const newDate = patch.date ?? occurrenceDate;
@@ -370,8 +395,14 @@ export async function updateSingle(
   await cloneMaterials(db, id, newId);
 
   const [seriesRows, createdRows] = await Promise.all([
-    db.select().from(events).where(eq(events.id, id)),
-    db.select().from(events).where(eq(events.id, newId)),
+    db.raw
+      .select()
+      .from(events)
+      .where(db.own(events, eq(events.id, id))),
+    db.raw
+      .select()
+      .from(events)
+      .where(db.own(events, eq(events.id, newId))),
   ]);
   const series = map(seriesRows[0]);
   const created = map(createdRows[0]);
@@ -395,24 +426,33 @@ export async function updateSingle(
  * "Delete this event": punch a hole in the series rather than deleting the row. Audited as an
  * update, because the row survives — only one occurrence stops existing.
  */
-export async function removeSingle(db: Db, id: string, occurrenceDate: string): Promise<void> {
-  const rows = await db.select().from(events).where(eq(events.id, id));
+export async function removeSingle(
+  db: TenantDb,
+  id: string,
+  occurrenceDate: string,
+): Promise<void> {
+  const rows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   if (!rows[0]) return;
   const before = map(rows[0]);
   if (before.recurrence === 'none') return remove(db, id);
 
   const exdates = [...new Set([...before.exdates, occurrenceDate])].sort();
-  await db
-    .update(events)
-    .set({ exdates: JSON.stringify(exdates) })
-    .where(eq(events.id, id));
+  await db.update(events, { exdates: JSON.stringify(exdates) }, eq(events.id, id));
   // The check-in list was authored for a session that no longer happens. Attendance marks stay:
   // they record something that already did.
-  await db
+  // tenant-unscoped: checklist_items has no tenant_id; the event above was read with `db.own`,
+  // so reaching this line at all proves the occurrence belongs to this school.
+  await db.raw
     .delete(checklistItems)
     .where(and(eq(checklistItems.eventId, id), eq(checklistItems.date, occurrenceDate)));
 
-  const afterRows = await db.select().from(events).where(eq(events.id, id));
+  const afterRows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   record({
     action: 'update',
     entityType: 'event',
@@ -428,27 +468,39 @@ export async function removeSingle(db: Db, id: string, occurrenceDate: string): 
  * would leave nothing (the occurrence is the anchor, or the row does not recur) the row itself
  * goes instead.
  */
-export async function removeFollowing(db: Db, id: string, occurrenceDate: string): Promise<void> {
-  const rows = await db.select().from(events).where(eq(events.id, id));
+export async function removeFollowing(
+  db: TenantDb,
+  id: string,
+  occurrenceDate: string,
+): Promise<void> {
+  const rows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   if (!rows[0]) return;
   const before = map(rows[0]);
   if (before.recurrence === 'none' || daysBetweenVn(before.date, occurrenceDate) <= 0) {
     return remove(db, id);
   }
 
-  await db
-    .update(events)
-    .set({
+  await db.update(
+    events,
+    {
       until: addDaysVn(occurrenceDate, -1),
       // Holes past the new cap describe occurrences that no longer exist at all.
       exdates: JSON.stringify(before.exdates.filter((d) => d < occurrenceDate).sort()),
-    })
-    .where(eq(events.id, id));
-  await db
+    },
+    eq(events.id, id),
+  );
+  // tenant-unscoped: checklist_items has no tenant_id; fenced by the scoped event read above.
+  await db.raw
     .delete(checklistItems)
     .where(and(eq(checklistItems.eventId, id), gte(checklistItems.date, occurrenceDate)));
 
-  const afterRows = await db.select().from(events).where(eq(events.id, id));
+  const afterRows = await db.raw
+    .select()
+    .from(events)
+    .where(db.own(events, eq(events.id, id)));
   record({
     action: 'update',
     entityType: 'event',
@@ -459,21 +511,21 @@ export async function removeFollowing(db: Db, id: string, occurrenceDate: string
   });
 }
 
-export async function remove(db: Db, id: string): Promise<void> {
+export async function remove(db: TenantDb, id: string): Promise<void> {
   // event_materials rows cascade with the event (ON DELETE CASCADE) — folded into `extra` so
   // which materials were attached survives into before_json.
-  const linked = await db
+  const linked = await db.raw
     .select({ materialId: eventMaterials.materialId })
     .from(eventMaterials)
-    .where(eq(eventMaterials.eventId, id));
+    .where(db.own(eventMaterials, eq(eventMaterials.eventId, id)));
   await recordDelete(db, 'event', events, id, { materialIds: linked.map((r) => r.materialId) });
-  await db.delete(events).where(eq(events.id, id));
+  await db.delete(events, eq(events.id, id));
 }
 
-export async function listForToday(db: Db, todayIso: string): Promise<EventRow[]> {
-  const rows = await db
+export async function listForToday(db: TenantDb, todayIso: string): Promise<EventRow[]> {
+  const rows = await db.raw
     .select()
     .from(events)
-    .where(or(eq(events.date, todayIso), ne(events.recurrence, 'none')));
+    .where(db.own(events, or(eq(events.date, todayIso), ne(events.recurrence, 'none'))));
   return rows.map(map);
 }

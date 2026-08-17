@@ -1,4 +1,4 @@
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type { CalendarView } from '../../shared/schemas';
 import { record } from './audit';
 import { readJson, writeJson } from './user-settings';
@@ -32,11 +32,15 @@ export type Theme = typeof DEFAULT_THEME;
  */
 export const THEME_KEY = 'theme';
 
-export async function getTheme(db: Db, accountId: string): Promise<Theme> {
+export async function getTheme(db: TenantDb, accountId: string): Promise<Theme> {
   return readJson(db, accountId, THEME_KEY, DEFAULT_THEME);
 }
 
-export async function setTheme(db: Db, accountId: string, patch: Partial<Theme>): Promise<Theme> {
+export async function setTheme(
+  db: TenantDb,
+  accountId: string,
+  patch: Partial<Theme>,
+): Promise<Theme> {
   const current = await getTheme(db, accountId);
   const next = { ...current, ...patch };
   await writeJson(db, accountId, THEME_KEY, next);

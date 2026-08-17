@@ -2,7 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { classes, classStudents, events } from '../db/schema';
 import * as subjectsSvc from './subjects';
-import type { Db } from '../db/index';
+import { chunk, rowsPerStatement, type TenantDb } from '../db';
 import type { ClassInput } from '../../shared/schemas';
 import { record, recordCreate, recordDelete } from './audit';
 
@@ -22,7 +22,7 @@ function sameJson(a: unknown, b: unknown): boolean {
  * undefined — "leave the subject alone" — so a stale client cannot blank it or invent a row.
  */
 async function resolveSubjectId(
-  db: Db,
+  db: TenantDb,
   input: Partial<ClassInput>,
 ): Promise<string | null | undefined> {
   if (input.subjectId !== undefined) return input.subjectId ?? null;
@@ -77,16 +77,16 @@ function assembleClass(
   };
 }
 
-export async function list(db: Db): Promise<ClassRow[]> {
+export async function list(db: TenantDb): Promise<ClassRow[]> {
   const [clsRows, csRows] = await db.batch([
-    db.select().from(classes),
-    db.select().from(classStudents),
+    db.raw.select().from(classes).where(db.own(classes)),
+    db.raw.select().from(classStudents).where(db.own(classStudents)),
   ]);
   return clsRows.map((c) => assembleClass(c, csRows));
 }
 
-export async function listLite(db: Db): Promise<ClassLite[]> {
-  return db
+export async function listLite(db: TenantDb): Promise<ClassLite[]> {
+  return db.raw
     .select({
       id: classes.id,
       name: classes.name,
@@ -95,19 +95,26 @@ export async function listLite(db: Db): Promise<ClassLite[]> {
       gradeLevelId: classes.gradeLevelId,
       classLevelId: classes.classLevelId,
     })
-    .from(classes);
+    .from(classes)
+    .where(db.own(classes));
 }
 
-export async function get(db: Db, id: string): Promise<ClassRow | null> {
+export async function get(db: TenantDb, id: string): Promise<ClassRow | null> {
   const [clsRows, csRows] = await db.batch([
-    db.select().from(classes).where(eq(classes.id, id)),
-    db.select().from(classStudents).where(eq(classStudents.classId, id)),
+    db.raw
+      .select()
+      .from(classes)
+      .where(db.own(classes, eq(classes.id, id))),
+    db.raw
+      .select()
+      .from(classStudents)
+      .where(db.own(classStudents, eq(classStudents.classId, id))),
   ]);
   if (!clsRows[0]) return null;
   return assembleClass(clsRows[0], csRows);
 }
 
-export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
+export async function create(db: TenantDb, input: ClassInput): Promise<ClassRow> {
   const id = crypto.randomUUID();
   const subjectId = await resolveSubjectId(db, input);
 
@@ -123,11 +130,13 @@ export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
   ];
 
   if (input.studentIds.length > 0) {
-    ops.push(
-      db
-        .insert(classStudents)
-        .values(input.studentIds.map((sid) => ({ classId: id, studentId: sid }))),
-    );
+    // tenant_id took one of D1's 100 bound parameters per row, so the roster now fits 33 rows
+    // a statement instead of 50. Chunked, still one batch, still atomic.
+    for (const part of chunk(input.studentIds, rowsPerStatement(3))) {
+      ops.push(
+        db.insert(classStudents).values(part.map((sid) => ({ classId: id, studentId: sid }))),
+      );
+    }
   }
 
   if (ops.length > 0) await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
@@ -136,7 +145,11 @@ export async function create(db: Db, input: ClassInput): Promise<ClassRow> {
   return result!;
 }
 
-export async function update(db: Db, id: string, input: Partial<ClassInput>): Promise<ClassRow> {
+export async function update(
+  db: TenantDb,
+  id: string,
+  input: Partial<ClassInput>,
+): Promise<ClassRow> {
   const before = await get(db, id);
   const ops: BatchItem<'sqlite'>[] = [];
 
@@ -148,17 +161,18 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
   if (input.gradeLevelId !== undefined) scalarSet.gradeLevelId = input.gradeLevelId ?? null;
   if (input.classLevelId !== undefined) scalarSet.classLevelId = input.classLevelId ?? null;
   if (Object.keys(scalarSet).length) {
-    ops.push(db.update(classes).set(scalarSet).where(eq(classes.id, id)));
+    ops.push(db.update(classes, scalarSet, eq(classes.id, id)));
   }
 
   if (input.studentIds !== undefined) {
-    ops.push(db.delete(classStudents).where(eq(classStudents.classId, id)));
+    ops.push(db.delete(classStudents, eq(classStudents.classId, id)));
     if (input.studentIds.length > 0) {
-      ops.push(
-        db
-          .insert(classStudents)
-          .values(input.studentIds.map((sid) => ({ classId: id, studentId: sid }))),
-      );
+      // Same 33-row ceiling as create(): see the comment there.
+      for (const part of chunk(input.studentIds, rowsPerStatement(3))) {
+        ops.push(
+          db.insert(classStudents).values(part.map((sid) => ({ classId: id, studentId: sid }))),
+        );
+      }
     }
   }
 
@@ -170,7 +184,7 @@ export async function update(db: Db, id: string, input: Partial<ClassInput>): Pr
   return result!;
 }
 
-export async function remove(db: Db, id: string): Promise<void> {
+export async function remove(db: TenantDb, id: string): Promise<void> {
   // ON DELETE CASCADE handles class_schedule and class_students rows (folded into `extra` via
   // the roster already on `before`). The events and tests FKs are ON DELETE SET NULL, so the
   // class's events are deleted here first — left to the FK they would survive as orphaned
@@ -178,17 +192,23 @@ export async function remove(db: Db, id: string): Promise<void> {
   // says which ones went. Rows hanging off an event (event_materials, attendance_records,
   // session_previews, checklist_items) cascade with it.
   const before = await get(db, id);
-  const owned = await db.select({ id: events.id }).from(events).where(eq(events.classId, id));
+  const owned = await db.raw
+    .select({ id: events.id })
+    .from(events)
+    .where(db.own(events, eq(events.classId, id)));
   await recordDelete(db, 'class', classes, id, {
     studentIds: before?.studentIds ?? [],
     eventIds: owned.map((r) => r.id),
   });
-  await db.delete(events).where(eq(events.classId, id));
-  await db.delete(classes).where(eq(classes.id, id));
+  await db.delete(events, eq(events.classId, id));
+  await db.delete(classes, eq(classes.id, id));
 }
 
-export async function countByIds(db: Db, ids: string[]): Promise<number> {
+export async function countByIds(db: TenantDb, ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
-  const rows = await db.select().from(classes).where(inArray(classes.id, ids));
+  const rows = await db.raw
+    .select()
+    .from(classes)
+    .where(db.own(classes, inArray(classes.id, ids)));
   return rows.length;
 }

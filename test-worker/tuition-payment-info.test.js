@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as tuitionSvc from '../server/services/tuition';
 
 /**
@@ -12,7 +13,7 @@ import * as tuitionSvc from '../server/services/tuition';
  */
 describe('tuition — payment info', () => {
   it('round-trips through the settings row', async () => {
-    const d = createDb(env);
+    const d = new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
     expect((await tuitionSvc.getPaymentInfo(d)).bankCode).toBe(null);
     await tuitionSvc.setPaymentInfo(d, { bankCode: 'VCB', accountNumber: '123' });
     // A partial save must not blank the fields it did not mention.

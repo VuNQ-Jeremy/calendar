@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { ClientLoaderFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { GardenAlbumScreen } from '../../src/garden/class-garden.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner } from '../../server/services/auth';
 import * as gardenSvc from '../../server/services/garden';
@@ -20,8 +20,9 @@ import { gardenAlbumKey, swrLoad } from '../../src/lib/route-cache.js';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireLearner(request, env);
-  const db = createDb(env);
+  const su = await requireLearner(request, env);
+  const { user, kind } = su;
+  const db = tenantDbFor(env, su);
   const classId = params.classId ?? '';
   const month = params.month ?? '';
   if (!/^\d{4}-\d{2}$/.test(month)) throw Response.json({ error: 'bad_month' }, { status: 400 });

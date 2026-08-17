@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from 'react-router';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import * as zalo from '../../server/services/zalo';
@@ -54,11 +54,11 @@ function fail(error: string, status: number): Response {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const { env, ctx } = context.get(cloudflareCtx);
-  await requireStaffCookieOrBearer(request, env);
+  const staff = await requireStaffCookieOrBearer(request, env);
   if (request.method !== 'POST') return fail('method_not_allowed', 405);
   if (!zalo.isEnabled(env)) return fail('zalo_disabled', 503);
 
-  const db = createDb(env);
+  const db = tenantDbFor(env, staff);
   const form = await request.formData();
   const file = form.get('file');
   const target = String(form.get('target') ?? '');

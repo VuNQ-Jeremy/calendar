@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { ClassShareCard } from '../../src/garden/share-card.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as gardenSvc from '../../server/services/garden';
@@ -21,8 +21,7 @@ import { ictDateOf } from '../../shared/logic/tests';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, await requireStaff(request, env));
   const vnToday = ictDateOf(new Date().toISOString());
   const garden = await gardenSvc.classGarden(db, params.classId ?? '', vnToday);
   if (!garden) throw Response.json({ error: 'unknown_class' }, { status: 404 });

@@ -1,4 +1,4 @@
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type { NotifPrefsInput } from '../../shared/schemas';
 import { record } from './audit';
 import {
@@ -45,12 +45,12 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
 
 export const NOTIF_PREFS_KEY = 'notif-prefs';
 
-export async function getNotifPrefs(db: Db, accountId: string): Promise<NotifPrefs> {
+export async function getNotifPrefs(db: TenantDb, accountId: string): Promise<NotifPrefs> {
   return readJson(db, accountId, NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS);
 }
 
 export async function setNotifPrefs(
-  db: Db,
+  db: TenantDb,
   accountId: string,
   patch: Partial<NotifPrefs>,
 ): Promise<NotifPrefs> {
@@ -70,11 +70,14 @@ export async function setNotifPrefs(
 }
 
 /** The school-wide baseline: what a recipient with no preferences of their own gets. */
-export async function getSchoolNotifPrefs(db: Db): Promise<NotifPrefs> {
+export async function getSchoolNotifPrefs(db: TenantDb): Promise<NotifPrefs> {
   return readSchoolJson(db, NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS);
 }
 
-export async function setSchoolNotifPrefs(db: Db, patch: Partial<NotifPrefs>): Promise<NotifPrefs> {
+export async function setSchoolNotifPrefs(
+  db: TenantDb,
+  patch: Partial<NotifPrefs>,
+): Promise<NotifPrefs> {
   const current = await getSchoolNotifPrefs(db);
   const next = { ...current, ...patch };
   await writeSchoolJson(db, NOTIF_PREFS_KEY, next);
@@ -94,7 +97,7 @@ export async function setSchoolNotifPrefs(db: Db, patch: Partial<NotifPrefs>): P
  * Everything the cron needs, in two queries: the school baseline, and every account that has
  * overridden it. Never one SELECT per recipient — a sweep touches the whole school.
  */
-export async function getNotifPrefsByAccount(db: Db): Promise<ResolvedNotifPrefs> {
+export async function getNotifPrefsByAccount(db: TenantDb): Promise<ResolvedNotifPrefs> {
   const [school, byAccount] = await Promise.all([
     getSchoolNotifPrefs(db),
     readJsonForAll(db, NOTIF_PREFS_KEY, DEFAULT_NOTIF_PREFS),

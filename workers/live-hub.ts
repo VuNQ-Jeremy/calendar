@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
 import { sessionCookie } from '../server/session';
 import { userFromToken } from '../server/services/auth';
 import { isMutationDomain, STUDENT_LIVE_DOMAINS, type MutationDomain } from '../shared/live';
@@ -8,7 +8,7 @@ import { isMutationDomain, STUDENT_LIVE_DOMAINS, type MutationDomain } from '../
  * Fan-out hub for live cache invalidation.
  *
  * Every browser tab holds one WebSocket to a single global instance
- * (`idFromName('global')`). After a successful mutation the server posts a
+ * (`idFromName('t:<tenantId>')` — one per school). After a successful mutation the server posts a
  * domain name to /broadcast (see server/live.ts) and the hub relays
  * `{type:'invalidate', domain}` to every connected socket. The client feeds
  * that into the existing SWR cache (src/lib/live.ts), so a change made in one
@@ -137,13 +137,16 @@ export async function handleLiveUpgrade(request: Request, env: Env): Promise<Res
   if (!rawToken || typeof rawToken !== 'string') {
     return new Response('unauthorized', { status: 401 });
   }
-  const user = await userFromToken(createDb(env), rawToken);
+  const user = await userFromToken(createRawDb(env), rawToken);
   if (!user) return new Response('unauthorized', { status: 401 });
 
   const forwarded = new Request('https://live-hub.internal/connect', request);
   forwarded.headers.set('X-Live-Kind', user.kind);
   forwarded.headers.set('X-Live-User', user.user.id);
 
-  const stub = env.LIVE_HUB.get(env.LIVE_HUB.idFromName('global'));
+  // One instance per school — the socket's school comes from the session that just resolved,
+  // never from a client-supplied header, and the instance boundary is what makes cross-school
+  // leakage structurally impossible rather than a filtering rule that could be forgotten.
+  const stub = env.LIVE_HUB.get(env.LIVE_HUB.idFromName(`t:${user.tenantId}`));
   return stub.fetch(forwarded);
 }

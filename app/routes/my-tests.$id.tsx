@@ -1,8 +1,8 @@
 import { redirect } from 'react-router';
 import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
 import { TakeTestScreen } from '../../src/tests/take.jsx';
-import { createDb } from '../../server/db/index';
-import type { Db } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
+import type { TenantDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner } from '../../server/services/auth';
 import * as attemptsSvc from '../../server/services/attempts';
@@ -41,7 +41,7 @@ type ReviewItem = {
  * `answerKey` and `explanation` are dropped here on the server and cannot reach the client.
  * (The graded branch goes through `attemptsSvc.reviewForStudent`, which does include the keys.)
  */
-async function studentQuestionsOf(db: Db, testId: string): Promise<StudentQuestion[]> {
+async function studentQuestionsOf(db: TenantDb, testId: string): Promise<StudentQuestion[]> {
   const [links, bank] = await Promise.all([
     testsSvc.listQuestionLinks(db, testId),
     questionsSvc.list(db),
@@ -71,7 +71,7 @@ async function studentQuestionsOf(db: Db, testId: string): Promise<StudentQuesti
  * a test that is not published, not online, or not in one of this student's classes never appears
  * in the list, and the absence becomes a 404 here.
  */
-async function ownItem(db: Db, testId: string, studentId: string, now: Date) {
+async function ownItem(db: TenantDb, testId: string, studentId: string, now: Date) {
   const items = await attemptsSvc.listOpenForStudent(db, studentId, now);
   const item = items.find((i) => i.test.id === testId);
   if (!item) throw Response.json({ error: 'test_not_found' }, { status: 404 });
@@ -80,11 +80,12 @@ async function ownItem(db: Db, testId: string, studentId: string, now: Date) {
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireLearner(request, env);
+  const session = await requireLearner(request, env);
+  const { user, kind } = session;
   if (kind === 'staff') throw redirect('/tests');
   if (kind !== 'student') throw redirect('/profile');
 
-  const db = createDb(env);
+  const db = tenantDbFor(env, session);
   const now = new Date();
   const serverNow = now.toISOString();
   const item = await ownItem(db, params.id!, user.id, now);
@@ -158,10 +159,11 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
 
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireLearner(request, env);
+  const session = await requireLearner(request, env);
+  const { user, kind } = session;
   if (kind !== 'student') return Response.json({ error: 'forbidden' }, { status: 403 });
 
-  const db = createDb(env);
+  const db = tenantDbFor(env, session);
   const now = new Date();
   const testId = params.id!;
   const formData = await request.formData();

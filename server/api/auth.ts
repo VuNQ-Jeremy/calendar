@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { createDb, type Db } from '../db';
+import { createRawDb, type Db } from '../db/internal';
 import { sessions } from '../db/schema';
 import { hashToken } from '../services/crypto';
 import {
@@ -58,7 +58,7 @@ async function slideExpiry(db: Db, rawToken: string): Promise<void> {
 export async function requireApiUser(request: Request, env: Env): Promise<SessionUser> {
   const raw = bearer(request);
   if (!raw) throw Response.json({ error: 'unauthorized' }, { status: 401 });
-  const db = createDb(env);
+  const db = createRawDb(env);
   const user = await userFromToken(db, raw);
   if (!user) throw Response.json({ error: 'unauthorized' }, { status: 401 });
   await slideExpiry(db, raw);

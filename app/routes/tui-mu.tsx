@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { TuiMuBoardScreen } from '../../src/tui-mu/board.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as checkinSvc from '../../server/services/checkin';
@@ -29,8 +29,8 @@ function requireMonth(raw: string | undefined): string {
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const month = requireMonth(params.month);
   const settings = await checkinSvc.getCheckinSettings(db);
   const classes = await classesSvc.listLite(db);
@@ -72,7 +72,7 @@ clientLoader.hydrate = true as const;
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const staff = await requireStaff(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, staff);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const raw = Object.fromEntries(formData) as Record<string, unknown>;

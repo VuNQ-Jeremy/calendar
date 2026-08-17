@@ -1,6 +1,6 @@
 import { eq, and, asc } from 'drizzle-orm';
 import { scoreRecords, behaviorRecords, monthlyRemarks } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type {
   ScoreRecordInput,
   BehaviorRecordInput,
@@ -58,12 +58,16 @@ function mapBehavior(r: typeof behaviorRecords.$inferSelect): BehaviorRow {
   };
 }
 
-export async function listScores(db: Db): Promise<ScoreRow[]> {
-  const rows = await db.select().from(scoreRecords).orderBy(asc(scoreRecords.date));
+export async function listScores(db: TenantDb): Promise<ScoreRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(scoreRecords)
+    .where(db.own(scoreRecords))
+    .orderBy(asc(scoreRecords.date));
   return rows.map(mapScore);
 }
 
-export async function createScore(db: Db, input: ScoreRecordInput): Promise<ScoreRow> {
+export async function createScore(db: TenantDb, input: ScoreRecordInput): Promise<ScoreRow> {
   const id = crypto.randomUUID();
   await db.insert(scoreRecords).values({
     id,
@@ -74,18 +78,24 @@ export async function createScore(db: Db, input: ScoreRecordInput): Promise<Scor
     assessmentTypeId: input.assessmentTypeId ?? null,
     notes: input.notes ?? null,
   });
-  const rows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
+  const rows = await db.raw
+    .select()
+    .from(scoreRecords)
+    .where(db.own(scoreRecords, eq(scoreRecords.id, id)));
   const row = mapScore(rows[0]);
   recordCreate('assessment', id, { kind: 'score', ...row });
   return row;
 }
 
 export async function updateScore(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<ScoreRecordInput>,
 ): Promise<ScoreRow> {
-  const beforeRows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
+  const beforeRows = await db.raw
+    .select()
+    .from(scoreRecords)
+    .where(db.own(scoreRecords, eq(scoreRecords.id, id)));
   const before = beforeRows[0] ? mapScore(beforeRows[0]) : undefined;
   const set: Partial<typeof scoreRecords.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
@@ -95,9 +105,12 @@ export async function updateScore(
   if (patch.assessmentTypeId !== undefined) set.assessmentTypeId = patch.assessmentTypeId ?? null;
   if (patch.notes !== undefined) set.notes = patch.notes ?? null;
   if (Object.keys(set).length) {
-    await db.update(scoreRecords).set(set).where(eq(scoreRecords.id, id));
+    await db.update(scoreRecords, set, eq(scoreRecords.id, id));
   }
-  const rows = await db.select().from(scoreRecords).where(eq(scoreRecords.id, id));
+  const rows = await db.raw
+    .select()
+    .from(scoreRecords)
+    .where(db.own(scoreRecords, eq(scoreRecords.id, id)));
   const after = mapScore(rows[0]);
   if (!sameJson(before, after)) {
     record({
@@ -112,17 +125,24 @@ export async function updateScore(
   return after;
 }
 
-export async function removeScore(db: Db, id: string): Promise<void> {
+export async function removeScore(db: TenantDb, id: string): Promise<void> {
   await recordDelete(db, 'assessment', scoreRecords, id, { kind: 'score' });
-  await db.delete(scoreRecords).where(eq(scoreRecords.id, id));
+  await db.delete(scoreRecords, eq(scoreRecords.id, id));
 }
 
-export async function listBehavior(db: Db): Promise<BehaviorRow[]> {
-  const rows = await db.select().from(behaviorRecords).orderBy(asc(behaviorRecords.date));
+export async function listBehavior(db: TenantDb): Promise<BehaviorRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(behaviorRecords)
+    .where(db.own(behaviorRecords))
+    .orderBy(asc(behaviorRecords.date));
   return rows.map(mapBehavior);
 }
 
-export async function createBehavior(db: Db, input: BehaviorRecordInput): Promise<BehaviorRow> {
+export async function createBehavior(
+  db: TenantDb,
+  input: BehaviorRecordInput,
+): Promise<BehaviorRow> {
   const id = crypto.randomUUID();
   await db.insert(behaviorRecords).values({
     id,
@@ -132,18 +152,24 @@ export async function createBehavior(db: Db, input: BehaviorRecordInput): Promis
     type: input.type,
     notes: input.notes ?? null,
   });
-  const rows = await db.select().from(behaviorRecords).where(eq(behaviorRecords.id, id));
+  const rows = await db.raw
+    .select()
+    .from(behaviorRecords)
+    .where(db.own(behaviorRecords, eq(behaviorRecords.id, id)));
   const row = mapBehavior(rows[0]);
   recordCreate('assessment', id, { kind: 'behavior', ...row });
   return row;
 }
 
 export async function updateBehavior(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<BehaviorRecordInput>,
 ): Promise<BehaviorRow> {
-  const beforeRows = await db.select().from(behaviorRecords).where(eq(behaviorRecords.id, id));
+  const beforeRows = await db.raw
+    .select()
+    .from(behaviorRecords)
+    .where(db.own(behaviorRecords, eq(behaviorRecords.id, id)));
   const before = beforeRows[0] ? mapBehavior(beforeRows[0]) : undefined;
   const set: Partial<typeof behaviorRecords.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
@@ -152,9 +178,12 @@ export async function updateBehavior(
   if (patch.type !== undefined) set.type = patch.type;
   if (patch.notes !== undefined) set.notes = patch.notes ?? null;
   if (Object.keys(set).length) {
-    await db.update(behaviorRecords).set(set).where(eq(behaviorRecords.id, id));
+    await db.update(behaviorRecords, set, eq(behaviorRecords.id, id));
   }
-  const rows = await db.select().from(behaviorRecords).where(eq(behaviorRecords.id, id));
+  const rows = await db.raw
+    .select()
+    .from(behaviorRecords)
+    .where(db.own(behaviorRecords, eq(behaviorRecords.id, id)));
   const after = mapBehavior(rows[0]);
   if (!sameJson(before, after)) {
     record({
@@ -169,9 +198,9 @@ export async function updateBehavior(
   return after;
 }
 
-export async function removeBehavior(db: Db, id: string): Promise<void> {
+export async function removeBehavior(db: TenantDb, id: string): Promise<void> {
   await recordDelete(db, 'assessment', behaviorRecords, id, { kind: 'behavior' });
-  await db.delete(behaviorRecords).where(eq(behaviorRecords.id, id));
+  await db.delete(behaviorRecords, eq(behaviorRecords.id, id));
 }
 
 export type RemarkRow = {
@@ -208,21 +237,30 @@ function mapRemark(r: typeof monthlyRemarks.$inferSelect): RemarkRow {
   };
 }
 
-export async function listRemarks(db: Db): Promise<RemarkRow[]> {
-  const rows = await db.select().from(monthlyRemarks).orderBy(asc(monthlyRemarks.month));
+export async function listRemarks(db: TenantDb): Promise<RemarkRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(monthlyRemarks)
+    .where(db.own(monthlyRemarks))
+    .orderBy(asc(monthlyRemarks.month));
   return rows.map(mapRemark);
 }
 
 /** One student's report for one month, or null. The printable slip loads exactly this. */
 export async function getRemark(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   month: string,
 ): Promise<RemarkRow | null> {
-  const rows = await db
+  const rows = await db.raw
     .select()
     .from(monthlyRemarks)
-    .where(and(eq(monthlyRemarks.studentId, studentId), eq(monthlyRemarks.month, month)));
+    .where(
+      db.own(
+        monthlyRemarks,
+        and(eq(monthlyRemarks.studentId, studentId), eq(monthlyRemarks.month, month)),
+      ),
+    );
   return rows[0] ? mapRemark(rows[0]) : null;
 }
 
@@ -232,7 +270,7 @@ export async function getRemark(
  * the UNIQUE constraint — the teacher would only see an opaque 500 for what is a save.
  */
 export async function createRemark(
-  db: Db,
+  db: TenantDb,
   input: MonthlyRemarkInput,
   staffId: string | null,
 ): Promise<RemarkRow> {
@@ -275,12 +313,15 @@ export async function createRemark(
 }
 
 export async function updateRemark(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<MonthlyRemarkInput>,
   staffId: string | null,
 ): Promise<RemarkRow> {
-  const beforeRows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.id, id));
+  const beforeRows = await db.raw
+    .select()
+    .from(monthlyRemarks)
+    .where(db.own(monthlyRemarks, eq(monthlyRemarks.id, id)));
   const before = beforeRows[0] ? mapRemark(beforeRows[0]) : undefined;
   const set: Partial<typeof monthlyRemarks.$inferInsert> = {};
   if (patch.studentId !== undefined) set.studentId = patch.studentId;
@@ -290,9 +331,12 @@ export async function updateRemark(
   if (Object.keys(set).length) {
     set.staffId = staffId;
     set.updatedAt = new Date().toISOString();
-    await db.update(monthlyRemarks).set(set).where(eq(monthlyRemarks.id, id));
+    await db.update(monthlyRemarks, set, eq(monthlyRemarks.id, id));
   }
-  const rows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.id, id));
+  const rows = await db.raw
+    .select()
+    .from(monthlyRemarks)
+    .where(db.own(monthlyRemarks, eq(monthlyRemarks.id, id)));
   const after = mapRemark(rows[0]);
   if (!sameJson(before, after)) {
     record({
@@ -307,9 +351,9 @@ export async function updateRemark(
   return after;
 }
 
-export async function removeRemark(db: Db, id: string): Promise<void> {
+export async function removeRemark(db: TenantDb, id: string): Promise<void> {
   await recordDelete(db, 'assessment', monthlyRemarks, id, { kind: 'remark' });
-  await db.delete(monthlyRemarks).where(eq(monthlyRemarks.id, id));
+  await db.delete(monthlyRemarks, eq(monthlyRemarks.id, id));
 }
 
 /**
@@ -317,9 +361,6 @@ export async function removeRemark(db: Db, id: string): Promise<void> {
  * Called by /zalo-send-card only after Zalo accepted the photo — never speculatively.
  * A repeat send simply moves the stamp forward; "last sent" is the honest reading.
  */
-export async function markRemarkSent(db: Db, id: string): Promise<void> {
-  await db
-    .update(monthlyRemarks)
-    .set({ sentAt: new Date().toISOString() })
-    .where(eq(monthlyRemarks.id, id));
+export async function markRemarkSent(db: TenantDb, id: string): Promise<void> {
+  await db.update(monthlyRemarks, { sentAt: new Date().toISOString() }, eq(monthlyRemarks.id, id));
 }

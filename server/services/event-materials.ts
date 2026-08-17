@@ -1,18 +1,18 @@
 import { eq, asc } from 'drizzle-orm';
 import { eventMaterials } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 
-export async function listForEvent(db: Db, eventId: string): Promise<string[]> {
-  const rows = await db
+export async function listForEvent(db: TenantDb, eventId: string): Promise<string[]> {
+  const rows = await db.raw
     .select()
     .from(eventMaterials)
-    .where(eq(eventMaterials.eventId, eventId))
+    .where(db.own(eventMaterials, eq(eventMaterials.eventId, eventId)))
     .orderBy(asc(eventMaterials.sortOrder));
   return rows.map((r) => r.materialId);
 }
 
-export async function listAll(db: Db): Promise<{ eventId: string; materialId: string }[]> {
-  const rows = await db.select().from(eventMaterials);
+export async function listAll(db: TenantDb): Promise<{ eventId: string; materialId: string }[]> {
+  const rows = await db.raw.select().from(eventMaterials).where(db.own(eventMaterials));
   return rows.map((r) => ({ eventId: r.eventId, materialId: r.materialId }));
 }
 
@@ -20,11 +20,11 @@ export async function listAll(db: Db): Promise<{ eventId: string; materialId: st
 // If the event's class changes later, previously attached materials from the old
 // class are intentionally kept (harmless; still listed as attached).
 export async function setForEvent(
-  db: Db,
+  db: TenantDb,
   eventId: string,
   materialIds: string[],
 ): Promise<string[]> {
-  const del = db.delete(eventMaterials).where(eq(eventMaterials.eventId, eventId));
+  const del = db.delete(eventMaterials, eq(eventMaterials.eventId, eventId));
   if (materialIds.length) {
     await db.batch([
       del,

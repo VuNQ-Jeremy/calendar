@@ -7,7 +7,7 @@ import type {
 import { useOutletContext } from 'react-router';
 import { FeedbackScreen } from '../../src/feedback.jsx';
 import type { AppContext } from './_app.js';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
@@ -18,8 +18,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const staff = await requireStaff(request, env);
+  const db = tenantDbFor(env, staff);
   const feedback = await feedbackSvc.list(db);
   return { feedback };
 }
@@ -31,8 +31,8 @@ clientLoader.hydrate = true as const;
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const { env, ctx } = context.get(cloudflareCtx);
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const staff = await requireStaff(request, env);
+  const db = tenantDbFor(env, staff);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

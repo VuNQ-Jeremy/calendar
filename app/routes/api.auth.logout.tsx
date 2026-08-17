@@ -13,7 +13,9 @@ import { record } from '../../server/services/audit';
  */
 export const action = withAuth('any', async ({ request, db }) => {
   const raw = (request.headers.get('Authorization') ?? '').slice(7).trim();
-  if (raw) await db.delete(sessions).where(eq(sessions.token, await hashToken(raw)));
+  // tenant-unscoped: `sessions` carries no tenant_id — the hashed token IS the row key, and a
+  // token is unguessable, so a school predicate would add nothing.
+  if (raw) await db.raw.delete(sessions).where(eq(sessions.token, await hashToken(raw)));
   record({ action: 'logout' });
   return { ok: true };
 });

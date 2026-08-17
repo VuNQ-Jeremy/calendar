@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../app/load-context';
 import type { MutationDomain } from '../shared/live';
-import { hasCrudEntry, noteAction, record } from './services/audit';
+import { actorTenantId, hasCrudEntry, noteAction, record } from './services/audit';
 
 /**
  * Server side of the live-update feature: tell every connected browser tab
@@ -13,7 +13,14 @@ import { hasCrudEntry, noteAction, record } from './services/audit';
  */
 export function notifyLive(env: Env, ctx: ExecutionContext, domain: MutationDomain): void {
   try {
-    const stub = env.LIVE_HUB.get(env.LIVE_HUB.idFromName('global'));
+    // One hub instance per school, so an edit in one school cannot even signal "something
+    // changed" to another's open tabs. The school comes from the ambient audit store rather
+    // than a parameter: `userFromToken` already put it there on every authenticated request,
+    // and threading it through would have touched every service and every `crud()` config for
+    // no additional safety. No actor (a system context) means nobody to broadcast to.
+    const tenantId = actorTenantId();
+    if (!tenantId) return;
+    const stub = env.LIVE_HUB.get(env.LIVE_HUB.idFromName(`t:${tenantId}`));
     ctx.waitUntil(
       stub
         .fetch('https://live-hub.internal/broadcast', {

@@ -9,7 +9,7 @@ import {
   students,
   vocabAssignments,
 } from '../db/schema';
-import type { Db } from '../db/index';
+import { PRIMARY_TENANT_ID, type TenantDb } from '../db/index';
 import { expandEvents } from '../../shared/logic/recurrence';
 import { parseISO, toMin } from '../../shared/logic/dates';
 import { previewLine } from '../../shared/logic/preview';
@@ -63,11 +63,18 @@ import {
  * and this forecast changes with it. What this module owns is only the arithmetic ./notify.ts does
  * not have: given a whole week, which cron tick sends each occurrence.
  *
- * Never write: no `run*` job is ever called from here. That is not squeamishness — `runDailyDigest`
- * carries the daily housekeeping (it prunes the ledger, the Zalo pair codes and orphaned R2 images),
- * so "just dry-run the job" would delete the very ledger the tab is displaying. The garden is the
- * one job whose subjects can only be discovered by sweeping, and `gardenSvc.forecastGardenSweep`
- * exists so that discovery can happen with `persist: false`.
+ * Never write: no `run*` job is ever called from here. Every job marks its ledger keys done whether
+ * or not anybody received anything, so "just dry-run the job" would silence the very notifications
+ * the tab exists to predict. (Until multi-tenancy it was worse still: the daily housekeeping — the
+ * ledger, the Zalo pair codes, the orphaned R2 images — rode inside `runDailyDigest` and would have
+ * deleted the ledger being displayed. That now lives in `runDailyHousekeeping`, outside the
+ * per-school loop, but the rule it motivated stands on its own.) The garden is the one job whose
+ * subjects can only be discovered by sweeping, and `gardenSvc.forecastGardenSweep` exists so that
+ * discovery can happen with `persist: false`.
+ *
+ * **One school at a time.** Everything here takes the same `TenantDb` the jobs take, so the forecast
+ * describes the acting admin's own school and nobody else's — including the Zalo channel, which v1
+ * pins to the school that owns the single bot token (see `zaloEnabledFor`).
  */
 
 export type JobKind =
@@ -236,21 +243,32 @@ type AudienceIndex = {
   };
 };
 
-async function buildAudienceIndex(db: Db): Promise<AudienceIndex> {
+async function buildAudienceIndex(db: TenantDb): Promise<AudienceIndex> {
   const [accountRows, tokenRows, studentRows, staffRows, links, parentLinks, prefs] =
     await Promise.all([
-      db
+      db.raw
         .select({ id: accounts.id, studentId: accounts.studentId, staffId: accounts.staffId })
-        .from(accounts),
-      db
+        .from(accounts)
+        .where(db.own(accounts)),
+      // `push_tokens` carries no `tenant_id` — a device token is physically global, and the same
+      // handset can be re-registered to an account in a different school. It is scoped the only way
+      // it can be: through the account that owns it. Without this join the `totals` below would
+      // report the whole deployment's device count on one school's page.
+      db.raw
         .select({ accountId: pushTokens.accountId, expoToken: pushTokens.expoToken })
-        .from(pushTokens),
-      db.select({ id: students.id, name: students.name }).from(students),
-      db.select({ id: staff.id, name: staff.name }).from(staff),
+        .from(pushTokens)
+        .innerJoin(accounts, eq(accounts.id, pushTokens.accountId))
+        .where(db.own(accounts)),
+      db.raw
+        .select({ id: students.id, name: students.name })
+        .from(students)
+        .where(db.own(students)),
+      db.raw.select({ id: staff.id, name: staff.name }).from(staff).where(db.own(staff)),
       zalo.listLinks(db),
-      db
+      db.raw
         .select({ parentId: parentStudents.parentId, studentId: parentStudents.studentId })
-        .from(parentStudents),
+        .from(parentStudents)
+        .where(db.own(parentStudents)),
       getNotifPrefsByAccount(db),
     ]);
 
@@ -417,8 +435,20 @@ type PlanCtx = {
   classes: Awaited<ReturnType<typeof classesSvc.list>>;
 };
 
+/**
+ * Whether the Zalo channel will actually fire for this school.
+ *
+ * The deployment has ONE `ZALO_BOT_TOKEN`, so v1 pins Zalo delivery to the school that owns it —
+ * `zaloDeliver` in ./notify.ts refuses the pass for anyone else. This mirror exists so the forecast
+ * cannot lie about it: without the tenant half of the test, a second school's admin would see a full
+ * column of parent messages that the cron will never send.
+ */
+function zaloEnabledFor(db: TenantDb, env: Env | undefined): boolean {
+  return !!env && zalo.isEnabled(env) && db.tenantId === PRIMARY_TENANT_ID;
+}
+
 /** Occurrences in the horizon that belong to a class, expanded once. */
-async function horizonOccurrences(db: Db, ctx: PlanCtx) {
+async function horizonOccurrences(db: TenantDb, ctx: PlanCtx) {
   // −1 day so an occurrence just after midnight, whose reminder fired yesterday evening, is still
   // seen; +1 past the horizon because `expandEvents` is inclusive and the preview job looks a day
   // ahead of the day it fires on.
@@ -441,13 +471,13 @@ async function horizonOccurrences(db: Db, ctx: PlanCtx) {
  * have no business in a loader payload. Only `sendPlannedNotification` reads it.
  */
 async function buildPlan(
-  db: Db,
+  db: TenantDb,
   env: Env | undefined,
   at: Date,
   horizonDays: number,
 ): Promise<{ plan: NotificationsPlan; recipients: Map<string, Recipients> }> {
   const { dateIso: nowDateIso, minutes: nowMin } = ictNow(at);
-  const zaloEnabled = !!env && zalo.isEnabled(env);
+  const zaloEnabled = zaloEnabledFor(db, env);
 
   // The SCHOOL baseline. It decides whether each job runs at all and what the lead window is;
   // who inside it actually hears about a row is decided per account, in the index's filters.
@@ -512,7 +542,7 @@ async function buildPlan(
 }
 
 export async function planNotifications(
-  db: Db,
+  db: TenantDb,
   env: Env | undefined,
   at: Date = new Date(),
   horizonDays = 7,
@@ -713,7 +743,7 @@ function previewRows(
  * who last played 6 days ago would be missing from a forecast of a run that will include them.
  */
 async function digestRows(
-  db: Db,
+  db: TenantDb,
   ctx: PlanCtx,
   nextRunIct: string,
   rec: Map<string, Recipients>,
@@ -723,10 +753,15 @@ async function digestRows(
   const runDateIso = nextRunIct.slice(0, 10);
   const cutoff = new Date(runAt.getTime() - 7 * 86_400_000).toISOString();
 
-  const recent = await db
+  const recent = await db.raw
     .select({ studentId: flashcardResults.studentId })
     .from(flashcardResults)
-    .where(and(isNotNull(flashcardResults.studentId), gte(flashcardResults.playedAt, cutoff)));
+    .where(
+      db.own(
+        flashcardResults,
+        and(isNotNull(flashcardResults.studentId), gte(flashcardResults.playedAt, cutoff)),
+      ),
+    );
   const active = new Set(recent.map((r) => r.studentId));
 
   const bucket = studyBucket(runDateIso);
@@ -767,7 +802,7 @@ async function digestRows(
  * has never had a Zalo channel.
  */
 async function gardenRows(
-  db: Db,
+  db: TenantDb,
   ctx: PlanCtx,
   nextRunIct: string,
   rec: Map<string, Recipients>,
@@ -835,7 +870,7 @@ export type SendOneResult =
  * their own notification on schedule.
  */
 export async function sendPlannedNotification(
-  db: Db,
+  db: TenantDb,
   env: Env | undefined,
   key: string,
   at: Date = new Date(),
@@ -865,10 +900,13 @@ export async function sendPlannedNotification(
         ...pushEnvelopeFor(row),
       })),
     );
+    // tenant-unscoped: a dead Expo token is dead for every school — `push.pruneTokens` unscopes
+    // internally, `push_tokens` having no `tenant_id` to filter on.
     if (dead.length) await push.pruneTokens(db, dead);
     sent = to.tokens.length - dead.length;
   } else {
-    if (!env || !zalo.isEnabled(env)) return { ok: false, reason: 'no_recipients' };
+    // Same pin as the cron's: one bot token, so only its owning school may send on this channel.
+    if (!env || !zaloEnabledFor(db, env)) return { ok: false, reason: 'no_recipients' };
     if (!to.chatIds.length) return { ok: false, reason: 'no_recipients' };
     sent = await zalo.broadcastText(env, to.chatIds, row.body);
   }
@@ -986,7 +1024,7 @@ export type SentEntry = {
  * nothing. A subject that has since been deleted keeps its row and gets a null label — the log is
  * a record of what happened, and hiding rows whose event was deleted would make it a worse one.
  */
-export async function listSentLog(db: Db, limit = 100): Promise<SentEntry[]> {
+export async function listSentLog(db: TenantDb, limit = 100): Promise<SentEntry[]> {
   const rows = await push.listRecentSent(db, limit);
   if (!rows.length) return [];
 
@@ -1004,17 +1042,20 @@ export async function listSentLog(db: Db, limit = 100): Promise<SentEntry[]> {
     eventIds.size ? eventsSvc.list(db) : Promise.resolve([]),
     eventIds.size ? classesSvc.listLite(db) : Promise.resolve([]),
     studentIds.size
-      ? db
+      ? db.raw
           .select({ id: students.id, name: students.name })
           .from(students)
-          .where(inArray(students.id, [...studentIds]))
+          .where(db.own(students, inArray(students.id, [...studentIds])))
       : Promise.resolve([]),
     assignmentIds.size
-      ? db
+      ? db.raw
           .select({ id: vocabAssignments.id, topicName: flashcardTopics.name })
           .from(vocabAssignments)
           .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
-          .where(inArray(vocabAssignments.id, [...assignmentIds]))
+          // Scoped on the assignment, not the topic: `flashcard_topics` is a two-tier pool whose
+          // NULL rows are the platform library, and an assignment of a library topic is still this
+          // school's assignment.
+          .where(db.own(vocabAssignments, inArray(vocabAssignments.id, [...assignmentIds])))
       : Promise.resolve([]),
   ]);
   const eventById = new Map(eventRows.map((e) => [e.id, e]));

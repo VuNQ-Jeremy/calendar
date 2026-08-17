@@ -10,7 +10,8 @@ import { DS } from '../../src/ds/index.js';
 import { MIcon } from '../../src/icons.jsx';
 import type { IconName } from '../../src/icons.jsx';
 import { useLang } from '../../src/lib/i18n.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db';
+import { createRawDb } from '../../server/db/internal';
 import { cloudflareCtx } from '../../app/load-context';
 import * as invitesSvc from '../../server/services/invites';
 import { NewPassword } from '../../shared/schemas';
@@ -58,7 +59,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const db = createDb(env);
+  // tenant-unscoped, deliberately: nobody on this route has a session yet. Signing in resolves a
+  // school from the account, and redeeming resolves one from the invite code — which is why
+  // `invites.code` is globally unique. A scoped handle here would have nothing to scope to.
+  const db = createRawDb(env);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const url = new URL(request.url);
@@ -108,7 +112,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Only the three fields the form renders. This response goes to an anonymous visitor,
     // so the invite row itself — ids, the class it links to — stays on the server.
     const linkedId = invite.studentId ?? invite.staffId ?? invite.parentId;
-    const personName = await invitesSvc.linkedPersonName(db, invite);
+    // The code has now selected a school, so the name lookup runs scoped to THAT school rather
+    // than against the whole table.
+    const personName = await invitesSvc.linkedPersonName(tenantDbFor(env, invite), invite);
     return Response.json({
       intent,
       invite: { role: invite.role, name: personName ?? invite.name ?? null, linked: !!linkedId },
@@ -337,6 +343,16 @@ export default function Login() {
         >
           {t('auth_have_code')}
         </LBtn>
+        {/*
+          The only way into /signup. Deliberately the quietest thing on the page: almost everyone
+          arriving here belongs to a school that already exists, and creating a second one by
+          mistake is a mess only a platform admin can clean up.
+        */}
+        <p className="auth-foot">
+          <a className="auth-link" href="/signup">
+            {t('signup_link')}
+          </a>
+        </p>
       </Form>
     );
   } else if (mode === 'code') {

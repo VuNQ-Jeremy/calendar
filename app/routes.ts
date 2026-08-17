@@ -2,6 +2,8 @@ import { type RouteConfig, index, layout, route } from '@react-router/dev/routes
 
 export default [
   route('login', 'routes/login.tsx'),
+  // Public school creation. Outside the _app layout, like /login: there is no session yet.
+  route('signup', 'routes/signup.tsx'),
   route('logout', 'routes/logout.tsx'),
   route('materials/:id/download', 'routes/materials.$id.download.tsx'),
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
@@ -169,6 +171,8 @@ export default [
     // `?month=` would give every month the same cache entry.
     route('tuition/:month?', 'routes/tuition.tsx'),
     route('config', 'routes/config.tsx'),
+    // Platform admins only (dev@ / admin@). A school's own Admin must never reach it.
+    route('platform', 'routes/platform.tsx'),
     // Admin diagnostics. The student filter sits in the PATH for the same cache reason as the
     // months above: cacheKeyForPath only sees pathnames.
     //

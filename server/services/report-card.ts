@@ -1,4 +1,4 @@
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import * as assessSvc from './assessments';
 import * as criteriaSvc from './remark-criteria';
 import * as peopleSvc from './people';
@@ -23,7 +23,7 @@ import { ictDateOf } from '../../shared/logic/tests';
  *
  * @returns null when the student does not exist.
  */
-export async function buildReportCard(db: Db, studentId: string, month: string) {
+export async function buildReportCard(db: TenantDb, studentId: string, month: string) {
   const vnToday = ictDateOf(new Date().toISOString());
   const checkinSettings = await checkinSvc.getCheckinSettings(db);
   const [

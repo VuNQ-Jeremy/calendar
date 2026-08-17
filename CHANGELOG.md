@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0251 — 2026-08-17
+Multi-tenancy: schools are isolated by tenant_id behind a scoped TenantDb, with public signup at /signup and a /platform admin surface. Existing data belongs to the original school; crons, live updates, R2 keys and the notification ledger are now per-school.
+
 ## v0.0250 — 2026-08-16
 Repair the test suites: five e2e specs and three unit tests were still asserting behaviour the app had already moved past. No product code changed.
 

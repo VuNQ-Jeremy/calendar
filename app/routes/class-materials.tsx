@@ -3,7 +3,7 @@ import type {
   ActionFunctionArgs,
   ClientActionFunctionArgs,
 } from 'react-router';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as classMaterialsSvc from '../../server/services/class-materials';
@@ -13,8 +13,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const classId = new URL(request.url).searchParams.get('classId');
   if (!classId) return Response.json({ error: 'missing params' }, { status: 400 });
   const materialIds = await classMaterialsSvc.listForClass(db, classId);
@@ -23,8 +23,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const formData = await request.formData();
 
   if (formData.get('intent') !== 'save') {

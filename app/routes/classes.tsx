@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { ClassesScreen } from '../../src/screens-manage/index.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as classesSvc from '../../server/services/classes';
@@ -22,8 +22,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const [classes, students, materials, classMaterials, tests, gradeLevels, classLevels, subjects] =
     await Promise.all([
       classesSvc.list(db),
@@ -54,8 +54,8 @@ clientLoader.hydrate = true as const;
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

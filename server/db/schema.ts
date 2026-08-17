@@ -9,78 +9,143 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-export const staff = sqliteTable('staff', {
+/**
+ * A school. Every table below that is ever read without already being fenced by a scoped
+ * parent id carries a `tenantId` pointing here — see migrations/0045_tenants.sql for which
+ * tables do not, and why.
+ *
+ * `tenantId` is deliberately NOT given a drizzle `.default()`, even though the SQL columns
+ * added by ALTER carry one: leaving it required means a raw insert that forgets the school
+ * fails to compile. The sanctioned way to insert is `TenantDb.insert`, which supplies it.
+ */
+export const tenants = sqliteTable('tenants', {
   id: text('id').primaryKey(),
+  /** Generated from the name at signup. Internal — there is no subdomain routing. */
+  slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
-  email: text('email'),
-  role: text('role').notNull().default('Teacher'),
-  color: text('color').notNull().default('orange'),
-  phone: text('phone'),
+  /** 'active' | 'suspended' — suspension is enforced in userFromToken, so it kills sessions. */
+  status: text('status').notNull().default('active'),
+  /** Reviewed by a platform admin on /platform. Informational until there is an email provider. */
+  verified: integer('verified', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull(),
+  /** Per-school meta (plan, limits, integration tokens) until any of it earns a column. */
+  settingsJson: text('settings_json'),
 });
 
-export const students = sqliteTable('students', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  grade: text('grade'),
-  guardian: text('guardian'),
-  email: text('email'),
-  color: text('color').notNull().default('blue'),
-});
+export const staff = sqliteTable(
+  'staff',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    name: text('name').notNull(),
+    email: text('email'),
+    role: text('role').notNull().default('Teacher'),
+    color: text('color').notNull().default('orange'),
+    phone: text('phone'),
+  },
+  (t) => [index('idx_staff_tenant').on(t.tenantId)],
+);
 
-export const parents = sqliteTable('parents', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email'),
-  phone: text('phone'),
-  color: text('color').notNull().default('green'),
-  relation: text('relation'),
-});
+export const students = sqliteTable(
+  'students',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    name: text('name').notNull(),
+    grade: text('grade'),
+    guardian: text('guardian'),
+    email: text('email'),
+    color: text('color').notNull().default('blue'),
+  },
+  (t) => [index('idx_students_tenant').on(t.tenantId)],
+);
+
+export const parents = sqliteTable(
+  'parents',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    name: text('name').notNull(),
+    email: text('email'),
+    phone: text('phone'),
+    color: text('color').notNull().default('green'),
+    relation: text('relation'),
+  },
+  (t) => [index('idx_parents_tenant').on(t.tenantId)],
+);
 
 /**
  * Trình độ — the second half of a class's competition cohort, alongside `gradeLevelId` (khối).
  * Managed from /config like `gradeLevels`; see migrations/0029_class_cohort.sql.
  */
-/** Môn học — managed from /config; see migrations/0030_subjects.sql. */
-export const subjects = sqliteTable('subjects', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-});
+/**
+ * Môn học — managed from /config; see migrations/0030_subjects.sql.
+ *
+ * The name is unique per school, not globally: two schools both teaching "Toán" is the normal
+ * case, and the original global UNIQUE(name) was the single-school assumption made structural.
+ * Rebuilt by 0045, which is also where the real FK to `tenants` comes from.
+ */
+export const subjects = sqliteTable(
+  'subjects',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [unique().on(t.tenantId, t.name)],
+);
 
-export const classLevels = sqliteTable('class_levels', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-});
+export const classLevels = sqliteTable(
+  'class_levels',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [unique().on(t.tenantId, t.name)],
+);
 
-export const classes = sqliteTable('classes', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  /**
-   * DORMANT since 0030, like `room` below. Subjects are a managed enum now (`subjectId`); this
-   * column is what that enum was seeded from and is the only record of the original free text.
-   * Read by nothing, written by nothing. Delete the field, not the data.
-   */
-  subject: text('subject'),
-  subjectId: text('subject_id').references(() => subjects.id, { onDelete: 'set null' }),
-  color: text('color').notNull().default('green'),
-  /** (khối, trình độ) — both set means the class competes in that cohort's rankings. */
-  gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, { onDelete: 'set null' }),
-  classLevelId: text('class_level_id').references(() => classLevels.id, { onDelete: 'set null' }),
-  /**
-   * DORMANT. `room` was removed from the product (only the phone could ever set it, and the web
-   * displayed it without an input). The column stays so no migration is needed and the four
-   * existing values survive — nothing reads or writes it. Delete the field, not the data.
-   */
-  room: text('room'),
-});
+export const classes = sqliteTable(
+  'classes',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    name: text('name').notNull(),
+    /**
+     * DORMANT since 0030, like `room` below. Subjects are a managed enum now (`subjectId`); this
+     * column is what that enum was seeded from and is the only record of the original free text.
+     * Read by nothing, written by nothing. Delete the field, not the data.
+     */
+    subject: text('subject'),
+    subjectId: text('subject_id').references(() => subjects.id, { onDelete: 'set null' }),
+    color: text('color').notNull().default('green'),
+    /** (khối, trình độ) — both set means the class competes in that cohort's rankings. */
+    gradeLevelId: text('grade_level_id').references(() => gradeLevels.id, { onDelete: 'set null' }),
+    classLevelId: text('class_level_id').references(() => classLevels.id, { onDelete: 'set null' }),
+    /**
+     * DORMANT. `room` was removed from the product (only the phone could ever set it, and the web
+     * displayed it without an input). The column stays so no migration is needed and the four
+     * existing values survive — nothing reads or writes it. Delete the field, not the data.
+     */
+    room: text('room'),
+  },
+  (t) => [index('idx_classes_tenant').on(t.tenantId)],
+);
 
 /**
  * DORMANT, like `classes.room`. Weekly schedules were editable only on the phone; the field was
  * removed from the product rather than built twice. Nothing reads or writes these rows — the
  * table and its seed data stay so the decision is reversible without a migration.
+ *
+ * No `tenantId`: nothing queries it at all, and it is reachable only through a scoped class.
  */
 export const classSchedule = sqliteTable(
   'class_schedule',
@@ -96,9 +161,16 @@ export const classSchedule = sqliteTable(
   (t) => [index('idx_class_schedule_class').on(t.classId)],
 );
 
+/**
+ * Junction tables carry a denormalized `tenantId` rather than reaching their parent, because the
+ * repo's read pattern is "fetch the whole junction, assemble in JS" (see `classes.list`).
+ * Rewriting those scans as correlated subqueries would be a far larger diff than one column the
+ * insert wrapper keeps honest.
+ */
 export const classStudents = sqliteTable(
   'class_students',
   {
+    tenantId: text('tenant_id').notNull(),
     classId: text('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
@@ -109,12 +181,14 @@ export const classStudents = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.classId, t.studentId] }),
     index('idx_class_students_student').on(t.studentId),
+    index('idx_class_students_tenant').on(t.tenantId),
   ],
 );
 
 export const parentStudents = sqliteTable(
   'parent_students',
   {
+    tenantId: text('tenant_id').notNull(),
     parentId: text('parent_id')
       .notNull()
       .references(() => parents.id, { onDelete: 'cascade' }),
@@ -125,6 +199,7 @@ export const parentStudents = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.parentId, t.studentId] }),
     index('idx_parent_students_student').on(t.studentId),
+    index('idx_parent_students_tenant').on(t.tenantId),
   ],
 );
 
@@ -132,6 +207,7 @@ export const events = sqliteTable(
   'events',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     title: text('title').notNull(),
     date: text('date').notNull(),
     startTime: text('start_time'),
@@ -146,43 +222,63 @@ export const events = sqliteTable(
     exdates: text('exdates').notNull().default('[]'),
     notes: text('notes'),
   },
-  (t) => [index('idx_events_date').on(t.date)],
+  (t) => [index('idx_events_tenant_date').on(t.tenantId, t.date)],
 );
 
-export const assessmentTypes = sqliteTable('assessment_types', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-});
+export const assessmentTypes = sqliteTable(
+  'assessment_types',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [unique().on(t.tenantId, t.name)],
+);
 
 /** The rating rows on the monthly report — a managed enum like assessment_types. */
-export const remarkCriteria = sqliteTable('remark_criteria', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-});
+export const remarkCriteria = sqliteTable(
+  'remark_criteria',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [unique().on(t.tenantId, t.name)],
+);
 
 /**
  * The file library. Deliberately free of any owner column: which classes and which events carry
  * a material lives in the `class_materials` / `event_materials` joins, so one file can be shared
- * by any number of both.
+ * by any number of both. `tenantId` is the one exception — a school never shares files.
  */
-export const materials = sqliteTable('materials', {
-  id: text('id').primaryKey(),
-  title: text('title').notNull(),
-  type: text('type').notNull().default('notes'),
-  url: text('url'),
-  fileName: text('file_name'),
-  fileKey: text('file_key'),
-  favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
-  addedAt: text('added_at'),
-});
+export const materials = sqliteTable(
+  'materials',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    title: text('title').notNull(),
+    type: text('type').notNull().default('notes'),
+    url: text('url'),
+    fileName: text('file_name'),
+    fileKey: text('file_key'),
+    favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
+    addedAt: text('added_at'),
+  },
+  (t) => [index('idx_materials_tenant').on(t.tenantId)],
+);
 
 export const eventMaterials = sqliteTable(
   'event_materials',
   {
+    tenantId: text('tenant_id').notNull(),
     eventId: text('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
@@ -194,6 +290,7 @@ export const eventMaterials = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.eventId, t.materialId] }),
     index('idx_event_materials_material').on(t.materialId),
+    index('idx_event_materials_tenant').on(t.tenantId),
   ],
 );
 
@@ -201,6 +298,7 @@ export const eventMaterials = sqliteTable(
 export const classMaterials = sqliteTable(
   'class_materials',
   {
+    tenantId: text('tenant_id').notNull(),
     classId: text('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
@@ -212,63 +310,103 @@ export const classMaterials = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.classId, t.materialId] }),
     index('idx_class_materials_material').on(t.materialId),
+    index('idx_class_materials_tenant').on(t.tenantId),
   ],
 );
 
-export const invites = sqliteTable('invites', {
-  id: text('id').primaryKey(),
-  code: text('code').notNull().unique(),
-  role: text('role').notNull(),
-  name: text('name'),
-  classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
-  createdAt: text('created_at'),
-  used: integer('used', { mode: 'boolean' }).notNull().default(false),
-  usedBy: text('used_by').references(() => accounts.id, { onDelete: 'set null' }),
-  usedAt: text('used_at'),
-  /**
-   * The person this code belongs to — exactly one is set for codes minted by the People
-   * screen, which generates them right after creating the row. Redeeming a linked code
-   * attaches an account to that row instead of inserting a second one.
-   *
-   * All three NULL = legacy invite (still minted by the mobile app); redeem falls back to
-   * creating the person. CASCADE so a deleted person's unused code dies with them rather
-   * than silently demoting to the legacy path. See migrations/0030_invite_links.sql.
-   */
-  studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
-  staffId: text('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
-  parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
-});
+/**
+ * `code` stays globally unique on purpose. Redemption is unauthenticated — the visitor has no
+ * session, so the code itself is what selects the school. `redeemInvite` reads `tenantId` from
+ * the row it finds and stamps the new account with it.
+ */
+export const invites = sqliteTable(
+  'invites',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    code: text('code').notNull().unique(),
+    role: text('role').notNull(),
+    name: text('name'),
+    classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
+    createdAt: text('created_at'),
+    used: integer('used', { mode: 'boolean' }).notNull().default(false),
+    usedBy: text('used_by').references(() => accounts.id, { onDelete: 'set null' }),
+    usedAt: text('used_at'),
+    /**
+     * The person this code belongs to — exactly one is set for codes minted by the People
+     * screen, which generates them right after creating the row. Redeeming a linked code
+     * attaches an account to that row instead of inserting a second one.
+     *
+     * All three NULL = legacy invite (still minted by the mobile app); redeem falls back to
+     * creating the person. CASCADE so a deleted person's unused code dies with them rather
+     * than silently demoting to the legacy path. See migrations/0030_invite_links.sql.
+     */
+    studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
+    parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
+  },
+  (t) => [index('idx_invites_tenant').on(t.tenantId)],
+);
 
-export const settings = sqliteTable('settings', {
-  key: text('key').primaryKey(),
-  value: text('value').notNull(),
-});
+/**
+ * School-wide preferences, one JSON blob per key. The primary key is `(tenantId, key)` because
+ * the bare `key` was the single-school assumption at its most literal: one theme, one parent
+ * portal switch, one tuition config for the whole deployment.
+ */
+export const settings = sqliteTable(
+  'settings',
+  {
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: text('value').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.key] })],
+);
 
 /**
  * Monthly usage counters for metered external services (/logs/usage). `count` is calls;
  * `quantity` is the metric's own unit — audio seconds for speech-assess, tokens for a future
- * AI metric. Blind upserts, no FKs: the month is the whole time axis.
+ * AI metric. Blind upserts: the month is the whole time axis.
+ *
+ * Counted per school, but note the physical quota (e.g. Azure F0) is platform-wide, so the
+ * quota check sums across schools rather than reading one row.
  */
 export const usageCounters = sqliteTable(
   'usage_counters',
   {
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
     month: text('month').notNull(),
     metric: text('metric').notNull(),
     count: integer('count').notNull().default(0),
     quantity: real('quantity').notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.month, t.metric] })],
+  (t) => [primaryKey({ columns: [t.tenantId, t.month, t.metric] })],
 );
 
-export const accounts = sqliteTable('accounts', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
-  studentId: text('student_id').references(() => students.id, { onDelete: 'set null' }),
-  parentId: text('parent_id').references(() => parents.id, { onDelete: 'set null' }),
-  createdAt: text('created_at'),
-});
+/**
+ * `email` stays globally unique: an account belongs to exactly one school, so the same person
+ * teaching at two of them holds two accounts. `isPlatformAdmin` is a column rather than a
+ * hardcoded email list so a third platform admin needs no deploy.
+ */
+export const accounts = sqliteTable(
+  'accounts',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    email: text('email').notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    isPlatformAdmin: integer('is_platform_admin', { mode: 'boolean' }).notNull().default(false),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    studentId: text('student_id').references(() => students.id, { onDelete: 'set null' }),
+    parentId: text('parent_id').references(() => parents.id, { onDelete: 'set null' }),
+    createdAt: text('created_at'),
+  },
+  (t) => [index('idx_accounts_tenant').on(t.tenantId)],
+);
 
 export const sessions = sqliteTable(
   'sessions',
@@ -284,6 +422,13 @@ export const sessions = sqliteTable(
     createdAt: text('created_at'),
     ip: text('ip'),
     userAgent: text('user_agent'),
+    /**
+     * The school a platform admin has "entered" from /platform, or NULL for their own. Honored
+     * only when the account is a platform admin, so a stray value on a normal account is inert.
+     * Lives on the session rather than in a second cookie so the mobile bearer path gets it for
+     * free, and so each device switches independently.
+     */
+    activeTenantId: text('active_tenant_id'),
   },
   (t) => [index('idx_sessions_account').on(t.accountId)],
 );
@@ -297,10 +442,15 @@ export const passwordResets = sqliteTable('password_resets', {
   used: integer('used').notNull().default(0),
 });
 
+/**
+ * `ref` stays globally unique: it is the handle on an issue in one GitHub repo, so "F-12" must
+ * mean one thing there. Only the listing is per-school.
+ */
 export const feedback = sqliteTable(
   'feedback',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     message: text('message').notNull(),
     category: text('category').notNull().default('idea'),
     author: text('author'),
@@ -312,13 +462,17 @@ export const feedback = sqliteTable(
     /** The GitHub issue `notifyFeedbackIssue` opened for this row, once it answers. */
     issueNumber: integer('issue_number'),
   },
-  (t) => [index('idx_feedback_status').on(t.status), uniqueIndex('idx_feedback_ref').on(t.ref)],
+  (t) => [
+    index('idx_feedback_tenant_status').on(t.tenantId, t.status),
+    uniqueIndex('idx_feedback_ref').on(t.ref),
+  ],
 );
 
 export const scoreRecords = sqliteTable(
   'score_records',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
@@ -334,6 +488,7 @@ export const scoreRecords = sqliteTable(
     index('idx_score_records_student').on(t.studentId, t.date),
     index('idx_score_records_class').on(t.classId),
     index('idx_score_records_type').on(t.assessmentTypeId),
+    index('idx_score_records_tenant_date').on(t.tenantId, t.date),
   ],
 );
 
@@ -341,6 +496,7 @@ export const behaviorRecords = sqliteTable(
   'behavior_records',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
@@ -352,6 +508,7 @@ export const behaviorRecords = sqliteTable(
   (t) => [
     index('idx_behavior_records_student').on(t.studentId, t.date),
     index('idx_behavior_records_class').on(t.classId),
+    index('idx_behavior_records_tenant_date').on(t.tenantId, t.date),
   ],
 );
 
@@ -363,6 +520,7 @@ export const monthlyRemarks = sqliteTable(
   'monthly_remarks',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
@@ -379,7 +537,7 @@ export const monthlyRemarks = sqliteTable(
   },
   (t) => [
     unique('uq_monthly_remarks_student_month').on(t.studentId, t.month),
-    index('idx_monthly_remarks_month').on(t.month),
+    index('idx_monthly_remarks_tenant_month').on(t.tenantId, t.month),
     index('idx_monthly_remarks_staff').on(t.staffId),
   ],
 );
@@ -387,6 +545,7 @@ export const monthlyRemarks = sqliteTable(
 export const attendanceRecords = sqliteTable(
   'attendance_records',
   {
+    tenantId: text('tenant_id').notNull(),
     eventId: text('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
@@ -399,6 +558,7 @@ export const attendanceRecords = sqliteTable(
   (t) => [
     primaryKey({ columns: [t.eventId, t.date, t.studentId] }),
     index('idx_attendance_student').on(t.studentId, t.date),
+    index('idx_attendance_tenant_date').on(t.tenantId, t.date),
   ],
 );
 
@@ -412,6 +572,7 @@ export const attendanceRecords = sqliteTable(
 export const sessionPreviews = sqliteTable(
   'session_previews',
   {
+    tenantId: text('tenant_id').notNull(),
     eventId: text('event_id')
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
@@ -424,23 +585,39 @@ export const sessionPreviews = sqliteTable(
   },
   (t) => [
     primaryKey({ columns: [t.eventId, t.date] }),
-    index('idx_session_previews_date').on(t.date),
+    index('idx_session_previews_tenant_date').on(t.tenantId, t.date),
   ],
 );
 
+/**
+ * A two-tier content pool, and the only kind of table where `tenantId` is nullable.
+ *
+ * NULL means the platform library: readable by every school, writable only by a platform admin.
+ * A non-null value means the topic belongs to that school alone. Reads use `TenantDb.pool`,
+ * which is the union; writes check ownership in the service.
+ */
 export const flashcardTopics = sqliteTable(
   'flashcard_topics',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id'),
     name: text('name').notNull(),
     slug: text('slug'),
     description: text('description'),
     color: text('color').notNull().default('violet'),
     createdAt: text('created_at'),
   },
-  (t) => [index('idx_flashcard_topics_slug').on(t.slug)],
+  (t) => [
+    index('idx_flashcard_topics_slug').on(t.slug),
+    index('idx_flashcard_topics_tenant').on(t.tenantId),
+  ],
 );
 
+/**
+ * No `tenantId`: a word is reachable only through its topic, whose id is a UUID. Duplicating the
+ * two-tier flag here would create an invariant that silently breaks the first time a platform
+ * topic is cloned into a school.
+ */
 export const flashcardWords = sqliteTable(
   'flashcard_words',
   {
@@ -468,6 +645,7 @@ export const flashcardResults = sqliteTable(
   'flashcard_results',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
     staffId: text('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
     topicId: text('topic_id')
@@ -484,10 +662,15 @@ export const flashcardResults = sqliteTable(
   (t) => [
     index('idx_flashcard_results_topic').on(t.topicId, t.playedAt),
     index('idx_flashcard_results_student').on(t.studentId, t.playedAt),
+    index('idx_flashcard_results_tenant_played').on(t.tenantId, t.playedAt),
   ],
 );
 
-/** One row per installed mobile device. */
+/**
+ * One row per installed mobile device. No `tenantId`: rows are only ever reached through their
+ * account, and `expoToken` is physically global — one device, one token, whatever school it
+ * happens to be signed into.
+ */
 export const pushTokens = sqliteTable(
   'push_tokens',
   {
@@ -509,6 +692,8 @@ export const pushTokens = sqliteTable(
  * The per-user twin of `settings` above. Same JSON-blob-per-key shape, keyed on the account
  * too, so one teacher's calendar theme is theirs alone (feedback F-19). Reads fall back to the
  * `settings` row of the same key — that fallback is what let this ship without copying data.
+ *
+ * No `tenantId`: the account carries the school, and every read is already keyed on it.
  *
  * Declared here rather than next to `settings` because the FK callback must not run before
  * `accounts` exists.
@@ -533,11 +718,16 @@ export const userSettings = sqliteTable(
  * SQLite cannot state it. `parentId` points at `parents` rather than `accounts` on purpose:
  * parent accounts cannot log in, so a parent has no session to pair from and reaches the bot
  * through a staff-issued code instead.
+ *
+ * `chatId` stays globally unique — it is Zalo's own id for a conversation, and there is one bot.
+ * `tenantId` records which school paired it, which is how the webhook resolves a school from an
+ * inbound message with no session attached.
  */
 export const zaloChats = sqliteTable(
   'zalo_chats',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     chatId: text('chat_id').notNull().unique(),
     /** 'user' | 'group' — the webhook's chat.chat_type, normalised. */
     kind: text('kind').notNull().default('user'),
@@ -559,14 +749,19 @@ export const zaloChats = sqliteTable(
     index('idx_zalo_chats_parent').on(t.parentId),
     index('idx_zalo_chats_student').on(t.studentId),
     index('idx_zalo_chats_class').on(t.classId),
+    index('idx_zalo_chats_tenant').on(t.tenantId),
   ],
 );
 
-/** Single-use, expiring pairing codes. The code is the credential — see the migration. */
+/**
+ * Single-use, expiring pairing codes. The code is the credential — see the migration. Like
+ * `invites.code` it stays globally unique, because it is typed by someone with no session.
+ */
 export const zaloPairCodes = sqliteTable(
   'zalo_pair_codes',
   {
     code: text('code').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     accountId: text('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
     parentId: text('parent_id').references(() => parents.id, { onDelete: 'cascade' }),
     studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
@@ -576,7 +771,10 @@ export const zaloPairCodes = sqliteTable(
     expiresAt: text('expires_at').notNull(),
     usedAt: text('used_at'),
   },
-  (t) => [index('idx_zalo_pair_codes_expires').on(t.expiresAt)],
+  (t) => [
+    index('idx_zalo_pair_codes_expires').on(t.expiresAt),
+    index('idx_zalo_pair_codes_tenant').on(t.tenantId),
+  ],
 );
 
 /**
@@ -585,16 +783,26 @@ export const zaloPairCodes = sqliteTable(
  * Key: `{kind}:{subjectId}:{occurrenceDate}` — see migrations/0015_notifications.sql. Shared by
  * both delivery channels: Zalo keys carry a `zalo-` prefix so enabling the second channel does
  * not find every occurrence already marked done by the first.
+ *
+ * The school moved into the primary key rather than into the string, so the dedupe guarantee is
+ * structural and existing keys keep their meaning — no digest re-sends on deploy.
  */
 export const sentNotifications = sqliteTable(
   'sent_notifications',
   {
-    key: text('key').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
     sentAt: text('sent_at').notNull(),
   },
-  (t) => [index('idx_sent_notifications_sent_at').on(t.sentAt)],
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.key] }),
+    index('idx_sent_notifications_sent_at').on(t.sentAt),
+  ],
 );
 
+/** No `tenantId`: every query is keyed on a student, whose id is a UUID. */
 export const flashcardMastery = sqliteTable(
   'flashcard_mastery',
   {
@@ -625,17 +833,26 @@ export const flashcardMastery = sqliteTable(
  * `test_questions.questionId` deliberately has NO cascade: deleting a question that is still on a
  * test must fail at the service layer rather than silently reshape a published test.
  */
-export const gradeLevels = sqliteTable('grade_levels', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-});
+export const gradeLevels = sqliteTable(
+  'grade_levels',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [unique().on(t.tenantId, t.name)],
+);
 
+/** The second two-tier pool, with the same NULL-means-platform-library rule as flashcardTopics. */
 export const questions = sqliteTable(
   'questions',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id'),
     /** mcq | multi | text | essay */
     type: text('type').notNull(),
     prompt: text('prompt').notNull(),
@@ -660,13 +877,14 @@ export const questions = sqliteTable(
     createdAt: text('created_at'),
     updatedAt: text('updated_at'),
   },
-  (t) => [index('idx_questions_grade_level').on(t.gradeLevelId)],
+  (t) => [index('idx_questions_tenant_grade_level').on(t.tenantId, t.gradeLevelId)],
 );
 
 export const tests = sqliteTable(
   'tests',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     title: text('title').notNull(),
     classId: text('class_id').references(() => classes.id, { onDelete: 'set null' }),
     assessmentTypeId: text('assessment_type_id').references(() => assessmentTypes.id, {
@@ -690,9 +908,10 @@ export const tests = sqliteTable(
     color: text('color'),
     createdAt: text('created_at'),
   },
-  (t) => [index('idx_tests_class').on(t.classId)],
+  (t) => [index('idx_tests_class').on(t.classId), index('idx_tests_tenant').on(t.tenantId)],
 );
 
+/** No `tenantId`: reached only through a test or a question, both of which are scoped. */
 export const testQuestions = sqliteTable(
   'test_questions',
   {
@@ -716,6 +935,7 @@ export const testAttempts = sqliteTable(
   'test_attempts',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     testId: text('test_id')
       .notNull()
       .references(() => tests.id, { onDelete: 'cascade' }),
@@ -743,9 +963,11 @@ export const testAttempts = sqliteTable(
     index('idx_test_attempts_test').on(t.testId),
     index('idx_test_attempts_student').on(t.studentId),
     unique('uq_test_attempts').on(t.testId, t.studentId),
+    index('idx_test_attempts_tenant_status').on(t.tenantId, t.status),
   ],
 );
 
+/** No `tenantId`: reached only through an attempt, which is scoped. */
 export const testAnswers = sqliteTable(
   'test_answers',
   {
@@ -776,6 +998,7 @@ export const classPrices = sqliteTable(
   'class_prices',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     classId: text('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
@@ -785,29 +1008,46 @@ export const classPrices = sqliteTable(
     effectiveFrom: text('effective_from').notNull(),
     createdAt: text('created_at'),
   },
-  (t) => [unique('uq_class_prices').on(t.classId, t.effectiveFrom)],
+  (t) => [
+    unique('uq_class_prices').on(t.classId, t.effectiveFrom),
+    index('idx_class_prices_tenant').on(t.tenantId),
+  ],
 );
 
-/** No row for a month means that month is open. */
-export const tuitionMonths = sqliteTable('tuition_months', {
-  /** YYYY-MM */
-  month: text('month').primaryKey(),
-  /** open | closed */
-  status: text('status').notNull().default('open'),
-  /** UTC ISO */
-  closedAt: text('closed_at'),
-  closedBy: text('closed_by'),
-  /** JSON snapshot of the billable-status setting used at close, for audit. */
-  billableStatuses: text('billable_statuses'),
-});
+/**
+ * No row for a month means that month is open — per school, now that the primary key is
+ * composite. One school closing March must not close it for everyone.
+ */
+export const tuitionMonths = sqliteTable(
+  'tuition_months',
+  {
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    /** YYYY-MM */
+    month: text('month').notNull(),
+    /** open | closed */
+    status: text('status').notNull().default('open'),
+    /** UTC ISO */
+    closedAt: text('closed_at'),
+    closedBy: text('closed_by'),
+    /** JSON snapshot of the billable-status setting used at close, for audit. */
+    billableStatuses: text('billable_statuses'),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.month] })],
+);
 
 export const tuitionLines = sqliteTable(
   'tuition_lines',
   {
     id: text('id').primaryKey(),
-    month: text('month')
-      .notNull()
-      .references(() => tuitionMonths.month, { onDelete: 'cascade' }),
+    /**
+     * Half of the composite foreign key to `tuitionMonths` — the cascade on it is what discards
+     * frozen lines when a month is reopened. Drizzle cannot express a composite FK in the column
+     * builder, so it lives in the migration only.
+     */
+    tenantId: text('tenant_id').notNull(),
+    month: text('month').notNull(),
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
@@ -830,8 +1070,9 @@ export const tuitionLines = sqliteTable(
     amountVnd: integer('amount_vnd').notNull(),
   },
   (t) => [
-    unique('uq_tuition_lines').on(t.month, t.studentId, t.classId),
+    unique('uq_tuition_lines').on(t.tenantId, t.month, t.studentId, t.classId),
     index('idx_tuition_lines_student').on(t.studentId, t.month),
+    index('idx_tuition_lines_tenant_month').on(t.tenantId, t.month),
   ],
 );
 
@@ -842,6 +1083,7 @@ export const tuitionLines = sqliteTable(
 export const tuitionStudentMonths = sqliteTable(
   'tuition_student_months',
   {
+    tenantId: text('tenant_id').notNull(),
     month: text('month').notNull(),
     studentId: text('student_id')
       .notNull()
@@ -854,7 +1096,10 @@ export const tuitionStudentMonths = sqliteTable(
     paidAt: text('paid_at'),
     paymentNote: text('payment_note'),
   },
-  (t) => [primaryKey({ columns: [t.month, t.studentId] })],
+  (t) => [
+    primaryKey({ columns: [t.month, t.studentId] }),
+    index('idx_tuition_student_months_tenant').on(t.tenantId, t.month),
+  ],
 );
 
 /**
@@ -865,32 +1110,37 @@ export const tuitionStudentMonths = sqliteTable(
  * never write, which is what keeps the student's own view, the class garden and the notification
  * sweep from ever disagreeing.
  */
-export const gardenPlants = sqliteTable('garden_plants', {
-  studentId: text('student_id')
-    .primaryKey()
-    .references(() => students.id, { onDelete: 'cascade' }),
-  plantName: text('plant_name'),
-  /** App palette key, same vocabulary as students.color. */
-  potColor: text('pot_color').notNull().default('orange'),
-  /** 0..5 — 0 empty/dead, 1 seed, 2 sprout, 3 young plant, 4 purple flower, 5 fruit. */
-  stage: integer('stage').notNull(),
-  isDead: integer('is_dead', { mode: 'boolean' }).notNull().default(false),
-  /** ICT day the wilt began, or null. Also set by a missed-deadline penalty. */
-  wiltedSince: text('wilted_since'),
-  /** ICT day of the last care event — the wilt/drop clock counts from here. */
-  lastCareDay: text('last_care_day').notNull(),
-  /** ICT day `growCount` refers to, so the daily cap resets at ICT midnight. */
-  growDay: text('grow_day'),
-  growCount: integer('grow_count').notNull().default(0),
-  /** Stages already lost to neglect since the last care event. The decay fence. */
-  dropsTaken: integer('drops_taken').notNull().default(0),
-  /** Lifetime harvested fruit; never decreases. Per-month counts come from harvest events. */
-  fruitsTotal: integer('fruits_total').notNull().default(0),
-  streakDays: integer('streak_days').notNull().default(0),
-  streakLastDay: text('streak_last_day'),
-  /** UTC ISO. Doubles as the optimistic-concurrency token. */
-  updatedAt: text('updated_at').notNull(),
-});
+export const gardenPlants = sqliteTable(
+  'garden_plants',
+  {
+    studentId: text('student_id')
+      .primaryKey()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    tenantId: text('tenant_id').notNull(),
+    plantName: text('plant_name'),
+    /** App palette key, same vocabulary as students.color. */
+    potColor: text('pot_color').notNull().default('orange'),
+    /** 0..5 — 0 empty/dead, 1 seed, 2 sprout, 3 young plant, 4 purple flower, 5 fruit. */
+    stage: integer('stage').notNull(),
+    isDead: integer('is_dead', { mode: 'boolean' }).notNull().default(false),
+    /** ICT day the wilt began, or null. Also set by a missed-deadline penalty. */
+    wiltedSince: text('wilted_since'),
+    /** ICT day of the last care event — the wilt/drop clock counts from here. */
+    lastCareDay: text('last_care_day').notNull(),
+    /** ICT day `growCount` refers to, so the daily cap resets at ICT midnight. */
+    growDay: text('grow_day'),
+    growCount: integer('grow_count').notNull().default(0),
+    /** Stages already lost to neglect since the last care event. The decay fence. */
+    dropsTaken: integer('drops_taken').notNull().default(0),
+    /** Lifetime harvested fruit; never decreases. Per-month counts come from harvest events. */
+    fruitsTotal: integer('fruits_total').notNull().default(0),
+    streakDays: integer('streak_days').notNull().default(0),
+    streakLastDay: text('streak_last_day'),
+    /** UTC ISO. Doubles as the optimistic-concurrency token. */
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('idx_garden_plants_tenant').on(t.tenantId)],
+);
 
 /**
  * Append-only audit log, and the qualifying-play ledger: a `grow` row exists for EVERY qualifying
@@ -906,6 +1156,7 @@ export const gardenEvents = sqliteTable(
   'garden_events',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
@@ -923,6 +1174,7 @@ export const gardenEvents = sqliteTable(
   (t) => [
     index('idx_garden_events_student').on(t.studentId, t.createdAt),
     index('idx_garden_events_day').on(t.vnDay, t.type),
+    index('idx_garden_events_tenant_day').on(t.tenantId, t.vnDay),
   ],
 );
 
@@ -935,6 +1187,7 @@ export const vocabAssignments = sqliteTable(
   'vocab_assignments',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     classId: text('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
@@ -965,6 +1218,7 @@ export const vocabAssignments = sqliteTable(
   (t) => [
     index('idx_vocab_assignments_class').on(t.classId, t.deadline),
     index('idx_vocab_assignments_topic').on(t.topicId),
+    index('idx_vocab_assignments_tenant_deadline').on(t.tenantId, t.deadline),
   ],
 );
 
@@ -972,13 +1226,18 @@ export const vocabAssignments = sqliteTable(
  * Cooperative class tree: +1 point per qualifying play by any member, counted even when that
  * student's own plant was capped, already at fruit, or dead. Effort always counts for the class.
  */
-export const classTrees = sqliteTable('class_trees', {
-  classId: text('class_id')
-    .primaryKey()
-    .references(() => classes.id, { onDelete: 'cascade' }),
-  points: integer('points').notNull().default(0),
-  updatedAt: text('updated_at').notNull(),
-});
+export const classTrees = sqliteTable(
+  'class_trees',
+  {
+    classId: text('class_id')
+      .primaryKey()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    tenantId: text('tenant_id').notNull(),
+    points: integer('points').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [index('idx_class_trees_tenant').on(t.tenantId)],
+);
 
 /**
  * Month-end album. Names and plant state are denormalized into `data` because the album is a
@@ -987,6 +1246,7 @@ export const classTrees = sqliteTable('class_trees', {
 export const gardenSnapshots = sqliteTable(
   'garden_snapshots',
   {
+    tenantId: text('tenant_id').notNull(),
     classId: text('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
@@ -997,7 +1257,10 @@ export const gardenSnapshots = sqliteTable(
     data: text('data').notNull(),
     createdAt: text('created_at').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.classId, t.month] })],
+  (t) => [
+    primaryKey({ columns: [t.classId, t.month] }),
+    index('idx_garden_snapshots_tenant').on(t.tenantId),
+  ],
 );
 
 /**
@@ -1013,6 +1276,7 @@ export const activityLog = sqliteTable(
   'activity_log',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    tenantId: text('tenant_id').notNull(),
     occurredAt: text('occurred_at').notNull(),
     recordedAt: text('recorded_at').notNull(),
     /** 'web' | 'api' | 'beacon' | 'cron' | 'zalo' */
@@ -1041,6 +1305,7 @@ export const activityLog = sqliteTable(
     index('idx_activity_account').on(t.accountId, t.id),
     index('idx_activity_action').on(t.action, t.id),
     index('idx_activity_time').on(t.recordedAt),
+    index('idx_activity_tenant').on(t.tenantId, t.id),
   ],
 );
 
@@ -1049,16 +1314,23 @@ export const activityLog = sqliteTable(
  * (subjects pattern, plus an icon and a palette color so the cells stay visually
  * stable for the kids week after week). See migrations/0038_checkin.sql.
  */
-export const checkinActivityTypes = sqliteTable('checkin_activity_types', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().unique(),
-  /** src/icons.tsx IconName. */
-  icon: text('icon').notNull().default('star'),
-  /** App palette key, same vocabulary as students.color. */
-  color: text('color').notNull().default('orange'),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  sortOrder: integer('sort_order').notNull().default(0),
-});
+export const checkinActivityTypes = sqliteTable(
+  'checkin_activity_types',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** src/icons.tsx IconName. */
+    icon: text('icon').notNull().default('star'),
+    /** App palette key, same vocabulary as students.color. */
+    color: text('color').notNull().default('orange'),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [unique().on(t.tenantId, t.name)],
+);
 
 /**
  * One checklist cell of one occurrence — keyed (eventId, date) like sessionPreviews,
@@ -1067,6 +1339,8 @@ export const checkinActivityTypes = sqliteTable('checkin_activity_types', {
  * during the session). Rows are id-stable and individually CRUDed — never
  * delete-then-insert — because checklistChecks reference them and a teacher fixing a
  * typo must not wipe the kids' taps.
+ *
+ * No `tenantId`: every read is keyed on an event occurrence, and the event is scoped.
  */
 export const checklistItems = sqliteTable(
   'checklist_items',
@@ -1120,6 +1394,8 @@ export const checklistChecks = sqliteTable(
  * later checklist edits never revoke it) while misses are derived at read time and
  * self-correct. No FK to events on purpose: deleting an event must not un-earn a bag.
  * refId = "<eventId>:<date>:<kind>" — the natural key that makes replays no-ops.
+ *
+ * No `tenantId`: every read is keyed on a student, or on a list of students already scoped.
  */
 export const tuiMuEvents = sqliteTable(
   'tui_mu_events',
@@ -1152,6 +1428,7 @@ export const giftRedemptions = sqliteTable(
   'gift_redemptions',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
     studentId: text('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
@@ -1165,6 +1442,6 @@ export const giftRedemptions = sqliteTable(
   },
   (t) => [
     unique('uq_gift_redemptions').on(t.studentId, t.month, t.tierBags),
-    index('idx_gift_redemptions_month').on(t.month),
+    index('idx_gift_redemptions_tenant_month').on(t.tenantId, t.month),
   ],
 );

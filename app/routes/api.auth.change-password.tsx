@@ -13,7 +13,9 @@ export const action = withAuth('any', async ({ request, db, user }) => {
   const currentTokenHash = await hashToken(raw);
 
   const result = await changePassword(
-    db,
+    // tenant-unscoped: `accounts` is auth-owned and `sessions` carries no tenant_id — the
+    // account id from the resolved session is what fences this, not a school predicate.
+    db.raw,
     user.account.id,
     input.currentPassword,
     input.newPassword,

@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { ParentChildrenScreen } from '../../src/parent/children.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireParent } from '../../server/services/auth';
 import * as parentPortalSvc from '../../server/services/parent-portal';
@@ -22,8 +22,9 @@ import * as previewSvc from '../../server/services/session-preview';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user } = await requireParent(request, env);
-  const db = createDb(env);
+  const parent = await requireParent(request, env);
+  const { user } = parent;
+  const db = tenantDbFor(env, parent);
 
   let studentIds: string[];
   try {

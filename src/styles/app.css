@@ -3357,3 +3357,156 @@ html .sb::-webkit-scrollbar-thumb:active {
     transition: none;
   }
 }
+
+/*
+ * Platform-admin "you are inside another school" banner (app/routes/_app.tsx).
+ *
+ * Fixed rather than a child of the `.app` grid: `.app` is a two-column sidebar/main layout, so
+ * an in-flow banner would land in a grid cell and shove the sidebar out of position. Fixed also
+ * means it survives scrolling, which is the point — the whole job of this strip is to be
+ * impossible to forget about while reading someone else's data.
+ */
+.app__tenant-banner {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: #7a3b12;
+  background: #ffe7d1;
+  border-bottom: 1px solid #f0c9a4;
+}
+
+.app__tenant-banner a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/*
+ * "Getting started" card (app/routes/dashboard.tsx) — shown only while a school has no classes
+ * or no students, which in practice means its first session or two.
+ */
+.gs-card {
+  margin: var(--space-5) var(--space-5) 0;
+  padding: var(--space-5);
+}
+
+.gs-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.gs-card__sub {
+  margin: 4px 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.gs-card__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.gs-card__steps a {
+  color: var(--brand-soft-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/*
+ * /platform — the cross-school admin page (app/routes/platform.tsx).
+ *
+ * Self-contained and namespaced rather than borrowing the generic card/table classes: this
+ * stylesheet is global (a standalone document route inherits it too), so a bare `.table` here
+ * would reach places it was never meant to.
+ */
+.platform {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.platform__head h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.platform__sub,
+.platform__meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin: 4px 0 0;
+}
+
+.platform__table-wrap {
+  overflow-x: auto;
+  background: var(--surface-card, #fff);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.platform__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.platform__table th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--text-disabled);
+  font-weight: 800;
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.platform__table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.platform__table tr:last-child td {
+  border-bottom: none;
+}
+
+.platform__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Visually hidden, still announced. Used for column headers whose cells label themselves. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

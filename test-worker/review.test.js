@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { and, eq } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as flashcardsSvc from '../server/services/flashcards';
 import * as peopleSvc from '../server/services/people';
 import { flashcardMastery } from '../server/db/schema';
@@ -20,7 +21,7 @@ import { ictDateOf } from '../shared/logic/tests';
 const today = () => ictDateOf(new Date().toISOString());
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seedTopicWithWords(d, count = 1) {
@@ -57,7 +58,7 @@ function play(d, student, topic, answers) {
 }
 
 async function masteryOf(d, student, word) {
-  const rows = await d
+  const rows = await d.raw
     .select()
     .from(flashcardMastery)
     .where(and(eq(flashcardMastery.studentId, student.id), eq(flashcardMastery.wordId, word.id)));
@@ -66,7 +67,7 @@ async function masteryOf(d, student, word) {
 
 /** Force a word to look due (or overdue) without waiting days for it. */
 function backdate(d, student, word, level, dueDay) {
-  return d
+  return d.raw
     .update(flashcardMastery)
     .set({ level, dueDay })
     .where(and(eq(flashcardMastery.studentId, student.id), eq(flashcardMastery.wordId, word.id)));
@@ -176,7 +177,7 @@ describe('review scheduling', () => {
       },
     );
 
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardMastery)
       .where(eq(flashcardMastery.wordId, words[0].id));

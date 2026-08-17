@@ -6,7 +6,7 @@ import type {
   LoaderFunctionArgs,
 } from 'react-router';
 import { ClassGardenScreen } from '../../src/garden/class-garden.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin, requireStaff, requireLearner } from '../../server/services/auth';
 import * as gardenSvc from '../../server/services/garden';
@@ -34,8 +34,9 @@ import { withLiveAction } from '../../server/live';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireLearner(request, env);
-  const db = createDb(env);
+  const su = await requireLearner(request, env);
+  const { user, kind } = su;
+  const db = tenantDbFor(env, su);
   const vnToday = ictDateOf(new Date().toISOString());
   const isStaff = kind === 'staff';
   const asked = params.classId ?? null;
@@ -112,8 +113,9 @@ clientLoader.hydrate = true as const;
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   // Everything writable on this screen is a teacher's doing; students only ever read it.
-  const { user } = await requireStaff(request, env);
-  const db = createDb(env);
+  const staff = await requireStaff(request, env);
+  const { user } = staff;
+  const db = tenantDbFor(env, staff);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
 

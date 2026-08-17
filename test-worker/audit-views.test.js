@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import { activityLog, accounts, sessions } from '../server/db/schema';
 import {
   listActivity,
@@ -10,7 +11,7 @@ import {
 } from '../server/services/audit-views';
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seed(d, overrides = {}) {
@@ -111,7 +112,7 @@ describe('securityOverview', () => {
     const d = db();
     const accountId = await seedAccount(d);
     const future = new Date(Date.now() + 3600_000).toISOString();
-    await d.insert(sessions).values([
+    await d.raw.insert(sessions).values([
       {
         token: crypto.randomUUID(),
         accountId,
@@ -142,7 +143,7 @@ describe('securityOverview', () => {
     const d = db();
     const accountId = await seedAccount(d);
     const future = new Date(Date.now() + 3600_000).toISOString();
-    await d.insert(sessions).values([
+    await d.raw.insert(sessions).values([
       // A row predating the ip/user_agent columns — must not blank out what we do know.
       { token: crypto.randomUUID(), accountId, expiresAt: future },
       {

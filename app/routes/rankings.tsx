@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ClientLoaderFunctionArgs } from 'react-router';
 import { RankingsScreen } from '../../src/screens-rankings.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as rankingsSvc from '../../server/services/rankings';
@@ -32,8 +32,7 @@ function requireMonth(raw: string | undefined): string {
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, await requireStaff(request, env));
   const month = requireMonth(params.month);
   // classesSvc.listLite carries each class's (gradeLevelId, classLevelId); the two level lists
   // are only needed to label the cohorts. Ranking itself is still computed on the client.

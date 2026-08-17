@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../../app/load-context';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { requireLearnerCookieOrBearer } from '../../server/api/auth';
 import { getPronounceSettings } from '../../server/services/flashcards';
 import { SPEECH_ASSESS_METRIC, trackUsage } from '../../server/services/usage';
@@ -26,7 +26,7 @@ const MAX_AUDIO_BYTES = 400_000;
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const { env, ctx } = context.get(cloudflareCtx);
-  await requireLearnerCookieOrBearer(request, env);
+  const su = await requireLearnerCookieOrBearer(request, env);
   if (!env.AZURE_SPEECH_KEY || !env.AZURE_SPEECH_REGION) {
     return Response.json({ error: 'disabled' }, { status: 503 });
   }
@@ -77,12 +77,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return Response.json({ error: 'disabled' }, { status: 503 });
   }
   if (!res.ok) return Response.json({ error: 'assess_failed' }, { status: 502 });
-  const db = createDb(env);
+  const db = tenantDbFor(env, su);
   // Usage gauge for /logs/usage: Azure billed this call (any 200 means the audio was
   // processed, whatever RecognitionStatus says), so count it — off the response path.
   ctx.waitUntil(
     trackUsage(
-      db,
+      // `trackUsage` takes the unscoped handle by design — it also runs inside the TranslateProxy
+      // DO, which has no session — and stamps the school from the ambient audit actor instead.
+      db.raw,
       SPEECH_ASSESS_METRIC,
       ictDateOf(new Date().toISOString()).slice(0, 7),
       wavSeconds(audio.byteLength),

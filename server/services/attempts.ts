@@ -8,7 +8,7 @@ import {
   classStudents,
   scoreRecords,
 } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type { AttemptGradeInput } from '../../shared/schemas';
 import {
   autoGradeAttempt,
@@ -144,14 +144,26 @@ function mapAnswer(r: typeof testAnswers.$inferSelect): AnswerRow {
   };
 }
 
-export async function listForTest(db: Db, testId: string): Promise<AttemptRow[]> {
-  const rows = await db.select().from(testAttempts).where(eq(testAttempts.testId, testId));
+export async function listForTest(db: TenantDb, testId: string): Promise<AttemptRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.testId, testId)));
   return rows.map(mapAttempt);
 }
 
-export async function listAnswers(db: Db, attemptId: string): Promise<AnswerRow[]> {
-  const rows = await db.select().from(testAnswers).where(eq(testAnswers.attemptId, attemptId));
-  return rows.map(mapAnswer);
+/**
+ * `test_answers` carries no tenant_id — it hangs off an attempt, which does — so the join to
+ * `test_attempts` is what fences it. Every caller here reaches it by an attempt id it has already
+ * resolved, but the join costs nothing and keeps a crafted id from reading a foreign paper.
+ */
+export async function listAnswers(db: TenantDb, attemptId: string): Promise<AnswerRow[]> {
+  const rows = await db.raw
+    .select({ answer: testAnswers })
+    .from(testAnswers)
+    .innerJoin(testAttempts, eq(testAttempts.id, testAnswers.attemptId))
+    .where(db.own(testAttempts, eq(testAnswers.attemptId, attemptId)));
+  return rows.map((r) => mapAnswer(r.answer));
 }
 
 /**
@@ -161,8 +173,15 @@ export async function listAnswers(db: Db, attemptId: string): Promise<AnswerRow[
  * caller "this attempt exists but is not yours" would leak that another student sat the test, so
  * the two cases are deliberately indistinguishable.
  */
-export async function getOwn(db: Db, attemptId: string, studentId: string): Promise<AttemptRow> {
-  const rows = await db.select().from(testAttempts).where(eq(testAttempts.id, attemptId));
+export async function getOwn(
+  db: TenantDb,
+  attemptId: string,
+  studentId: string,
+): Promise<AttemptRow> {
+  const rows = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.id, attemptId)));
   const row = rows[0];
   if (!row || row.studentId !== studentId) {
     throw Response.json({ error: 'attempt_not_found' }, { status: 404 });
@@ -170,18 +189,30 @@ export async function getOwn(db: Db, attemptId: string, studentId: string): Prom
   return mapAttempt(row);
 }
 
-export async function isEnrolled(db: Db, testId: string, studentId: string): Promise<boolean> {
+export async function isEnrolled(
+  db: TenantDb,
+  testId: string,
+  studentId: string,
+): Promise<boolean> {
   const test = await getTest(db, testId);
   if (!test.classId) return false;
-  const rows = await db
+  const rows = await db.raw
     .select()
     .from(classStudents)
-    .where(and(eq(classStudents.classId, test.classId), eq(classStudents.studentId, studentId)));
+    .where(
+      db.own(
+        classStudents,
+        and(eq(classStudents.classId, test.classId), eq(classStudents.studentId, studentId)),
+      ),
+    );
   return rows.length > 0;
 }
 
-async function classIdsOf(db: Db, studentId: string): Promise<string[]> {
-  const rows = await db.select().from(classStudents).where(eq(classStudents.studentId, studentId));
+async function classIdsOf(db: TenantDb, studentId: string): Promise<string[]> {
+  const rows = await db.raw
+    .select()
+    .from(classStudents)
+    .where(db.own(classStudents, eq(classStudents.studentId, studentId)));
   return rows.map((r) => r.classId);
 }
 
@@ -196,34 +227,40 @@ const WINDOW_ORDER: Record<StudentTestListItem['window'], number> = {
  * the student actually sat them — a missed test is noise, a sat test is their result.
  */
 export async function listOpenForStudent(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   now: Date,
 ): Promise<StudentTestListItem[]> {
   const classIds = await classIdsOf(db, studentId);
   if (!classIds.length) return [];
 
-  const testRows = await db
+  const testRows = await db.raw
     .select()
     .from(tests)
     .where(
-      and(
-        inArray(tests.classId, classIds),
-        eq(tests.status, 'published'),
-        eq(tests.mode, 'online'),
+      db.own(
+        tests,
+        and(
+          inArray(tests.classId, classIds),
+          eq(tests.status, 'published'),
+          eq(tests.mode, 'online'),
+        ),
       ),
     );
   if (!testRows.length) return [];
 
-  const attemptRows = await db
+  const attemptRows = await db.raw
     .select()
     .from(testAttempts)
     .where(
-      and(
-        eq(testAttempts.studentId, studentId),
-        inArray(
-          testAttempts.testId,
-          testRows.map((t) => t.id),
+      db.own(
+        testAttempts,
+        and(
+          eq(testAttempts.studentId, studentId),
+          inArray(
+            testAttempts.testId,
+            testRows.map((t) => t.id),
+          ),
         ),
       ),
     );
@@ -274,12 +311,16 @@ export async function listOpenForStudent(
  * fields entirely (the shape a student sitting the test gets) and `reviewQuestions` keeps them (only
  * ever reached through `reviewForStudent`, which gates on `status === 'graded'`).
  */
-async function questionsWithKeys(db: Db, testId: string): Promise<ReviewQuestion[]> {
-  const rows = await db
+async function questionsWithKeys(db: TenantDb, testId: string): Promise<ReviewQuestion[]> {
+  // `test_questions` has no tenant_id; the join to `tests` is the fence. `questions` needs none of
+  // its own — being linked from one of this school's tests is exactly what makes a row (owned or
+  // platform-library) legitimately readable here.
+  const rows = await db.raw
     .select({ link: testQuestions, q: questions })
     .from(testQuestions)
     .innerJoin(questions, eq(questions.id, testQuestions.questionId))
-    .where(eq(testQuestions.testId, testId))
+    .innerJoin(tests, eq(tests.id, testQuestions.testId))
+    .where(db.own(tests, eq(testQuestions.testId, testId)))
     .orderBy(asc(testQuestions.sortOrder));
 
   return rows.map(({ link, q }) => ({
@@ -296,7 +337,7 @@ async function questionsWithKeys(db: Db, testId: string): Promise<ReviewQuestion
 }
 
 /** The test's questions in sit order, stripped of everything that would give the answer away. */
-async function studentQuestions(db: Db, testId: string): Promise<StudentQuestion[]> {
+async function studentQuestions(db: TenantDb, testId: string): Promise<StudentQuestion[]> {
   // Destructured rather than deleted so the returned objects genuinely lack the keys — a test
   // asserts `'answerKey' in q === false`, not merely that it is null.
   return (await questionsWithKeys(db, testId)).map(
@@ -312,7 +353,7 @@ async function studentQuestions(db: Db, testId: string): Promise<StudentQuestion
  * test or move the deadline, so nothing about an existing attempt is rewritten here.
  */
 export async function start(
-  db: Db,
+  db: TenantDb,
   testId: string,
   studentId: string,
   now: Date,
@@ -332,10 +373,15 @@ export async function start(
   if (window === 'closed') throw Response.json({ error: 'window_closed' }, { status: 409 });
 
   const serverNow = now.toISOString();
-  const existing = await db
+  const existing = await db.raw
     .select()
     .from(testAttempts)
-    .where(and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, studentId)));
+    .where(
+      db.own(
+        testAttempts,
+        and(eq(testAttempts.testId, testId), eq(testAttempts.studentId, studentId)),
+      ),
+    );
 
   if (existing[0]) {
     return {
@@ -390,7 +436,7 @@ export async function start(
  * reviewed after the test has closed.
  */
 export async function reviewForStudent(
-  db: Db,
+  db: TenantDb,
   attemptId: string,
   studentId: string,
 ): Promise<AttemptReview> {
@@ -423,7 +469,7 @@ function assertWritable(attempt: AttemptRow, now: Date): void {
  * autosave of a single question never wipes the answers the student already gave.
  */
 export async function saveAnswers(
-  db: Db,
+  db: TenantDb,
   attemptId: string,
   studentId: string,
   answers: { questionId: string; answer: AnswerValue }[],
@@ -442,13 +488,15 @@ export async function saveAnswers(
   }
 
   // Last-write-wins on the composite PK: delete-then-insert the listed rows in one atomic batch.
+  // tenant-unscoped: test_answers has no tenant_id — `getOwn` above already proved this attempt
+  // belongs to this school AND to this student, which is a strictly tighter fence.
   const ids = [...new Set(answers.map((a) => a.questionId))];
   const latest = new Map(answers.map((a) => [a.questionId, a.answer]));
   await db.batch([
-    db
+    db.raw
       .delete(testAnswers)
       .where(and(eq(testAnswers.attemptId, attemptId), inArray(testAnswers.questionId, ids))),
-    db.insert(testAnswers).values(
+    db.raw.insert(testAnswers).values(
       ids.map((questionId) => ({
         attemptId,
         questionId,
@@ -469,7 +517,7 @@ export async function saveAnswers(
  * `syncScoreRecord` and repairs it, and the invariant it upholds makes that safe to repeat.
  */
 export async function submit(
-  db: Db,
+  db: TenantDb,
   attemptId: string,
   studentId: string,
   now: Date,
@@ -481,8 +529,13 @@ export async function submit(
   const test = await getTest(db, attempt.testId);
   const links = await listQuestionLinks(db, attempt.testId);
   const questionIds = links.map((l) => l.questionId);
+  // `pool`: a test can be built from platform-library questions as well as the school's own, and
+  // grading has to see the answer key of either.
   const questionRows = questionIds.length
-    ? await db.select().from(questions).where(inArray(questions.id, questionIds))
+    ? await db.raw
+        .select()
+        .from(questions)
+        .where(db.pool(questions, inArray(questions.id, questionIds)))
     : [];
   const byId = new Map(questionRows.map((q) => [q.id, q]));
   const saved = await listAnswers(db, attemptId);
@@ -516,9 +569,10 @@ export async function submit(
     };
   });
   if (writes.length) {
+    // tenant-unscoped: test_answers has no tenant_id; `getOwn` above is the fence.
     await db.batch([
-      db.delete(testAnswers).where(eq(testAnswers.attemptId, attemptId)),
-      db.insert(testAnswers).values(writes),
+      db.raw.delete(testAnswers).where(eq(testAnswers.attemptId, attemptId)),
+      db.raw.insert(testAnswers).values(writes),
     ]);
   }
 
@@ -540,7 +594,7 @@ export async function submit(
         totalScore: graded.autoScore,
         normalizedScore: normalizeScore(graded.autoScore, graded.maxTotalPoints),
       };
-  await db.update(testAttempts).set(set).where(eq(testAttempts.id, attemptId));
+  await db.update(testAttempts, set, eq(testAttempts.id, attemptId));
 
   // 3. Gradebook sync, only for a fully auto-graded attempt.
   if (!graded.hasEssay) {
@@ -550,7 +604,7 @@ export async function submit(
       comment: attempt.comment,
       existingScoreRecordId: attempt.scoreRecordId,
     });
-    await db.update(testAttempts).set({ scoreRecordId }).where(eq(testAttempts.id, attemptId));
+    await db.update(testAttempts, { scoreRecordId }, eq(testAttempts.id, attemptId));
   }
 
   return getOwn(db, attemptId, studentId);
@@ -561,11 +615,14 @@ export async function submit(
  * Re-runnable: the same payload converges on the same total, score record included.
  */
 export async function grade(
-  db: Db,
+  db: TenantDb,
   attemptId: string,
   input: AttemptGradeInput,
 ): Promise<AttemptRow> {
-  const rows = await db.select().from(testAttempts).where(eq(testAttempts.id, attemptId));
+  const rows = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.id, attemptId)));
   if (!rows[0]) throw Response.json({ error: 'attempt_not_found' }, { status: 404 });
   const attempt = mapAttempt(rows[0]);
 
@@ -578,8 +635,9 @@ export async function grade(
     }
   }
 
+  // tenant-unscoped: test_answers has no tenant_id; the scoped attempt read above is the fence.
   const updates = input.grades.map((g) =>
-    db
+    db.raw
       .update(testAnswers)
       .set({ manualPoints: g.manualPoints ?? null, feedback: g.feedback ?? null })
       .where(and(eq(testAnswers.attemptId, attemptId), eq(testAnswers.questionId, g.questionId))),
@@ -609,10 +667,11 @@ export async function grade(
     existingScoreRecordId: attempt.scoreRecordId,
   });
 
-  await db
-    .update(testAttempts)
-    .set({ status: 'graded', totalScore, normalizedScore, comment, scoreRecordId })
-    .where(eq(testAttempts.id, attemptId));
+  await db.update(
+    testAttempts,
+    { status: 'graded', totalScore, normalizedScore, comment, scoreRecordId },
+    eq(testAttempts.id, attemptId),
+  );
 
   return getOwn(db, attemptId, attempt.studentId);
 }
@@ -622,12 +681,15 @@ export async function grade(
  * The score record goes first — the attempt's FK is ON DELETE SET NULL, so deleting the attempt
  * first would strand the gradebook row with nothing pointing at it. Answers CASCADE.
  */
-export async function reset(db: Db, attemptId: string): Promise<void> {
-  const rows = await db.select().from(testAttempts).where(eq(testAttempts.id, attemptId));
+export async function reset(db: TenantDb, attemptId: string): Promise<void> {
+  const rows = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.id, attemptId)));
   const row = rows[0];
   if (!row) return;
   if (row.scoreRecordId) {
-    await db.delete(scoreRecords).where(eq(scoreRecords.id, row.scoreRecordId));
+    await db.delete(scoreRecords, eq(scoreRecords.id, row.scoreRecordId));
   }
-  await db.delete(testAttempts).where(eq(testAttempts.id, attemptId));
+  await db.delete(testAttempts, eq(testAttempts.id, attemptId));
 }

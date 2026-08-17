@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { TuitionScreen } from '../../src/screens-tuition.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as tuitionSvc from '../../server/services/tuition';
@@ -35,8 +35,8 @@ function requireMonth(raw: string | undefined): string {
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
-  const db = createDb(env);
+  const admin = await requireAdmin(request, env);
+  const db = tenantDbFor(env, admin);
   const month = requireMonth(params.month);
   const [report, prices, classes, students, settings] = await Promise.all([
     tuitionSvc.getMonthReport(db, month),
@@ -56,8 +56,9 @@ clientLoader.hydrate = true as const;
 
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user } = await requireAdmin(request, env);
-  const db = createDb(env);
+  const admin = await requireAdmin(request, env);
+  const { user } = admin;
+  const db = tenantDbFor(env, admin);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const raw = Object.fromEntries(formData) as Record<string, unknown>;

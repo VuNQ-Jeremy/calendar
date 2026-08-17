@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { and, eq, sql } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as materialsSvc from '../server/services/materials';
@@ -51,7 +52,7 @@ import {
 } from '../server/db/schema';
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 describe('classes service', () => {
@@ -231,7 +232,7 @@ describe('user-settings service', () => {
     await userSettingsSvc.writeJson(db(), a.accountId, key, { v: 2 });
 
     const rows = await db()
-      .select()
+      .raw.select()
       .from(userSettings)
       .where(and(eq(userSettings.accountId, a.accountId), eq(userSettings.key, key)));
     expect(rows).toHaveLength(1);
@@ -244,7 +245,7 @@ describe('user-settings service', () => {
     const stamp = crypto.randomUUID();
     const a = await seedStaffAccount(db(), { email: `us-d-${stamp}@test.com`, password: 'pw' });
     await db()
-      .insert(userSettings)
+      .raw.insert(userSettings)
       .values({ accountId: a.accountId, key: `bad-${stamp}`, value: 'not json' });
     expect(await userSettingsSvc.readJson(db(), a.accountId, `bad-${stamp}`, { v: 7 })).toEqual({
       v: 7,
@@ -255,9 +256,9 @@ describe('user-settings service', () => {
     const stamp = crypto.randomUUID();
     const a = await seedStaffAccount(db(), { email: `us-e-${stamp}@test.com`, password: 'pw' });
     await userSettingsSvc.writeJson(db(), a.accountId, `casc-${stamp}`, { v: 1 });
-    await db().delete(accounts).where(eq(accounts.id, a.accountId));
+    await db().raw.delete(accounts).where(eq(accounts.id, a.accountId));
     const left = await db()
-      .select()
+      .raw.select()
       .from(userSettings)
       .where(eq(userSettings.accountId, a.accountId));
     expect(left).toHaveLength(0);
@@ -331,7 +332,7 @@ describe('auth service — login', () => {
   it('returns null for bad credentials', async () => {
     const d = db();
     await seedStaffAccount(d, { email: 'bad@test.com', password: 'correct-pw' });
-    const result = await authSvc.login(d, 'bad@test.com', 'wrong-pw');
+    const result = await authSvc.login(d.raw, 'bad@test.com', 'wrong-pw');
     expect(result).toBeNull();
   });
 
@@ -341,7 +342,7 @@ describe('auth service — login', () => {
       email: 'good@test.com',
       password: 'good-pw',
     });
-    const result = await authSvc.login(d, 'good@test.com', 'good-pw');
+    const result = await authSvc.login(d.raw, 'good@test.com', 'good-pw');
     expect(result).not.toBeNull();
     expect(result.accountId).toBe(accountId);
   });
@@ -349,12 +350,12 @@ describe('auth service — login', () => {
   it('is case-insensitive for email', async () => {
     const d = db();
     await seedStaffAccount(d, { email: 'mixed@test.com', password: 'pw' });
-    const result = await authSvc.login(d, 'MIXED@TEST.COM', 'pw');
+    const result = await authSvc.login(d.raw, 'MIXED@TEST.COM', 'pw');
     expect(result).not.toBeNull();
   });
 
   it('returns null for unknown email (no enumeration)', async () => {
-    const result = await authSvc.login(db(), 'nobody@test.com', 'anything');
+    const result = await authSvc.login(db().raw, 'nobody@test.com', 'anything');
     expect(result).toBeNull();
   });
 });
@@ -366,7 +367,7 @@ describe('auth service — session lifecycle', () => {
       email: 'session@test.com',
       password: 'pw',
     });
-    const token = await authSvc.createSession(d, accountId, true);
+    const token = await authSvc.createSession(d.raw, accountId, true);
     expect(typeof token).toBe('string');
     expect(token.length).toBeGreaterThan(20);
 
@@ -392,13 +393,13 @@ describe('auth service — session lifecycle', () => {
       email: 'logout@test.com',
       password: 'pw',
     });
-    const token = await authSvc.createSession(d, accountId, true);
+    const token = await authSvc.createSession(d.raw, accountId, true);
     const cookieHeader = await sessionCookie.serialize(token, { maxAge: 86400 });
 
     const logoutReq = new Request('http://localhost/logout', {
       headers: { Cookie: cookieHeader },
     });
-    await authSvc.logout(d, logoutReq);
+    await authSvc.logout(d.raw, logoutReq);
 
     const checkReq = new Request('http://localhost/dashboard', {
       headers: { Cookie: cookieHeader },
@@ -417,7 +418,7 @@ describe('auth service — invite redemption', () => {
       used: false,
     });
 
-    const result = await authSvc.redeemInvite(d, 'TST001', {
+    const result = await authSvc.redeemInvite(d.raw, 'TST001', {
       name: 'New Teacher',
       email: 'newteacher@test.com',
       password: 'pw123',
@@ -425,7 +426,7 @@ describe('auth service — invite redemption', () => {
     expect(result).not.toBeNull();
 
     // Second redemption with same code should fail
-    const result2 = await authSvc.redeemInvite(d, 'TST001', {
+    const result2 = await authSvc.redeemInvite(d.raw, 'TST001', {
       name: 'Another',
       email: 'another@test.com',
       password: 'pw456',
@@ -434,7 +435,7 @@ describe('auth service — invite redemption', () => {
   });
 
   it('fails for unknown invite code', async () => {
-    const result = await authSvc.redeemInvite(db(), 'XXXXXX', {
+    const result = await authSvc.redeemInvite(db().raw, 'XXXXXX', {
       name: 'Ghost',
       email: 'ghost@test.com',
       password: 'pw',
@@ -463,7 +464,7 @@ describe('auth service — linked invite redemption', () => {
     expect(invite.code).toMatch(/^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
     expect(invite.studentId).toBe(student.id);
 
-    const result = await authSvc.redeemInvite(d, invite.code, {
+    const result = await authSvc.redeemInvite(d.raw, invite.code, {
       name: 'Whatever They Typed',
       email: 'linked-student@test.com',
       password: 'pw123456',
@@ -475,7 +476,7 @@ describe('auth service — linked invite redemption', () => {
     expect(after.length).toBe(before);
     expect(after.find((s) => s.id === student.id)?.name).toBe('Linked Student');
 
-    const account = await d.query.accounts.findFirst({
+    const account = await d.raw.query.accounts.findFirst({
       where: eq(accounts.studentId, student.id),
     });
     expect(account?.id).toBe(result.accountId);
@@ -494,7 +495,7 @@ describe('auth service — linked invite redemption', () => {
       color: 'cocoa',
     });
     const [invite] = await invitesSvc.createLinked(d, [{ role: 'Staff', staffId: member.id }]);
-    await authSvc.redeemInvite(d, invite.code, {
+    await authSvc.redeemInvite(d.raw, invite.code, {
       name: 'Ignored',
       password: 'pw123456',
     });
@@ -520,12 +521,12 @@ describe('auth service — linked invite redemption', () => {
       { role: 'Student', studentId: blank.id },
       { role: 'Student', studentId: set.id },
     ]);
-    await authSvc.redeemInvite(d, codes[0].code, {
+    await authSvc.redeemInvite(d.raw, codes[0].code, {
       name: 'x',
       email: 'they-signed-up@test.com',
       password: 'pw123456',
     });
-    await authSvc.redeemInvite(d, codes[1].code, {
+    await authSvc.redeemInvite(d.raw, codes[1].code, {
       name: 'x',
       email: 'different@test.com',
       password: 'pw123456',
@@ -547,10 +548,10 @@ describe('auth service — linked invite redemption', () => {
     const second = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
 
     expect(
-      await authSvc.redeemInvite(d, first[0].code, { name: 'x', password: 'pw123456' }),
+      await authSvc.redeemInvite(d.raw, first[0].code, { name: 'x', password: 'pw123456' }),
     ).not.toBeNull();
     expect(
-      await authSvc.redeemInvite(d, second[0].code, { name: 'x', password: 'pw999999' }),
+      await authSvc.redeemInvite(d.raw, second[0].code, { name: 'x', password: 'pw999999' }),
     ).toBeNull();
   });
 
@@ -584,7 +585,7 @@ describe('auth service — linked invite redemption', () => {
     const [open] = await invitesSvc.createLinked(d, [target]);
     expect(await invitesSvc.needsInvite(d, target)).toBe(false); // code still waiting
 
-    await authSvc.redeemInvite(d, open.code, { name: 'x', password: 'pw123456' });
+    await authSvc.redeemInvite(d.raw, open.code, { name: 'x', password: 'pw123456' });
     expect(await invitesSvc.needsInvite(d, target)).toBe(false); // now they have a login
   });
 
@@ -621,15 +622,15 @@ describe('auth service — linked invite redemption', () => {
       studentIds: [],
     });
     const [invite] = await invitesSvc.createLinked(d, [{ role: 'Parent', parentId: parent.id }]);
-    const result = await authSvc.redeemInvite(d, invite.code, {
+    const result = await authSvc.redeemInvite(d.raw, invite.code, {
       name: 'x',
       email: 'signed-in-parent@test.com',
       password: 'pw123456',
     });
     expect(result).not.toBeNull();
 
-    const token = await authSvc.createSession(d, result.accountId, true);
-    const session = await authSvc.userFromToken(d, token);
+    const token = await authSvc.createSession(d.raw, result.accountId, true);
+    const session = await authSvc.userFromToken(d.raw, token);
     expect(session.kind).toBe('parent');
     expect(session.user.id).toBe(parent.id);
     expect(session.user.name).toBe('Signed In Parent');
@@ -646,16 +647,16 @@ describe('auth service — password reset', () => {
     });
 
     // Create a session so we can verify it gets wiped
-    const token = await authSvc.createSession(d, accountId, true);
+    const token = await authSvc.createSession(d.raw, accountId, true);
 
     // Request reset
-    const { devUrl } = await authSvc.requestReset(d, 'reset@test.com');
+    const { devUrl } = await authSvc.requestReset(d.raw, 'reset@test.com');
     expect(typeof devUrl).toBe('string');
     const resetToken = new URL('http://localhost' + devUrl).searchParams.get('token');
     expect(resetToken).toBeTruthy();
 
     // Perform reset
-    const ok = await authSvc.resetPassword(d, resetToken, 'new-pw');
+    const ok = await authSvc.resetPassword(d.raw, resetToken, 'new-pw');
     expect(ok).toBe(true);
 
     // Old session no longer works
@@ -664,15 +665,15 @@ describe('auth service — password reset', () => {
     expect(await authSvc.getUser(req, env)).toBeNull();
 
     // New password works
-    const loginResult = await authSvc.login(d, 'reset@test.com', 'new-pw');
+    const loginResult = await authSvc.login(d.raw, 'reset@test.com', 'new-pw');
     expect(loginResult).not.toBeNull();
 
     // Old password rejected
-    expect(await authSvc.login(d, 'reset@test.com', 'old-pw')).toBeNull();
+    expect(await authSvc.login(d.raw, 'reset@test.com', 'old-pw')).toBeNull();
   });
 
   it('resetPassword returns false for invalid token', async () => {
-    const ok = await authSvc.resetPassword(db(), 'bogus-token', 'new-pw');
+    const ok = await authSvc.resetPassword(db().raw, 'bogus-token', 'new-pw');
     expect(ok).toBe(false);
   });
 });
@@ -720,11 +721,11 @@ describe('FK cascade — delete class', () => {
       studentIds: [],
     });
 
-    await d
+    await d.raw
       .insert(classSchedule)
       .values({ classId: cls.id, day: 1, startTime: '09:00', endTime: '10:00' });
 
-    const schedBefore = await d
+    const schedBefore = await d.raw
       .select()
       .from(classSchedule)
       .where(eq(classSchedule.classId, cls.id));
@@ -732,7 +733,7 @@ describe('FK cascade — delete class', () => {
 
     await classesSvc.remove(d, cls.id);
 
-    const schedAfter = await d
+    const schedAfter = await d.raw
       .select()
       .from(classSchedule)
       .where(eq(classSchedule.classId, cls.id));
@@ -752,7 +753,7 @@ describe('FK cascade — delete class', () => {
       studentIds: [student.id],
     });
 
-    const linkBefore = await d
+    const linkBefore = await d.raw
       .select()
       .from(classStudents)
       .where(eq(classStudents.classId, cls.id));
@@ -760,7 +761,10 @@ describe('FK cascade — delete class', () => {
 
     await classesSvc.remove(d, cls.id);
 
-    const linkAfter = await d.select().from(classStudents).where(eq(classStudents.classId, cls.id));
+    const linkAfter = await d.raw
+      .select()
+      .from(classStudents)
+      .where(eq(classStudents.classId, cls.id));
     expect(linkAfter.length).toBe(0);
   });
 
@@ -788,10 +792,10 @@ describe('FK cascade — delete class', () => {
 
     // The FK is ON DELETE SET NULL, but classesSvc.remove deletes the owned events first — left to
     // the FK they would survive as untitled personal events on everyone's calendar.
-    const evRows = await d.select().from(events).where(eq(events.id, ev.id));
+    const evRows = await d.raw.select().from(events).where(eq(events.id, ev.id));
     expect(evRows).toHaveLength(0);
 
-    const personalRows = await d.select().from(events).where(eq(events.id, personal.id));
+    const personalRows = await d.raw.select().from(events).where(eq(events.id, personal.id));
     expect(personalRows).toHaveLength(1);
   });
 
@@ -813,7 +817,7 @@ describe('FK cascade — delete class', () => {
 
     expect(await classMaterialsSvc.listForClass(d, cls.id)).toEqual([]);
     // The file survives the class — it is library content, not class content.
-    const matRows = await d.select().from(materials).where(eq(materials.id, mat.id));
+    const matRows = await d.raw.select().from(materials).where(eq(materials.id, mat.id));
     expect(matRows).toHaveLength(1);
   });
 });
@@ -887,11 +891,11 @@ describe('FK cascade — delete student', () => {
       studentIds: [student.id],
     });
 
-    const csBefore = await d
+    const csBefore = await d.raw
       .select()
       .from(classStudents)
       .where(eq(classStudents.studentId, student.id));
-    const psBefore = await d
+    const psBefore = await d.raw
       .select()
       .from(parentStudents)
       .where(eq(parentStudents.studentId, student.id));
@@ -900,11 +904,11 @@ describe('FK cascade — delete student', () => {
 
     await peopleSvc.removeStudent(d, student.id);
 
-    const csAfter = await d
+    const csAfter = await d.raw
       .select()
       .from(classStudents)
       .where(eq(classStudents.studentId, student.id));
-    const psAfter = await d
+    const psAfter = await d.raw
       .select()
       .from(parentStudents)
       .where(eq(parentStudents.studentId, student.id));
@@ -936,13 +940,13 @@ describe('FK cascade — delete account', () => {
       createdAt: new Date().toISOString(),
     });
 
-    await authSvc.createSession(d, accountId, true);
-    const sessBefore = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
+    await authSvc.createSession(d.raw, accountId, true);
+    const sessBefore = await d.raw.select().from(sessions).where(eq(sessions.accountId, accountId));
     expect(sessBefore.length).toBe(1);
 
-    await d.delete(accounts).where(eq(accounts.id, accountId));
+    await d.raw.delete(accounts).where(eq(accounts.id, accountId));
 
-    const sessAfter = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
+    const sessAfter = await d.raw.select().from(sessions).where(eq(sessions.accountId, accountId));
     expect(sessAfter.length).toBe(0);
   });
 });
@@ -1022,8 +1026,11 @@ describe('assessments service', () => {
 
     await peopleSvc.removeStudent(d, student.id);
 
-    const scoreAfter = await d.select().from(scoreRecords).where(eq(scoreRecords.id, score.id));
-    const behAfter = await d.select().from(behaviorRecords).where(eq(behaviorRecords.id, beh.id));
+    const scoreAfter = await d.raw.select().from(scoreRecords).where(eq(scoreRecords.id, score.id));
+    const behAfter = await d.raw
+      .select()
+      .from(behaviorRecords)
+      .where(eq(behaviorRecords.id, beh.id));
     expect(scoreAfter.length).toBe(0);
     expect(behAfter.length).toBe(0);
   });
@@ -1055,8 +1062,11 @@ describe('assessments service', () => {
 
     await classesSvc.remove(d, cls.id);
 
-    const scoreAfter = await d.select().from(scoreRecords).where(eq(scoreRecords.id, score.id));
-    const behAfter = await d.select().from(behaviorRecords).where(eq(behaviorRecords.id, beh.id));
+    const scoreAfter = await d.raw.select().from(scoreRecords).where(eq(scoreRecords.id, score.id));
+    const behAfter = await d.raw
+      .select()
+      .from(behaviorRecords)
+      .where(eq(behaviorRecords.id, beh.id));
     expect(scoreAfter[0]?.classId).toBeNull();
     expect(behAfter[0]?.classId).toBeNull();
   });
@@ -1151,7 +1161,7 @@ describe('attendance service', () => {
     expect(day2.length).toBe(0);
 
     await eventsSvc.remove(d, ev.id);
-    const afterEventDelete = await d
+    const afterEventDelete = await d.raw
       .select()
       .from(attendanceRecords)
       .where(eq(attendanceRecords.eventId, ev.id));
@@ -1174,7 +1184,7 @@ describe('attendance service', () => {
       { studentId: student.id, status: 'present' },
     ]);
     await peopleSvc.removeStudent(d, student.id);
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(attendanceRecords)
       .where(eq(attendanceRecords.studentId, student.id));
@@ -1370,7 +1380,7 @@ describe('questions', () => {
   }
 
   async function linkQuestion(d, testId, questionId, sortOrder = 0) {
-    await d.insert(testQuestions).values({ testId, questionId, sortOrder, points: 1 });
+    await d.raw.insert(testQuestions).values({ testId, questionId, sortOrder, points: 1 });
   }
 
   /**
@@ -1384,7 +1394,7 @@ describe('questions', () => {
 
   async function idsPresent(d, ids) {
     const all = new Set(
-      (await d.select({ id: questionsTable.id }).from(questionsTable)).map((r) => r.id),
+      (await d.raw.select({ id: questionsTable.id }).from(questionsTable)).map((r) => r.id),
     );
     return ids.filter((id) => all.has(id));
   }
@@ -1539,7 +1549,7 @@ describe('questions', () => {
     expect(err.status).toBe(409);
     expect(await err.json()).toEqual({ error: 'question_in_use' });
 
-    const rows = await d.select().from(questionsTable).where(eq(questionsTable.id, q.id));
+    const rows = await d.raw.select().from(questionsTable).where(eq(questionsTable.id, q.id));
     expect(rows.length).toBe(1);
   });
 
@@ -1547,7 +1557,7 @@ describe('questions', () => {
     const d = db();
     const q = await questionsSvc.create(d, mcqInput({ prompt: 'Free' }));
     await questionsSvc.remove(d, q.id);
-    const rows = await d.select().from(questionsTable).where(eq(questionsTable.id, q.id));
+    const rows = await d.raw.select().from(questionsTable).where(eq(questionsTable.id, q.id));
     expect(rows.length).toBe(0);
   });
 
@@ -1602,7 +1612,7 @@ describe('questions', () => {
     expect(n).toBe(120);
 
     const idSet = new Set(ids);
-    const rows = (await d.select().from(questionsTable)).filter((r) => idSet.has(r.id));
+    const rows = (await d.raw.select().from(questionsTable)).filter((r) => idSet.has(r.id));
     expect(rows.length).toBe(120);
     expect(rows.every((r) => r.gradeLevelId === 'gl9' && r.difficulty === 'hard')).toBe(true);
   });
@@ -1894,25 +1904,27 @@ describe('questions', () => {
       const testId = await seedTest(d, 'Wipe Test');
       await linkQuestion(d, testId, linked.id);
       const { attemptId } = await seedAttempt(d, testId, 'Wipe Student');
-      await d
+      await d.raw
         .insert(testAnswers)
         .values({ attemptId, questionId: linked.id, answer: '"b"', correct: 1 });
 
       // Counted rather than hard-coded: earlier tests in this file left their own rows behind.
-      const [{ n: before }] = await d.select({ n: sql`count(*)` }).from(questionsTable);
+      const [{ n: before }] = await d.raw.select({ n: sql`count(*)` }).from(questionsTable);
       const result = await questionsSvc.wipe(d);
       expect(result.deleted).toBe(Number(before));
       expect(result.detachedFromTests).toBeGreaterThanOrEqual(1);
 
-      expect(await d.select().from(questionsTable)).toEqual([]);
-      expect(await d.select().from(testQuestions)).toEqual([]);
+      expect(await d.raw.select().from(questionsTable)).toEqual([]);
+      expect(await d.raw.select().from(testQuestions)).toEqual([]);
       // test_answers.questionId DOES cascade, so this row is gone with it. That is the real cost of
       // the wipe, and the confirmation dialog says so in as many words.
-      expect(await d.select().from(testAnswers)).toEqual([]);
+      expect(await d.raw.select().from(testAnswers)).toEqual([]);
       // The test and the attempt survive, so any score already recorded is untouched.
-      expect((await d.select().from(testsTable).where(eq(testsTable.id, testId))).length).toBe(1);
+      expect((await d.raw.select().from(testsTable).where(eq(testsTable.id, testId))).length).toBe(
+        1,
+      );
       expect(
-        (await d.select().from(testAttempts).where(eq(testAttempts.id, attemptId))).length,
+        (await d.raw.select().from(testAttempts).where(eq(testAttempts.id, attemptId))).length,
       ).toBe(1);
     });
 
@@ -2041,13 +2053,16 @@ describe('tests service', () => {
     expect(replaced[0].sortOrder).toBe(0);
     expect(await testsSvc.totalPoints(d, t.id)).toBe(4);
 
-    const rows = await d.select().from(testQuestions).where(eq(testQuestions.testId, t.id));
+    const rows = await d.raw.select().from(testQuestions).where(eq(testQuestions.testId, t.id));
     expect(rows.length).toBe(1);
 
     const cleared = await testsSvc.setQuestions(d, t.id, []);
     expect(cleared).toEqual([]);
     expect(await testsSvc.totalPoints(d, t.id)).toBe(0);
-    const afterClear = await d.select().from(testQuestions).where(eq(testQuestions.testId, t.id));
+    const afterClear = await d.raw
+      .select()
+      .from(testQuestions)
+      .where(eq(testQuestions.testId, t.id));
     expect(afterClear.length).toBe(0);
   });
 
@@ -2220,7 +2235,7 @@ describe('paper score sync', () => {
   }
 
   function scoresFor(d, studentId) {
-    return d.select().from(scoreRecords).where(eq(scoreRecords.studentId, studentId));
+    return d.raw.select().from(scoreRecords).where(eq(scoreRecords.studentId, studentId));
   }
 
   it('a paper score creates a graded attempt and a fully populated linked score record', async () => {
@@ -2304,7 +2319,7 @@ describe('paper score sync', () => {
     expect(attempt.comment).toBe('Missing submission');
     expect(attempt.scoreRecordId).toBeNull();
 
-    const gone = await d.select().from(scoreRecords).where(eq(scoreRecords.id, scoreRecordId));
+    const gone = await d.raw.select().from(scoreRecords).where(eq(scoreRecords.id, scoreRecordId));
     expect(gone.length).toBe(0);
     expect(await scoresFor(d, s1.id)).toEqual([]);
   });
@@ -2418,11 +2433,17 @@ describe('paper score sync', () => {
 
     expect(await scoresFor(d, s1.id)).toEqual([]);
     expect(await scoresFor(d, s2.id)).toEqual([]);
-    const attemptRows = await d.select().from(testAttempts).where(eq(testAttempts.testId, test.id));
+    const attemptRows = await d.raw
+      .select()
+      .from(testAttempts)
+      .where(eq(testAttempts.testId, test.id));
     expect(attemptRows.length).toBe(0);
-    const linkRows = await d.select().from(testQuestions).where(eq(testQuestions.testId, test.id));
+    const linkRows = await d.raw
+      .select()
+      .from(testQuestions)
+      .where(eq(testQuestions.testId, test.id));
     expect(linkRows.length).toBe(0);
-    const testRows = await d.select().from(testsTable).where(eq(testsTable.id, test.id));
+    const testRows = await d.raw.select().from(testsTable).where(eq(testsTable.id, test.id));
     expect(testRows.length).toBe(0);
   });
 
@@ -2445,7 +2466,9 @@ describe('paper score sync', () => {
       { studentId: s2.id, score: 8, comment: null },
     ]);
 
-    const online = (await d.select().from(testAttempts).where(eq(testAttempts.id, onlineId)))[0];
+    const online = (
+      await d.raw.select().from(testAttempts).where(eq(testAttempts.id, onlineId))
+    )[0];
     expect(online.source).toBe('online');
     expect(online.status).toBe('submitted');
     expect(online.normalizedScore).toBe(4.5);
@@ -2634,7 +2657,7 @@ describe('attempts service', () => {
   }
 
   function scoresFor(d, studentId) {
-    return d.select().from(scoreRecords).where(eq(scoreRecords.studentId, studentId));
+    return d.raw.select().from(scoreRecords).where(eq(scoreRecords.studentId, studentId));
   }
 
   const THREE_Q = [
@@ -2693,7 +2716,7 @@ describe('attempts service', () => {
 
     // Neither: a published online test needs a closeAt, so clear it after publishing.
     const c = await setup(d, { timeLimitMinutes: null });
-    await d.update(testsTable).set({ closeAt: null }).where(eq(testsTable.id, c.test.id));
+    await d.raw.update(testsTable).set({ closeAt: null }).where(eq(testsTable.id, c.test.id));
     const rc = await attemptsSvc.start(d, c.test.id, c.student.id, new Date());
     expect(rc.attempt.deadlineAt).toBeNull();
   });
@@ -2712,7 +2735,7 @@ describe('attempts service', () => {
     expect(second.questions.length).toBe(first.questions.length);
     expect(second.serverNow).toBe(later.toISOString());
 
-    const rows = await d.select().from(testAttempts).where(eq(testAttempts.testId, test.id));
+    const rows = await d.raw.select().from(testAttempts).where(eq(testAttempts.testId, test.id));
     expect(rows.length).toBe(1);
   });
 
@@ -3252,9 +3275,9 @@ describe('attempts service', () => {
 
     // A draft, a paper test and an online test for another class must not appear.
     const draft = await setup(d, { publish: false });
-    await d.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, draft.test.id));
+    await d.raw.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, draft.test.id));
     const paper = await setup(d, { mode: 'paper' });
-    await d.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, paper.test.id));
+    await d.raw.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, paper.test.id));
     const foreign = await setup(d); // its own class, this student is not in it
 
     const items = await attemptsSvc.listOpenForStudent(d, student.id, new Date());
@@ -3272,9 +3295,12 @@ describe('attempts service', () => {
 
     // A closed test appears only once the student has an attempt on it.
     const closed = await setup(d);
-    await d.update(testsTable).set({ classId: cls.id }).where(eq(testsTable.id, closed.test.id));
+    await d.raw
+      .update(testsTable)
+      .set({ classId: cls.id })
+      .where(eq(testsTable.id, closed.test.id));
     await attemptsSvc.start(d, closed.test.id, student.id, new Date());
-    await d
+    await d.raw
       .update(testsTable)
       .set({ closeAt: iso(-60 * 60 * 1000) })
       .where(eq(testsTable.id, closed.test.id));
@@ -3525,7 +3551,9 @@ describe('tuition — closing a month freezes it', () => {
     await tuitionSvc.reopenMonth(d, month);
     const reopened = await tuitionSvc.getMonthReport(d, month);
     expect(reopened.status).toBe('open');
-    expect(await d.select().from(tuitionLines).where(eq(tuitionLines.month, month))).toEqual([]);
+    expect(await d.raw.select().from(tuitionLines).where(eq(tuitionLines.month, month))).toEqual(
+      [],
+    );
     const live = reopened.lines.find((l) => l.studentId === student.id);
     expect(live.sessions).toBe(3);
     expect(live.unitPriceVnd).toBe(500_000);
@@ -3537,7 +3565,7 @@ describe('tuition — closing a month freezes it', () => {
     expect(reclosed.status).toBe('closed');
     expect(reclosed.lines.find((l) => l.studentId === student.id).amountVnd).toBe(1_500_000);
     expect(
-      (await d.select().from(tuitionMonths).where(eq(tuitionMonths.month, month))).length,
+      (await d.raw.select().from(tuitionMonths).where(eq(tuitionMonths.month, month))).length,
     ).toBe(1);
 
     await tuitionSvc.setTuitionSettings(d, tuitionSvc.DEFAULT_TUITION_SETTINGS);
@@ -3584,7 +3612,9 @@ describe('tuition — closing a month freezes it', () => {
     expect(line.className).toBe('Tuition Vanishing');
     expect(line.amountVnd).toBe(100_000);
     // The price rows cascaded away with the class; the frozen line does not depend on them.
-    expect(await d.select().from(classPrices).where(eq(classPrices.classId, cls.id))).toEqual([]);
+    expect(await d.raw.select().from(classPrices).where(eq(classPrices.classId, cls.id))).toEqual(
+      [],
+    );
   });
 });
 
@@ -3665,7 +3695,11 @@ describe('parent portal — settings', () => {
     await d
       .insert(settings)
       .values({ key: 'parent-portal', value: 'not json' })
-      .onConflictDoUpdate({ target: settings.key, set: { value: 'not json' } });
+      // The primary key is (tenant_id, key) now, so the conflict target has to be both.
+      .onConflictDoUpdate({
+        target: [settings.tenantId, settings.key],
+        set: { value: 'not json' },
+      });
     expect(await parentPortalSvc.getParentPortal(d)).toEqual(parentPortalSvc.DEFAULT_PARENT_PORTAL);
 
     await parentPortalSvc.setParentPortal(d, { enabled: false });

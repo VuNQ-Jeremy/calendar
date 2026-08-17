@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { settings, userSettings } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 
 /**
  * Per-account preferences, one JSON blob per (account, key).
@@ -28,24 +28,26 @@ function merge<T extends object>(defaults: T, raw: string | undefined): T | null
 
 /** The school-wide value: the legacy `settings` row, merged over defaults. */
 export async function readSchoolJson<T extends object>(
-  db: Db,
+  db: TenantDb,
   key: string,
   defaults: T,
 ): Promise<T> {
-  const rows = await db
+  const rows = await db.raw
     .select({ value: settings.value })
     .from(settings)
-    .where(eq(settings.key, key));
+    .where(db.own(settings, eq(settings.key, key)));
   return merge(defaults, rows[0]?.value) ?? { ...defaults };
 }
 
 export async function readJson<T extends object>(
-  db: Db,
+  db: TenantDb,
   accountId: string,
   key: string,
   defaults: T,
 ): Promise<T> {
-  const mine = await db
+  // tenant-unscoped: reached only via the scoped account (`accounts` is auth-owned and carries
+  // the school; a `user_settings` row is keyed on one account id and no other school can name it).
+  const mine = await db.raw
     .select({ value: userSettings.value })
     .from(userSettings)
     .where(and(eq(userSettings.accountId, accountId), eq(userSettings.key, key)));
@@ -55,13 +57,14 @@ export async function readJson<T extends object>(
 }
 
 export async function writeJson<T extends object>(
-  db: Db,
+  db: TenantDb,
   accountId: string,
   key: string,
   value: T,
 ): Promise<void> {
   const json = JSON.stringify(value);
-  await db
+  // tenant-unscoped: reached only via the scoped account (see readJson).
+  await db.raw
     .insert(userSettings)
     .values({ accountId, key, value: json })
     .onConflictDoUpdate({
@@ -71,7 +74,7 @@ export async function writeJson<T extends object>(
 }
 
 export async function writeSchoolJson<T extends object>(
-  db: Db,
+  db: TenantDb,
   key: string,
   value: T,
 ): Promise<void> {
@@ -79,7 +82,9 @@ export async function writeSchoolJson<T extends object>(
   await db
     .insert(settings)
     .values({ key, value: json })
-    .onConflictDoUpdate({ target: settings.key, set: { value: json } });
+    // The primary key is (tenant_id, key) since multi-tenancy, so BOTH columns are the conflict
+    // target — targeting `key` alone would make one school's write clobber another's row.
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value: json } });
 }
 
 /**
@@ -88,8 +93,9 @@ export async function writeSchoolJson<T extends object>(
  * Deliberately a delete rather than a write of the current school values: copying them would
  * freeze "follow the school" at whatever the school looked like that day.
  */
-export async function deleteJson(db: Db, accountId: string, key: string): Promise<void> {
-  await db
+export async function deleteJson(db: TenantDb, accountId: string, key: string): Promise<void> {
+  // tenant-unscoped: reached only via the scoped account (see readJson).
+  await db.raw
     .delete(userSettings)
     .where(and(eq(userSettings.accountId, accountId), eq(userSettings.key, key)));
 }
@@ -102,11 +108,13 @@ export async function deleteJson(db: Db, accountId: string, key: string): Promis
  * caller pairs it with `readSchoolJson` for those.
  */
 export async function readJsonForAll<T extends object>(
-  db: Db,
+  db: TenantDb,
   key: string,
   defaults: T,
 ): Promise<Map<string, T>> {
-  const rows = await db
+  // tenant-unscoped: `user_settings` carries no school, so this returns every account's row and
+  // the caller narrows by the account ids it already resolved inside its own school.
+  const rows = await db.raw
     .select({ accountId: userSettings.accountId, value: userSettings.value })
     .from(userSettings)
     .where(eq(userSettings.key, key));

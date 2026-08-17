@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, lte, like, sql } from 'drizzle-orm';
+import { asc, desc, eq, gte, inArray, lt, lte, like, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
   classStudents,
@@ -14,7 +14,7 @@ import {
   students,
   vocabAssignments,
 } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type {
   GardenSettingsInput,
   PlantPatchInput,
@@ -72,8 +72,11 @@ const SETTINGS_KEY = 'garden-settings';
 // ---- Settings ----
 
 /** Same store and defaulting shape as `getRankingWeights`. */
-export async function getGardenSettings(db: Db): Promise<GardenSettings> {
-  const rows = await db.select().from(settings).where(eq(settings.key, SETTINGS_KEY));
+export async function getGardenSettings(db: TenantDb): Promise<GardenSettings> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, SETTINGS_KEY)));
   const row = rows[0];
   if (!row) return { ...DEFAULT_GARDEN_SETTINGS };
   try {
@@ -98,15 +101,16 @@ export async function getGardenSettings(db: Db): Promise<GardenSettings> {
 }
 
 export async function setGardenSettings(
-  db: Db,
+  db: TenantDb,
   input: GardenSettingsInput,
 ): Promise<GardenSettings> {
   const before = await getGardenSettings(db);
   const value = JSON.stringify(input);
+  // Conflict target is the full primary key `(tenant_id, key)` — one garden config per school.
   await db
     .insert(settings)
     .values({ key: SETTINGS_KEY, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value } });
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value } });
   // Replaces rather than merges, unlike the other settings modules — before/after can therefore
   // genuinely differ in shape if a stored blob had drifted from the current defaults.
   record({ action: 'update', entityType: 'setting', entityId: SETTINGS_KEY, before, after: input });
@@ -139,8 +143,11 @@ function rowToState(row: PlantRow): PlantState {
   };
 }
 
-export async function getPlant(db: Db, studentId: string): Promise<PlantRecord | null> {
-  const rows = await db.select().from(gardenPlants).where(eq(gardenPlants.studentId, studentId));
+export async function getPlant(db: TenantDb, studentId: string): Promise<PlantRecord | null> {
+  const rows = await db.raw
+    .select()
+    .from(gardenPlants)
+    .where(db.own(gardenPlants, eq(gardenPlants.studentId, studentId)));
   const row = rows[0];
   if (!row) return null;
   return {
@@ -163,7 +170,7 @@ export async function getPlant(db: Db, studentId: string): Promise<PlantRecord |
  * stage the student earns back on the next round.
  */
 function transitionOps(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   t: PlantTransition,
   nowIso: string,
@@ -207,7 +214,7 @@ function transitionOps(
 }
 
 async function writeTransition(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   t: PlantTransition,
   nowIso: string,
@@ -241,41 +248,45 @@ export type VocabAssignmentRow = {
 };
 
 export async function listAssignments(
-  db: Db,
+  db: TenantDb,
   opts: { classId?: string; activeFrom?: string } = {},
 ): Promise<VocabAssignmentRow[]> {
   const where = [
     opts.classId ? eq(vocabAssignments.classId, opts.classId) : undefined,
     opts.activeFrom ? gte(vocabAssignments.deadline, opts.activeFrom) : undefined,
-  ].filter(Boolean);
-  return db
-    .select({
-      id: vocabAssignments.id,
-      classId: vocabAssignments.classId,
-      className: classes.name,
-      classColor: classes.color,
-      topicId: vocabAssignments.topicId,
-      topicName: flashcardTopics.name,
-      topicSlug: flashcardTopics.slug,
-      requiredCount: vocabAssignments.requiredCount,
-      minScorePct: vocabAssignments.minScorePct,
-      questionCount: vocabAssignments.questionCount,
-      deadline: vocabAssignments.deadline,
-      deadlineTime: vocabAssignments.deadlineTime,
-      note: vocabAssignments.note,
-      modes: vocabAssignments.modes,
-      createdAt: vocabAssignments.createdAt,
-    })
-    .from(vocabAssignments)
-    .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
-    .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
-    .where(where.length ? and(...where) : undefined)
-    .orderBy(asc(vocabAssignments.deadline), asc(flashcardTopics.name));
+  ];
+  return (
+    db.raw
+      .select({
+        id: vocabAssignments.id,
+        classId: vocabAssignments.classId,
+        className: classes.name,
+        classColor: classes.color,
+        topicId: vocabAssignments.topicId,
+        topicName: flashcardTopics.name,
+        topicSlug: flashcardTopics.slug,
+        requiredCount: vocabAssignments.requiredCount,
+        minScorePct: vocabAssignments.minScorePct,
+        questionCount: vocabAssignments.questionCount,
+        deadline: vocabAssignments.deadline,
+        deadlineTime: vocabAssignments.deadlineTime,
+        note: vocabAssignments.note,
+        modes: vocabAssignments.modes,
+        createdAt: vocabAssignments.createdAt,
+      })
+      .from(vocabAssignments)
+      .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
+      .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
+      // The assignment is the scoped root, and its class and topic joins ride along on FKs the
+      // school already owns. The topic may be a library one — that is what the pool is for.
+      .where(db.own(vocabAssignments, ...where))
+      .orderBy(asc(vocabAssignments.deadline), asc(flashcardTopics.name))
+  );
 }
 
 /** One assignment with its topic and class names, or null. */
-export async function getAssignment(db: Db, id: string): Promise<VocabAssignmentRow | null> {
-  const rows = await db
+export async function getAssignment(db: TenantDb, id: string): Promise<VocabAssignmentRow | null> {
+  const rows = await db.raw
     .select({
       id: vocabAssignments.id,
       classId: vocabAssignments.classId,
@@ -296,12 +307,12 @@ export async function getAssignment(db: Db, id: string): Promise<VocabAssignment
     .from(vocabAssignments)
     .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
     .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
-    .where(eq(vocabAssignments.id, id));
+    .where(db.own(vocabAssignments, eq(vocabAssignments.id, id)));
   return rows[0] ?? null;
 }
 
 export async function createAssignment(
-  db: Db,
+  db: TenantDb,
   input: VocabAssignmentInput,
   staffId: string | null,
 ): Promise<string> {
@@ -324,7 +335,7 @@ export async function createAssignment(
 }
 
 export async function updateAssignment(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<VocabAssignmentInput>,
 ): Promise<void> {
@@ -339,12 +350,12 @@ export async function updateAssignment(
   if (patch.note !== undefined) set.note = patch.note ?? null;
   if (patch.modes !== undefined) set.modes = patch.modes ?? null;
   if (Object.keys(set).length) {
-    await db.update(vocabAssignments).set(set).where(eq(vocabAssignments.id, id));
+    await db.update(vocabAssignments, set, eq(vocabAssignments.id, id));
   }
 }
 
-export async function deleteAssignment(db: Db, id: string): Promise<void> {
-  await db.delete(vocabAssignments).where(eq(vocabAssignments.id, id));
+export async function deleteAssignment(db: TenantDb, id: string): Promise<void> {
+  await db.delete(vocabAssignments, eq(vocabAssignments.id, id));
 }
 
 /**
@@ -368,7 +379,7 @@ function deadlineEndUtc(deadline: string, deadlineTime: string | null = null): s
  * not count — the teacher asked for work, not for history.
  */
 export async function assignmentProgress(
-  db: Db,
+  db: TenantDb,
   assignmentId: string,
   known?: VocabAssignmentRow,
 ): Promise<{
@@ -382,11 +393,11 @@ export async function assignmentProgress(
   const assignment = known ?? (await getAssignment(db, assignmentId));
   if (!assignment) return null;
 
-  const members = await db
+  const members = await db.raw
     .select({ id: students.id, name: students.name, color: students.color })
     .from(classStudents)
     .innerJoin(students, eq(students.id, classStudents.studentId))
-    .where(eq(classStudents.classId, assignment.classId))
+    .where(db.own(classStudents, eq(classStudents.classId, assignment.classId)))
     .orderBy(asc(students.name));
 
   const counts = await countQualifying(
@@ -416,7 +427,7 @@ export async function assignmentProgress(
  * any assignment the teacher left unrestricted) counts every mode, exactly as before.
  */
 async function countQualifying(
-  db: Db,
+  db: TenantDb,
   topicId: string,
   studentIds: string[],
   minScorePct: number,
@@ -425,14 +436,15 @@ async function countQualifying(
   modes: string[] | null = null,
 ): Promise<Map<string, number>> {
   if (studentIds.length === 0) return new Map();
-  const rows = await db
+  const rows = await db.raw
     .select({
       studentId: flashcardResults.studentId,
       n: sql<number>`count(*)`,
     })
     .from(flashcardResults)
     .where(
-      and(
+      db.own(
+        flashcardResults,
         eq(flashcardResults.topicId, topicId),
         inArray(flashcardResults.studentId, studentIds),
         gte(flashcardResults.playedAt, fromIso),
@@ -455,7 +467,7 @@ async function countQualifying(
  * expired at 6pm. `nowIso` rather than a day string for exactly that reason.
  */
 export async function activeAssignmentsFor(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   topicId: string,
   nowIso: string,
@@ -469,7 +481,7 @@ export async function activeAssignmentsFor(
     modes: string | null;
   }[]
 > {
-  const rows = await db
+  const rows = await db.raw
     .select({
       id: vocabAssignments.id,
       minScorePct: vocabAssignments.minScorePct,
@@ -481,7 +493,8 @@ export async function activeAssignmentsFor(
     .from(vocabAssignments)
     .innerJoin(classStudents, eq(classStudents.classId, vocabAssignments.classId))
     .where(
-      and(
+      db.own(
+        vocabAssignments,
         eq(classStudents.studentId, studentId),
         eq(vocabAssignments.topicId, topicId),
         gte(vocabAssignments.deadline, ictDateOf(nowIso)),
@@ -498,7 +511,7 @@ export async function activeAssignmentsFor(
  * toward it.
  */
 export async function studentAssignments(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   nowIso: string,
 ): Promise<
@@ -521,7 +534,7 @@ export async function studentAssignments(
   }[]
 > {
   const vnToday = ictDateOf(nowIso);
-  const rows = await db
+  const rows = await db.raw
     .select({
       id: vocabAssignments.id,
       topicId: vocabAssignments.topicId,
@@ -540,7 +553,13 @@ export async function studentAssignments(
     .innerJoin(classStudents, eq(classStudents.classId, vocabAssignments.classId))
     .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
     .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
-    .where(and(eq(classStudents.studentId, studentId), gte(vocabAssignments.deadline, vnToday)))
+    .where(
+      db.own(
+        vocabAssignments,
+        eq(classStudents.studentId, studentId),
+        gte(vocabAssignments.deadline, vnToday),
+      ),
+    )
     .orderBy(asc(vocabAssignments.deadline));
 
   const open = rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
@@ -582,11 +601,11 @@ export type StudentMonthAssignment = {
  * the module-private window logic (created_at .. deadlineEndUtc) with everything else that counts.
  */
 export async function studentAssignmentsInMonth(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   month: string,
 ): Promise<StudentMonthAssignment[]> {
-  const list = await db
+  const list = await db.raw
     .select({
       id: vocabAssignments.id,
       topicId: vocabAssignments.topicId,
@@ -604,7 +623,8 @@ export async function studentAssignmentsInMonth(
     .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
     .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
     .where(
-      and(
+      db.own(
+        vocabAssignments,
         eq(classStudents.studentId, studentId),
         gte(vocabAssignments.deadline, `${month}-01`),
         lte(vocabAssignments.deadline, `${month}-31`),
@@ -652,7 +672,7 @@ export type { GardenOutcome };
  * writes the same event or none at all.
  */
 export async function onStudentResult(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   input: { topicId: string; mode: string; score: number; total: number },
   resultId: string,
@@ -684,10 +704,10 @@ export async function onStudentResult(
   }
 
   const t = applyQualifyingPlay(existing?.state ?? null, settings, nowIso, resultId);
-  const memberClasses = await db
+  const memberClasses = await db.raw
     .select({ classId: classStudents.classId })
     .from(classStudents)
-    .where(eq(classStudents.studentId, studentId));
+    .where(db.own(classStudents, eq(classStudents.studentId, studentId)));
 
   const ops = [
     ...transitionOps(db, studentId, t, nowIso),
@@ -745,7 +765,7 @@ export async function onStudentResult(
 // ---- Student actions ----
 
 export async function harvest(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   nowIso: string = new Date().toISOString(),
 ): Promise<{ ok: true; fruitsTotal: number } | { ok: false; error: HarvestError }> {
@@ -766,7 +786,7 @@ export async function harvest(
 
 /** Rename the plant / repaint the pot. Only meaningful once a plant exists. */
 export async function updatePlant(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   patch: PlantPatchInput,
 ): Promise<void> {
@@ -775,11 +795,11 @@ export async function updatePlant(
   if (patch.potColor !== undefined) set.potColor = patch.potColor;
   if (!Object.keys(set).length) return;
   set.updatedAt = new Date().toISOString();
-  await db.update(gardenPlants).set(set).where(eq(gardenPlants.studentId, studentId));
+  await db.update(gardenPlants, set, eq(gardenPlants.studentId, studentId));
 }
 
 export async function water(
-  db: Db,
+  db: TenantDb,
   staffId: string,
   studentId: string,
   note: string | null,
@@ -805,7 +825,7 @@ export async function water(
  * Every call appends a `dev` event, so a plant's history never claims a student earned this.
  */
 export async function devSetPlant(
-  db: Db,
+  db: TenantDb,
   staffId: string,
   input: { studentId: string; stage: number; idleDays: number },
   nowIso: string = new Date().toISOString(),
@@ -854,12 +874,12 @@ export async function devSetPlant(
 }
 
 /** Admin test tool — back to an unplanted pot, history and all. */
-export async function devResetPlant(db: Db, studentId: string): Promise<void> {
+export async function devResetPlant(db: TenantDb, studentId: string): Promise<void> {
   // The events go too. Keeping them would leave a history whose first row starts mid-air, and the
   // point of the reset is a student who has never planted anything.
   await db.batch([
-    db.delete(gardenEvents).where(eq(gardenEvents.studentId, studentId)),
-    db.delete(gardenPlants).where(eq(gardenPlants.studentId, studentId)),
+    db.delete(gardenEvents, eq(gardenEvents.studentId, studentId)),
+    db.delete(gardenPlants, eq(gardenPlants.studentId, studentId)),
   ]);
 }
 
@@ -876,11 +896,11 @@ export type GardenEventRow = {
 
 /** Recent history for one plant — what the audit popover shows. */
 export async function plantHistory(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   limit = 20,
 ): Promise<GardenEventRow[]> {
-  return db
+  return db.raw
     .select({
       id: gardenEvents.id,
       type: gardenEvents.type,
@@ -893,7 +913,7 @@ export async function plantHistory(
     })
     .from(gardenEvents)
     .leftJoin(staff, eq(staff.id, gardenEvents.actorStaffId))
-    .where(eq(gardenEvents.studentId, studentId))
+    .where(db.own(gardenEvents, eq(gardenEvents.studentId, studentId)))
     .orderBy(desc(gardenEvents.createdAt))
     .limit(limit);
 }
@@ -920,7 +940,7 @@ export interface GardenMonthSummary extends GardenMonthTally {
  * plant reads as wilted here for the same reason it does on /vocabulary.
  */
 export async function studentGardenMonth(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   month: string,
   vnToday: string,
@@ -957,7 +977,7 @@ function emptyGardenMonth(month: string): GardenMonthSummary {
  * zeros rather than a missing key the caller has to defend against.
  */
 export async function gardenMonthByStudent(
-  db: Db,
+  db: TenantDb,
   month: string,
   vnToday: string,
   opts: { studentIds?: string[]; settings?: GardenSettings } = {},
@@ -968,7 +988,7 @@ export async function gardenMonthByStudent(
 
   const scope = studentIds ? inArray(gardenEvents.studentId, studentIds) : undefined;
   const [events, plants] = await Promise.all([
-    db
+    db.raw
       .select({
         studentId: gardenEvents.studentId,
         type: gardenEvents.type,
@@ -977,10 +997,15 @@ export async function gardenMonthByStudent(
         vnDay: gardenEvents.vnDay,
       })
       .from(gardenEvents)
-      .where(and(like(gardenEvents.vnDay, `${month}-%`), scope)),
-    studentIds
-      ? db.select().from(gardenPlants).where(inArray(gardenPlants.studentId, studentIds))
-      : db.select().from(gardenPlants),
+      .where(db.own(gardenEvents, like(gardenEvents.vnDay, `${month}-%`), scope)),
+    // The no-`studentIds` branch is the whole-school read the assessments screen makes, and `own`
+    // is what now keeps "the whole school" from meaning "every school".
+    db.raw
+      .select()
+      .from(gardenPlants)
+      .where(
+        db.own(gardenPlants, studentIds ? inArray(gardenPlants.studentId, studentIds) : undefined),
+      ),
   ]);
 
   // Group first, then fold each student's events with the shared pure function — one definition
@@ -1027,16 +1052,17 @@ export interface ClassGarden {
 
 /** Harvest counts for one ICT month, per student. */
 async function monthFruit(
-  db: Db,
+  db: TenantDb,
   studentIds: string[],
   month: string,
 ): Promise<Map<string, number>> {
   if (studentIds.length === 0) return new Map();
-  const rows = await db
+  const rows = await db.raw
     .select({ studentId: gardenEvents.studentId, n: sql<number>`count(*)` })
     .from(gardenEvents)
     .where(
-      and(
+      db.own(
+        gardenEvents,
         eq(gardenEvents.type, 'harvest'),
         inArray(gardenEvents.studentId, studentIds),
         like(gardenEvents.vnDay, `${month}-%`),
@@ -1052,16 +1078,22 @@ async function monthFruit(
  * One class's garden, as of `vnToday`. Every plant is settled in memory — this is a read.
  */
 export async function classGarden(
-  db: Db,
+  db: TenantDb,
   classId: string,
   vnToday: string,
   settings?: GardenSettings,
 ): Promise<ClassGarden | null> {
-  const cls = (await db.select().from(classes).where(eq(classes.id, classId)))[0];
+  // Another school's class id reads as "no such class" — the 404 the routes already render.
+  const cls = (
+    await db.raw
+      .select()
+      .from(classes)
+      .where(db.own(classes, eq(classes.id, classId)))
+  )[0];
   if (!cls) return null;
   const cfg = settings ?? (await getGardenSettings(db));
 
-  const rows = await db
+  const rows = await db.raw
     .select({
       studentId: students.id,
       name: students.name,
@@ -1071,7 +1103,7 @@ export async function classGarden(
     .from(classStudents)
     .innerJoin(students, eq(students.id, classStudents.studentId))
     .leftJoin(gardenPlants, eq(gardenPlants.studentId, students.id))
-    .where(eq(classStudents.classId, classId))
+    .where(db.own(classStudents, eq(classStudents.classId, classId)))
     .orderBy(asc(students.name));
 
   const fruit = await monthFruit(
@@ -1079,7 +1111,12 @@ export async function classGarden(
     rows.map((r) => r.studentId),
     monthOfVn(vnToday),
   );
-  const treeRow = (await db.select().from(classTrees).where(eq(classTrees.classId, classId)))[0];
+  const treeRow = (
+    await db.raw
+      .select()
+      .from(classTrees)
+      .where(db.own(classTrees, eq(classTrees.classId, classId)))
+  )[0];
   const points = treeRow?.points ?? 0;
 
   return {
@@ -1100,14 +1137,14 @@ export async function classGarden(
 
 /** The classes a student belongs to, for routing them to their own garden. */
 export async function studentClasses(
-  db: Db,
+  db: TenantDb,
   studentId: string,
 ): Promise<{ id: string; name: string }[]> {
-  return db
+  return db.raw
     .select({ id: classes.id, name: classes.name })
     .from(classStudents)
     .innerJoin(classes, eq(classes.id, classStudents.classId))
-    .where(eq(classStudents.studentId, studentId))
+    .where(db.own(classStudents, eq(classStudents.studentId, studentId)))
     .orderBy(asc(classes.name));
 }
 
@@ -1120,17 +1157,22 @@ export async function studentClasses(
  * plants as they stood when the month ended. Idempotent by primary key: an existing month is left
  * exactly as it was — a keepsake is not something to overwrite.
  */
-export async function snapshotMonth(db: Db, month: string, classId?: string): Promise<number> {
+export async function snapshotMonth(
+  db: TenantDb,
+  month: string,
+  classId?: string,
+): Promise<number> {
   const asOf = lastDayOfMonth(month);
   const settings = await getGardenSettings(db);
-  const targets = classId
-    ? await db.select({ id: classes.id }).from(classes).where(eq(classes.id, classId))
-    : await db.select({ id: classes.id }).from(classes);
+  const targets = await db.raw
+    .select({ id: classes.id })
+    .from(classes)
+    .where(db.own(classes, classId ? eq(classes.id, classId) : undefined));
 
-  const existing = await db
+  const existing = await db.raw
     .select({ classId: gardenSnapshots.classId })
     .from(gardenSnapshots)
-    .where(eq(gardenSnapshots.month, month));
+    .where(db.own(gardenSnapshots, eq(gardenSnapshots.month, month)));
   const already = new Set(existing.map((e) => e.classId));
 
   let written = 0;
@@ -1174,26 +1216,32 @@ function lastDayOfMonth(month: string): string {
 }
 
 export async function listSnapshots(
-  db: Db,
+  db: TenantDb,
   classId: string,
 ): Promise<{ month: string; createdAt: string }[]> {
-  return db
+  return db.raw
     .select({ month: gardenSnapshots.month, createdAt: gardenSnapshots.createdAt })
     .from(gardenSnapshots)
-    .where(eq(gardenSnapshots.classId, classId))
+    .where(db.own(gardenSnapshots, eq(gardenSnapshots.classId, classId)))
     .orderBy(desc(gardenSnapshots.month));
 }
 
 export async function getSnapshot(
-  db: Db,
+  db: TenantDb,
   classId: string,
   month: string,
 ): Promise<{ className: string; month: string; data: GardenSnapshotData } | null> {
   const row = (
-    await db
+    await db.raw
       .select()
       .from(gardenSnapshots)
-      .where(and(eq(gardenSnapshots.classId, classId), eq(gardenSnapshots.month, month)))
+      .where(
+        db.own(
+          gardenSnapshots,
+          eq(gardenSnapshots.classId, classId),
+          eq(gardenSnapshots.month, month),
+        ),
+      )
   )[0];
   if (!row) return null;
   try {
@@ -1226,7 +1274,7 @@ export interface SweepResult {
  * decay every reader has been deriving all along — so a skipped run costs notifications, never
  * correctness.
  */
-export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResult> {
+export async function runGardenSweep(db: TenantDb, nowIso: string): Promise<SweepResult> {
   return sweepCore(db, nowIso, true);
 }
 
@@ -1245,11 +1293,15 @@ export async function runGardenSweep(db: Db, nowIso: string): Promise<SweepResul
  * and it only ever over-reports, which is why the UI labels this section a forecast rather than a
  * schedule.
  */
-export async function forecastGardenSweep(db: Db, nowIso: string): Promise<SweepResult> {
+export async function forecastGardenSweep(db: TenantDb, nowIso: string): Promise<SweepResult> {
   return sweepCore(db, nowIso, false);
 }
 
-async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<SweepResult> {
+/**
+ * Scoped to ONE school. The cron used to sweep the deployment in a single pass; it now needs a
+ * per-school loop with a `TenantDb` each, because every read below is fenced to `db.tenantId`.
+ */
+async function sweepCore(db: TenantDb, nowIso: string, persist: boolean): Promise<SweepResult> {
   const vnToday = ictDateOf(nowIso);
   const settings = await getGardenSettings(db);
   const out: SweepResult = {
@@ -1266,7 +1318,7 @@ async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<Swee
   // job, so an assignment that shut at 6pm is charged by the run after ICT midnight, not at 6pm.
   // What the time does change is `countQualifying` below — a round played at 8pm does not save the
   // student from the drop, exactly as the closed chip told them at 6.
-  const overdue = await db
+  const overdue = await db.raw
     .select({
       id: vocabAssignments.id,
       classId: vocabAssignments.classId,
@@ -1282,23 +1334,26 @@ async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<Swee
     .from(vocabAssignments)
     .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
     .where(
-      and(
+      db.own(
+        vocabAssignments,
         lt(vocabAssignments.deadline, vnToday),
         gte(vocabAssignments.deadline, addDaysVn(vnToday, -35)),
       ),
     );
 
   for (const a of overdue) {
-    const members = await db
+    const members = await db.raw
       .select({ studentId: classStudents.studentId })
       .from(classStudents)
-      .where(eq(classStudents.classId, a.classId));
+      .where(db.own(classStudents, eq(classStudents.classId, a.classId)));
     if (!members.length) continue;
 
-    const charged = await db
+    const charged = await db.raw
       .select({ studentId: gardenEvents.studentId })
       .from(gardenEvents)
-      .where(and(eq(gardenEvents.type, 'deadline_drop'), eq(gardenEvents.refId, a.id)));
+      .where(
+        db.own(gardenEvents, eq(gardenEvents.type, 'deadline_drop'), eq(gardenEvents.refId, a.id)),
+      );
     const done = new Set(charged.map((c) => c.studentId));
 
     const counts = await countQualifying(
@@ -1332,11 +1387,12 @@ async function sweepCore(db: Db, nowIso: string, persist: boolean): Promise<Swee
 
   // 2. Persist overdue decay, and note who to tell. Only plants that have gone quiet long enough
   // to matter are touched.
-  const stale = await db
+  const stale = await db.raw
     .select()
     .from(gardenPlants)
     .where(
-      and(
+      db.own(
+        gardenPlants,
         eq(gardenPlants.isDead, false),
         lt(gardenPlants.lastCareDay, addDaysVn(vnToday, -settings.wiltAfterDays + 1)),
       ),

@@ -1,6 +1,7 @@
 import { and, gte, isNotNull } from 'drizzle-orm';
 import { flashcardResults, staff, students } from '../db/schema';
-import { createDb, type Db } from '../db/index';
+import { PRIMARY_TENANT_ID, TenantDb, type Db } from '../db/index';
+import { createRawDb } from '../db/internal';
 import { expandEvents } from '../../shared/logic/recurrence';
 import { iso, parseISO, toMin } from '../../shared/logic/dates';
 import { previewLine, type ComposedPreview } from '../../shared/logic/preview';
@@ -13,16 +14,23 @@ import * as push from './push';
 import type { ExpoPushMessage } from './push';
 import * as zalo from './zalo';
 import * as vocabImages from './vocab-images';
-import { record } from './audit';
+import { record, setActorTenant } from './audit';
+import { listActiveTenantIds } from './tenants';
 
 /**
  * The scheduled notification jobs. Called from `scheduled()` in workers/app.ts, and from the
  * debug endpoint while developing (waiting 15 minutes per iteration is not a feedback loop).
  *
  * **Timezone.** The whole user base is in Vietnam: ICT, UTC+7, no DST, ever. That offset is
- * hardcoded below rather than carried in a column. It is the right trade for one school in one
- * city — and it is the first thing to change if the school opens a second location, which is why
- * it is a single named constant and not seven scattered `+ 7`s.
+ * hardcoded below rather than carried in a column. Multi-tenancy did NOT relax this: every school
+ * in the deployment is assumed to keep Vietnamese hours, so one cron tick means the same wall
+ * clock for all of them. It stays a single named constant and not seven scattered `+ 7`s precisely
+ * so that the day a school outside ICT signs up, the fix is a column read here rather than a hunt.
+ *
+ * **One sweep per school.** `runScheduled` walks `listActiveTenantIds` and runs the jobs below once
+ * per school against a `TenantDb`. The jobs themselves know nothing about that: they read and write
+ * through the scoped handle and see exactly one school's data, which is why their logic is unchanged
+ * from the single-school version.
  *
  * **Two channels, one sweep.** Each job decides WHAT to say once, then hands it to Expo push and
  * to Zalo (server/services/zalo.ts) separately. They reach different people — push reaches
@@ -262,7 +270,11 @@ export function gardenAlertPush(body: string): PushBody {
  * mobile agenda use. If this job and the calendar disagreed about when a class runs, users would
  * be notified for classes that are not happening, which is worse than not being notified at all.
  */
-export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
+export async function runClassReminders(
+  db: TenantDb,
+  at: Date = new Date(),
+  env?: Env,
+): Promise<number> {
   // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
   // all and how wide its window is. `perAccount` decides who inside that window actually
   // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
@@ -357,8 +369,21 @@ export async function runClassReminders(db: Db, at: Date = new Date(), env?: Env
   return messages.length;
 }
 
-/** Job B — the daily digest. 01:00 UTC = 08:00 ICT, the `study` channel. */
-export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
+/**
+ * Job B — the daily digest. 01:00 UTC = 08:00 ICT, the `study` channel.
+ *
+ * `env` no longer does anything here: the daily housekeeping that needed it (R2 pruning) moved to
+ * `runDailyHousekeeping`, which runs once for the whole deployment rather than once per school. The
+ * parameter stays because the debug endpoints (app/routes/api.push.run.tsx, /logs → Notifications)
+ * call all four jobs through one uniform `(db, at, env)` shape, and narrowing it here would break
+ * those call sites to save nothing.
+ */
+export async function runDailyDigest(
+  db: TenantDb,
+  at: Date = new Date(),
+  env?: Env,
+): Promise<number> {
+  void env; // accepted for signature parity with the other three jobs; see above.
   // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
   // all and how wide its window is. `perAccount` decides who inside that window actually
   // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
@@ -376,13 +401,21 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
     const QUIET_DAYS = 7;
     const cutoff = new Date(at.getTime() - QUIET_DAYS * 86_400_000).toISOString();
 
-    const recent = await db
+    const recent = await db.raw
       .select({ studentId: flashcardResults.studentId })
       .from(flashcardResults)
-      .where(and(isNotNull(flashcardResults.studentId), gte(flashcardResults.playedAt, cutoff)));
+      .where(
+        db.own(
+          flashcardResults,
+          and(isNotNull(flashcardResults.studentId), gte(flashcardResults.playedAt, cutoff)),
+        ),
+      );
     const active = new Set(recent.map((r) => r.studentId));
 
-    const all = await db.select({ id: students.id, name: students.name }).from(students);
+    const all = await db.raw
+      .select({ id: students.id, name: students.name })
+      .from(students)
+      .where(db.own(students));
     const quiet = all.filter((s) => !active.has(s.id));
 
     // Half-month bucket: keeps this to at most two nudges per student per month even though the
@@ -409,17 +442,46 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
 
   await deliver(db, messages);
   await push.markSent(db, doneKeys);
-  // Housekeeping rides along with the daily job rather than needing a cron of its own.
-  await push.pruneLedger(db);
-  // Spent and expired Zalo pairing codes, and the share-card images whose capability URLs should
-  // stop working. Same slot, same reasoning.
-  await zalo.pruneCodes(db);
+  return messages.length;
+}
+
+/**
+ * The daily retention sweep, deployment half. Rides the 08:00 ICT slot rather than needing a cron of
+ * its own, and runs ONCE, outside the per-school loop, on the unscoped handle.
+ *
+ * What lands here is what a school id cannot narrow: the two R2 sweeps walk a bucket that has no
+ * school in it at all, and the objects `vocabImages.pruneImages` protects are pinned by
+ * `flashcard_words`, which carries no `tenant_id`. Running these inside the loop would be N passes
+ * over the same objects, N−1 of which find nothing left to do — it would make the R2 listing cost
+ * scale with the number of schools for no benefit whatsoever.
+ *
+ * What does NOT land here is the two ledgers, `sent_notifications` and `zalo_pair_codes`. Both
+ * gained a `tenant_id`, and their prunes (`push.pruneLedger`, `zalo.pruneCodes`) delete only the
+ * caller's rows — so they are per-school, in `runTenantHousekeeping` below.
+ */
+export async function runDailyHousekeeping(db: Db, env?: Env): Promise<void> {
+  // tenant-unscoped: retention sweep spans the deployment
   if (env?.FILES) await zalo.pruneMedia(env.FILES);
   // Vocabulary pictures nothing points at — a teacher who abandoned a generated topic after the
   // images were stored. Only objects older than a day go, so a review in progress is never cut
   // out from under itself. See server/services/vocab-images.ts.
+  // tenant-unscoped: retention sweep spans the deployment
   if (env?.FILES) await vocabImages.pruneImages(db, env.FILES);
-  return messages.length;
+}
+
+/**
+ * The daily retention sweep, school half: the notification ledger and the spent Zalo pair codes.
+ *
+ * Both tables are keyed by school and both prunes are scoped, so this runs once per school rather
+ * than once per deployment. It is two dated DELETEs, so the cost of the extra passes is real but
+ * small. The thing worth knowing is what the loop implies: a SUSPENDED school stops being visited by
+ * `runScheduled` and therefore stops having these trimmed. The rows are harmless — nothing reads a
+ * suspended school's ledger — but they do not go away on their own either.
+ */
+async function runTenantHousekeeping(db: TenantDb): Promise<void> {
+  await push.pruneLedger(db);
+  // Spent and expired pairing codes. Same slot, same reasoning.
+  await zalo.pruneCodes(db);
 }
 
 /**
@@ -430,7 +492,11 @@ export async function runDailyDigest(db: Db, at: Date = new Date(), env?: Env): 
  * find the book. Students get one message per class they are in; staff get one summary of the
  * whole day, because the thing a teacher needs is the list, not five separate pings.
  */
-export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env): Promise<number> {
+export async function runEveningPreview(
+  db: TenantDb,
+  at: Date = new Date(),
+  env?: Env,
+): Promise<number> {
   // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
   // all and how wide its window is. `perAccount` decides who inside that window actually
   // hears about it — see server/services/notif-prefs.ts on why the lead time is not personal.
@@ -491,12 +557,15 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
 
   // ---- Staff: one summary for the day ----
   //
-  // Every staff account gets it. There is no class_staff table (a deliberate absence — the school
-  // has one or two teachers), so "the teachers of this class" is not a query that exists yet.
+  // Every staff account OF THIS SCHOOL gets it. There is no class_staff table (a deliberate
+  // absence — a school has one or two teachers), so "the teachers of this class" is not a query
+  // that exists yet.
   const staffKey = ledgerKey.previewStaff(tomorrow);
   if (!(await push.alreadySent(db, [staffKey])).has(staffKey)) {
     doneKeys.push(staffKey);
-    const staffIds = (await db.select({ id: staff.id }).from(staff)).map((r) => r.id);
+    const staffIds = (await db.raw.select({ id: staff.id }).from(staff).where(db.own(staff))).map(
+      (r) => r.id,
+    );
     const tokens = await push.tokensForAccounts(
       db,
       accountsWanting(perAccount, await push.accountIdsForStaff(db, staffIds), 'previewEvening'),
@@ -536,7 +605,7 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
         db,
         await zalo.accountIdsForStaff(
           db,
-          (await db.select({ id: staff.id }).from(staff)).map((r) => r.id),
+          (await db.raw.select({ id: staff.id }).from(staff).where(db.own(staff))).map((r) => r.id),
         ),
       ),
     text: staffPreviewZaloText(occs.length, staffDaySummary(occs, classes, previews)),
@@ -556,7 +625,7 @@ export async function runEveningPreview(db: Db, at: Date = new Date(), env?: Env
  * message, never a wrong plant — which is also why the ledger keys below are date-scoped. A
  * "wilting today" push two days late would be a lie, so it is simply never sent.
  */
-export async function runGardenAlerts(db: Db, at: Date = new Date()): Promise<number> {
+export async function runGardenAlerts(db: TenantDb, at: Date = new Date()): Promise<number> {
   const nowIso = at.toISOString();
   const sweep = await gardenSvc.runGardenSweep(db, nowIso);
   // Two reads, two jobs. `prefs` is the SCHOOL baseline: it decides whether this sweep runs at
@@ -617,9 +686,15 @@ type ZaloJob = { key: string; chatIds: () => Promise<string[]>; text: string };
  * The whole pass is wrapped in a try/catch rather than relying on the service's own error
  * swallowing. If this threw, it would take the enclosing job's return value with it — and Zalo
  * being down is not a reason for the class-reminder cron to report failure.
+ *
+ * The tenant guard lives here, on the one path both jobs' Zalo passes go through, rather than at
+ * the two call sites — a rule that has to be remembered twice is a rule that gets forgotten once.
  */
-async function zaloDeliver(db: Db, env: Env | undefined, jobs: ZaloJob[]): Promise<number> {
+async function zaloDeliver(db: TenantDb, env: Env | undefined, jobs: ZaloJob[]): Promise<number> {
   if (!env || !zalo.isEnabled(env) || !jobs.length) return 0;
+  // One bot token, so Zalo delivery belongs to the school that owns it. Per-school bots are
+  // deferred; every other school's notifications go out by push only.
+  if (db.tenantId !== PRIMARY_TENANT_ID) return 0;
   try {
     const already = await push.alreadySent(
       db,
@@ -645,33 +720,75 @@ async function zaloDeliver(db: Db, env: Env | undefined, jobs: ZaloJob[]): Promi
 }
 
 /** Send, then delete whatever Expo said is gone. */
-async function deliver(db: Db, messages: ExpoPushMessage[]): Promise<void> {
+async function deliver(db: TenantDb, messages: ExpoPushMessage[]): Promise<void> {
   if (!messages.length) return;
   const { dead } = await push.sendPush(messages);
   if (dead.length) {
     console.log('[push] pruning dead tokens', { n: dead.length });
+    // tenant-unscoped: a dead Expo token is dead for every school. `push.pruneTokens` takes the
+    // scoped handle for a uniform signature and drops to `db.raw` internally — `push_tokens` has
+    // no `tenant_id` to filter on, and nothing here would want one.
     await push.pruneTokens(db, dead);
   }
 }
 
-/** Cron entry point. Branches on the schedule that fired. */
+/**
+ * Cron entry point. Branches on the schedule that fired, once per school.
+ *
+ * **Every school gets its own try/catch.** One school's bad data must not silence every other
+ * school's digest — a single unhandled throw halfway down the list used to be a missed sweep for
+ * nobody in particular, and is now a missed sweep for everyone after the failure.
+ *
+ * **The per-tenant `ms` is logged on purpose.** These sweeps are sequential inside one Worker
+ * invocation, so the deployment's total cron cost is the sum of the numbers in this log, and there
+ * is a CPU-time ceiling it will eventually reach. That log is how the wall becomes visible while it
+ * is still a graph and not an incident; the fix when it arrives (a queue, or a shard per tick) is a
+ * change to this loop and nothing below it.
+ */
 export async function runScheduled(cron: string, env: Env, at: Date = new Date()): Promise<void> {
-  const db = createDb(env);
-  const started = Date.now();
-  // 08:00 ICT carries two jobs: the study digest and the garden. The garden runs second and its
-  // own errors must not swallow the digest's result, so it is awaited separately.
-  const sent =
-    cron === '0 1 * * *'
-      ? await runDailyDigest(db, at, env)
-      : cron === '0 12 * * *'
-        ? await runEveningPreview(db, at, env)
-        : await runClassReminders(db, at, env);
-  let garden = 0;
-  if (cron === '0 1 * * *') garden = await runGardenAlerts(db, at);
-  const ms = Date.now() - started;
-  console.log('[cron]', { cron, sent, garden, ms });
-  // One summary row per cron run — not per bookkeeping write (markSent/pruneTokens/pruneLedger/
-  // pruneCodes/pruneImages are pure noise at this granularity; runGardenAlerts already writes its
-  // own garden_events audit). The system-store actor (workers/app.ts's scheduled()) attributes it.
-  record({ action: 'mutation', meta: { sent, garden, ms } });
+  const raw = createRawDb(env);
+  const tenantIds = await listActiveTenantIds(raw);
+
+  for (const tenantId of tenantIds) {
+    const db = new TenantDb(raw, tenantId);
+    // The ambient audit store follows the school being swept, so the summary row below — and any
+    // audit a job writes on the way — is attributed to it rather than to whoever came first.
+    setActorTenant(tenantId);
+    const started = Date.now();
+    try {
+      // 08:00 ICT carries two jobs: the study digest and the garden. The garden runs second and its
+      // own errors must not swallow the digest's result, so it is awaited separately.
+      const sent =
+        cron === '0 1 * * *'
+          ? await runDailyDigest(db, at, env)
+          : cron === '0 12 * * *'
+            ? await runEveningPreview(db, at, env)
+            : await runClassReminders(db, at, env);
+      let garden = 0;
+      if (cron === '0 1 * * *') {
+        garden = await runGardenAlerts(db, at);
+        await runTenantHousekeeping(db);
+      }
+      const ms = Date.now() - started;
+      console.log('[cron]', { cron, tenant: tenantId, sent, garden, ms });
+      // One summary row per school per cron run — not per bookkeeping write (markSent/pruneTokens/
+      // pruneLedger/pruneCodes/pruneImages are pure noise at this granularity; runGardenAlerts
+      // already writes its own garden_events audit). The system-store actor (workers/app.ts's
+      // scheduled()) attributes it, and `setActorTenant` above places it.
+      record({ action: 'mutation', meta: { tenant: tenantId, sent, garden, ms } });
+    } catch (err) {
+      // One school's bad data must not silence every other school's digest.
+      console.error('[cron] tenant failed', { cron, tenant: tenantId, err: String(err) });
+    }
+  }
+
+  // Outside the loop, on the unscoped handle: these sweep by age across the whole deployment, so
+  // running them per school would be N passes over the same rows. See `runDailyHousekeeping`.
+  if (cron === '0 1 * * *') {
+    try {
+      await runDailyHousekeeping(raw, env);
+    } catch (err) {
+      console.error('[cron] housekeeping failed', { cron, err: String(err) });
+    }
+  }
 }

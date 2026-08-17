@@ -1,11 +1,17 @@
-import { and, asc, desc, eq, gt, gte, inArray, lt, lte } from 'drizzle-orm';
+import { asc, desc, eq, gt, gte, inArray, lt, lte } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { accounts, activityLog, parents, sessions, staff, students } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 
 /**
  * Read-only query layer for `/logs/activity` (server/services/audit.ts writes the table; this
  * module only reads it). Kept out of the route file per this repo's services convention.
+ *
+ * Every read here is fenced to the admin's own school. `activity_log` carries `tenant_id` on
+ * every row (audit.ts stamps it, falling back to the original school for rows raised before a
+ * session resolved), so one school's admin reading the stream, an entity's history, or the
+ * security panel sees only their own — which matters more here than anywhere else, since these
+ * rows quote the before/after contents of records the reader may have no other way to see.
  */
 
 /** JSON columns parsed defensively — a malformed or size-capped snapshot must render as a note,
@@ -106,15 +112,15 @@ function buildConditions(f: ActivityFilter): SQL[] {
  * just "is there more".
  */
 export async function listActivity(
-  db: Db,
+  db: TenantDb,
   f: ActivityFilter = {},
 ): Promise<{ rows: ActivityRow[]; nextCursor: number | null }> {
   const limit = Math.min(Math.max(1, f.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
   const conditions = buildConditions(f);
-  const rows = await db
+  const rows = await db.raw
     .select()
     .from(activityLog)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(db.own(activityLog, ...conditions))
     .orderBy(desc(activityLog.id))
     .limit(limit + 1);
   const hasMore = rows.length > limit;
@@ -130,7 +136,7 @@ export async function listActivity(
  * `session_ref`, treating login/logout rows as the boundaries.
  */
 export async function sessionTimeline(
-  db: Db,
+  db: TenantDb,
   accountId: string,
   beforeId?: number,
 ): Promise<{ rows: ActivityRow[]; nextCursor: number | null }> {
@@ -141,14 +147,20 @@ export async function sessionTimeline(
  *  recent first, matching the stream. Capped at MAX_LIMIT; a single record's history realistically
  *  never approaches that. */
 export async function entityHistory(
-  db: Db,
+  db: TenantDb,
   entityType: string,
   entityId: string,
 ): Promise<ActivityRow[]> {
-  const rows = await db
+  const rows = await db.raw
     .select()
     .from(activityLog)
-    .where(and(eq(activityLog.entityType, entityType), eq(activityLog.entityId, entityId)))
+    .where(
+      db.own(
+        activityLog,
+        eq(activityLog.entityType, entityType),
+        eq(activityLog.entityId, entityId),
+      ),
+    )
     .orderBy(desc(activityLog.id))
     .limit(MAX_LIMIT);
   return rows.map(mapRow);
@@ -196,18 +208,20 @@ const NEW_IP_WINDOW_DAYS = 14;
  * Three panels: recent auth events, who is currently signed in (flagging >1 concurrent session
  * per account), and logins from an (account, ip) pair never seen before in the last 14 days.
  */
-export async function securityOverview(db: Db, now: Date): Promise<SecurityOverview> {
+export async function securityOverview(db: TenantDb, now: Date): Promise<SecurityOverview> {
   const nowIso = now.toISOString();
   const cutoff = new Date(now.getTime() - NEW_IP_WINDOW_DAYS * 86_400_000).toISOString();
 
   const [authEventRows, sessionRows, recentLogins] = await Promise.all([
-    db
+    db.raw
       .select()
       .from(activityLog)
-      .where(inArray(activityLog.action, ['login', 'login_failed', 'logout']))
+      .where(db.own(activityLog, inArray(activityLog.action, ['login', 'login_failed', 'logout'])))
       .orderBy(desc(activityLog.id))
       .limit(200),
-    db
+    // `sessions` carries no `tenant_id` of its own — a session is a credential for an account,
+    // and the account is what belongs to a school. The join is therefore also the fence.
+    db.raw
       .select({
         accountId: sessions.accountId,
         email: accounts.email,
@@ -218,8 +232,8 @@ export async function securityOverview(db: Db, now: Date): Promise<SecurityOverv
       })
       .from(sessions)
       .innerJoin(accounts, eq(accounts.id, sessions.accountId))
-      .where(gt(sessions.expiresAt, nowIso)),
-    db
+      .where(db.own(accounts, gt(sessions.expiresAt, nowIso))),
+    db.raw
       .select({
         id: activityLog.id,
         accountId: activityLog.accountId,
@@ -228,7 +242,9 @@ export async function securityOverview(db: Db, now: Date): Promise<SecurityOverv
         metaJson: activityLog.metaJson,
       })
       .from(activityLog)
-      .where(and(eq(activityLog.action, 'login'), gte(activityLog.recordedAt, cutoff)))
+      .where(
+        db.own(activityLog, eq(activityLog.action, 'login'), gte(activityLog.recordedAt, cutoff)),
+      )
       .orderBy(asc(activityLog.id)),
   ]);
 
@@ -275,11 +291,12 @@ export async function securityOverview(db: Db, now: Date): Promise<SecurityOverv
   // "new" if there is truly no earlier login row for it, not just none in the last 14 days.
   const newIps: NewIpRow[] = [];
   for (const first of firstInWindow.values()) {
-    const earlier = await db
+    const earlier = await db.raw
       .select({ id: activityLog.id })
       .from(activityLog)
       .where(
-        and(
+        db.own(
+          activityLog,
           eq(activityLog.action, 'login'),
           eq(activityLog.accountId, first.accountId as string),
           eq(activityLog.ip, first.ip as string),
@@ -301,8 +318,10 @@ export async function securityOverview(db: Db, now: Date): Promise<SecurityOverv
 }
 
 /** id + display label for the stream/session views' account filter dropdown. */
-export async function listAccountsForFilter(db: Db): Promise<{ id: string; label: string }[]> {
-  const rows = await db
+export async function listAccountsForFilter(
+  db: TenantDb,
+): Promise<{ id: string; label: string }[]> {
+  const rows = await db.raw
     .select({
       id: accounts.id,
       email: accounts.email,
@@ -313,7 +332,8 @@ export async function listAccountsForFilter(db: Db): Promise<{ id: string; label
     .from(accounts)
     .leftJoin(staff, eq(staff.id, accounts.staffId))
     .leftJoin(students, eq(students.id, accounts.studentId))
-    .leftJoin(parents, eq(parents.id, accounts.parentId));
+    .leftJoin(parents, eq(parents.id, accounts.parentId))
+    .where(db.own(accounts));
   return rows
     .map((r) => {
       const name = r.staffName ?? r.studentName ?? r.parentName ?? r.email;

@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { LogsNotificationsScreen } from '../../src/screens-logs-notifications.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as notifyPlan from '../../server/services/notify-plan';
@@ -37,8 +37,8 @@ import { K, swrLoad } from '../../src/lib/route-cache.js';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
-  const db = createDb(env);
+  const admin = await requireAdmin(request, env);
+  const db = tenantDbFor(env, admin);
   const [plan, recent] = await Promise.all([
     notifyPlan.planNotifications(db, env),
     notifyPlan.listSentLog(db),
@@ -61,8 +61,8 @@ clientLoader.hydrate = true as const;
  */
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
-  const db = createDb(env);
+  const admin = await requireAdmin(request, env);
+  const db = tenantDbFor(env, admin);
   const form = await request.formData();
   const intent = form.get('intent');
 

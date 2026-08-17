@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
@@ -19,7 +20,7 @@ import { zaloChats, zaloPairCodes } from '../server/db/schema';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 /** A configured channel. Absent ZALO_BOT_TOKEN, every send no-ops by design. */
@@ -40,8 +41,8 @@ beforeEach(async () => {
     }),
   );
   const d = db();
-  await d.delete(zaloChats);
-  await d.delete(zaloPairCodes);
+  await d.raw.delete(zaloChats);
+  await d.raw.delete(zaloPairCodes);
 });
 
 // The service functions take already-parsed Zod input, so the collection fields are required
@@ -67,7 +68,7 @@ describe('pairing codes', () => {
     const parent = await mkParent(d, 'Mẹ Linh');
     const { code } = await zalo.createPairCode(d, { parentId: parent.id });
 
-    const outcome = await zalo.redeemCode(d, code, { chatId: 'chat-1', kind: 'user' });
+    const outcome = await zalo.redeemCode(d.raw, code, { chatId: 'chat-1', kind: 'user' });
     expect(outcome).toBe('ok');
 
     const links = await zalo.listLinks(d);
@@ -77,7 +78,7 @@ describe('pairing codes', () => {
 
     // Single use. A code that kept working would let anyone who saw it over a parent's shoulder
     // attach their own Zalo to that parent's notifications.
-    expect(await zalo.redeemCode(d, code, { chatId: 'chat-2', kind: 'user' })).toBe('used');
+    expect(await zalo.redeemCode(d.raw, code, { chatId: 'chat-2', kind: 'user' })).toBe('used');
   });
 
   it('accepts the code in any of the shapes people actually send it', async () => {
@@ -86,7 +87,7 @@ describe('pairing codes', () => {
 
     for (const shape of [(c) => c, (c) => c.toLowerCase(), (c) => `/start ${c}`, (c) => ` ${c} `]) {
       const { code } = await zalo.createPairCode(d, { parentId: parent.id });
-      await zalo.handleUpdate(d, ON, {
+      await zalo.handleUpdate(d.raw, ON, {
         message: {
           text: shape(code),
           chat: { id: 'chat-shapes', chat_type: 'PRIVATE' },
@@ -95,7 +96,7 @@ describe('pairing codes', () => {
       });
       const links = await zalo.listLinks(d);
       expect(links.map((l) => l.chatId)).toContain('chat-shapes');
-      await d.delete(zaloChats);
+      await d.raw.delete(zaloChats);
     }
   });
 
@@ -103,17 +104,19 @@ describe('pairing codes', () => {
     const d = db();
     const parent = await mkParent(d, 'Mẹ Hoa');
     const { code } = await zalo.createPairCode(d, { parentId: parent.id });
-    await d
+    await d.raw
       .update(zaloPairCodes)
       .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
       .where(eq(zaloPairCodes.code, code));
 
-    expect(await zalo.redeemCode(d, code, { chatId: 'chat-x', kind: 'user' })).toBe('expired');
+    expect(await zalo.redeemCode(d.raw, code, { chatId: 'chat-x', kind: 'user' })).toBe('expired');
     expect(await zalo.listLinks(d)).toHaveLength(0);
   });
 
   it('rejects an unknown code without linking anything', async () => {
-    expect(await zalo.redeemCode(db(), 'ZZZZZZ', { chatId: 'c', kind: 'user' })).toBe('unknown');
+    expect(await zalo.redeemCode(db().raw, 'ZZZZZZ', { chatId: 'c', kind: 'user' })).toBe(
+      'unknown',
+    );
     expect(await zalo.listLinks(db())).toHaveLength(0);
   });
 
@@ -128,12 +131,12 @@ describe('pairing codes', () => {
     const cls = await mkClass(d, 'Toán 9A');
 
     const personal = await zalo.createPairCode(d, { parentId: parent.id });
-    expect(await zalo.redeemCode(d, personal.code, { chatId: 'g1', kind: 'group' })).toBe(
+    expect(await zalo.redeemCode(d.raw, personal.code, { chatId: 'g1', kind: 'group' })).toBe(
       'wrong_context',
     );
 
     const group = await zalo.createPairCode(d, { classId: cls.id });
-    expect(await zalo.redeemCode(d, group.code, { chatId: 'p1', kind: 'user' })).toBe(
+    expect(await zalo.redeemCode(d.raw, group.code, { chatId: 'p1', kind: 'user' })).toBe(
       'wrong_context',
     );
 
@@ -151,9 +154,9 @@ describe('pairing codes', () => {
     const b = await mkParent(d, 'Parent B');
 
     const first = await zalo.createPairCode(d, { parentId: a.id });
-    await zalo.redeemCode(d, first.code, { chatId: 'shared-chat', kind: 'user' });
+    await zalo.redeemCode(d.raw, first.code, { chatId: 'shared-chat', kind: 'user' });
     const second = await zalo.createPairCode(d, { parentId: b.id });
-    await zalo.redeemCode(d, second.code, { chatId: 'shared-chat', kind: 'user' });
+    await zalo.redeemCode(d.raw, second.code, { chatId: 'shared-chat', kind: 'user' });
 
     const links = await zalo.listLinks(d);
     expect(links).toHaveLength(1);
@@ -164,9 +167,9 @@ describe('pairing codes', () => {
     const d = db();
     const parent = await mkParent(d, 'Mẹ Thu');
     const { code } = await zalo.createPairCode(d, { parentId: parent.id });
-    await zalo.redeemCode(d, code, { chatId: 'chat-bye', kind: 'user' });
+    await zalo.redeemCode(d.raw, code, { chatId: 'chat-bye', kind: 'user' });
 
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: { text: '/unlink', chat: { id: 'chat-bye', chat_type: 'PRIVATE' } },
     });
     expect(await zalo.listLinks(d)).toHaveLength(0);
@@ -175,12 +178,12 @@ describe('pairing codes', () => {
   /** A bot that answers every message in a class group is a bot that gets removed from it. */
   it('stays silent on unrecognised text in a group, but helps in a private chat', async () => {
     const d = db();
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: { text: 'ai học bài chưa', chat: { id: 'g9', chat_type: 'GROUP' } },
     });
     expect(textsSent()).toHaveLength(0);
 
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: { text: 'xin chào', chat: { id: 'p9', chat_type: 'PRIVATE' } },
     });
     expect(textsSent()).toHaveLength(1);
@@ -197,7 +200,7 @@ describe('pairing codes', () => {
     const cls = await mkClass(d, 'Toán 9A');
     const { code } = await zalo.createPairCode(d, { classId: cls.id });
 
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: {
         text: `@Bot Mochi dev /link ${code}`,
         chat: { id: 'zgr-real', chat_type: 'GROUP' },
@@ -217,7 +220,7 @@ describe('pairing codes', () => {
     const cls = await mkClass(d, 'Lý 10');
     const first = await zalo.createPairCode(d, { classId: cls.id });
 
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: { text: `@Bot Mochi dev ${first.code}`, chat: { id: 'g-bare', chat_type: 'GROUP' } },
     });
     expect(await zalo.listLinks(d)).toHaveLength(0);
@@ -225,7 +228,7 @@ describe('pairing codes', () => {
 
     const parent = await mkParent(d, 'Mẹ Bare');
     const second = await zalo.createPairCode(d, { parentId: parent.id });
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: { text: second.code, chat: { id: 'p-bare', chat_type: 'PRIVATE' } },
     });
     expect(await zalo.listLinks(d)).toHaveLength(1);
@@ -233,7 +236,7 @@ describe('pairing codes', () => {
 
   /** An explicit request gets an answer even in a group — the silence rule is for everything else. */
   it('answers a /link with no usable code, even in a group', async () => {
-    await zalo.handleUpdate(db(), ON, {
+    await zalo.handleUpdate(db().raw, ON, {
       message: { text: '@Bot Mochi dev /link', chat: { id: 'g-empty', chat_type: 'GROUP' } },
     });
     expect(textsSent()).toHaveLength(1);
@@ -243,9 +246,9 @@ describe('pairing codes', () => {
     const d = db();
     const cls = await mkClass(d, 'Hóa 11');
     const { code } = await zalo.createPairCode(d, { classId: cls.id });
-    await zalo.redeemCode(d, code, { chatId: 'g-bye', kind: 'group' });
+    await zalo.redeemCode(d.raw, code, { chatId: 'g-bye', kind: 'group' });
 
-    await zalo.handleUpdate(d, ON, {
+    await zalo.handleUpdate(d.raw, ON, {
       message: { text: '@Bot Mochi dev /unlink', chat: { id: 'g-bye', chat_type: 'GROUP' } },
     });
     expect(await zalo.chatForClass(d, cls.id)).toBeNull();
@@ -277,7 +280,7 @@ describe('the polling relay', () => {
         },
       },
     });
-    await zalo.handleUpdate(d, ON, update);
+    await zalo.handleUpdate(d.raw, ON, update);
 
     const links = await zalo.listLinks(d);
     expect(links).toHaveLength(1);
@@ -389,7 +392,7 @@ describe('targeting', () => {
     const parent = await mkParent(d, 'Mẹ', [s1.id, s2.id]);
 
     const { code } = await zalo.createPairCode(d, { parentId: parent.id });
-    await zalo.redeemCode(d, code, { chatId: 'chat-mum', kind: 'user' });
+    await zalo.redeemCode(d.raw, code, { chatId: 'chat-mum', kind: 'user' });
 
     const chats = await zalo.chatsForParentsOfStudents(d, [s1.id, s2.id]);
     expect(chats).toEqual(['chat-mum']);
@@ -403,7 +406,9 @@ describe('targeting', () => {
     const d = db();
     const student = await mkStudent(d, 'Không có phụ huynh');
     const { code } = await zalo.createPairCode(d, { studentId: student.id });
-    expect(await zalo.redeemCode(d, code, { chatId: 'chat-guardian', kind: 'user' })).toBe('ok');
+    expect(await zalo.redeemCode(d.raw, code, { chatId: 'chat-guardian', kind: 'user' })).toBe(
+      'ok',
+    );
 
     expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['chat-guardian']);
     expect((await zalo.listLinks(d))[0].studentId).toBe(student.id);
@@ -416,9 +421,9 @@ describe('targeting', () => {
     const parent = await mkParent(d, 'Mẹ Cả hai', [student.id]);
 
     const viaParent = await zalo.createPairCode(d, { parentId: parent.id });
-    await zalo.redeemCode(d, viaParent.code, { chatId: 'same-chat', kind: 'user' });
+    await zalo.redeemCode(d.raw, viaParent.code, { chatId: 'same-chat', kind: 'user' });
     const viaStudent = await zalo.createPairCode(d, { studentId: student.id });
-    await zalo.redeemCode(d, viaStudent.code, { chatId: 'same-chat', kind: 'user' });
+    await zalo.redeemCode(d.raw, viaStudent.code, { chatId: 'same-chat', kind: 'user' });
 
     expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['same-chat']);
   });
@@ -431,7 +436,7 @@ describe('targeting', () => {
     const d = db();
     const student = await mkStudent(d, 'Chỉ học sinh');
     const viaStudent = await zalo.createPairCode(d, { studentId: student.id });
-    await zalo.redeemCode(d, viaStudent.code, { chatId: 'the-teenager', kind: 'user' });
+    await zalo.redeemCode(d.raw, viaStudent.code, { chatId: 'the-teenager', kind: 'user' });
 
     // The reminder route finds them; the fee-slip route deliberately does not.
     expect(await zalo.chatsForParentsOfStudents(d, [student.id])).toEqual(['the-teenager']);
@@ -439,7 +444,7 @@ describe('targeting', () => {
 
     const parent = await mkParent(d, 'Mẹ thật', [student.id]);
     const viaParent = await zalo.createPairCode(d, { parentId: parent.id });
-    await zalo.redeemCode(d, viaParent.code, { chatId: 'the-parent', kind: 'user' });
+    await zalo.redeemCode(d.raw, viaParent.code, { chatId: 'the-parent', kind: 'user' });
     expect(await zalo.chatsForParentRecordsOf(d, [student.id])).toEqual(['the-parent']);
   });
 
@@ -448,7 +453,9 @@ describe('targeting', () => {
     const d = db();
     const student = await mkStudent(d, 'Nhóm sai');
     const { code } = await zalo.createPairCode(d, { studentId: student.id });
-    expect(await zalo.redeemCode(d, code, { chatId: 'g-x', kind: 'group' })).toBe('wrong_context');
+    expect(await zalo.redeemCode(d.raw, code, { chatId: 'g-x', kind: 'group' })).toBe(
+      'wrong_context',
+    );
     expect(await zalo.listLinks(d)).toHaveLength(0);
   });
 
@@ -456,7 +463,7 @@ describe('targeting', () => {
     const d = db();
     const cls = await mkClass(d, 'Lý 10');
     const { code } = await zalo.createPairCode(d, { classId: cls.id });
-    await zalo.redeemCode(d, code, { chatId: 'group-ly10', kind: 'group' });
+    await zalo.redeemCode(d.raw, code, { chatId: 'group-ly10', kind: 'group' });
 
     expect(await zalo.chatForClass(d, cls.id)).toBe('group-ly10');
     expect(await zalo.chatForClass(d, 'no-such-class')).toBeNull();
@@ -483,7 +490,7 @@ describe('class reminders over Zalo', () => {
     const cls = await mkClass(d, 'Toán 9A', [student.id]);
 
     const { code } = await zalo.createPairCode(d, { parentId: parent.id });
-    await zalo.redeemCode(d, code, { chatId: 'chat-parent', kind: 'user' });
+    await zalo.redeemCode(d.raw, code, { chatId: 'chat-parent', kind: 'user' });
 
     await eventsSvc.create(d, {
       title: 'Buổi 3',

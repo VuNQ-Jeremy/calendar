@@ -18,9 +18,11 @@ export const loader = withAuth('staff', async ({ request, db }) => {
   // dozen of them; the day that stops being true, paginate the picker, not this.
   const [preview, topics] = await Promise.all([
     svc.getRow(db, eventId, date),
-    db
+    // `pool`, not `own`: the picker offers this school's topics AND the platform library.
+    db.raw
       .select({ id: flashcardTopics.id, name: flashcardTopics.name })
       .from(flashcardTopics)
+      .where(db.pool(flashcardTopics))
       .orderBy(flashcardTopics.name),
   ]);
   return { preview, topics };

@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { TestPrintView } from '../../src/tests/print-view.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as testsSvc from '../../server/services/tests';
@@ -17,8 +17,8 @@ import * as glSvc from '../../server/services/grade-levels';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const session = await requireStaff(request, env);
+  const db = tenantDbFor(env, session);
   const id = params.id!;
   const showKey = !!new URL(request.url).searchParams.get('key');
 

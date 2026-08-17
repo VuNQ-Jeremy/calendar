@@ -138,6 +138,12 @@ type UsageLoaderData = {
   /** Current ICT month, 'YYYY-MM'. */
   month: string;
   speechFreeSeconds: number;
+  /**
+   * Speech seconds this month across EVERY school, not just this one — the Azure F0 allowance is
+   * a property of the subscription key the whole deployment shares. Only the gauge uses it; the
+   * table beside it stays per-school.
+   */
+  speechUsedSeconds: number;
 };
 
 /** Per-metric display strings; a metric without an entry still renders under its raw key. */
@@ -154,7 +160,7 @@ const mins = (seconds: number) => (seconds / 60).toFixed(1);
  * label entry above.
  */
 export function LogsUsageScreen() {
-  const { rows, month, speechFreeSeconds } = useLoaderData() as UsageLoaderData;
+  const { rows, month, speechFreeSeconds, speechUsedSeconds } = useLoaderData() as UsageLoaderData;
   const { t } = useLang();
 
   // The two Anthropic metrics render as ONE combined card (calls, tokens, cost estimate).
@@ -182,7 +188,10 @@ export function LogsUsageScreen() {
           // Only the speech metric has a known free quota; a future metric renders no gauge
           // until it declares one.
           const quota = metric === 'speech-assess' ? speechFreeSeconds : null;
-          const pct = quota ? Math.min(100, (current.quantity / quota) * 100) : null;
+          // Against the platform-wide total, not this school's share — the quota is Azure's, and
+          // Azure counts every school's clips against the one key.
+          const used = metric === 'speech-assess' ? speechUsedSeconds : current.quantity;
+          const pct = quota ? Math.min(100, (used / quota) * 100) : null;
 
           return (
             <LCard key={metric} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -1,6 +1,6 @@
-import { eq, and, gte, lte, desc, isNotNull } from 'drizzle-orm';
+import { eq, gte, lte, desc, isNotNull } from 'drizzle-orm';
 import { attendanceRecords, classes, events } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 
 export type AttendanceRow = {
   eventId: string;
@@ -50,11 +50,11 @@ export type AttendanceHistoryRow = {
  * date filter here. Covered by idx_attendance_student (student_id, date).
  */
 export async function historyForStudent(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   range: { from: string; to: string },
 ): Promise<AttendanceHistoryRow[]> {
-  const rows = await db
+  const rows = await db.raw
     .select({
       eventId: attendanceRecords.eventId,
       date: attendanceRecords.date,
@@ -69,7 +69,8 @@ export async function historyForStudent(
     .innerJoin(events, eq(attendanceRecords.eventId, events.id))
     .leftJoin(classes, eq(events.classId, classes.id))
     .where(
-      and(
+      db.own(
+        attendanceRecords,
         eq(attendanceRecords.studentId, studentId),
         gte(attendanceRecords.date, range.from),
         lte(attendanceRecords.date, range.to),
@@ -80,14 +81,20 @@ export async function historyForStudent(
 }
 
 export async function listForOccurrence(
-  db: Db,
+  db: TenantDb,
   eventId: string,
   date: string,
 ): Promise<AttendanceRow[]> {
-  const rows = await db
+  const rows = await db.raw
     .select()
     .from(attendanceRecords)
-    .where(and(eq(attendanceRecords.eventId, eventId), eq(attendanceRecords.date, date)));
+    .where(
+      db.own(
+        attendanceRecords,
+        eq(attendanceRecords.eventId, eventId),
+        eq(attendanceRecords.date, date),
+      ),
+    );
   return rows.map(map);
 }
 
@@ -95,14 +102,16 @@ export async function listForOccurrence(
 // Known caveat: if a recurring event's base weekday/date is edited later, previously saved
 // occurrence rows keep their old dates as harmless orphans (cascaded away on event delete).
 export async function saveOccurrence(
-  db: Db,
+  db: TenantDb,
   eventId: string,
   date: string,
   records: { studentId: string; status: string }[],
 ): Promise<AttendanceRow[]> {
-  const del = db
-    .delete(attendanceRecords)
-    .where(and(eq(attendanceRecords.eventId, eventId), eq(attendanceRecords.date, date)));
+  const del = db.delete(
+    attendanceRecords,
+    eq(attendanceRecords.eventId, eventId),
+    eq(attendanceRecords.date, date),
+  );
 
   if (records.length) {
     await db.batch([
@@ -131,16 +140,17 @@ export async function saveOccurrence(
  * with a concurrent tap is a silent no-op. Returns whether a row was actually inserted.
  */
 export async function markPresentIfUnmarked(
-  db: Db,
+  db: TenantDb,
   eventId: string,
   date: string,
   studentId: string,
 ): Promise<boolean> {
-  const existing = await db
+  const existing = await db.raw
     .select()
     .from(attendanceRecords)
     .where(
-      and(
+      db.own(
+        attendanceRecords,
         eq(attendanceRecords.eventId, eventId),
         eq(attendanceRecords.date, date),
         eq(attendanceRecords.studentId, studentId),
@@ -171,11 +181,11 @@ export type ClassAttendanceSummary = {
  * compared lexically (dates are zero-padded).
  */
 export async function studentMonthAttendance(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   month: string,
 ): Promise<ClassAttendanceSummary[]> {
-  const rows = await db
+  const rows = await db.raw
     .select({
       classId: events.classId,
       className: classes.name,
@@ -185,7 +195,8 @@ export async function studentMonthAttendance(
     .innerJoin(events, eq(attendanceRecords.eventId, events.id))
     .innerJoin(classes, eq(classes.id, events.classId))
     .where(
-      and(
+      db.own(
+        attendanceRecords,
         eq(attendanceRecords.studentId, studentId),
         gte(attendanceRecords.date, `${month}-01`),
         lte(attendanceRecords.date, `${month}-31`),

@@ -9,9 +9,33 @@
 -- staff/students fires accounts' ON DELETE SET NULL, so the role links here
 -- have to be re-established each time.
 
--- Sweep accounts created by the invite-redemption e2e spec (their student
--- rows are deleted in-test; the accounts have no UI delete path).
+-- Schools created by the signup / tenant-isolation specs. This must come FIRST: those specs
+-- create a whole second school, and every sweep below is written as an unqualified DELETE, so
+-- clearing the extra schools' rows here means the rest of the file keeps working unchanged.
+--
+-- The tables migration 0045 changed by ALTER carry no foreign key to `tenants` (SQLite cannot
+-- add one), so nothing cascades — the deletes have to be explicit and exhaustive. The eleven
+-- REBUILT tables do cascade, which is why they are absent from this list.
+DELETE FROM accounts       WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM staff          WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM students       WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM parents        WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM classes        WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM events         WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM materials      WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM invites        WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM feedback       WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM activity_log   WHERE tenant_id <> 'tnt_mochi_0001';
+DELETE FROM tenants        WHERE id        <> 'tnt_mochi_0001';
+-- And make sure the original school is present before anything references it.
+INSERT INTO tenants (id, slug, name, status, verified, created_at)
+VALUES ('tnt_mochi_0001', 'mochi', 'Mochi', 'active', 1, datetime('now') || 'Z')
+ON CONFLICT(id) DO UPDATE SET status = 'active';
+
+-- Sweep accounts created by the invite-redemption and signup e2e specs (their person rows are
+-- deleted in-test; the accounts have no UI delete path).
 DELETE FROM accounts WHERE email LIKE 'e2e-redeem-%';
+DELETE FROM accounts WHERE email LIKE 'e2e-signup-%';
 
 -- Per-account preferences (migration 0043). The cascade off `accounts` above only reaches the
 -- redeemed e2e accounts — dev@mochi.edu's account SURVIVES a reset, so without this a theme set
@@ -49,8 +73,9 @@ DELETE FROM event_materials;
 -- so this is a wipe-and-restore: a spec that fails mid-attach must not leave a stray link behind,
 -- and the four canonical ones must still be there for the next run.
 DELETE FROM class_materials;
-INSERT INTO class_materials (class_id, material_id) VALUES
-  ('c1', 'm1'), ('c2', 'm2'), ('c3', 'm3'), ('c4', 'm4');
+INSERT INTO class_materials (tenant_id, class_id, material_id) VALUES
+  ('tnt_mochi_0001', 'c1', 'm1'), ('tnt_mochi_0001', 'c2', 'm2'),
+  ('tnt_mochi_0001', 'c3', 'm3'), ('tnt_mochi_0001', 'c4', 'm4');
 -- The notification idempotency ledger (migration 0015). Keyed by a synthetic `key`, never by an
 -- entity, so nothing cascades it away — and every row is a permanent "already sent" for that key.
 -- logs-notifications.spec.ts presses Send on a forecast row; without this sweep the SECOND run
@@ -84,8 +109,8 @@ DELETE FROM usage_counters;
 -- Subjects (môn học). seed.sql still writes the legacy free-text `classes.subject`, so re-derive
 -- the managed rows and the subject_id link after every reset — otherwise the seeded classes come
 -- back reading "General" and the class spec has nothing to pick.
-INSERT INTO subjects (id, name, active, sort_order)
-SELECT 'sub_' || lower(hex(randomblob(8))), name, 1, 0
+INSERT INTO subjects (id, tenant_id, name, active, sort_order)
+SELECT 'sub_' || lower(hex(randomblob(8))), 'tnt_mochi_0001', name, 1, 0
 FROM (
   SELECT DISTINCT TRIM(subject) AS name
   FROM classes
@@ -99,8 +124,8 @@ WHERE subject IS NOT NULL AND TRIM(subject) <> '';
 -- Class levels (trình độ). seed.sql predates the table, so sweep rows the config spec creates
 -- and re-assert the two migration-seeded defaults the class/rankings specs pick from.
 DELETE FROM class_levels WHERE id NOT IN ('cl1','cl2');
-INSERT INTO class_levels (id, name, active, sort_order) VALUES
-  ('cl1','Cơ bản',1,1),('cl2','Nâng cao',1,2)
+INSERT INTO class_levels (id, tenant_id, name, active, sort_order) VALUES
+  ('cl1','tnt_mochi_0001','Cơ bản',1,1),('cl2','tnt_mochi_0001','Nâng cao',1,2)
 ON CONFLICT(id) DO UPDATE SET
   name       = excluded.name,
   active     = 1,
@@ -113,6 +138,13 @@ INSERT INTO accounts (id, email, password_hash, staff_id, created_at) VALUES
 ON CONFLICT(email) DO UPDATE SET
   password_hash = excluded.password_hash,
   staff_id      = excluded.staff_id;
+
+-- dev@ owns the platform as well as the school, so the /platform and tenant-isolation specs
+-- have someone who can enter another school. vunq@ deliberately does NOT, so the specs can
+-- assert that an ordinary school Admin is refused.
+UPDATE accounts SET is_platform_admin = 1 WHERE email = 'dev@mochi.edu';
+UPDATE accounts SET tenant_id = 'tnt_mochi_0001'
+  WHERE email IN ('dev@mochi.edu', 'vunq@mochi.edu');
 
 -- Linked to seed student s1 (Leo Park) so the student sees real demo data.
 INSERT INTO accounts (id, email, password_hash, student_id, created_at) VALUES

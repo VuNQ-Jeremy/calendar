@@ -31,7 +31,7 @@ import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { VersionStamp } from '../../src/components/version-stamp.jsx';
 import { BUILD_ID } from '../../src/lib/build-id.js';
 import { useTrackNavigation } from '../../src/lib/track.js';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import * as feedbackSvc from '../../server/services/feedback';
 import * as invitesSvc from '../../server/services/invites';
 import * as uiPrefsSvc from '../../server/services/ui-prefs';
@@ -75,8 +75,9 @@ function parentMayOpen(path: string, portalOn: boolean): boolean {
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind, account } = await requireUser(request, env);
-  const db = createDb(env);
+  const session = await requireUser(request, env);
+  const { user, kind, account } = session;
+  const db = tenantDbFor(env, session);
   // Only parents pay for this read; for everyone else the portal flag is not part of the answer.
   const parentPortal = kind === 'parent' ? (await getParentPortal(db)).enabled : false;
   if (kind === 'parent') {
@@ -112,7 +113,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       parentPortal,
       // Nav visibility only, not enforced for non-staff — the route itself re-checks.
       showTuiMuBoard: false,
-      user: { ...user, kind },
+      // `isPlatformAdmin` and the two school ids ride along on the sidebar's user object: the nav
+      // needs the first to show /platform at all, and the banner needs the pair to tell "I am in
+      // my own school" from "I have entered someone else's".
+      user: {
+        ...user,
+        kind,
+        isPlatformAdmin: session.isPlatformAdmin,
+        tenantId: session.tenantId,
+        homeTenantId: session.homeTenantId,
+      },
     };
   }
   const [unusedInviteCount, unresolvedFeedbackCount, uiPrefs, summary, checkinSettings] =
@@ -134,7 +144,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     // Staff nav has no parent rows to gate; the field exists so the payload shape is uniform.
     parentPortal,
     showTuiMuBoard: checkinSettings.showClassBoard,
-    user: { ...user, kind },
+    // `isPlatformAdmin` and the two school ids ride along on the sidebar's user object: the nav
+    // needs the first to show /platform at all, and the banner needs the pair to tell "I am in
+    // my own school" from "I have entered someone else's".
+    user: {
+      ...user,
+      kind,
+      isPlatformAdmin: session.isPlatformAdmin,
+      tenantId: session.tenantId,
+      homeTenantId: session.homeTenantId,
+    },
   };
 }
 
@@ -391,6 +410,7 @@ export default function AppLayout() {
   useStaleRouteRefresh();
   useLiveUpdates();
   useTrackNavigation();
+  const { t } = useLang();
   const { user, uiPrefs } = useLoaderData<typeof loader>();
   const feedbackFetcher = useFetcher();
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
@@ -437,6 +457,16 @@ export default function AppLayout() {
   return (
     <div className="app" style={shellStyle} data-density={TWEAKS.density}>
       <NavProgress />
+      {/*
+        A platform admin reading another school's data must never be able to forget they are.
+        Entering is already audited; this is the half the person doing it can see.
+      */}
+      {user.isPlatformAdmin && user.tenantId !== user.homeTenantId && (
+        <div className="app__tenant-banner" role="status">
+          <span>{t('platform_banner')}</span>
+          <a href="/platform">{t('platform_exit')}</a>
+        </div>
+      )}
       <Sidebar user={user} onFeedback={openFeedback} />
       <div className="main">
         <Outlet context={{ user } satisfies AppContext} />

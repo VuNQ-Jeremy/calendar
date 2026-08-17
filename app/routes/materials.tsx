@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { MaterialsScreen } from '../../src/screens-extra.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as materialsSvc from '../../server/services/materials';
@@ -24,8 +24,8 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const [materials, classes, classMaterials] = await Promise.all([
     materialsSvc.list(db),
     classesSvc.listLite(db),
@@ -47,8 +47,8 @@ function preprocessMatRaw(raw: Record<string, unknown>) {
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

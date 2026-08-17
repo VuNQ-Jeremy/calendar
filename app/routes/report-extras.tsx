@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from 'react-router';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as attendanceSvc from '../../server/services/attendance';
@@ -18,8 +18,8 @@ import { TuitionMonth } from '../../shared/schemas';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const session = await requireStaff(request, env);
+  const db = tenantDbFor(env, session);
 
   const url = new URL(request.url);
   const studentId = url.searchParams.get('student');

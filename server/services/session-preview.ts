@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   classStudents,
   flashcardTopics,
@@ -6,7 +6,7 @@ import {
   sessionPreviews,
   tests,
 } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type { SessionPreviewInput } from '../../shared/schemas';
 import {
   ICT_OFFSET_MIN,
@@ -49,18 +49,20 @@ function map(r: typeof sessionPreviews.$inferSelect): SessionPreviewRow {
 }
 
 export async function getRow(
-  db: Db,
+  db: TenantDb,
   eventId: string,
   date: string,
 ): Promise<SessionPreviewRow | null> {
-  const rows = await db
+  const rows = await db.raw
     .select()
     .from(sessionPreviews)
-    .where(and(eq(sessionPreviews.eventId, eventId), eq(sessionPreviews.date, date)));
+    .where(
+      db.own(sessionPreviews, eq(sessionPreviews.eventId, eventId), eq(sessionPreviews.date, date)),
+    );
   return rows[0] ? map(rows[0]) : null;
 }
 
-export async function save(db: Db, input: SessionPreviewInput): Promise<SessionPreviewRow> {
+export async function save(db: TenantDb, input: SessionPreviewInput): Promise<SessionPreviewRow> {
   const values = {
     eventId: input.eventId,
     date: input.date,
@@ -96,7 +98,7 @@ export function previewKey(eventId: string, date: string): string {
  * these composite keys", and the row counts here are tiny.
  */
 export async function composeMany(
-  db: Db,
+  db: TenantDb,
   occs: { id: string; classId: string; date: string }[],
 ): Promise<Map<string, ComposedPreview>> {
   const out = new Map<string, ComposedPreview>();
@@ -106,11 +108,14 @@ export async function composeMany(
   const classIds = [...new Set(occs.map((o) => o.classId))];
 
   const [prevRows, testRows] = await Promise.all([
-    db.select().from(sessionPreviews).where(inArray(sessionPreviews.eventId, eventIds)),
-    db
+    db.raw
+      .select()
+      .from(sessionPreviews)
+      .where(db.own(sessionPreviews, inArray(sessionPreviews.eventId, eventIds))),
+    db.raw
       .select()
       .from(tests)
-      .where(and(inArray(tests.classId, classIds), eq(tests.status, 'published'))),
+      .where(db.own(tests, inArray(tests.classId, classIds), eq(tests.status, 'published'))),
   ]);
 
   const topicIds = [
@@ -118,15 +123,19 @@ export async function composeMany(
   ];
   const [topicRows, wordRows] = topicIds.length
     ? await Promise.all([
-        db
+        // `pool`: a preview may point at the platform library (tenant_id NULL) as well as at
+        // one of this school's own topics.
+        db.raw
           .select({
             id: flashcardTopics.id,
             name: flashcardTopics.name,
             slug: flashcardTopics.slug,
           })
           .from(flashcardTopics)
-          .where(inArray(flashcardTopics.id, topicIds)),
-        db
+          .where(db.pool(flashcardTopics, inArray(flashcardTopics.id, topicIds))),
+        // tenant-unscoped: flashcard_words has no tenant_id — a word is reachable only through
+        // its topic, and `topicIds` came from the scoped rows above.
+        db.raw
           .select({ topicId: flashcardWords.topicId })
           .from(flashcardWords)
           .where(inArray(flashcardWords.topicId, topicIds)),
@@ -202,7 +211,7 @@ function addDaysIso(dateIso: string, days: number): string {
  * app/routes/my-tests.tsx uses to skip the route cache entirely.
  */
 export async function upcomingSessions(
-  db: Db,
+  db: TenantDb,
   who: { studentId?: string },
   days: number,
   at: Date = new Date(),
@@ -211,10 +220,10 @@ export async function upcomingSessions(
 
   let classIds: string[] | null = null;
   if (who.studentId) {
-    const rows = await db
+    const rows = await db.raw
       .select({ classId: classStudents.classId })
       .from(classStudents)
-      .where(eq(classStudents.studentId, who.studentId));
+      .where(db.own(classStudents, eq(classStudents.studentId, who.studentId)));
     classIds = rows.map((r) => r.classId);
     if (!classIds.length) return { serverNow, items: [] };
   }

@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as previewSvc from '../../server/services/session-preview';
@@ -13,17 +13,19 @@ import { withLiveAction } from '../../server/live';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const url = new URL(request.url);
   const eventId = url.searchParams.get('eventId');
   const date = url.searchParams.get('date');
   if (!eventId || !date) return Response.json({ error: 'missing params' }, { status: 400 });
   const [preview, topics] = await Promise.all([
     previewSvc.getRow(db, eventId, date),
-    db
+    // `pool`, not `own`: the picker offers this school's topics AND the platform library.
+    db.raw
       .select({ id: flashcardTopics.id, name: flashcardTopics.name })
       .from(flashcardTopics)
+      .where(db.pool(flashcardTopics))
       .orderBy(flashcardTopics.name),
   ]);
   return { preview, topics };
@@ -31,8 +33,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const formData = await request.formData();
   if (formData.get('intent') !== 'save') {
     return Response.json({ error: 'unknown intent' }, { status: 400 });

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import { accounts, activityLog, sessions, staff } from '../server/db/schema';
 import {
   auditALS,
@@ -26,7 +27,7 @@ import {
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 function fakeUser(overrides = {}) {
@@ -39,7 +40,7 @@ function fakeUser(overrides = {}) {
 }
 
 async function countRows(d) {
-  const rows = await d.select({ id: activityLog.id }).from(activityLog);
+  const rows = await d.raw.select({ id: activityLog.id }).from(activityLog);
   return rows.length;
 }
 
@@ -152,7 +153,7 @@ describe('flush()', () => {
     for (let i = 0; i < 250; i++) {
       store.entries.push({ action: 'view', route: `/page-${i}` });
     }
-    await flush(d, store);
+    await flush(d.raw, store);
     const after = await countRows(d);
     expect(after - before).toBe(250);
   });
@@ -160,7 +161,7 @@ describe('flush()', () => {
   it('is a no-op for an empty store', async () => {
     const d = db();
     const before = await countRows(d);
-    await flush(d, newRequestStore(new Request('https://x/empty')));
+    await flush(d.raw, newRequestStore(new Request('https://x/empty')));
     expect(await countRows(d)).toBe(before);
   });
 
@@ -180,8 +181,8 @@ describe('flush()', () => {
     const d = db();
     const store = newRequestStore(new Request('https://x/anon-flush'));
     store.entries.push({ action: 'login_failed', meta: { email: 'nobody@x.com' } });
-    await flush(d, store);
-    const rows = await d
+    await flush(d.raw, store);
+    const rows = await d.raw
       .select()
       .from(activityLog)
       .where(eq(activityLog.action, 'login_failed'))
@@ -218,9 +219,9 @@ describe('purgeOldLogs', () => {
     for (let i = 0; i < 3; i++) await seedRow(d, old, marker);
     for (let i = 0; i < 2; i++) await seedRow(d, recent, marker);
 
-    await purgeOldLogs(d, now);
+    await purgeOldLogs(d.raw, now);
 
-    const remaining = await d.select().from(activityLog).where(eq(activityLog.route, marker));
+    const remaining = await d.raw.select().from(activityLog).where(eq(activityLog.route, marker));
     expect(remaining).toHaveLength(2);
     expect(remaining.every((r) => r.recordedAt === recent)).toBe(true);
   });
@@ -230,9 +231,9 @@ describe('purgeOldLogs', () => {
     const now = new Date('2026-06-02T00:00:00.000Z');
     const marker = `/purge-test-${crypto.randomUUID()}`;
     await seedRow(d, new Date(now.getTime() - 1 * 86_400_000).toISOString(), marker);
-    const deleted = await purgeOldLogs(d, now);
+    const deleted = await purgeOldLogs(d.raw, now);
     expect(deleted).toBe(0);
-    const remaining = await d.select().from(activityLog).where(eq(activityLog.route, marker));
+    const remaining = await d.raw.select().from(activityLog).where(eq(activityLog.route, marker));
     expect(remaining).toHaveLength(1);
   });
 });
@@ -249,15 +250,15 @@ describe('purgeExpiredSessions', () => {
       createdAt: now.toISOString(),
     });
     const liveToken = crypto.randomUUID();
-    await d.insert(sessions).values([
+    await d.raw.insert(sessions).values([
       { token: crypto.randomUUID(), accountId, expiresAt: '2026-05-01T00:00:00.000Z' },
       { token: crypto.randomUUID(), accountId, expiresAt: '2026-05-31T23:59:59.000Z' },
       { token: liveToken, accountId, expiresAt: '2026-07-01T00:00:00.000Z' },
     ]);
 
-    await purgeExpiredSessions(d, now);
+    await purgeExpiredSessions(d.raw, now);
 
-    const remaining = await d.select().from(sessions).where(eq(sessions.accountId, accountId));
+    const remaining = await d.raw.select().from(sessions).where(eq(sessions.accountId, accountId));
     expect(remaining).toHaveLength(1);
     expect(remaining[0].token).toBe(liveToken);
   });
@@ -305,7 +306,7 @@ describe('precise-capture helpers', () => {
     const store = newRequestStore(new Request('https://x/update'));
     await auditALS.run(store, async () => {
       await auditedUpdate(d, 'staff', staff, id, async () => {
-        await d.update(staff).set({ name: 'Renamed' }).where(eq(staff.id, id));
+        await d.raw.update(staff).set({ name: 'Renamed' }).where(eq(staff.id, id));
       });
     });
     expect(store.entries).toHaveLength(1);

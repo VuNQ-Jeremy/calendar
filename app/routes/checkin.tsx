@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from 'react-router';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor, type TenantDb } from '../../server/db/index';
 import { classStudents, events } from '../../server/db/schema';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
@@ -15,27 +15,32 @@ import { withLiveAction } from '../../server/live';
  * /api/ (bearer-only; a browser fetcher there 401s silently — the garden-month trap).
  */
 
+/**
+ * The scoped event read here is also the fence for the whole kiosk payload: another school's
+ * eventId resolves to no class, so the roster comes back empty and the checklist service —
+ * which fences on the same read — has nothing to hand back either.
+ */
 async function rosterOf(
-  db: ReturnType<typeof createDb>,
+  db: TenantDb,
   eventId: string,
 ): Promise<{ classId: string | null; studentIds: string[] }> {
-  const ev = await db
+  const ev = await db.raw
     .select({ classId: events.classId })
     .from(events)
-    .where(eq(events.id, eventId));
+    .where(db.own(events, eq(events.id, eventId)));
   const classId = ev[0]?.classId ?? null;
   if (!classId) return { classId: null, studentIds: [] };
-  const rows = await db
+  const rows = await db.raw
     .select({ studentId: classStudents.studentId })
     .from(classStudents)
-    .where(eq(classStudents.classId, classId));
+    .where(db.own(classStudents, eq(classStudents.classId, classId)));
   return { classId, studentIds: rows.map((r) => r.studentId) };
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const url = new URL(request.url);
   const eventId = url.searchParams.get('eventId');
   const date = url.searchParams.get('date');
@@ -62,7 +67,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const staff = await requireStaff(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, staff);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;
@@ -73,6 +78,8 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     const parsed = ChecklistItemInput.safeParse(raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
     const item = await checkinSvc.createItem(db, parsed.data, staff.user.id, now);
+    // null = the eventId names an occurrence outside this school; same answer as a missing one.
+    if (!item) return Response.json({ error: 'not found' }, { status: 404 });
     return { ok: true, item };
   }
 

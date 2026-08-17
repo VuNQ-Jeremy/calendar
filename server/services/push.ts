@@ -1,6 +1,6 @@
 import { desc, eq, inArray, lt } from 'drizzle-orm';
 import { accounts, pushTokens, sentNotifications } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 
 /**
  * Expo push: the device registry, the sender, and the "already sent" ledger.
@@ -8,6 +8,13 @@ import type { Db } from '../db/index';
  * Sending is a plain HTTPS POST to https://exp.host/--/api/v2/push/send — no SDK, no
  * credentials. It is called DIRECTLY from the Worker: unlike Anthropic, Expo has no problem with
  * Cloudflare's Hong Kong egress, so it must NOT go through TRANSLATE_DO.
+ *
+ * **Two scoping regimes in one file.** `push_tokens` carries no `tenant_id` and is queried on
+ * `db.raw` throughout: an Expo token identifies a physical handset, is globally unique by
+ * Expo's own construction, and the row is only ever reached through the `accounts` row that
+ * owns it. The account lookups that feed those queries ARE fenced, which is what keeps a
+ * school's notifications on that school's devices. The `sent_notifications` ledger is keyed on
+ * `(tenant_id, key)` and goes through the scoped wrappers like any other table.
  */
 
 export type PushTokenRow = {
@@ -25,13 +32,15 @@ export type PushTokenRow = {
  * would push another user's notifications to this device.
  */
 export async function registerToken(
-  db: Db,
+  db: TenantDb,
   accountId: string,
   expoToken: string,
   platform: string,
 ): Promise<void> {
   const now = new Date().toISOString();
-  await db
+  // tenant-unscoped: push_tokens has no tenant_id — a device token is physically global, and
+  // `accountId` here is the caller's own resolved account, which already carries the school.
+  await db.raw
     .insert(pushTokens)
     .values({
       id: crypto.randomUUID(),
@@ -47,14 +56,21 @@ export async function registerToken(
     });
 }
 
-export async function unregisterToken(db: Db, expoToken: string): Promise<void> {
-  await db.delete(pushTokens).where(eq(pushTokens.expoToken, expoToken));
+export async function unregisterToken(db: TenantDb, expoToken: string): Promise<void> {
+  // tenant-unscoped: push_tokens has no tenant_id. Unregistering is a device saying "stop
+  // pushing to me", which is true whatever school it was signed into.
+  await db.raw.delete(pushTokens).where(eq(pushTokens.expoToken, expoToken));
 }
 
-/** Every device belonging to the given accounts. Used by the phase-6 cron jobs. */
-export async function tokensForAccounts(db: Db, accountIds: string[]): Promise<string[]> {
+/**
+ * Every device belonging to the given accounts. Used by the phase-6 cron jobs.
+ *
+ * tenant-unscoped: push_tokens has no tenant_id. The fence is `accountIds`, which callers get
+ * from the scoped lookups below.
+ */
+export async function tokensForAccounts(db: TenantDb, accountIds: string[]): Promise<string[]> {
   if (!accountIds.length) return [];
-  const rows = await db
+  const rows = await db.raw
     .select({ expoToken: pushTokens.expoToken })
     .from(pushTokens)
     .where(inArray(pushTokens.accountId, accountIds));
@@ -65,18 +81,20 @@ export async function tokensForAccounts(db: Db, accountIds: string[]): Promise<s
  * Drop tokens Expo reported as DeviceNotRegistered. Called after a send; without it the
  * table fills with dead tokens from uninstalled apps and every send gets slower.
  */
-export async function pruneTokens(db: Db, expoTokens: string[]): Promise<void> {
+export async function pruneTokens(db: TenantDb, expoTokens: string[]): Promise<void> {
   if (!expoTokens.length) return;
-  await db.delete(pushTokens).where(inArray(pushTokens.expoToken, expoTokens));
+  // tenant-unscoped: push_tokens has no tenant_id, and the tokens here are ones Expo itself
+  // just told us are dead. A dead handset is dead for every school.
+  await db.raw.delete(pushTokens).where(inArray(pushTokens.expoToken, expoTokens));
 }
 
 /** Account ids for a set of student records. A student with no account has no device. */
-export async function accountIdsForStudents(db: Db, studentIds: string[]): Promise<string[]> {
+export async function accountIdsForStudents(db: TenantDb, studentIds: string[]): Promise<string[]> {
   if (!studentIds.length) return [];
-  const rows = await db
+  const rows = await db.raw
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.studentId, studentIds));
+    .where(db.own(accounts, inArray(accounts.studentId, studentIds)));
   return rows.map((r) => r.id);
 }
 
@@ -90,12 +108,12 @@ export async function accountIdsForStudents(db: Db, studentIds: string[]): Promi
  * `runClassReminders` still reaches students only, for the same missing relation. When it lands,
  * both callers become a filter on this list. See docs/mobile-parity.md, "Knowingly not built".
  */
-export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<string[]> {
+export async function accountIdsForStaff(db: TenantDb, staffIds: string[]): Promise<string[]> {
   if (!staffIds.length) return [];
-  const rows = await db
+  const rows = await db.raw
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.staffId, staffIds));
+    .where(db.own(accounts, inArray(accounts.staffId, staffIds)));
   return rows.map((r) => r.id);
 }
 
@@ -179,23 +197,29 @@ export async function sendPush(messages: ExpoPushMessage[]): Promise<{ dead: str
  * Read as a set rather than one query per candidate: a 15-minute sweep over a 30-minute window
  * checks every upcoming occurrence each time it runs.
  */
-export async function alreadySent(db: Db, keys: string[]): Promise<Set<string>> {
+export async function alreadySent(db: TenantDb, keys: string[]): Promise<Set<string>> {
   if (!keys.length) return new Set();
-  const rows = await db
+  const rows = await db.raw
     .select({ key: sentNotifications.key })
     .from(sentNotifications)
-    .where(inArray(sentNotifications.key, keys));
+    .where(db.own(sentNotifications, inArray(sentNotifications.key, keys)));
   return new Set(rows.map((r) => r.key));
 }
 
-/** Record keys as sent. `DO NOTHING` on conflict: two overlapping ticks must not throw. */
-export async function markSent(db: Db, keys: string[]): Promise<void> {
+/**
+ * Record keys as sent. `DO NOTHING` on conflict: two overlapping ticks must not throw.
+ *
+ * The conflict target is the whole primary key, school included — two schools whose digests
+ * happen to land on the same occurrence key must each get their own row, or the second school's
+ * notification would be suppressed by the first school's send.
+ */
+export async function markSent(db: TenantDb, keys: string[]): Promise<void> {
   if (!keys.length) return;
   const sentAt = new Date().toISOString();
   await db
     .insert(sentNotifications)
     .values(keys.map((key) => ({ key, sentAt })))
-    .onConflictDoNothing();
+    .onConflictDoNothing({ target: [sentNotifications.tenantId, sentNotifications.key] });
 }
 
 /**
@@ -208,12 +232,13 @@ export async function markSent(db: Db, keys: string[]): Promise<void> {
  * resolved. Retention is whatever `pruneLedger` leaves behind: 30 days.
  */
 export async function listRecentSent(
-  db: Db,
+  db: TenantDb,
   limit = 100,
 ): Promise<{ key: string; sentAt: string }[]> {
-  return db
+  return db.raw
     .select({ key: sentNotifications.key, sentAt: sentNotifications.sentAt })
     .from(sentNotifications)
+    .where(db.own(sentNotifications))
     .orderBy(desc(sentNotifications.sentAt))
     .limit(limit);
 }
@@ -222,7 +247,7 @@ export async function listRecentSent(
  * Drop ledger rows older than `days`. The ledger only has to outlive the window a job can still
  * re-fire in; keeping it forever would turn an idempotency check into a growing table scan.
  */
-export async function pruneLedger(db: Db, days = 30): Promise<void> {
+export async function pruneLedger(db: TenantDb, days = 30): Promise<void> {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
-  await db.delete(sentNotifications).where(lt(sentNotifications.sentAt, cutoff));
+  await db.delete(sentNotifications, lt(sentNotifications.sentAt, cutoff));
 }

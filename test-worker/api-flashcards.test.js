@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as flashcardsSvc from '../server/services/flashcards';
 import * as peopleSvc from '../server/services/people';
 import * as pushSvc from '../server/services/push';
@@ -16,7 +17,7 @@ import { accounts, flashcardResults, flashcardMastery, pushTokens } from '../ser
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seedTopicWithWord(d) {
@@ -69,7 +70,7 @@ describe('recordResult idempotency', () => {
     );
     expect(first).toBe(true);
 
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardResults)
       .where(eq(flashcardResults.clientId, clientId));
@@ -97,7 +98,7 @@ describe('recordResult idempotency', () => {
       false,
     );
 
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardResults)
       .where(eq(flashcardResults.clientId, clientId));
@@ -122,7 +123,7 @@ describe('recordResult idempotency', () => {
     await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload);
     await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload);
 
-    const mastery = await d
+    const mastery = await d.raw
       .select()
       .from(flashcardMastery)
       .where(eq(flashcardMastery.studentId, student.id));
@@ -145,7 +146,7 @@ describe('recordResult idempotency', () => {
     await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload);
     await flashcardsSvc.recordResult(d, { kind: 'student', id: student.id }, payload);
 
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardResults)
       .where(eq(flashcardResults.topicId, topic.id));
@@ -171,7 +172,7 @@ describe('recordResult idempotency', () => {
       );
       expect(ok).toBe(true);
     }
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardResults)
       .where(eq(flashcardResults.topicId, topic.id));
@@ -291,14 +292,14 @@ describe('staff vs student plays', () => {
       },
     );
 
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardResults)
       .where(eq(flashcardResults.topicId, topic.id));
     expect(rows[0].studentId).toBe(student.id);
     expect(rows[0].staffId).toBeNull();
 
-    const mastery = await d
+    const mastery = await d.raw
       .select()
       .from(flashcardMastery)
       .where(eq(flashcardMastery.wordId, word.id));
@@ -323,14 +324,14 @@ describe('staff vs student plays', () => {
       },
     );
 
-    const rows = await d
+    const rows = await d.raw
       .select()
       .from(flashcardResults)
       .where(eq(flashcardResults.topicId, topic.id));
     expect(rows[0].staffId).toBe(teacher.id);
     expect(rows[0].studentId).toBeNull();
 
-    const mastery = await d
+    const mastery = await d.raw
       .select()
       .from(flashcardMastery)
       .where(eq(flashcardMastery.wordId, word.id));
@@ -358,7 +359,7 @@ describe('push token registry', () => {
     const token = `ExponentPushToken[${crypto.randomUUID()}]`;
 
     await pushSvc.registerToken(d, accountId, token, 'android');
-    const rows = await d.select().from(pushTokens).where(eq(pushTokens.expoToken, token));
+    const rows = await d.raw.select().from(pushTokens).where(eq(pushTokens.expoToken, token));
     expect(rows).toHaveLength(1);
     expect(rows[0].accountId).toBe(accountId);
   });
@@ -373,7 +374,7 @@ describe('push token registry', () => {
     await pushSvc.registerToken(d, first, token, 'android');
     await pushSvc.registerToken(d, second, token, 'android');
 
-    const rows = await d.select().from(pushTokens).where(eq(pushTokens.expoToken, token));
+    const rows = await d.raw.select().from(pushTokens).where(eq(pushTokens.expoToken, token));
     expect(rows).toHaveLength(1);
     expect(rows[0].accountId).toBe(second);
   });

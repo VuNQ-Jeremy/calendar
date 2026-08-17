@@ -15,6 +15,12 @@ import { auditALS, flush, newSystemStore } from '../../server/services/audit';
  * **Always 200 on a verified update, whatever happens next.** A non-2xx here earns a retry, and a
  * malformed message that fails forever would be retried forever. `handleUpdate` swallows its own
  * errors for the same reason; this catch is the backstop.
+ *
+ * **The one write path with no school in hand**, which is why it is a `withPublic` and takes
+ * `rawDb`. Nothing in a delivery names a school: the selectors are Zalo's `chat_id` and a typed
+ * pairing code, both globally unique for exactly that reason. `zalo.handleUpdate` resolves the
+ * school from whichever row it matches and scopes everything downstream of that point — the
+ * fence is inside the service, not here, because here there is nothing yet to fence on.
  */
 const HEADER = 'X-Bot-Api-Secret-Token';
 
@@ -29,7 +35,7 @@ function secretMatches(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export const action = withPublic(async ({ request, db, env, ctx }) => {
+export const action = withPublic(async ({ request, rawDb, env, ctx }) => {
   // Trimmed for the same reason as the bot token: `wrangler secret put` fed from a pipe stores
   // the trailing newline, and Zalo echoes back exactly the secret `setWebhook` was given — clean.
   // Comparing against the trimmed value is strictly more forgiving, never less.
@@ -64,11 +70,13 @@ export const action = withPublic(async ({ request, db, env, ctx }) => {
   const chatId = update.message?.chat?.id ?? 'unknown';
   const zaloStore = newSystemStore('zalo', chatId);
   try {
-    await auditALS.run(zaloStore, () => zalo.handleUpdate(db, env, update));
+    // `handleUpdate` calls `setActorTenant` as soon as a row tells it which school this chat
+    // belongs to, so the audit rows below are stamped with that school rather than the default.
+    await auditALS.run(zaloStore, () => zalo.handleUpdate(rawDb, env, update));
   } catch (err) {
     console.error('[zalo] webhook handler threw', { err: String(err) });
   } finally {
-    if (zaloStore.entries.length) ctx.waitUntil(flush(db, zaloStore));
+    if (zaloStore.entries.length) ctx.waitUntil(flush(rawDb, zaloStore));
   }
   return { ok: true };
 });

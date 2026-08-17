@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, isNotNull, asc } from 'drizzle-orm';
+import { eq, gte, lte, isNotNull, asc } from 'drizzle-orm';
 import {
   attendanceRecords,
   behaviorRecords,
@@ -7,7 +7,7 @@ import {
   scoreRecords,
   settings,
 } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import { DEFAULT_RANKING_WEIGHTS, type RankingWeights } from '../../shared/logic/rankings';
 import { record } from './audit';
 
@@ -34,8 +34,11 @@ function sameJson(a: unknown, b: unknown): boolean {
 const SETTINGS_KEY = 'ranking-weights';
 
 /** Same store and defaulting shape as `getTuitionSettings`. */
-export async function getRankingWeights(db: Db): Promise<RankingWeights> {
-  const rows = await db.select().from(settings).where(eq(settings.key, SETTINGS_KEY));
+export async function getRankingWeights(db: TenantDb): Promise<RankingWeights> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, SETTINGS_KEY)));
   const row = rows[0];
   if (!row) return { ...DEFAULT_RANKING_WEIGHTS };
   try {
@@ -60,13 +63,17 @@ export async function getRankingWeights(db: Db): Promise<RankingWeights> {
   }
 }
 
-export async function setRankingWeights(db: Db, input: RankingWeights): Promise<RankingWeights> {
+export async function setRankingWeights(
+  db: TenantDb,
+  input: RankingWeights,
+): Promise<RankingWeights> {
   const before = await getRankingWeights(db);
   const value = JSON.stringify(input);
+  // Conflict target is the full primary key `(tenant_id, key)` — one weighting per school.
   await db
     .insert(settings)
     .values({ key: SETTINGS_KEY, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value } });
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value } });
   if (!sameJson(before, input)) {
     record({
       action: 'update',
@@ -91,9 +98,12 @@ export type RankAttendanceRow = { studentId: string; classId: string; status: st
  * tuition bills from. Sessions on an event with no class are dropped: they cannot pass a class
  * filter, and an ad-hoc one-off is not part of a class's ý thức record.
  */
-export async function listMonthAttendance(db: Db, month: string): Promise<RankAttendanceRow[]> {
+export async function listMonthAttendance(
+  db: TenantDb,
+  month: string,
+): Promise<RankAttendanceRow[]> {
   const [start, end] = monthRange(month);
-  const rows = await db
+  const rows = await db.raw
     .select({
       studentId: attendanceRecords.studentId,
       classId: events.classId,
@@ -102,7 +112,8 @@ export async function listMonthAttendance(db: Db, month: string): Promise<RankAt
     .from(attendanceRecords)
     .innerJoin(events, eq(attendanceRecords.eventId, events.id))
     .where(
-      and(
+      db.own(
+        attendanceRecords,
         gte(attendanceRecords.date, start),
         lte(attendanceRecords.date, end),
         isNotNull(events.classId),
@@ -118,37 +129,42 @@ export type RankScoreRow = { studentId: string; classId: string | null; score: n
  * `score_records` is the whole gradebook: hand-entered marks and graded tests both land here
  * (tests sync through `syncScoreRecord`), so there is nothing to read from `test_attempts`.
  */
-export async function listMonthScores(db: Db, month: string): Promise<RankScoreRow[]> {
+export async function listMonthScores(db: TenantDb, month: string): Promise<RankScoreRow[]> {
   const [start, end] = monthRange(month);
-  return db
+  return db.raw
     .select({
       studentId: scoreRecords.studentId,
       classId: scoreRecords.classId,
       score: scoreRecords.score,
     })
     .from(scoreRecords)
-    .where(and(gte(scoreRecords.date, start), lte(scoreRecords.date, end)))
+    .where(db.own(scoreRecords, gte(scoreRecords.date, start), lte(scoreRecords.date, end)))
     .orderBy(asc(scoreRecords.date));
 }
 
 export type RankBehaviorRow = { studentId: string; classId: string | null; type: string };
 
-export async function listMonthBehavior(db: Db, month: string): Promise<RankBehaviorRow[]> {
+export async function listMonthBehavior(db: TenantDb, month: string): Promise<RankBehaviorRow[]> {
   const [start, end] = monthRange(month);
-  return db
+  return db.raw
     .select({
       studentId: behaviorRecords.studentId,
       classId: behaviorRecords.classId,
       type: behaviorRecords.type,
     })
     .from(behaviorRecords)
-    .where(and(gte(behaviorRecords.date, start), lte(behaviorRecords.date, end)));
+    .where(
+      db.own(behaviorRecords, gte(behaviorRecords.date, start), lte(behaviorRecords.date, end)),
+    );
 }
 
 export type RankRemarkRow = { studentId: string; ratings: Record<string, number> };
 
-export async function listMonthRemarks(db: Db, month: string): Promise<RankRemarkRow[]> {
-  const rows = await db.select().from(monthlyRemarks).where(eq(monthlyRemarks.month, month));
+export async function listMonthRemarks(db: TenantDb, month: string): Promise<RankRemarkRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(monthlyRemarks)
+    .where(db.own(monthlyRemarks, eq(monthlyRemarks.month, month)));
   return rows.map((r) => {
     let ratings: Record<string, number> = {};
     try {

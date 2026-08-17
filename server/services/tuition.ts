@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, isNotNull, asc, sql } from 'drizzle-orm';
+import { eq, gte, lte, isNotNull, asc } from 'drizzle-orm';
 import {
   attendanceRecords,
   classes,
@@ -9,7 +9,7 @@ import {
   tuitionMonths,
   tuitionStudentMonths,
 } from '../db/schema';
-import { chunk, rowsPerStatement, type Db } from '../db/index';
+import { chunk, rowsPerStatement, type TenantDb } from '../db/index';
 import type {
   AttendanceStatus,
   ClassPriceInput,
@@ -43,6 +43,12 @@ function sameJson(a: unknown, b: unknown): boolean {
  * money is collected after the month closes.
  *
  * Everything is integer VND.
+ *
+ * Every table here is per-school, and three of them changed shape for it: `tuition_months` is
+ * now keyed on `(tenant_id, month)`, so "March is closed" is a fact about one school rather than
+ * the deployment, and `tuition_lines` and `settings` gained the school in their unique keys the
+ * same way. The upserts below name the whole composite key as their conflict target — naming
+ * only the old half would have one school's close silently overwrite another's.
  */
 
 export type TuitionSettings = { billableStatuses: AttendanceStatus[] };
@@ -57,8 +63,11 @@ export const DEFAULT_TUITION_SETTINGS: TuitionSettings = {
 
 const SETTINGS_KEY = 'tuition-settings';
 
-export async function getTuitionSettings(db: Db): Promise<TuitionSettings> {
-  const rows = await db.select().from(settings).where(eq(settings.key, SETTINGS_KEY));
+export async function getTuitionSettings(db: TenantDb): Promise<TuitionSettings> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, SETTINGS_KEY)));
   const row = rows[0];
   if (!row) return { ...DEFAULT_TUITION_SETTINGS };
   try {
@@ -72,7 +81,7 @@ export async function getTuitionSettings(db: Db): Promise<TuitionSettings> {
 }
 
 export async function setTuitionSettings(
-  db: Db,
+  db: TenantDb,
   patch: Partial<TuitionSettings>,
 ): Promise<TuitionSettings> {
   const current = await getTuitionSettings(db);
@@ -80,7 +89,10 @@ export async function setTuitionSettings(
   await db
     .insert(settings)
     .values({ key: SETTINGS_KEY, value: JSON.stringify(next) })
-    .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+    .onConflictDoUpdate({
+      target: [settings.tenantId, settings.key],
+      set: { value: JSON.stringify(next) },
+    });
   if (!sameJson(current, next)) {
     record({
       action: 'update',
@@ -114,8 +126,11 @@ const EMPTY_PAYMENT_INFO: TuitionPaymentInfo = {
 const PAYMENT_INFO_KEY = 'tuition-payment-info';
 
 /** The centre's bank account. Unset until an admin fills the /config form — every field nullable. */
-export async function getPaymentInfo(db: Db): Promise<TuitionPaymentInfo> {
-  const rows = await db.select().from(settings).where(eq(settings.key, PAYMENT_INFO_KEY));
+export async function getPaymentInfo(db: TenantDb): Promise<TuitionPaymentInfo> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, PAYMENT_INFO_KEY)));
   const row = rows[0];
   if (!row) return { ...EMPTY_PAYMENT_INFO };
   try {
@@ -127,7 +142,7 @@ export async function getPaymentInfo(db: Db): Promise<TuitionPaymentInfo> {
 }
 
 export async function setPaymentInfo(
-  db: Db,
+  db: TenantDb,
   patch: TuitionPaymentInfoInput,
 ): Promise<TuitionPaymentInfo> {
   const current = await getPaymentInfo(db);
@@ -141,7 +156,10 @@ export async function setPaymentInfo(
   await db
     .insert(settings)
     .values({ key: PAYMENT_INFO_KEY, value: JSON.stringify(next) })
-    .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+    .onConflictDoUpdate({
+      target: [settings.tenantId, settings.key],
+      set: { value: JSON.stringify(next) },
+    });
   if (!sameJson(current, next)) {
     record({
       action: 'update',
@@ -172,10 +190,11 @@ function mapPrice(r: typeof classPrices.$inferSelect): ClassPriceRow {
   };
 }
 
-export async function listPrices(db: Db): Promise<ClassPriceRow[]> {
-  const rows = await db
+export async function listPrices(db: TenantDb): Promise<ClassPriceRow[]> {
+  const rows = await db.raw
     .select()
     .from(classPrices)
+    .where(db.own(classPrices))
     .orderBy(asc(classPrices.classId), asc(classPrices.effectiveFrom));
   return rows.map(mapPrice);
 }
@@ -184,16 +203,13 @@ export async function listPrices(db: Db): Promise<ClassPriceRow[]> {
  * Set a class's price from a date. An upsert, not an insert: "the price for this class from March"
  * is one fact, so saving it twice must correct the amount rather than fail on the unique index.
  */
-export async function setPrice(db: Db, input: ClassPriceInput): Promise<ClassPriceRow> {
-  const beforeRows = await db
-    .select()
-    .from(classPrices)
-    .where(
-      and(
-        eq(classPrices.classId, input.classId),
-        eq(classPrices.effectiveFrom, input.effectiveFrom),
-      ),
-    );
+export async function setPrice(db: TenantDb, input: ClassPriceInput): Promise<ClassPriceRow> {
+  const key = db.own(
+    classPrices,
+    eq(classPrices.classId, input.classId),
+    eq(classPrices.effectiveFrom, input.effectiveFrom),
+  );
+  const beforeRows = await db.raw.select().from(classPrices).where(key);
   const before = beforeRows[0] ? mapPrice(beforeRows[0]) : undefined;
 
   await db
@@ -205,19 +221,14 @@ export async function setPrice(db: Db, input: ClassPriceInput): Promise<ClassPri
       effectiveFrom: input.effectiveFrom,
       createdAt: new Date().toISOString(),
     })
+    // `uq_class_prices` is still `(class_id, effective_from)` and stays that way: a class belongs
+    // to exactly one school, so its id already carries the school and adding it here would only
+    // widen a key that cannot collide across schools anyway.
     .onConflictDoUpdate({
       target: [classPrices.classId, classPrices.effectiveFrom],
       set: { priceVnd: input.priceVnd },
     });
-  const rows = await db
-    .select()
-    .from(classPrices)
-    .where(
-      and(
-        eq(classPrices.classId, input.classId),
-        eq(classPrices.effectiveFrom, input.effectiveFrom),
-      ),
-    );
+  const rows = await db.raw.select().from(classPrices).where(key);
   const after = mapPrice(rows[0]);
   if (!before) recordCreate('tuition', after.id, after);
   else if (!sameJson(before, after)) {
@@ -227,9 +238,9 @@ export async function setPrice(db: Db, input: ClassPriceInput): Promise<ClassPri
 }
 
 /** Changing an existing row's date is a delete plus a `setPrice`, so there is no updatePrice. */
-export async function removePrice(db: Db, id: string): Promise<void> {
+export async function removePrice(db: TenantDb, id: string): Promise<void> {
   await recordDelete(db, 'tuition', classPrices, id);
-  await db.delete(classPrices).where(eq(classPrices.id, id));
+  await db.delete(classPrices, eq(classPrices.id, id));
 }
 
 /**
@@ -310,7 +321,7 @@ function monthRange(month: string): [string, string] {
  * in this app, and only the second one is a decision someone made.
  */
 export async function computeMonthLines(
-  db: Db,
+  db: TenantDb,
   month: string,
   settings: TuitionSettings,
 ): Promise<{ lines: TuitionLine[]; missingPriceClasses: { id: string; name: string }[] }> {
@@ -318,7 +329,7 @@ export async function computeMonthLines(
   // One row per attendance record rather than a grouped count: the Minimal slip lists the individual
   // session dates, so the dates have to come back with the rows. One centre-month is a few hundred.
   const [marks, prices, classRows] = await Promise.all([
-    db
+    db.raw
       .select({
         studentId: attendanceRecords.studentId,
         classId: events.classId,
@@ -328,7 +339,8 @@ export async function computeMonthLines(
       .from(attendanceRecords)
       .innerJoin(events, eq(attendanceRecords.eventId, events.id))
       .where(
-        and(
+        db.own(
+          attendanceRecords,
           gte(attendanceRecords.date, start),
           lte(attendanceRecords.date, end),
           isNotNull(events.classId),
@@ -336,7 +348,7 @@ export async function computeMonthLines(
       )
       .orderBy(asc(attendanceRecords.date)),
     listPrices(db),
-    db.select({ id: classes.id, name: classes.name }).from(classes),
+    db.raw.select({ id: classes.id, name: classes.name }).from(classes).where(db.own(classes)),
   ]);
 
   const classNames = new Map(classRows.map((c) => [c.id, c.name]));
@@ -405,11 +417,11 @@ function mapStudentMonth(r: typeof tuitionStudentMonths.$inferSelect): StudentMo
   };
 }
 
-async function listStudentMonths(db: Db, month: string): Promise<StudentMonthRow[]> {
-  const rows = await db
+async function listStudentMonths(db: TenantDb, month: string): Promise<StudentMonthRow[]> {
+  const rows = await db.raw
     .select()
     .from(tuitionStudentMonths)
-    .where(eq(tuitionStudentMonths.month, month));
+    .where(db.own(tuitionStudentMonths, eq(tuitionStudentMonths.month, month)));
   return rows.map(mapStudentMonth);
 }
 
@@ -422,11 +434,11 @@ function parseJson<T>(raw: string, fallback: T): T {
   }
 }
 
-async function listSnapshotLines(db: Db, month: string): Promise<TuitionLine[]> {
-  const rows = await db
+async function listSnapshotLines(db: TenantDb, month: string): Promise<TuitionLine[]> {
+  const rows = await db.raw
     .select()
     .from(tuitionLines)
-    .where(eq(tuitionLines.month, month))
+    .where(db.own(tuitionLines, eq(tuitionLines.month, month)))
     .orderBy(asc(tuitionLines.studentId), asc(tuitionLines.className));
   return rows.map((r) => {
     return {
@@ -443,16 +455,19 @@ async function listSnapshotLines(db: Db, month: string): Promise<TuitionLine[]> 
 }
 
 export async function getMonthStatus(
-  db: Db,
+  db: TenantDb,
   month: string,
 ): Promise<{ status: 'open' | 'closed'; closedAt: string | null; closedBy: string | null }> {
-  const rows = await db.select().from(tuitionMonths).where(eq(tuitionMonths.month, month));
+  const rows = await db.raw
+    .select()
+    .from(tuitionMonths)
+    .where(db.own(tuitionMonths, eq(tuitionMonths.month, month)));
   const row = rows[0];
   if (!row || row.status !== 'closed') return { status: 'open', closedAt: null, closedBy: null };
   return { status: 'closed', closedAt: row.closedAt ?? null, closedBy: row.closedBy ?? null };
 }
 
-export async function getMonthReport(db: Db, month: string): Promise<MonthReport> {
+export async function getMonthReport(db: TenantDb, month: string): Promise<MonthReport> {
   const [{ status, closedAt, closedBy }, studentMonths] = await Promise.all([
     getMonthStatus(db, month),
     listStudentMonths(db, month),
@@ -490,7 +505,7 @@ const TUITION_LINE_COLUMNS = 10;
  * Freeze the month. Idempotent: closing an already-closed month recomputes and replaces the
  * snapshot, which is how an admin applies a correction they made while it was open.
  */
-export async function closeMonth(db: Db, month: string, closedBy: string): Promise<void> {
+export async function closeMonth(db: TenantDb, month: string, closedBy: string): Promise<void> {
   const settings = await getTuitionSettings(db);
   const { lines, missingPriceClasses } = await computeMonthLines(db, month, settings);
   // Billing a class at zero because nobody set its price would be a silent, wrong invoice.
@@ -515,11 +530,14 @@ export async function closeMonth(db: Db, month: string, closedBy: string): Promi
   const markClosed = db
     .insert(tuitionMonths)
     .values({ month, status: 'closed', closedAt, closedBy, billableStatuses: billableJson })
+    // Both halves of the primary key. Targeting the bare `month` would make one school closing
+    // March overwrite every other school's March row — the single-school assumption at its most
+    // expensive, since the losing school's snapshot would go with it.
     .onConflictDoUpdate({
-      target: tuitionMonths.month,
+      target: [tuitionMonths.tenantId, tuitionMonths.month],
       set: { status: 'closed', closedAt, closedBy, billableStatuses: billableJson },
     });
-  const del = db.delete(tuitionLines).where(eq(tuitionLines.month, month));
+  const del = db.delete(tuitionLines, eq(tuitionLines.month, month));
   // A line binds 10 parameters, so one INSERT of every line would blow D1's 100-parameter ceiling
   // past 10 lines. Chunked, but in the same batch as the delete — that is what keeps a month from
   // being left marked closed with a half-written snapshot.
@@ -537,10 +555,10 @@ export async function closeMonth(db: Db, month: string, closedBy: string): Promi
 }
 
 /** Back to live compute. Payments and adjustments survive — they are not part of the snapshot. */
-export async function reopenMonth(db: Db, month: string): Promise<void> {
+export async function reopenMonth(db: TenantDb, month: string): Promise<void> {
   await db.batch([
-    db.delete(tuitionLines).where(eq(tuitionLines.month, month)),
-    db.update(tuitionMonths).set({ status: 'open' }).where(eq(tuitionMonths.month, month)),
+    db.delete(tuitionLines, eq(tuitionLines.month, month)),
+    db.update(tuitionMonths, { status: 'open' }, eq(tuitionMonths.month, month)),
   ]);
   record({ action: 'update', entityType: 'tuition', entityId: month, meta: { closed: false } });
 }
@@ -548,17 +566,17 @@ export async function reopenMonth(db: Db, month: string): Promise<void> {
 /* ── Payments and adjustments ───────────────────────────────────────────────────────────── */
 
 export async function saveStudentMonth(
-  db: Db,
+  db: TenantDb,
   month: string,
   studentId: string,
   patch: Partial<TuitionPaymentInput & TuitionAdjustmentInput>,
 ): Promise<StudentMonthRow> {
-  const beforeRows = await db
-    .select()
-    .from(tuitionStudentMonths)
-    .where(
-      and(eq(tuitionStudentMonths.month, month), eq(tuitionStudentMonths.studentId, studentId)),
-    );
+  const key = db.own(
+    tuitionStudentMonths,
+    eq(tuitionStudentMonths.month, month),
+    eq(tuitionStudentMonths.studentId, studentId),
+  );
+  const beforeRows = await db.raw.select().from(tuitionStudentMonths).where(key);
   const before = beforeRows[0] ? mapStudentMonth(beforeRows[0]) : undefined;
 
   const set: Partial<typeof tuitionStudentMonths.$inferInsert> = {};
@@ -571,17 +589,14 @@ export async function saveStudentMonth(
   await db
     .insert(tuitionStudentMonths)
     .values({ month, studentId, ...set })
+    // The primary key is still `(month, student_id)` and stays that way: a student belongs to
+    // exactly one school, so the student id already carries it.
     .onConflictDoUpdate({
       target: [tuitionStudentMonths.month, tuitionStudentMonths.studentId],
       set,
     });
 
-  const rows = await db
-    .select()
-    .from(tuitionStudentMonths)
-    .where(
-      and(eq(tuitionStudentMonths.month, month), eq(tuitionStudentMonths.studentId, studentId)),
-    );
+  const rows = await db.raw.select().from(tuitionStudentMonths).where(key);
   const after = mapStudentMonth(rows[0]);
   const entityId = `${month}:${studentId}`;
   if (!before) recordCreate('tuition', entityId, after);

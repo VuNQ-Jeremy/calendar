@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
 import { hashPassword } from '../server/services/crypto';
@@ -20,7 +21,7 @@ import { sessionCookie } from '../server/session';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seedStaffSession(email) {
@@ -39,7 +40,7 @@ async function seedStaffSession(email) {
     staffId: staffRow.id,
     createdAt: new Date().toISOString(),
   });
-  return authSvc.createSession(d, accountId, false);
+  return authSvc.createSession(d.raw, accountId, false);
 }
 
 /** A fresh hub per test, so sockets from earlier tests cannot skew delivered counts. */

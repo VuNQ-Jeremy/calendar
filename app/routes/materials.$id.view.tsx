@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { LoaderFunctionArgs } from 'react-router';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaffCookieOrBearer } from '../../server/api/auth';
 import { materials } from '../../server/db/schema';
@@ -25,10 +25,15 @@ function guessMime(fileName: string | null): string | null {
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaffCookieOrBearer(request, env);
-  const db = createDb(env);
+  const user = await requireStaffCookieOrBearer(request, env);
+  const db = tenantDbFor(env, user);
 
-  const rows = await db.select().from(materials).where(eq(materials.id, params.id!));
+  // `db.own`, not a bare id match: material ids are the only thing standing between a signed-in
+  // teacher and another school's files, and an id is guessable in a way a fence is not.
+  const rows = await db.raw
+    .select()
+    .from(materials)
+    .where(db.own(materials, eq(materials.id, params.id!)));
   const row = rows[0];
   if (!row || !row.fileKey) {
     throw new Response(null, { status: 404 });

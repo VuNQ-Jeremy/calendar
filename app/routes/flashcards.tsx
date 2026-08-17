@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { FlashcardTopicsScreen } from '../../src/flashcards/index.jsx';
-import { createDb, type Db } from '../../server/db/index';
+import { tenantDbFor, type TenantDb } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner, requireStaff, type SessionUser } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
@@ -34,7 +34,7 @@ import { withLiveAction } from '../../server/live';
  * treats null as "not there yet" rather than as an error.
  */
 async function loadGarden(
-  db: Db,
+  db: TenantDb,
   su: SessionUser,
 ): Promise<{ garden: StudentGardenData | null; gardenStaff: StaffGardenData | null }> {
   // The Worker clock is UTC and the school is UTC+7: every day boundary here is an ICT one.
@@ -106,7 +106,7 @@ async function loadGarden(
  * first, and a deploy that lands before its migration must not take that down. Staff get null
  * because only students have mastery rows to schedule.
  */
-async function loadReview(db: Db, su: SessionUser) {
+async function loadReview(db: TenantDb, su: SessionUser) {
   if (su.kind !== 'student') return null;
   const today = ictDateOf(new Date().toISOString());
   try {
@@ -123,7 +123,7 @@ async function loadReview(db: Db, su: SessionUser) {
  * loadGarden/loadReview: this page is the topics list first, and a chip is not worth a 500.
  * Null for staff (only students earn bags) and while the admin's `showStudentView` toggle is off.
  */
-async function loadTuiMu(db: Db, su: SessionUser) {
+async function loadTuiMu(db: TenantDb, su: SessionUser) {
   if (su.kind !== 'student') return null;
   try {
     const settings = await checkinSvc.getCheckinSettings(db);
@@ -139,7 +139,7 @@ async function loadTuiMu(db: Db, su: SessionUser) {
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireLearner(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, su);
   const topics = await flashcardsSvc.listTopics(db);
   const [{ garden, gardenStaff }, review, tuiMu] = await Promise.all([
     loadGarden(db, su),
@@ -165,7 +165,8 @@ clientLoader.hydrate = true as const;
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const db = createDb(env);
+  // The handle is built from the resolved session, not from `env` alone, so it can only be made
+  // AFTER one of the two guards below has run. That is why there is no shared `db` up here.
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;
@@ -176,6 +177,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   if (intent === 'harvest' || intent === 'plant-update') {
     const su = await requireLearner(request, env);
     if (su.kind !== 'student') return Response.json({ error: 'forbidden' }, { status: 403 });
+    const db = tenantDbFor(env, su);
 
     if (intent === 'harvest') {
       const result = await gardenSvc.harvest(db, su.user.id);
@@ -196,6 +198,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   }
 
   const staff = await requireStaff(request, env); // topic CRUD and assignments are staff-only
+  const db = tenantDbFor(env, staff);
 
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });

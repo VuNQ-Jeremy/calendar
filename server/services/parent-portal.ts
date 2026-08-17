@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { settings } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import { studentIdsOfParent } from './people';
 import { record } from './audit';
 
@@ -22,8 +22,11 @@ export const DEFAULT_PARENT_PORTAL: ParentPortalSettings = { enabled: false };
 
 const KEY = 'parent-portal';
 
-export async function getParentPortal(db: Db): Promise<ParentPortalSettings> {
-  const rows = await db.select().from(settings).where(eq(settings.key, KEY));
+export async function getParentPortal(db: TenantDb): Promise<ParentPortalSettings> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, KEY)));
   const row = rows[0];
   if (!row) return { ...DEFAULT_PARENT_PORTAL };
   try {
@@ -37,7 +40,7 @@ export async function getParentPortal(db: Db): Promise<ParentPortalSettings> {
 }
 
 export async function setParentPortal(
-  db: Db,
+  db: TenantDb,
   patch: Partial<ParentPortalSettings>,
 ): Promise<ParentPortalSettings> {
   const current = await getParentPortal(db);
@@ -45,7 +48,11 @@ export async function setParentPortal(
   await db
     .insert(settings)
     .values({ key: KEY, value: JSON.stringify(next) })
-    .onConflictDoUpdate({ target: settings.key, set: { value: JSON.stringify(next) } });
+    // (tenant_id, key) is the primary key — both columns, or one school's toggle overwrites another's.
+    .onConflictDoUpdate({
+      target: [settings.tenantId, settings.key],
+      set: { value: JSON.stringify(next) },
+    });
   // A toggle that gates a whole family's access to their children's data — worth a full row
   // even though it's a one-boolean setting.
   if (current.enabled !== next.enabled) {
@@ -73,14 +80,18 @@ export async function setParentPortal(
  */
 
 /** @throws {Response} 403 when the portal is disabled. */
-export async function portalChildIds(db: Db, parentId: string): Promise<string[]> {
+export async function portalChildIds(db: TenantDb, parentId: string): Promise<string[]> {
   const { enabled } = await getParentPortal(db);
   if (!enabled) throw Response.json({ error: 'forbidden' }, { status: 403 });
   return studentIdsOfParent(db, parentId);
 }
 
 /** @throws {Response} 403 when the portal is disabled or `studentId` is another family's child. */
-export async function portalChild(db: Db, parentId: string, studentId: string): Promise<void> {
+export async function portalChild(
+  db: TenantDb,
+  parentId: string,
+  studentId: string,
+): Promise<void> {
   const ids = await portalChildIds(db, parentId);
   if (!ids.includes(studentId)) throw Response.json({ error: 'forbidden' }, { status: 403 });
 }

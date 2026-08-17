@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { FlashcardTopicScreen } from '../../src/flashcards/topic.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
@@ -25,7 +25,7 @@ import { withLiveAction } from '../../server/live';
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireLearner(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, su);
   const topic = await flashcardsSvc.getTopicBySlug(db, params.slug!);
   if (!topic) throw new Response('Not found', { status: 404 });
   const [words, results, mastery] = await Promise.all([
@@ -92,7 +92,7 @@ function preprocessWord(raw: Record<string, unknown>) {
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireLearner(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, su);
   const topic = await flashcardsSvc.getTopicBySlug(db, params.slug!);
   if (!topic) throw new Response('Not found', { status: 404 });
   const topicId = topic.id;

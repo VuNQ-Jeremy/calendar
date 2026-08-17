@@ -25,7 +25,7 @@ import { secure } from './security-headers';
 import { pollerStub } from './zalo-poller';
 import { runScheduled } from '../server/services/notify';
 import { isEnabled as zaloEnabled } from '../server/services/zalo';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
 import {
   auditALS,
   flush,
@@ -68,7 +68,7 @@ export default {
     try {
       const response = await auditALS.run(store, () => requestHandler(request, context));
       store.status ??= response.status;
-      if (store.entries.length) ctx.waitUntil(flush(createDb(env), store));
+      if (store.entries.length) ctx.waitUntil(flush(createRawDb(env), store));
       console.log('[request]', {
         method: request.method,
         path: url.pathname,
@@ -81,7 +81,7 @@ export default {
       // record right before an unrelated downstream error) — flush them rather than drop them.
       if (store.entries.length) {
         store.status ??= 500;
-        ctx.waitUntil(flush(createDb(env), store));
+        ctx.waitUntil(flush(createRawDb(env), store));
       }
       console.error('[request] unhandled', {
         method: request.method,
@@ -131,7 +131,7 @@ export default {
           console.error('[cron] failed', { cron: event.cron, err: String(err) });
         })
         .finally(() => {
-          if (cronStore.entries.length) return flush(createDb(env), cronStore);
+          if (cronStore.entries.length) return flush(createRawDb(env), cronStore);
         }),
     );
 
@@ -139,12 +139,12 @@ export default {
     // self-healing (see purgeOldLogs) so a missed day never needs a manual catch-up.
     if (event.cron === '0 1 * * *') {
       ctx.waitUntil(
-        purgeOldLogs(createDb(env), new Date()).catch((err) =>
+        purgeOldLogs(createRawDb(env), new Date()).catch((err) =>
           console.error('[audit] purge failed', { err: String(err) }),
         ),
       );
       ctx.waitUntil(
-        purgeExpiredSessions(createDb(env), new Date()).catch((err) =>
+        purgeExpiredSessions(createRawDb(env), new Date()).catch((err) =>
           console.error('[audit] session purge failed', { err: String(err) }),
         ),
       );

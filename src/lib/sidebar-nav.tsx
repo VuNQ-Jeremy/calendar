@@ -18,6 +18,12 @@ export interface NavItem {
   studentOnly?: boolean;
   adminOnly?: boolean;
   /**
+   * Platform admins only (dev@ / admin@) — a tier above `adminOnly`, which every school's own
+   * Admin holds. The distinction is load-bearing now that anyone can create a school: "admin of
+   * my school" must never imply "admin of every school".
+   */
+  platformOnly?: boolean;
+  /**
    * Opt-in for parents. Only /children sets it — the two unflagged learning rows
    * (/vocabulary, /garden) are a student's surface, not theirs. Note the row is
    * additionally hidden until an admin switches the portal on; see `visibleItems`.
@@ -155,6 +161,18 @@ export const NAV: NavSection[] = [
       // Diagnostics, not a report: it reads every student's rows at once, so admin only. The
       // route enforces it with requireAdmin — this flag only hides the link.
       { id: 'logs', path: '/logs', tk: 'nav_logs', icon: 'list', adminOnly: true, staffOnly: true },
+      // Every school on the platform. Not part of /config on purpose: /config is a school's own
+      // settings page and each school's Admin sees it, so mixing platform rows in would need
+      // per-row gating and blur what the page means.
+      {
+        id: 'platform',
+        path: '/platform',
+        tk: 'platform_title',
+        icon: 'grad',
+        platformOnly: true,
+        adminOnly: true,
+        staffOnly: true,
+      },
       { id: 'feedback', path: '/feedback', tk: 'nav_feedback', icon: 'message', staffOnly: true },
       // The generated API reference (Scalar). Admin-only here for the same reason as logs — it is
       // a developer surface, not a teacher's — though the route itself only requires staff, so a
@@ -181,7 +199,7 @@ export const NAV: NavSection[] = [
  */
 export function visibleItems(
   sec: NavSection,
-  user: { kind: string; role: string },
+  user: { kind: string; role: string; isPlatformAdmin?: boolean },
   opts?: { parentPortal?: boolean; tuiMuBoard?: boolean },
 ): NavItem[] {
   const isParent = user.kind === 'parent';
@@ -194,6 +212,7 @@ export function visibleItems(
       // only while the portal is open.
       (!isParent || (n.parentOk && opts?.parentPortal === true)) &&
       (!n.adminOnly || user.role === 'Admin') &&
+      (!n.platformOnly || user.isPlatformAdmin === true) &&
       (!n.tuiMuOk || opts?.tuiMuBoard === true),
   );
 }

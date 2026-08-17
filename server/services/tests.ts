@@ -1,6 +1,6 @@
 import { eq, asc, desc, inArray } from 'drizzle-orm';
 import { tests, testQuestions, testAttempts, questions, scoreRecords } from '../db/schema';
-import { chunk, rowsPerStatement, D1_MAX_BOUND_PARAMS, type Db } from '../db/index';
+import { chunk, rowsPerStatement, SCOPED_MAX_BOUND_PARAMS, type TenantDb } from '../db/index';
 import type { TestInput } from '../../shared/schemas';
 import { ictDateOf } from '../../shared/logic/tests';
 import { record, recordCreate, recordDelete } from './audit';
@@ -108,35 +108,51 @@ function mapAttempt(r: typeof testAttempts.$inferSelect): TestAttemptRow {
   };
 }
 
-export async function list(db: Db): Promise<TestRow[]> {
-  const rows = await db.select().from(tests).orderBy(desc(tests.createdAt));
+export async function list(db: TenantDb): Promise<TestRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(tests)
+    .where(db.own(tests))
+    .orderBy(desc(tests.createdAt));
   return rows.map(map);
 }
 
-export async function get(db: Db, id: string): Promise<TestRow> {
-  const rows = await db.select().from(tests).where(eq(tests.id, id));
+export async function get(db: TenantDb, id: string): Promise<TestRow> {
+  const rows = await db.raw
+    .select()
+    .from(tests)
+    .where(db.own(tests, eq(tests.id, id)));
   if (!rows[0]) throw Response.json({ error: 'test_not_found' }, { status: 404 });
   return map(rows[0]);
 }
 
-export async function listQuestionLinks(db: Db, testId?: string): Promise<TestQuestionRow[]> {
-  const q = db.select().from(testQuestions).$dynamic();
-  const rows = testId
-    ? await q.where(eq(testQuestions.testId, testId)).orderBy(asc(testQuestions.sortOrder))
-    : await q.orderBy(asc(testQuestions.sortOrder));
-  return rows.map(mapLink);
+/**
+ * `test_questions` carries no tenant_id — it is reachable only through a test — so the join to
+ * `tests` is what scopes it. The un-filtered form (no `testId`) feeds the tests INDEX screen,
+ * where an unjoined read would hand over every school's question layout at once.
+ */
+export async function listQuestionLinks(db: TenantDb, testId?: string): Promise<TestQuestionRow[]> {
+  const rows = await db.raw
+    .select({ link: testQuestions })
+    .from(testQuestions)
+    .innerJoin(tests, eq(tests.id, testQuestions.testId))
+    .where(db.own(tests, testId ? eq(testQuestions.testId, testId) : undefined))
+    .orderBy(asc(testQuestions.sortOrder));
+  return rows.map((r) => mapLink(r.link));
 }
 
-export async function listAttempts(db: Db, testId?: string): Promise<TestAttemptRow[]> {
-  const q = db.select().from(testAttempts).$dynamic();
-  const rows = testId ? await q.where(eq(testAttempts.testId, testId)) : await q;
+export async function listAttempts(db: TenantDb, testId?: string): Promise<TestAttemptRow[]> {
+  const rows = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, testId ? eq(testAttempts.testId, testId) : undefined));
   return rows.map(mapAttempt);
 }
 
 export async function attemptsSummary(
-  db: Db,
+  db: TenantDb,
 ): Promise<Record<string, { total: number; needsGrading: number; graded: number }>> {
-  const rows = await db.select().from(testAttempts);
+  const rows = await db.raw.select().from(testAttempts).where(db.own(testAttempts));
   const out: Record<string, { total: number; needsGrading: number; graded: number }> = {};
   for (const r of rows) {
     const bucket = (out[r.testId] ??= { total: 0, needsGrading: 0, graded: 0 });
@@ -147,12 +163,15 @@ export async function attemptsSummary(
   return out;
 }
 
-export async function hasAttempts(db: Db, testId: string): Promise<boolean> {
-  const rows = await db.select().from(testAttempts).where(eq(testAttempts.testId, testId));
+export async function hasAttempts(db: TenantDb, testId: string): Promise<boolean> {
+  const rows = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.testId, testId)));
   return rows.length > 0;
 }
 
-export async function create(db: Db, input: TestInput): Promise<TestRow> {
+export async function create(db: TenantDb, input: TestInput): Promise<TestRow> {
   const id = crypto.randomUUID();
   await db.insert(tests).values({
     id,
@@ -175,7 +194,11 @@ export async function create(db: Db, input: TestInput): Promise<TestRow> {
   return row;
 }
 
-export async function update(db: Db, id: string, patch: Partial<TestInput>): Promise<TestRow> {
+export async function update(
+  db: TenantDb,
+  id: string,
+  patch: Partial<TestInput>,
+): Promise<TestRow> {
   const before = await get(db, id);
   // Switching mode once anyone has sat the test would strand their attempts in a mode that
   // cannot display them: an online attempt is invisible to the paper score grid, which then
@@ -200,7 +223,7 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
   if (patch.instructions !== undefined) set.instructions = patch.instructions ?? null;
   if (patch.color !== undefined) set.color = patch.color ?? null;
   if (Object.keys(set).length) {
-    await db.update(tests).set(set).where(eq(tests.id, id));
+    await db.update(tests, set, eq(tests.id, id));
   }
 
   const row = await get(db, id);
@@ -214,7 +237,10 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
     patch.assessmentTypeId !== undefined ||
     patch.date !== undefined
   ) {
-    const attempts = await db.select().from(testAttempts).where(eq(testAttempts.testId, id));
+    const attempts = await db.raw
+      .select()
+      .from(testAttempts)
+      .where(db.own(testAttempts, eq(testAttempts.testId, id)));
     const scoreRecordIds = attempts
       .map((a) => a.scoreRecordId)
       .filter((x): x is string => x != null);
@@ -224,7 +250,7 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
       if (patch.assessmentTypeId !== undefined) scoreSet.assessmentTypeId = row.assessmentTypeId;
       if (patch.date !== undefined) scoreSet.date = row.date ?? ictDateOf(new Date().toISOString());
       if (Object.keys(scoreSet).length) {
-        await db.update(scoreRecords).set(scoreSet).where(inArray(scoreRecords.id, scoreRecordIds));
+        await db.update(scoreRecords, scoreSet, inArray(scoreRecords.id, scoreRecordIds));
       }
     }
   }
@@ -235,20 +261,20 @@ export async function update(db: Db, id: string, patch: Partial<TestInput>): Pro
   return row;
 }
 
-export async function remove(db: Db, id: string): Promise<void> {
-  const attempts = await db.select().from(testAttempts).where(eq(testAttempts.testId, id));
+export async function remove(db: TenantDb, id: string): Promise<void> {
+  const attempts = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.testId, id)));
   const scoreRecordIds = attempts.map((a) => a.scoreRecordId).filter((x): x is string => x != null);
   if (scoreRecordIds.length) {
-    await db.delete(scoreRecords).where(inArray(scoreRecords.id, scoreRecordIds));
+    await db.delete(scoreRecords, inArray(scoreRecords.id, scoreRecordIds));
   }
   // ON DELETE CASCADE removes test_questions, test_attempts and test_answers — folded into
   // `extra` so the linked question ids survive into before_json.
-  const links = await db
-    .select({ questionId: testQuestions.questionId })
-    .from(testQuestions)
-    .where(eq(testQuestions.testId, id));
+  const links = await listQuestionLinks(db, id);
   await recordDelete(db, 'test', tests, id, { questionIds: links.map((l) => l.questionId) });
-  await db.delete(tests).where(eq(tests.id, id));
+  await db.delete(tests, eq(tests.id, id));
 }
 
 /** The columns each test_questions row binds — see `rowsPerStatement`. */
@@ -259,10 +285,12 @@ const TEST_QUESTION_COLUMNS = 4;
  * Refuses once anyone has an attempt — reshaping a sat test would invalidate its scores.
  */
 export async function setQuestions(
-  db: Db,
+  db: TenantDb,
   testId: string,
   items: { questionId: string; points: number }[],
 ): Promise<TestQuestionRow[]> {
+  // Proves the test belongs to this school (404 otherwise), which is what licenses the unscoped
+  // `test_questions` writes below — that table has no tenant_id of its own.
   await get(db, testId);
   if (await hasAttempts(db, testId)) {
     throw Response.json({ error: 'test_has_attempts' }, { status: 409 });
@@ -270,11 +298,16 @@ export async function setQuestions(
 
   const ids = [...new Set(items.map((i) => i.questionId))];
   if (ids.length) {
+    // `pool`: a test may legitimately be built from platform-library questions as well as the
+    // school's own. Anything outside both is 'unknown_question', same as a deleted id.
     // Chunked: `inArray` binds one parameter per id and D1 caps a statement at 100 of them.
     const found = (
       await Promise.all(
-        chunk(ids, D1_MAX_BOUND_PARAMS).map((part) =>
-          db.select().from(questions).where(inArray(questions.id, part)),
+        chunk(ids, SCOPED_MAX_BOUND_PARAMS).map((part) =>
+          db.raw
+            .select()
+            .from(questions)
+            .where(db.pool(questions, inArray(questions.id, part))),
         ),
       )
     ).flat();
@@ -283,7 +316,8 @@ export async function setQuestions(
     }
   }
 
-  const del = db.delete(testQuestions).where(eq(testQuestions.testId, testId));
+  // tenant-unscoped: test_questions has no tenant_id; the `get` above is the fence.
+  const del = db.raw.delete(testQuestions).where(eq(testQuestions.testId, testId));
   if (items.length) {
     const rows = items.map((it, i) => ({
       testId,
@@ -295,7 +329,7 @@ export async function setQuestions(
     // ceiling past 25 questions, so the rows go out in chunks — all in the same batch as the
     // delete, which is what makes the replace atomic.
     const inserts = chunk(rows, rowsPerStatement(TEST_QUESTION_COLUMNS)).map((part) =>
-      db.insert(testQuestions).values(part),
+      db.raw.insert(testQuestions).values(part),
     );
     await db.batch([del, ...inserts]);
   } else {
@@ -315,7 +349,7 @@ export async function setQuestions(
  * (test_id, question_id), so a repeat would fail the insert.
  */
 export async function appendQuestions(
-  db: Db,
+  db: TenantDb,
   testId: string,
   add: { questionId: string; points: number }[],
 ): Promise<TestQuestionRow[]> {
@@ -333,33 +367,33 @@ export async function appendQuestions(
   return setQuestions(db, testId, merged);
 }
 
-export async function publish(db: Db, id: string): Promise<TestRow> {
+export async function publish(db: TenantDb, id: string): Promise<TestRow> {
   const test = await get(db, id);
   const links = await listQuestionLinks(db, id);
   if (!links.length) throw Response.json({ error: 'test_empty' }, { status: 400 });
   if (test.mode === 'online' && !test.closeAt) {
     throw Response.json({ error: 'test_no_close' }, { status: 400 });
   }
-  await db.update(tests).set({ status: 'published' }).where(eq(tests.id, id));
+  await db.update(tests, { status: 'published' }, eq(tests.id, id));
   const after = await get(db, id);
   record({ action: 'update', entityType: 'test', entityId: id, before: test, after });
   return after;
 }
 
-export async function unpublish(db: Db, id: string): Promise<TestRow> {
+export async function unpublish(db: TenantDb, id: string): Promise<TestRow> {
   const before = await get(db, id);
   if (await hasAttempts(db, id)) {
     throw Response.json({ error: 'test_has_attempts' }, { status: 409 });
   }
-  await db.update(tests).set({ status: 'draft' }).where(eq(tests.id, id));
+  await db.update(tests, { status: 'draft' }, eq(tests.id, id));
   const after = await get(db, id);
   record({ action: 'update', entityType: 'test', entityId: id, before, after });
   return after;
 }
 
-export async function totalPoints(db: Db, testId: string): Promise<number> {
-  const rows = await db.select().from(testQuestions).where(eq(testQuestions.testId, testId));
-  return rows.reduce((sum, r) => sum + r.points, 0);
+export async function totalPoints(db: TenantDb, testId: string): Promise<number> {
+  const links = await listQuestionLinks(db, testId);
+  return links.reduce((sum, l) => sum + l.points, 0);
 }
 
 /**
@@ -368,7 +402,7 @@ export async function totalPoints(db: Db, testId: string): Promise<number> {
  * Returns the score_record id to store on the attempt, or null when there should be none.
  */
 export async function syncScoreRecord(
-  db: Db,
+  db: TenantDb,
   test: TestRow,
   args: {
     studentId: string;
@@ -381,22 +415,23 @@ export async function syncScoreRecord(
 
   if (args.score == null) {
     if (args.existingScoreRecordId) {
-      await db.delete(scoreRecords).where(eq(scoreRecords.id, args.existingScoreRecordId));
+      await db.delete(scoreRecords, eq(scoreRecords.id, args.existingScoreRecordId));
     }
     return null;
   }
 
   if (args.existingScoreRecordId) {
-    await db
-      .update(scoreRecords)
-      .set({
+    await db.update(
+      scoreRecords,
+      {
         score: args.score,
         notes: args.comment ?? null,
         date,
         classId: test.classId,
         assessmentTypeId: test.assessmentTypeId,
-      })
-      .where(eq(scoreRecords.id, args.existingScoreRecordId));
+      },
+      eq(scoreRecords.id, args.existingScoreRecordId),
+    );
     return args.existingScoreRecordId;
   }
 
@@ -423,13 +458,16 @@ export async function syncScoreRecord(
  * the teacher's input without telling anyone is worse — the caller surfaces this.
  */
 export async function savePaperScores(
-  db: Db,
+  db: TenantDb,
   testId: string,
   records: { studentId: string; score?: number | null; comment?: string | null }[],
 ): Promise<{ attempts: TestAttemptRow[]; skipped: string[] }> {
   const test = await get(db, testId);
 
-  const existing = await db.select().from(testAttempts).where(eq(testAttempts.testId, testId));
+  const existing = await db.raw
+    .select()
+    .from(testAttempts)
+    .where(db.own(testAttempts, eq(testAttempts.testId, testId)));
   const byStudent = new Map(existing.map((a) => [a.studentId, a]));
 
   const now = new Date().toISOString();
@@ -448,9 +486,9 @@ export async function savePaperScores(
     if (!hasScore && !hasComment) {
       if (prev) {
         if (prev.scoreRecordId) {
-          await db.delete(scoreRecords).where(eq(scoreRecords.id, prev.scoreRecordId));
+          await db.delete(scoreRecords, eq(scoreRecords.id, prev.scoreRecordId));
         }
-        await db.delete(testAttempts).where(eq(testAttempts.id, prev.id));
+        await db.delete(testAttempts, eq(testAttempts.id, prev.id));
       }
       continue;
     }
@@ -473,7 +511,7 @@ export async function savePaperScores(
       scoreRecordId,
     };
     if (prev) {
-      await db.update(testAttempts).set(values).where(eq(testAttempts.id, prev.id));
+      await db.update(testAttempts, values, eq(testAttempts.id, prev.id));
     } else {
       await db.insert(testAttempts).values({
         id: crypto.randomUUID(),

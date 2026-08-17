@@ -1,4 +1,4 @@
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import * as feedbackSvc from './feedback';
 import type { FeedbackRow } from './feedback';
 
@@ -23,7 +23,7 @@ export function feedbackRef(row: FeedbackRow): string | null {
 export function notifyFeedbackIssue(
   env: Env,
   ctx: ExecutionContext,
-  db: Db,
+  db: TenantDb,
   row: FeedbackRow,
 ): void {
   const token = env.GITHUB_FEEDBACK_TOKEN;

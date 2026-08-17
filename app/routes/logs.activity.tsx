@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from 'react-router';
 import { ActivityScreen } from '../../src/screens-activity.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as auditViews from '../../server/services/audit-views';
@@ -33,8 +33,8 @@ export type ActivityView = 'stream' | 'sessions' | 'entity' | 'security';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
-  const db = createDb(env);
+  const admin = await requireAdmin(request, env);
+  const db = tenantDbFor(env, admin);
   const url = new URL(request.url);
   const viewParam = url.searchParams.get('view');
   const view: ActivityView =

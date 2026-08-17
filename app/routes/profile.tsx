@@ -3,7 +3,7 @@ import { useOutletContext, useFetcher } from 'react-router';
 import type { ActionFunctionArgs, ClientActionFunctionArgs } from 'react-router';
 import { ProfileScreen } from '../../src/screens-extra.jsx';
 import type { AppContext } from './_app.js';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireUser, changePassword } from '../../server/services/auth';
 import { sessionCookie } from '../../server/session';
@@ -17,7 +17,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const sessionUser = await requireUser(request, env);
   const { user, account } = sessionUser;
-  const db = createDb(env);
+  const db = tenantDbFor(env, sessionUser);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
 
@@ -64,7 +64,9 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     const currentTokenHash =
       rawToken && typeof rawToken === 'string' ? await hashToken(rawToken) : '';
     const result = await changePassword(
-      db,
+      // tenant-unscoped: `accounts` is auth-owned and `sessions` carries no tenant_id — the
+      // account id from the resolved session is what fences this, not a school predicate.
+      db.raw,
       account.id,
       currentPassword,
       newPassword,

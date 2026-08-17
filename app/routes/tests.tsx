@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { TestsScreen } from '../../src/tests/index.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as testsSvc from '../../server/services/tests';
@@ -18,8 +18,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const session = await requireStaff(request, env);
+  const db = tenantDbFor(env, session);
   const [tests, links, classes, gradeLevels, types, summary] = await Promise.all([
     testsSvc.list(db),
     testsSvc.listQuestionLinks(db),
@@ -62,8 +62,8 @@ function preprocessTestRaw(raw: Record<string, unknown>): Record<string, unknown
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const session = await requireStaff(request, env);
+  const db = tenantDbFor(env, session);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

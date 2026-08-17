@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
-import { createDb, type Db } from '../db';
+import { tenantDbFor, type TenantDb, type TenantTable } from '../db';
+import { createRawDb, type Db } from '../db/internal';
 import { cloudflareCtx } from '../../app/load-context';
 import { parsePatch } from '../../shared/schemas';
 import type { SessionUser, LearnerUser, ParentUser } from '../services/auth';
@@ -55,7 +56,12 @@ type UserFor<L extends AuthLevel> = L extends 'any'
 
 export type ApiCtx<L extends AuthLevel = AuthLevel> = {
   user: UserFor<L>;
-  db: Db;
+  /**
+   * Already fenced to the acting user's school. This one line is what tenant-scopes the whole
+   * mobile API and every `crud()` collection at once — no endpoint opts in, and none can opt
+   * out without changing its own type.
+   */
+  db: TenantDb;
   env: Env;
   ctx: ExecutionContext;
   request: Request;
@@ -117,7 +123,7 @@ export function withAuth<T, L extends AuthLevel>(
       const user = await resolveUser(level, request, env);
       const result = await handler({
         user: user as UserFor<L>,
-        db: createDb(env),
+        db: tenantDbFor(env, user),
         env,
         ctx: execCtx,
         request,
@@ -144,16 +150,23 @@ export function withAuth<T, L extends AuthLevel>(
   };
 }
 
-/** Same as withAuth but for unauthenticated endpoints (login, invite redemption, reset). */
+/**
+ * Same as withAuth but for unauthenticated endpoints (login, invite redemption, reset).
+ *
+ * These genuinely have no school yet — the visitor has no session, and for invite redemption
+ * the code itself is what selects one. So the handle stays unscoped, and the field is named
+ * `rawDb` rather than `db` so an authed handler's body cannot be pasted in and silently lose
+ * its fence. This is the residual unscoped surface: keep it tiny.
+ */
 export function withPublic<T>(
-  handler: (ctx: Omit<ApiCtx, 'user'>) => Promise<T>,
+  handler: (ctx: Omit<ApiCtx, 'user' | 'db'> & { rawDb: Db }) => Promise<T>,
 ): (args: LoaderFunctionArgs | ActionFunctionArgs) => Promise<Response> {
   return async ({ request, params, context }) => {
     if (request.method === 'OPTIONS') return corsPreflight();
     const { env, ctx: execCtx } = context.get(cloudflareCtx);
     try {
       const result = await handler({
-        db: createDb(env),
+        rawDb: createRawDb(env),
         env,
         ctx: execCtx,
         request,
@@ -239,12 +252,21 @@ type CrudCfg<S extends z.ZodObject<z.ZodRawShape>> = {
   remove?: (id: string, ctx: ApiCtx) => Promise<unknown>;
 };
 
+/**
+ * The before-snapshot for an update's audit row. Scoped when the table carries a school, so a
+ * crafted id cannot be used to read a neighbouring school's row out of the activity log —
+ * `undefined` here just means the update logs without a before, which is the safe direction.
+ */
 async function readByIdOrUndefined(
   db: ApiCtx['db'],
   table: TableWithId,
   id: string,
 ): Promise<Record<string, unknown> | undefined> {
-  const rows = await db.select().from(table).where(eq(table.id, id)).limit(1);
+  const scoped = table as TableWithId & Partial<TenantTable>;
+  const where = scoped.tenantId
+    ? db.own(scoped as TableWithId & TenantTable, eq(table.id, id))
+    : eq(table.id, id);
+  const rows = await db.raw.select().from(table).where(where).limit(1);
   return rows[0] as Record<string, unknown> | undefined;
 }
 

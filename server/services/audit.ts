@@ -3,7 +3,14 @@ import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { activityLog, sessions } from '../db/schema';
-import { chunk, rowsPerStatement, type Db } from '../db/index';
+import {
+  chunk,
+  rowsPerStatement,
+  PRIMARY_TENANT_ID,
+  type Db,
+  type TenantDb,
+  type TenantTable,
+} from '../db/index';
 import type { SessionUser } from './auth';
 
 // Requires "compatibility_flags": ["nodejs_als"] in wrangler.jsonc (top level AND env.test) and
@@ -30,6 +37,13 @@ export type AuditActor = {
   name: string | null;
   accountId: string | null;
   sessionRef: string | null;
+  /**
+   * The school this request is acting in. Set by `setActor` from the resolved session, so it
+   * is available ambiently to code that has no `TenantDb` in hand — `notifyLive` uses it to
+   * pick the school's Durable Object instance without threading an argument through forty
+   * services, and the activity log stamps every row with it.
+   */
+  tenantId: string | null;
 };
 
 export type AuditAction =
@@ -75,8 +89,11 @@ export const auditALS = new AsyncLocalStorage<AuditStore>();
 export const RETENTION_DAYS = 90;
 const SNAPSHOT_CAP = 8 * 1024;
 const UA_CAP = 256;
-/** 21 columns on activity_log (see migrations/0035_activity_log.sql) ⇒ 4 rows/statement. */
-const ACTIVITY_LOG_COLUMNS = 21;
+/**
+ * 22 columns on activity_log — the original 21 (migrations/0035_activity_log.sql) plus
+ * `tenant_id` (0045) ⇒ still 4 rows/statement under D1's 100 bound-parameter cap.
+ */
+const ACTIVITY_LOG_COLUMNS = 22;
 
 export function newRequestStore(request: Request): AuditStore {
   const url = new URL(request.url);
@@ -111,6 +128,8 @@ export function newSystemStore(source: 'cron' | 'zalo', label: string): AuditSto
       name: source === 'cron' ? `cron ${label}` : 'Zalo',
       accountId: null,
       sessionRef: null,
+      // A cron sweep spans every school; the per-school loop sets this as it goes.
+      tenantId: null,
     },
     entries: [],
   };
@@ -140,7 +159,23 @@ export function setActor(user: SessionUser, sessionRef: string | null): void {
     name: user.user.name,
     accountId: user.account.id,
     sessionRef,
+    tenantId: user.tenantId,
   };
+}
+
+/**
+ * The school the current request is acting in, or null outside a request (or in a system store
+ * that has not entered a school yet). The ambient read that lets `notifyLive` and the usage
+ * counters stay tenant-correct without a signature change at every call site.
+ */
+export function actorTenantId(): string | null {
+  return auditALS.getStore()?.actor?.tenantId ?? null;
+}
+
+/** Point the ambient store at a school — the cron loop, once per school it sweeps. */
+export function setActorTenant(tenantId: string): void {
+  const s = auditALS.getStore();
+  if (s?.actor) s.actor.tenantId = tenantId;
 }
 
 /**
@@ -154,7 +189,14 @@ export function setActor(user: SessionUser, sessionRef: string | null): void {
 export function attributeAccount(accountId: string | null): void {
   const s = auditALS.getStore();
   if (!s || s.actor?.kind === 'system') return;
-  s.actor = { kind: 'anon', id: null, name: null, accountId, sessionRef: null };
+  s.actor = {
+    kind: 'anon',
+    id: null,
+    name: null,
+    accountId,
+    sessionRef: null,
+    tenantId: s.actor?.tenantId ?? null,
+  };
 }
 
 export function noteAction(intent: string | null, domain: string | null, status: number): void {
@@ -239,11 +281,16 @@ export async function flush(db: Db, store: AuditStore): Promise<void> {
       name: null,
       accountId: null,
       sessionRef: null,
+      tenantId: null,
     };
     const rows = store.entries.map((e) => ({
       occurredAt: e.occurredAt ?? recordedAt,
       recordedAt,
       source: store.source,
+      // Anonymous and system rows before a school is known are stamped with the original
+      // school rather than dropped: the log is append-only evidence, and losing a failed
+      // login because nobody had resolved a tenant yet would be the wrong trade.
+      tenantId: actor.tenantId ?? PRIMARY_TENANT_ID,
       actorKind: actor.kind,
       actorId: actor.id,
       actorName: actor.name,
@@ -276,6 +323,9 @@ export async function flush(db: Db, store: AuditStore): Promise<void> {
  * self-healing across a missed day since it just picks up where the last run left off.
  */
 export async function purgeOldLogs(db: Db, now: Date): Promise<number> {
+  // tenant-unscoped: retention is a property of the deployment, not of a school. Ninety days is
+  // ninety days for everyone, and running this per school would mean a suspended one's rows were
+  // never trimmed again.
   const cutoff = new Date(now.getTime() - RETENTION_DAYS * 86_400_000).toISOString();
   let total = 0;
   for (let i = 0; i < 20; i++) {
@@ -326,15 +376,36 @@ export type TableWithId = SQLiteTable & { id: AnySQLiteColumn };
  * classIds/parentIds, into `extra` so it survives into `before_json`) and records `action:'delete'`.
  * A missing row (already gone) is a silent no-op rather than a thrown error.
  */
+/**
+ * Read one row by id for an audit snapshot, fenced to the acting school when the table carries
+ * one.
+ *
+ * The fence matters more here than it looks: without it a crafted id would pull a neighbouring
+ * school's row into `before_json`, turning the activity log — which admins can read — into a
+ * cross-school read primitive. Returning `undefined` instead just means the entry is logged
+ * without a before, which is the safe direction to fail.
+ */
+async function snapshotById(
+  db: TenantDb,
+  table: TableWithId,
+  id: string,
+): Promise<Record<string, unknown> | undefined> {
+  const scoped = table as TableWithId & Partial<TenantTable>;
+  const where = scoped.tenantId
+    ? db.own(scoped as TableWithId & TenantTable, eq(table.id, id))
+    : eq(table.id, id);
+  const rows = await db.raw.select().from(table).where(where).limit(1);
+  return rows[0] as Record<string, unknown> | undefined;
+}
+
 export async function recordDelete(
-  db: Db,
+  db: TenantDb,
   entityType: string,
   table: TableWithId,
   id: string,
   extra?: Record<string, unknown>,
 ): Promise<void> {
-  const rows = await db.select().from(table).where(eq(table.id, id)).limit(1);
-  const before = rows[0] as Record<string, unknown> | undefined;
+  const before = await snapshotById(db, table, id);
   if (!before) return;
   record({
     action: 'delete',
@@ -363,17 +434,15 @@ function deepEqualJson(a: unknown, b: unknown): boolean {
  * protect.
  */
 export async function auditedUpdate(
-  db: Db,
+  db: TenantDb,
   entityType: string,
   table: TableWithId,
   id: string,
   mutate: () => Promise<void>,
 ): Promise<void> {
-  const beforeRows = await db.select().from(table).where(eq(table.id, id)).limit(1);
-  const before = beforeRows[0] as Record<string, unknown> | undefined;
+  const before = await snapshotById(db, table, id);
   await mutate();
-  const afterRows = await db.select().from(table).where(eq(table.id, id)).limit(1);
-  const after = afterRows[0] as Record<string, unknown> | undefined;
+  const after = await snapshotById(db, table, id);
   if (deepEqualJson(before, after)) return;
   record({ action: 'update', entityType, entityId: id, before, after });
 }

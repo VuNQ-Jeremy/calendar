@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq, sql } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
@@ -39,7 +40,7 @@ import {
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 /**
@@ -92,7 +93,7 @@ async function seedStudentWithDevice(d, name, token) {
     studentId: student.id,
     createdAt: new Date().toISOString(),
   });
-  await d.insert(pushTokens).values({
+  await d.raw.insert(pushTokens).values({
     id: crypto.randomUUID(),
     accountId,
     expoToken: token,
@@ -125,7 +126,7 @@ async function seedPlant(d, studentId, at = new Date()) {
 }
 
 async function countRows(d, table) {
-  const rows = await d.select({ n: sql`count(*)` }).from(table);
+  const rows = await d.raw.select({ n: sql`count(*)` }).from(table);
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -558,7 +559,10 @@ describe('forecastGardenSweep()', () => {
     // And the real sweep agrees about who is affected, then writes.
     const real = await gardenSvc.runGardenSweep(d, now.toISOString());
     expect(real.penalties.some((p) => p.assignmentId === assignmentId)).toBe(true);
-    const charged = await d.select().from(gardenEvents).where(eq(gardenEvents.refId, assignmentId));
+    const charged = await d.raw
+      .select()
+      .from(gardenEvents)
+      .where(eq(gardenEvents.refId, assignmentId));
     expect(charged.length).toBeGreaterThan(0);
   });
 
@@ -667,7 +671,10 @@ describe('planNotifications() writes nothing at all', () => {
 
     await planNotifications(d, undefined, new Date());
 
-    const still = await d.select().from(sentNotifications).where(eq(sentNotifications.key, stale));
+    const still = await d.raw
+      .select()
+      .from(sentNotifications)
+      .where(eq(sentNotifications.key, stale));
     expect(still).toHaveLength(1);
   });
 });
@@ -796,7 +803,7 @@ describe('sendPlannedNotification()', () => {
     const key = ledgerKey.gardenPenalty(assignmentId, student.id);
 
     // Nothing is charged until the button is pressed.
-    const chargedBefore = await d
+    const chargedBefore = await d.raw
       .select()
       .from(gardenEvents)
       .where(eq(gardenEvents.refId, assignmentId));
@@ -808,7 +815,7 @@ describe('sendPlannedNotification()', () => {
     expect(sent[0].body).toContain('quá hạn');
 
     // The stage the message announces has actually been taken, so the student's own screen agrees.
-    const chargedAfter = await d
+    const chargedAfter = await d.raw
       .select()
       .from(gardenEvents)
       .where(eq(gardenEvents.refId, assignmentId));

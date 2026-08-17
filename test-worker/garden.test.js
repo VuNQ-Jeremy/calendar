@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as flashcardsSvc from '../server/services/flashcards';
 import * as gardenSvc from '../server/services/garden';
 import * as peopleSvc from '../server/services/people';
@@ -18,7 +19,7 @@ import { composeUtcFromIct, ictDateOf } from '../shared/logic/tests';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seedTopic(d) {
@@ -69,7 +70,7 @@ describe('a qualifying round grows the plant', () => {
     expect(plant.state.isDead).toBe(false);
     expect(plant.potColor).toBe('orange');
 
-    const events = await d
+    const events = await d.raw
       .select()
       .from(gardenEvents)
       .where(eq(gardenEvents.studentId, student.id));
@@ -103,7 +104,7 @@ describe('a qualifying round grows the plant', () => {
     const third = await play(d, student.id, topic.id);
 
     expect(third.garden).toMatchObject({ qualified: true, grew: false, stage: 2 });
-    const events = await d
+    const events = await d.raw
       .select()
       .from(gardenEvents)
       .where(eq(gardenEvents.studentId, student.id));
@@ -400,7 +401,7 @@ describe('the daily sweep', () => {
     await play(d, student.id, topic.id);
 
     // Backdate the last care so the plant is three days idle: wilting today.
-    await d
+    await d.raw
       .update(gardenPlants)
       .set({ lastCareDay: '2026-08-02', growDay: '2026-08-02' })
       .where(eq(gardenPlants.studentId, student.id));

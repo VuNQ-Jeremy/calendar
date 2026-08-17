@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import * as enrichSvc from '../server/services/enrich';
 import * as generateSvc from '../server/services/generate';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
 import { trackAiUsage } from '../server/services/usage';
 import { ictDateOf } from '../shared/logic/tests';
 import type { AiUsage } from '../shared/logic/usage';
@@ -40,7 +40,7 @@ export class TranslateProxy extends DurableObject<Env> {
     // so the count happens right where the call returns.
     const track = (usage: AiUsage) =>
       this.ctx.waitUntil(
-        trackAiUsage(createDb(this.env), ictDateOf(new Date().toISOString()).slice(0, 7), usage),
+        trackAiUsage(createRawDb(this.env), ictDateOf(new Date().toISOString()).slice(0, 7), usage),
       );
     try {
       if (op === '/generate') {

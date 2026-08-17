@@ -9,7 +9,7 @@ import {
   students,
   staff,
 } from '../db/schema';
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import * as gardenSvc from './garden';
 import type { GardenOutcome } from './garden';
 import { record, recordCreate, recordDelete } from './audit';
@@ -77,11 +77,18 @@ function slugify(name: string): string {
  */
 const RESERVED_SLUGS = new Set(['new', 'generate', 'import', 'edit']);
 
-/** Append -2, -3… until the slug is free (ignoring the row being updated). */
-async function uniqueSlug(db: Db, base: string, excludeId?: string): Promise<string> {
-  const rows = await db
+/**
+ * Append -2, -3… until the slug is free (ignoring the row being updated).
+ *
+ * `pool`, not `own`: `getTopicBySlug` resolves across the platform library too, so a school topic
+ * that reused a library topic's slug would make that URL ambiguous rather than merely duplicated.
+ * Uniqueness therefore has to hold over everything this school can see, not just what it owns.
+ */
+async function uniqueSlug(db: TenantDb, base: string, excludeId?: string): Promise<string> {
+  const rows = await db.raw
     .select({ id: flashcardTopics.id, slug: flashcardTopics.slug })
-    .from(flashcardTopics);
+    .from(flashcardTopics)
+    .where(db.pool(flashcardTopics));
   const taken = new Set(
     rows.filter((r) => r.id !== excludeId && r.slug).map((r) => r.slug as string),
   );
@@ -90,6 +97,53 @@ async function uniqueSlug(db: Db, base: string, excludeId?: string): Promise<str
   let n = 2;
   while (taken.has(`${base}-${n}`)) n++;
   return `${base}-${n}`;
+}
+
+/* ── The two-tier topic pool ────────────────────────────────────────────────────────────────
+ *
+ * `flashcard_topics.tenant_id` is the one nullable discriminator in the schema: NULL means the
+ * platform library, readable by every school and writable by nobody but a platform admin, and a
+ * non-null value means the topic belongs to that school alone. So topic READS go through
+ * `db.pool` and topic WRITES through `db.update`/`db.delete`, which are `own`-scoped and
+ * therefore refuse a library row and another school's row alike — the first because it is not
+ * ours to edit, the second because it must look like it does not exist.
+ *
+ * `flashcard_words` carries no `tenant_id` at all (see schema.ts): a word is fenced by its topic.
+ * That fence is not automatic, so every word statement names it explicitly through one of the two
+ * subqueries below — written as subqueries rather than a preceding round trip so a word read or
+ * write stays a single statement, batchable like it was before scoping.
+ */
+
+/** Topic ids this school may READ: its own, plus the platform library. */
+function readableTopicIds(db: TenantDb) {
+  return db.raw
+    .select({ id: flashcardTopics.id })
+    .from(flashcardTopics)
+    .where(db.pool(flashcardTopics));
+}
+
+/** Topic ids this school may WRITE: its own only — the library is read-only to every school. */
+function writableTopicIds(db: TenantDb) {
+  return db.raw
+    .select({ id: flashcardTopics.id })
+    .from(flashcardTopics)
+    .where(db.own(flashcardTopics));
+}
+
+/**
+ * Refuse a topic this school may not write to, before inserting words into it.
+ *
+ * An insert has no `where` to fence, so the ownership test has to be its own read. `own`, not
+ * `pool`: a library topic is visible to everyone and editable by nobody, so adding words to one
+ * is refused here even though `listWords` reads it happily.
+ */
+async function assertWritableTopic(db: TenantDb, topicId: string): Promise<void> {
+  const rows = await db.raw
+    .select({ id: flashcardTopics.id })
+    .from(flashcardTopics)
+    .where(db.own(flashcardTopics, eq(flashcardTopics.id, topicId)))
+    .limit(1);
+  if (!rows[0]) throw new Error(`flashcards: topic ${topicId} is not this school's to edit`);
 }
 
 export type FlashcardWordRow = {
@@ -157,8 +211,8 @@ function mapWord(r: typeof flashcardWords.$inferSelect): FlashcardWordRow {
 
 // ---- Topics ----
 
-export async function listTopics(db: Db): Promise<FlashcardTopicRow[]> {
-  const rows = await db
+export async function listTopics(db: TenantDb): Promise<FlashcardTopicRow[]> {
+  const rows = await db.raw
     .select({
       id: flashcardTopics.id,
       name: flashcardTopics.name,
@@ -170,24 +224,30 @@ export async function listTopics(db: Db): Promise<FlashcardTopicRow[]> {
     })
     .from(flashcardTopics)
     .leftJoin(flashcardWords, eq(flashcardWords.topicId, flashcardTopics.id))
+    .where(db.pool(flashcardTopics))
     .groupBy(flashcardTopics.id)
     .orderBy(desc(flashcardTopics.createdAt));
   return rows.map((r) => ({ ...r, wordCount: Number(r.wordCount) }));
 }
 
 /** Resolve a topic by its slug, falling back to its id so old UUID links work. */
-export async function getTopicBySlug(db: Db, slugOrId: string): Promise<TopicInfo | null> {
-  const rows = await db
+export async function getTopicBySlug(db: TenantDb, slugOrId: string): Promise<TopicInfo | null> {
+  const rows = await db.raw
     .select()
     .from(flashcardTopics)
-    .where(or(eq(flashcardTopics.slug, slugOrId), eq(flashcardTopics.id, slugOrId)));
+    .where(
+      db.pool(
+        flashcardTopics,
+        or(eq(flashcardTopics.slug, slugOrId), eq(flashcardTopics.id, slugOrId)),
+      ),
+    );
   // Prefer an exact slug match when both a slug row and an id row could match.
   const r = rows.find((x) => x.slug === slugOrId) ?? rows[0];
   if (!r) return null;
   return { id: r.id, name: r.name, slug: r.slug, description: r.description, color: r.color };
 }
 
-export async function createTopic(db: Db, input: FlashcardTopicInput): Promise<void> {
+export async function createTopic(db: TenantDb, input: FlashcardTopicInput): Promise<void> {
   const id = crypto.randomUUID();
   const slug = await uniqueSlug(db, slugify(input.name));
   await db.insert(flashcardTopics).values({
@@ -210,7 +270,7 @@ export async function createTopic(db: Db, input: FlashcardTopicInput): Promise<v
  * slug to navigate to the new topic.
  */
 export async function createTopicWithWords(
-  db: Db,
+  db: TenantDb,
   input: FlashcardTopicInput,
   words: FlashcardWordInput[],
 ): Promise<TopicInfo> {
@@ -224,7 +284,9 @@ export async function createTopicWithWords(
     color: input.color,
     createdAt: new Date().toISOString(),
   });
-  await importWords(db, id, words);
+  // Straight to the private insert: the topic was created one statement ago and is this school's
+  // by construction, so `importWords`'s ownership read would only re-prove that.
+  await insertWords(db, id, words);
   const row = {
     id,
     name: input.name,
@@ -236,13 +298,24 @@ export async function createTopicWithWords(
   return row;
 }
 
+/**
+ * Rename / recolour a topic.
+ *
+ * The before/after snapshots read `own`, not `pool`, deliberately: the update below is
+ * `own`-scoped, so a library id or another school's id changes nothing, and snapshotting a row
+ * this school may not edit would put it in the activity log anyway.
+ */
 export async function updateTopic(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<FlashcardTopicInput>,
 ): Promise<void> {
-  const beforeRows = await db.select().from(flashcardTopics).where(eq(flashcardTopics.id, id));
-  const before = beforeRows[0];
+  const readOwn = () =>
+    db.raw
+      .select()
+      .from(flashcardTopics)
+      .where(db.own(flashcardTopics, eq(flashcardTopics.id, id)));
+  const before = (await readOwn())[0];
   const set: Partial<typeof flashcardTopics.$inferInsert> = {};
   if (patch.name !== undefined) {
     set.name = patch.name;
@@ -251,38 +324,49 @@ export async function updateTopic(
   if (patch.description !== undefined) set.description = patch.description ?? null;
   if (patch.color !== undefined) set.color = patch.color;
   if (Object.keys(set).length) {
-    await db.update(flashcardTopics).set(set).where(eq(flashcardTopics.id, id));
+    await db.update(flashcardTopics, set, eq(flashcardTopics.id, id));
   }
-  const afterRows = await db.select().from(flashcardTopics).where(eq(flashcardTopics.id, id));
-  const after = afterRows[0];
+  const after = (await readOwn())[0];
   if (!sameJson(before, after)) {
     record({ action: 'update', entityType: 'flashcard', entityId: id, before, after });
   }
 }
 
-export async function removeTopic(db: Db, id: string): Promise<void> {
+export async function removeTopic(db: TenantDb, id: string): Promise<void> {
+  // Both statements are `own`-scoped, so a platform-library topic and a neighbouring school's
+  // topic delete nothing AND log nothing — the row simply does not exist from here.
   // FK cascade clears words, results, and mastery rows.
   await recordDelete(db, 'flashcard', flashcardTopics, id);
-  await db.delete(flashcardTopics).where(eq(flashcardTopics.id, id));
+  await db.delete(flashcardTopics, eq(flashcardTopics.id, id));
 }
 
 // ---- Words ----
 
-export async function listWords(db: Db, topicId: string): Promise<FlashcardWordRow[]> {
-  const rows = await db
+// tenant-unscoped: `flashcard_words` has no `tenant_id` — a word is fenced by its topic, and the
+// `readableTopicIds` subquery is that fence. `topicId` arrives from a query string on
+// /api/flashcards/words, so the visibility test cannot be left to the caller.
+export async function listWords(db: TenantDb, topicId: string): Promise<FlashcardWordRow[]> {
+  const rows = await db.raw
     .select()
     .from(flashcardWords)
-    .where(eq(flashcardWords.topicId, topicId))
+    .where(
+      and(
+        eq(flashcardWords.topicId, topicId),
+        inArray(flashcardWords.topicId, readableTopicIds(db)),
+      ),
+    )
     .orderBy(flashcardWords.createdAt);
   return rows.map(mapWord);
 }
 
 export async function createWord(
-  db: Db,
+  db: TenantDb,
   topicId: string,
   input: FlashcardWordInput,
 ): Promise<void> {
-  await db.insert(flashcardWords).values({
+  await assertWritableTopic(db, topicId);
+  // tenant-unscoped: no `tenant_id` on the row; the check above is the fence.
+  await db.raw.insert(flashcardWords).values({
     id: crypto.randomUUID(),
     topicId,
     word: input.word,
@@ -298,7 +382,7 @@ export async function createWord(
 }
 
 export async function updateWord(
-  db: Db,
+  db: TenantDb,
   id: string,
   patch: Partial<FlashcardWordInput>,
 ): Promise<void> {
@@ -312,22 +396,42 @@ export async function updateWord(
   if (patch.audioUrl !== undefined) set.audioUrl = patch.audioUrl ?? null;
   if (patch.imageKey !== undefined) set.imageKey = patch.imageKey ?? null;
   if (Object.keys(set).length) {
-    await db.update(flashcardWords).set(set).where(eq(flashcardWords.id, id));
+    // tenant-unscoped: no `tenant_id` on the row. `writableTopicIds` is the fence, and it excludes
+    // the platform library, so a word in a library topic is not editable from a school.
+    await db.raw
+      .update(flashcardWords)
+      .set(set)
+      .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, writableTopicIds(db))));
   }
 }
 
-export async function removeWord(db: Db, id: string): Promise<void> {
-  await db.delete(flashcardWords).where(eq(flashcardWords.id, id));
+export async function removeWord(db: TenantDb, id: string): Promise<void> {
+  // tenant-unscoped: same fence as `updateWord`. A word outside it deletes nothing, which is the
+  // "looks like it does not exist" answer both a library row and another school's row should get.
+  await db.raw
+    .delete(flashcardWords)
+    .where(and(eq(flashcardWords.id, id), inArray(flashcardWords.topicId, writableTopicIds(db))));
 }
 
 export async function importWords(
-  db: Db,
+  db: TenantDb,
+  topicId: string,
+  words: FlashcardWordInput[],
+): Promise<void> {
+  await assertWritableTopic(db, topicId);
+  await insertWords(db, topicId, words);
+}
+
+/** The insert half of `importWords`, for callers that have just created the topic themselves. */
+async function insertWords(
+  db: TenantDb,
   topicId: string,
   words: FlashcardWordInput[],
 ): Promise<void> {
   const now = new Date().toISOString();
+  // tenant-unscoped: no `tenant_id` on the row; the caller's ownership check is the fence.
   const ops: BatchItem<'sqlite'>[] = words.map((w) =>
-    db.insert(flashcardWords).values({
+    db.raw.insert(flashcardWords).values({
       id: crypto.randomUUID(),
       topicId,
       word: w.word,
@@ -349,12 +453,15 @@ export async function importWords(
  * topic (or a crafted one) cannot touch rows this screen does not own.
  */
 export async function updateWordExamples(
-  db: Db,
+  db: TenantDb,
   topicId: string,
   items: { id: string; exampleEn: string; exampleAnswer: string }[],
 ): Promise<void> {
+  await assertWritableTopic(db, topicId);
+  // tenant-unscoped: no `tenant_id` on the row. The topic check above plus the per-statement
+  // `topicId` equality are the fence, exactly as they were the fence against a stale id before.
   const ops: BatchItem<'sqlite'>[] = items.map((it) =>
-    db
+    db.raw
       .update(flashcardWords)
       .set({ exampleEn: it.exampleEn, exampleAnswer: it.exampleAnswer })
       .where(and(eq(flashcardWords.id, it.id), eq(flashcardWords.topicId, topicId))),
@@ -365,11 +472,11 @@ export async function updateWordExamples(
 // ---- Results & mastery ----
 
 export async function listTopicResults(
-  db: Db,
+  db: TenantDb,
   topicId: string,
   limit = 30,
 ): Promise<FlashcardResultRow[]> {
-  const rows = await db
+  const rows = await db.raw
     .select({
       id: flashcardResults.id,
       playerId: sql<string>`coalesce(${flashcardResults.studentId}, ${flashcardResults.staffId})`,
@@ -386,7 +493,9 @@ export async function listTopicResults(
     .from(flashcardResults)
     .leftJoin(students, eq(students.id, flashcardResults.studentId))
     .leftJoin(staff, eq(staff.id, flashcardResults.staffId))
-    .where(eq(flashcardResults.topicId, topicId))
+    // Own, not pool: a library topic is shared, but a leaderboard is not — each school sees only
+    // the rounds its own players have banked on it.
+    .where(db.own(flashcardResults, eq(flashcardResults.topicId, topicId)))
     .orderBy(desc(flashcardResults.playedAt))
     .limit(limit);
   return rows.map((r) => ({ ...r, isStaff: Boolean(r.isStaff) }));
@@ -407,15 +516,17 @@ export async function listTopicResults(
  * than the vocabulary screen being broken.
  */
 export async function recordResultWithGarden(
-  db: Db,
+  db: TenantDb,
   player: { kind: 'staff' | 'student'; id: string },
   input: FlashcardResultInput,
 ): Promise<{ recorded: boolean; garden: GardenOutcome | null }> {
   if (input.clientId) {
-    const existing = await db.query.flashcardResults.findFirst({
-      where: eq(flashcardResults.clientId, input.clientId),
-    });
-    if (existing) return { recorded: false, garden: null };
+    const existing = await db.raw
+      .select({ id: flashcardResults.id })
+      .from(flashcardResults)
+      .where(db.own(flashcardResults, eq(flashcardResults.clientId, input.clientId)))
+      .limit(1);
+    if (existing[0]) return { recorded: false, garden: null };
   }
   const now = new Date().toISOString();
   const isStudent = player.kind === 'student';
@@ -429,7 +540,9 @@ export async function recordResultWithGarden(
     const wordIds = [...new Set(input.answers.map((a) => a.wordId))];
     const [{ intervals }, prior] = await Promise.all([
       getReviewSettings(db),
-      db
+      // tenant-unscoped: `flashcard_mastery` is keyed on `(student_id, word_id)` and carries no
+      // `tenant_id` — the student id is the fence, and it comes from the session, never the body.
+      db.raw
         .select({
           wordId: flashcardMastery.wordId,
           level: flashcardMastery.level,
@@ -467,7 +580,8 @@ export async function recordResultWithGarden(
     ...(isStudent
       ? input.answers.map((a) => {
           const next = review.get(a.wordId);
-          return db
+          // tenant-unscoped: keyed on `(student_id, word_id)`, and the student is already scoped.
+          return db.raw
             .insert(flashcardMastery)
             .values({
               studentId: player.id,
@@ -514,7 +628,7 @@ export async function recordResultWithGarden(
 
 /** The plain "did it record?" form. Staff plays never touch the garden, exactly as with mastery. */
 export async function recordResult(
-  db: Db,
+  db: TenantDb,
   player: { kind: 'staff' | 'student'; id: string },
   input: FlashcardResultInput,
 ): Promise<boolean> {
@@ -539,7 +653,7 @@ export interface BatchResultOutcome {
  * addressable once the outbox batches several together.
  */
 export async function recordResults(
-  db: Db,
+  db: TenantDb,
   player: { kind: 'staff' | 'student'; id: string },
   inputs: FlashcardResultInput[],
 ): Promise<{ recorded: number; outcomes: BatchResultOutcome[] }> {
@@ -553,12 +667,15 @@ export async function recordResults(
   return { recorded, outcomes };
 }
 
+// tenant-unscoped: `flashcard_mastery` and `flashcard_words` both carry no `tenant_id`. The
+// student id fences the mastery rows and the topic id fences the words; both come from a caller
+// that has already resolved them against the school (session id, `getTopicBySlug`).
 export async function listMasteryForStudent(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   topicId: string,
 ): Promise<MasteryRow[]> {
-  const rows = await db
+  const rows = await db.raw
     .select({
       wordId: flashcardMastery.wordId,
       correct: flashcardMastery.correct,
@@ -583,8 +700,11 @@ export async function listMasteryForStudent(
 const REVIEW_SETTINGS_KEY = 'review-settings';
 
 /** Same store and defaulting shape as `getGardenSettings`. */
-export async function getReviewSettings(db: Db): Promise<ReviewSettings> {
-  const rows = await db.select().from(settings).where(eq(settings.key, REVIEW_SETTINGS_KEY));
+export async function getReviewSettings(db: TenantDb): Promise<ReviewSettings> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, REVIEW_SETTINGS_KEY)));
   const row = rows[0];
   if (!row) return { intervals: [...DEFAULT_REVIEW_SETTINGS.intervals] };
   try {
@@ -605,17 +725,19 @@ export async function getReviewSettings(db: Db): Promise<ReviewSettings> {
  * to the new top the next time they are answered, which keeps the write cheap and the read correct.
  */
 export async function setReviewSettings(
-  db: Db,
+  db: TenantDb,
   input: ReviewSettingsInput,
 ): Promise<ReviewSettings> {
   const before = await getReviewSettings(db);
   const intervals = [...input.intervals];
   const after = { intervals };
   const value = JSON.stringify(after);
+  // The conflict target is the whole primary key `(tenant_id, key)` now, not the bare key — one
+  // ladder per school, not one per deployment.
   await db
     .insert(settings)
     .values({ key: REVIEW_SETTINGS_KEY, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value } });
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value } });
   if (!sameJson(before, after)) {
     record({
       action: 'update',
@@ -637,8 +759,11 @@ export type PronounceSettings = { curve: PronounceCurve };
  * `forgiveScore`). Same store and defaulting shape as `getReviewSettings`; the default is
  * 'off' — raw Azure scores — until the admin turns a curve on from /config.
  */
-export async function getPronounceSettings(db: Db): Promise<PronounceSettings> {
-  const rows = await db.select().from(settings).where(eq(settings.key, PRONOUNCE_SETTINGS_KEY));
+export async function getPronounceSettings(db: TenantDb): Promise<PronounceSettings> {
+  const rows = await db.raw
+    .select()
+    .from(settings)
+    .where(db.own(settings, eq(settings.key, PRONOUNCE_SETTINGS_KEY)));
   const row = rows[0];
   if (!row) return { curve: 'off' };
   try {
@@ -652,7 +777,7 @@ export async function getPronounceSettings(db: Db): Promise<PronounceSettings> {
 }
 
 export async function setPronounceSettings(
-  db: Db,
+  db: TenantDb,
   input: PronounceSettingsInput,
 ): Promise<PronounceSettings> {
   const before = await getPronounceSettings(db);
@@ -661,7 +786,7 @@ export async function setPronounceSettings(
   await db
     .insert(settings)
     .values({ key: PRONOUNCE_SETTINGS_KEY, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value } });
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value } });
   if (!sameJson(before, after)) {
     record({
       action: 'update',
@@ -688,11 +813,14 @@ export type DueTopicGroup = {
  * is what the rest of the vocabulary screen is for.
  */
 export async function listDueForStudent(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   todayVn: string,
 ): Promise<{ groups: DueTopicGroup[]; total: number }> {
-  const rows = await db
+  // tenant-unscoped on `flashcard_mastery`/`flashcard_words` (neither carries `tenant_id`); the
+  // student id is the fence there. The topic join adds `pool`, so a mastery row that somehow
+  // pointed at another school's topic would drop out rather than name it in the due list.
+  const rows = await db.raw
     .select({
       wordId: flashcardMastery.wordId,
       dueDay: flashcardMastery.dueDay,
@@ -705,7 +833,13 @@ export async function listDueForStudent(
     .from(flashcardMastery)
     .innerJoin(flashcardWords, eq(flashcardWords.id, flashcardMastery.wordId))
     .innerJoin(flashcardTopics, eq(flashcardTopics.id, flashcardWords.topicId))
-    .where(and(eq(flashcardMastery.studentId, studentId), lte(flashcardMastery.dueDay, todayVn)));
+    .where(
+      db.pool(
+        flashcardTopics,
+        eq(flashcardMastery.studentId, studentId),
+        lte(flashcardMastery.dueDay, todayVn),
+      ),
+    );
 
   const topics = new Map<string, TopicInfo>();
   for (const r of rows) {
@@ -728,11 +862,14 @@ export async function listDueForStudent(
 
 /** Just the number, for the sidebar badge. Index-only against `idx_flashcard_mastery_due`. */
 export async function countDueForStudent(
-  db: Db,
+  db: TenantDb,
   studentId: string,
   todayVn: string,
 ): Promise<number> {
-  const rows = await db
+  // tenant-unscoped: `flashcard_mastery` has no `tenant_id`; the student id is the fence, and it
+  // comes from the session. Kept index-only on purpose — joining topics for a pool check would
+  // cost the badge its index.
+  const rows = await db.raw
     .select({ n: sql<number>`count(*)` })
     .from(flashcardMastery)
     .where(and(eq(flashcardMastery.studentId, studentId), lte(flashcardMastery.dueDay, todayVn)));
@@ -775,13 +912,17 @@ export const SCHEDULED_WORDS_LIMIT = 500;
  * reloads is useless for comparing two looks at the same data.
  */
 export async function listScheduledWords(
-  db: Db,
+  db: TenantDb,
   opts: { studentId?: string | null; limit?: number } = {},
 ): Promise<ScheduledWordRow[]> {
-  const where = opts.studentId
-    ? and(isNotNull(flashcardMastery.dueDay), eq(flashcardMastery.studentId, opts.studentId))
-    : isNotNull(flashcardMastery.dueDay);
-  const rows = await db
+  // The school comes from the `students` join — mastery and words carry no `tenant_id`, and this
+  // is the one read here that is not already fenced by a session-supplied student id.
+  const where = db.own(
+    students,
+    isNotNull(flashcardMastery.dueDay),
+    opts.studentId ? eq(flashcardMastery.studentId, opts.studentId) : undefined,
+  );
+  const rows = await db.raw
     .select({
       studentId: flashcardMastery.studentId,
       studentName: students.name,
@@ -809,8 +950,8 @@ export async function listScheduledWords(
   return rows.map((r) => ({ ...r, dueDay: r.dueDay as string }));
 }
 
-export async function studentFlashcardStats(db: Db): Promise<StudentFlashcardStats[]> {
-  const rows = await db
+export async function studentFlashcardStats(db: TenantDb): Promise<StudentFlashcardStats[]> {
+  const rows = await db.raw
     .select({
       studentId: flashcardResults.studentId,
       rounds: sql<number>`count(*)`,
@@ -818,7 +959,7 @@ export async function studentFlashcardStats(db: Db): Promise<StudentFlashcardSta
       lastPlayedAt: sql<string>`max(${flashcardResults.playedAt})`,
     })
     .from(flashcardResults)
-    .where(isNotNull(flashcardResults.studentId))
+    .where(db.own(flashcardResults, isNotNull(flashcardResults.studentId)))
     .groupBy(flashcardResults.studentId);
   return rows.map((r) => ({
     studentId: r.studentId as string,

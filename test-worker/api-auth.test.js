@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
 import { hashPassword, hashToken } from '../server/services/crypto';
@@ -24,7 +25,7 @@ import * as parentPortalSvc from '../server/services/parent-portal';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seedStaff(d, { email, password = 'pw', role = 'Teacher' }) {
@@ -98,9 +99,9 @@ describe('userFromToken', () => {
   it('resolves a raw token to the account', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'uft@test.com' });
-    const token = await authSvc.createSession(d, accountId, true);
+    const token = await authSvc.createSession(d.raw, accountId, true);
 
-    const user = await authSvc.userFromToken(d, token);
+    const user = await authSvc.userFromToken(d.raw, token);
     expect(user).not.toBeNull();
     expect(user.account.id).toBe(accountId);
     expect(user.kind).toBe('staff');
@@ -109,12 +110,12 @@ describe('userFromToken', () => {
   it('stores the HASH, never the raw token', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'hash@test.com' });
-    const token = await authSvc.createSession(d, accountId, true);
+    const token = await authSvc.createSession(d.raw, accountId, true);
 
-    const raw = await d.select().from(sessions).where(eq(sessions.token, token));
+    const raw = await d.raw.select().from(sessions).where(eq(sessions.token, token));
     expect(raw).toHaveLength(0);
 
-    const hashed = await d
+    const hashed = await d.raw
       .select()
       .from(sessions)
       .where(eq(sessions.token, await hashToken(token)));
@@ -122,22 +123,22 @@ describe('userFromToken', () => {
   });
 
   it('returns null for an unknown token', async () => {
-    expect(await authSvc.userFromToken(db(), 'not-a-real-token')).toBeNull();
+    expect(await authSvc.userFromToken(db().raw, 'not-a-real-token')).toBeNull();
   });
 
   it('deletes and rejects an expired session', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'expired@test.com' });
-    const token = await authSvc.createSession(d, accountId, true);
+    const token = await authSvc.createSession(d.raw, accountId, true);
     const tokenHash = await hashToken(token);
 
-    await d
+    await d.raw
       .update(sessions)
       .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
       .where(eq(sessions.token, tokenHash));
 
-    expect(await authSvc.userFromToken(d, token)).toBeNull();
-    const rows = await d.select().from(sessions).where(eq(sessions.token, tokenHash));
+    expect(await authSvc.userFromToken(d.raw, token)).toBeNull();
+    const rows = await d.raw.select().from(sessions).where(eq(sessions.token, tokenHash));
     expect(rows).toHaveLength(0);
   });
 });
@@ -147,12 +148,12 @@ describe('createSession ttlDays', () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'ttl1@test.com' });
 
-    const short = await authSvc.createSession(d, accountId, false);
-    const long = await authSvc.createSession(d, accountId, true);
+    const short = await authSvc.createSession(d.raw, accountId, false);
+    const long = await authSvc.createSession(d.raw, accountId, true);
 
     const at = async (t) =>
       (
-        await d
+        await d.raw
           .select()
           .from(sessions)
           .where(eq(sessions.token, await hashToken(t)))
@@ -167,10 +168,10 @@ describe('createSession ttlDays', () => {
   it('honours an explicit ttlDays for mobile', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'ttl90@test.com' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const row = (
-      await d
+      await d.raw
         .select()
         .from(sessions)
         .where(eq(sessions.token, await hashToken(token)))
@@ -209,7 +210,7 @@ describe('API guards reject with JSON, never a redirect', () => {
   it('accepts a valid bearer token', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'valid@test.com' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const user = await requireApiUser(withBearer(token), env);
     expect(user.account.id).toBe(accountId);
@@ -220,7 +221,7 @@ describe('role enforcement', () => {
   it('403s a student against a staff endpoint — not a redirect to /flashcards', async () => {
     const d = db();
     const { accountId } = await seedStudent(d, { email: 'student@test.com' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const err = await caught(() => requireApiStaff(withBearer(token), env));
     expect(err).toBeInstanceOf(Response);
@@ -232,7 +233,7 @@ describe('role enforcement', () => {
   it('lets a student through a user-level endpoint', async () => {
     const d = db();
     const { accountId } = await seedStudent(d, { email: 'student2@test.com' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const user = await requireApiUser(withBearer(token), env);
     expect(user.kind).toBe('student');
@@ -241,7 +242,7 @@ describe('role enforcement', () => {
   it('403s a Teacher against an admin endpoint', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'teacher@test.com', role: 'Teacher' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const err = await caught(() => requireApiAdmin(withBearer(token), env));
     expect(err.status).toBe(403);
@@ -250,7 +251,7 @@ describe('role enforcement', () => {
   it('lets an Admin through', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'admin@test.com', role: 'Admin' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const user = await requireApiAdmin(withBearer(token), env);
     expect(user.user.role).toBe('Admin');
@@ -262,11 +263,11 @@ describe('changePassword and multi-device sessions', () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'multi@test.com', password: 'old-pw' });
 
-    const phone = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
-    const browser = await authSvc.createSession(d, accountId, true);
+    const phone = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
+    const browser = await authSvc.createSession(d.raw, accountId, true);
 
     const result = await authSvc.changePassword(
-      d,
+      d.raw,
       accountId,
       'old-pw',
       'new-pw',
@@ -275,24 +276,24 @@ describe('changePassword and multi-device sessions', () => {
     expect(result).toBe('ok');
 
     // The device that made the change stays signed in; every other one is evicted.
-    expect(await authSvc.userFromToken(d, phone)).not.toBeNull();
-    expect(await authSvc.userFromToken(d, browser)).toBeNull();
+    expect(await authSvc.userFromToken(d.raw, phone)).not.toBeNull();
+    expect(await authSvc.userFromToken(d.raw, browser)).toBeNull();
   });
 
   it('rejects a wrong current password without touching sessions', async () => {
     const d = db();
     const { accountId } = await seedStaff(d, { email: 'wrongpw@test.com', password: 'right' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const result = await authSvc.changePassword(
-      d,
+      d.raw,
       accountId,
       'wrong',
       'new-pw',
       await hashToken(token),
     );
     expect(result).toBe('wrong_current_password');
-    expect(await authSvc.userFromToken(d, token)).not.toBeNull();
+    expect(await authSvc.userFromToken(d.raw, token)).not.toBeNull();
   });
 });
 
@@ -303,9 +304,9 @@ describe('requireApiParent and the parent portal gate', () => {
     const { accountId: staffAccount } = await seedStaff(d, { email: 'rap-staff@test.com' });
     const { accountId: studentAccount } = await seedStudent(d, { email: 'rap-student@test.com' });
 
-    const parentToken = await authSvc.createSession(d, parentAccount, true, MOBILE_TTL_DAYS);
-    const staffToken = await authSvc.createSession(d, staffAccount, true, MOBILE_TTL_DAYS);
-    const studentToken = await authSvc.createSession(d, studentAccount, true, MOBILE_TTL_DAYS);
+    const parentToken = await authSvc.createSession(d.raw, parentAccount, true, MOBILE_TTL_DAYS);
+    const staffToken = await authSvc.createSession(d.raw, staffAccount, true, MOBILE_TTL_DAYS);
+    const studentToken = await authSvc.createSession(d.raw, studentAccount, true, MOBILE_TTL_DAYS);
 
     const parent = await requireApiParent(withBearer(parentToken), env);
     expect(parent.kind).toBe('parent');
@@ -330,7 +331,7 @@ describe('requireApiParent and the parent portal gate', () => {
   it('403s a parent for learner-level endpoints, both before and after the portal opens', async () => {
     const d = db();
     const { accountId } = await seedParent(d, { email: 'learner-gate@test.com' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     // The portal never widens `user` level: /api/my-sessions passes an EMPTY filter for a
     // non-student, which means "every class in the school". A parent must never reach it.
@@ -345,7 +346,7 @@ describe('requireApiParent and the parent portal gate', () => {
   it('never lets a parent write the portal setting that governs them', async () => {
     const d = db();
     const { accountId } = await seedParent(d, { email: 'portal-write@test.com' });
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     // Read is `any` level — a parent's own tab bar depends on it, so this must NOT throw.
     await expect(requireApiUser(withBearer(token), env)).resolves.toBeTruthy();

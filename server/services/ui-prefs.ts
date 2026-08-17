@@ -1,4 +1,4 @@
-import type { Db } from '../db/index';
+import type { TenantDb } from '../db/index';
 import type { ScrollbarStyle, TabBarStyle } from '../../shared/schemas';
 import { record } from './audit';
 import { deleteJson, readJson, readSchoolJson, writeJson, writeSchoolJson } from './user-settings';
@@ -33,13 +33,13 @@ export const DEFAULT_UI_PREFS: UiPrefs = { scrollbar: 'slim', mobileTabBar: 'pil
 export const UI_PREFS_KEY = 'ui-prefs';
 
 /** What THIS account should actually see: its own row, else the school's, else the default. */
-export async function getUiPrefs(db: Db, accountId: string): Promise<UiPrefs> {
+export async function getUiPrefs(db: TenantDb, accountId: string): Promise<UiPrefs> {
   return readJson(db, accountId, UI_PREFS_KEY, DEFAULT_UI_PREFS);
 }
 
 /** Store a personal override. Never touches the school row. */
 export async function setUiPrefs(
-  db: Db,
+  db: TenantDb,
   accountId: string,
   patch: Partial<UiPrefs>,
 ): Promise<UiPrefs> {
@@ -59,17 +59,17 @@ export async function setUiPrefs(
 }
 
 /** Drop the personal override; this account follows the school default again. */
-export async function clearUiPrefsOverride(db: Db, accountId: string): Promise<void> {
+export async function clearUiPrefsOverride(db: TenantDb, accountId: string): Promise<void> {
   await deleteJson(db, accountId, UI_PREFS_KEY);
   record({ action: 'update', entityType: 'setting', entityId: UI_PREFS_KEY });
 }
 
 /** The school default, as the System Config screens present it. */
-export async function getSchoolUiPrefs(db: Db): Promise<UiPrefs> {
+export async function getSchoolUiPrefs(db: TenantDb): Promise<UiPrefs> {
   return readSchoolJson(db, UI_PREFS_KEY, DEFAULT_UI_PREFS);
 }
 
-export async function setSchoolUiPrefs(db: Db, patch: Partial<UiPrefs>): Promise<UiPrefs> {
+export async function setSchoolUiPrefs(db: TenantDb, patch: Partial<UiPrefs>): Promise<UiPrefs> {
   const current = await getSchoolUiPrefs(db);
   const next = { ...current, ...patch };
   await writeSchoolJson(db, UI_PREFS_KEY, next);

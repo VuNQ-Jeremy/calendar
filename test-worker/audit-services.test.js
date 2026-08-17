@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import { auditALS, newRequestStore, hasCrudEntry } from '../server/services/audit';
 import * as peopleSvc from '../server/services/people';
 import * as eventsSvc from '../server/services/events';
@@ -15,7 +16,7 @@ import * as subjectsSvc from '../server/services/subjects';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 /** Run `fn` inside one auditALS scope; returns `{ store, result }` — never just one or the other. */

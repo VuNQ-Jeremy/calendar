@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { env } from 'cloudflare:test';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as authSvc from '../server/services/auth';
 import * as peopleSvc from '../server/services/people';
 import { hashPassword } from '../server/services/crypto';
@@ -26,7 +27,7 @@ import { getSpecJson } from '../server/api/docs/build-spec';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 async function seedStaff(d, email, role = 'Teacher') {
@@ -74,7 +75,7 @@ describe('who may read the API reference', () => {
   it('lets a staff bearer token through', async () => {
     const d = db();
     const accountId = await seedStaff(d, 'docs-staff@mochi.edu');
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const user = await requireStaffCookieOrBearer(bearer(token), env);
     expect(user.kind).toBe('staff');
@@ -83,7 +84,7 @@ describe('who may read the API reference', () => {
   it('refuses a student bearer token with a JSON 403', async () => {
     const d = db();
     const accountId = await seedStudent(d, 'docs-student@mochi.edu');
-    const token = await authSvc.createSession(d, accountId, true, MOBILE_TTL_DAYS);
+    const token = await authSvc.createSession(d.raw, accountId, true, MOBILE_TTL_DAYS);
 
     const thrown = await requireStaffCookieOrBearer(bearer(token), env).catch((e) => e);
     expect(thrown).toBeInstanceOf(Response);

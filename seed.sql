@@ -3,6 +3,14 @@
 --   wrangler d1 execute mochi --remote --file=./seed.sql   (deployed DB)
 -- Dates are static (anchored around 2026-06-22, a Monday) for a stable demo.
 
+-- The demo dataset belongs to the original school. Every table that got a `tenant_id` by plain
+-- ALTER carries a DEFAULT, so the inserts below need no change; the tables migration 0045
+-- REBUILT (settings, assessment_types, the managed enums, tuition_months, usage_counters,
+-- sent_notifications) have no default and must name the school explicitly.
+INSERT INTO tenants (id, slug, name, status, verified, created_at)
+VALUES ('tnt_mochi_0001', 'mochi', 'Mochi', 'active', 1, datetime('now') || 'Z')
+ON CONFLICT(id) DO NOTHING;
+
 DELETE FROM attendance_records;
 DELETE FROM parent_students; DELETE FROM class_students; DELETE FROM class_schedule;
 DELETE FROM events; DELETE FROM materials; DELETE FROM invites;
@@ -66,13 +74,13 @@ INSERT INTO events (id, title, date, start_time, end_time, color, class_id, loca
   ('e6', 'Science fair',  '2026-06-26', '10:00', '12:00', 'green',  'c1',  'Gym',      'none'),
   ('e7', 'Parent night',  '2026-06-27', '18:00', '19:30', 'rose',   NULL,  'Hall',     'none');
 
-INSERT INTO assessment_types (id, name, active, sort_order) VALUES
-  ('at1', 'Kiểm tra miệng',   1, 1),
-  ('at2', 'Kiểm tra 15 phút', 1, 2),
-  ('at3', 'Kiểm tra 1 tiết',  1, 3),
-  ('at4', 'Giữa kỳ',          1, 4),
-  ('at5', 'Essay draft',      1, 5),
-  ('at6', 'Essay final',      1, 6);
+INSERT INTO assessment_types (id, tenant_id, name, active, sort_order) VALUES
+  ('at1', 'tnt_mochi_0001', 'Kiểm tra miệng',   1, 1),
+  ('at2', 'tnt_mochi_0001', 'Kiểm tra 15 phút', 1, 2),
+  ('at3', 'tnt_mochi_0001', 'Kiểm tra 1 tiết',  1, 3),
+  ('at4', 'tnt_mochi_0001', 'Giữa kỳ',          1, 4),
+  ('at5', 'tnt_mochi_0001', 'Essay draft',      1, 5),
+  ('at6', 'tnt_mochi_0001', 'Essay final',      1, 6);
 
 INSERT INTO materials (id, title, type, url, file_name, favorite, added_at) VALUES
   ('m1', 'Photosynthesis slides', 'notes',     '',                        'photosynthesis.pdf', 1, '2026-06-22'),
@@ -92,8 +100,8 @@ INSERT INTO feedback (id, message, category, author, status, created_at, ref) VA
   ('fb1', 'Love the calendar color themes — the per-class hues make my week so easy to scan.', 'praise', 'Priya Nair', 'reviewed', '2026-06-20', 1),
   ('fb2', 'Could we get a print / PDF export of the month view for the staff room board?',      'idea',   'Sam Okafor', 'new',      '2026-06-21', 2);
 
-INSERT INTO settings (key, value) VALUES
-  ('theme', '{"bg":"#FFFCF8","gridLine":"#ECE0CF","today":"#FFE7D1","header":"#FDF6EC","bgImage":"","bgOpacity":0.12}');
+INSERT INTO settings (tenant_id, key, value) VALUES
+  ('tnt_mochi_0001', 'theme', '{"bg":"#FFFCF8","gridLine":"#ECE0CF","today":"#FFE7D1","header":"#FDF6EC","bgImage":"","bgOpacity":0.12}');
 
 INSERT INTO score_records (id, student_id, class_id, date, score, assessment_type_id, notes) VALUES
   ('sc1',  's1', 'c1', '2026-05-04', 6.5, 'at1', NULL),

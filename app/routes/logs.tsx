@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ClientLoaderFunctionArgs } from 'react-router';
 import { LogsScreen } from '../../src/screens-logs.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireAdmin } from '../../server/services/auth';
 import * as flashcardsSvc from '../../server/services/flashcards';
@@ -20,8 +20,8 @@ import { K, logsStudentKey, swrLoad } from '../../src/lib/route-cache.js';
  */
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireAdmin(request, env);
-  const db = createDb(env);
+  const admin = await requireAdmin(request, env);
+  const db = tenantDbFor(env, admin);
   const studentId = params.studentId ?? null;
   const [students, scheduledWords] = await Promise.all([
     peopleSvc.listStudents(db),

@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { MyTestsScreen } from '../../src/tests/student-list.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner } from '../../server/services/auth';
 import * as attemptsSvc from '../../server/services/attempts';
@@ -18,13 +18,14 @@ import * as attemptsSvc from '../../server/services/attempts';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireLearner(request, env);
+  const session = await requireLearner(request, env);
+  const { user, kind } = session;
   // Staff have their own screen; anything that is not a student has no test list at all.
   // (Parents cannot authenticate today — the branch is defensive, not reachable.)
   if (kind === 'staff') throw redirect('/tests');
   if (kind !== 'student') throw redirect('/profile');
 
-  const db = createDb(env);
+  const db = tenantDbFor(env, session);
   const now = new Date();
   return {
     items: await attemptsSvc.listOpenForStudent(db, user.id, now),

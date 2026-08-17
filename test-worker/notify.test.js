@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { env } from 'cloudflare:test';
-import { createDb } from '../server/db/index';
+import { createRawDb } from '../server/db/internal';
+import { TenantDb, PRIMARY_TENANT_ID } from '../server/db/index';
 import * as classesSvc from '../server/services/classes';
 import * as eventsSvc from '../server/services/events';
 import * as peopleSvc from '../server/services/people';
@@ -21,7 +22,7 @@ import { accounts, pushTokens } from '../server/db/schema';
  */
 
 function db() {
-  return createDb(env);
+  return new TenantDb(createRawDb(env), PRIMARY_TENANT_ID);
 }
 
 /** Every message handed to exp.host across all calls since the last reset. */
@@ -57,7 +58,7 @@ async function seedStudentWithDevice(d, name, token) {
     studentId: student.id,
     createdAt: new Date().toISOString(),
   });
-  await d.insert(pushTokens).values({
+  await d.raw.insert(pushTokens).values({
     id: crypto.randomUUID(),
     accountId,
     expoToken: token,

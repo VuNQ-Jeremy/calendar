@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { StudentsScreen } from '../../src/screens-manage/index.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as peopleSvc from '../../server/services/people';
@@ -24,8 +24,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const [students, staff, parents, invites, classes, flashcardStats] = await Promise.all([
     peopleSvc.listStudents(db),
     peopleSvc.listStaff(db),
@@ -50,8 +50,8 @@ clientLoader.hydrate = true as const;
  */
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const user = await requireStaff(request, env);
+  const db = tenantDbFor(env, user);
   const formData = await request.formData();
   const entity = formData.get('entity') as string;
   const intent = formData.get('intent') as string;

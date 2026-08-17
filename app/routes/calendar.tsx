@@ -5,7 +5,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { CalendarScreen } from '../../src/calendar/index.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import * as eventsSvc from '../../server/services/events';
 import { requireStaff } from '../../server/services/auth';
@@ -23,7 +23,7 @@ import { withLiveAction } from '../../server/live';
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const sessionUser = await requireStaff(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, sessionUser);
   const [events, classes, students, theme, materials, eventMaterials, classMaterials] =
     await Promise.all([
       eventsSvc.list(db),
@@ -45,7 +45,7 @@ clientLoader.hydrate = true as const;
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const sessionUser = await requireStaff(request, env);
-  const db = createDb(env);
+  const db = tenantDbFor(env, sessionUser);
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;

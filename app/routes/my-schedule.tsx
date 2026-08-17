@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { StudentScheduleScreen } from '../../src/schedule/student-schedule.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireLearner } from '../../server/services/auth';
 import * as previewSvc from '../../server/services/session-preview';
@@ -16,14 +16,15 @@ import * as previewSvc from '../../server/services/session-preview';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  const { user, kind } = await requireLearner(request, env);
+  const learner = await requireLearner(request, env);
+  const { user, kind } = learner;
   // Staff have the calendar; anything that is not a student has no schedule of its own. A parent
   // never reaches this — requireLearner already sent them to /profile — and their children's
   // sessions live on /children instead.
   if (kind === 'staff') throw redirect('/calendar');
   if (kind !== 'student') throw redirect('/profile');
 
-  const db = createDb(env);
+  const db = tenantDbFor(env, learner);
   return previewSvc.upcomingSessions(db, { studentId: user.id }, 7);
 }
 

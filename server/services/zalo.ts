@@ -1,7 +1,7 @@
-import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { accounts, parentStudents, zaloChats, zaloPairCodes } from '../db/schema';
-import type { Db } from '../db/index';
-import { record } from './audit';
+import { TenantDb, type Db } from '../db/index';
+import { record, setActorTenant } from './audit';
 
 /**
  * Zalo Bot channel — the conversation registry, the sender, and the pairing flow.
@@ -23,6 +23,13 @@ import { record } from './audit';
  *
  * **Disabled by default.** No ZALO_BOT_TOKEN means every send quietly no-ops. That is what keeps
  * the e2e environment inert while still letting it drive the webhook.
+ *
+ * **Scoping.** `zalo_chats` and `zalo_pair_codes` both carry a school, and everything a signed-in
+ * staff member touches goes through a `TenantDb`. The inbound half cannot: a webhook delivery has
+ * no session, and the only identity it carries is Zalo's `chat_id` (or a typed pairing code).
+ * Both of those selectors stay globally unique for exactly that reason, so the incoming path
+ * takes the unscoped handle, resolves the school FROM the row it finds, and scopes everything
+ * downstream of that point.
  */
 
 const API_BASE = 'https://bot-api.zaloplatforms.com';
@@ -184,29 +191,40 @@ function map(r: typeof zaloChats.$inferSelect): ZaloChatRow {
 }
 
 /** Every paired conversation. The admin list, and small enough to read whole. */
-export async function listLinks(db: Db): Promise<ZaloChatRow[]> {
-  const rows = await db.select().from(zaloChats);
+export async function listLinks(db: TenantDb): Promise<ZaloChatRow[]> {
+  const rows = await db.raw.select().from(zaloChats).where(db.own(zaloChats));
   return rows.map(map);
 }
 
-export async function unlink(db: Db, id: string): Promise<void> {
-  await db.delete(zaloChats).where(eq(zaloChats.id, id));
+export async function unlink(db: TenantDb, id: string): Promise<void> {
+  await db.delete(zaloChats, eq(zaloChats.id, id));
 }
 
+/**
+ * Detach a conversation, addressed the way the bot itself addresses it.
+ *
+ * tenant-unscoped: inbound webhook has no session; chat_id is the selector. The person typing
+ * `/unlink` is the conversation, and `zalo_chats.chat_id` is globally unique — asking which
+ * school they belong to before honouring "stop messaging me" would be the wrong way round.
+ */
 export async function unlinkByChatId(db: Db, chatId: string): Promise<void> {
   const rows = await db.select().from(zaloChats).where(eq(zaloChats.chatId, chatId));
-  if (rows[0])
+  if (rows[0]) {
+    // The row is the only thing that knows which school this conversation belonged to; tell the
+    // ambient store before recording, or the audit entry lands on the wrong school's log.
+    setActorTenant(rows[0].tenantId);
     record({ action: 'delete', entityType: 'zalo_link', entityId: rows[0].id, before: rows[0] });
+  }
   await db.delete(zaloChats).where(eq(zaloChats.chatId, chatId));
 }
 
 /** 1:1 chats belonging to the given accounts — the Zalo twin of push.tokensForAccounts. */
-export async function chatsForAccounts(db: Db, accountIds: string[]): Promise<string[]> {
+export async function chatsForAccounts(db: TenantDb, accountIds: string[]): Promise<string[]> {
   if (!accountIds.length) return [];
-  const rows = await db
+  const rows = await db.raw
     .select({ chatId: zaloChats.chatId })
     .from(zaloChats)
-    .where(inArray(zaloChats.accountId, accountIds));
+    .where(db.own(zaloChats, inArray(zaloChats.accountId, accountIds)));
   return rows.map((r) => r.chatId);
 }
 
@@ -224,14 +242,17 @@ export async function chatsForAccounts(db: Db, accountIds: string[]): Promise<st
  * Deduped across both, so siblings in one class — and a family that happened to pair both ways —
  * are messaged once rather than twice.
  */
-export async function chatsForParentsOfStudents(db: Db, studentIds: string[]): Promise<string[]> {
+export async function chatsForParentsOfStudents(
+  db: TenantDb,
+  studentIds: string[],
+): Promise<string[]> {
   if (!studentIds.length) return [];
   const [viaParent, viaStudent] = await Promise.all([
     chatsForParentRecordsOf(db, studentIds),
-    db
+    db.raw
       .select({ chatId: zaloChats.chatId })
       .from(zaloChats)
-      .where(inArray(zaloChats.studentId, studentIds)),
+      .where(db.own(zaloChats, inArray(zaloChats.studentId, studentIds))),
   ]);
   return [...new Set([...viaParent, ...viaStudent.map((r) => r.chatId)])];
 }
@@ -248,32 +269,35 @@ export async function chatsForParentsOfStudents(db: Db, studentIds: string[]): P
  * so it receives no slip and the caller answers `not_linked` rather than quietly sending the
  * bill to the child.
  */
-export async function chatsForParentRecordsOf(db: Db, studentIds: string[]): Promise<string[]> {
+export async function chatsForParentRecordsOf(
+  db: TenantDb,
+  studentIds: string[],
+): Promise<string[]> {
   if (!studentIds.length) return [];
-  const rows = await db
+  const rows = await db.raw
     .select({ chatId: zaloChats.chatId })
     .from(zaloChats)
     .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
-    .where(inArray(parentStudents.studentId, studentIds));
+    .where(db.own(zaloChats, inArray(parentStudents.studentId, studentIds)));
   return [...new Set(rows.map((r) => r.chatId))];
 }
 
 /** The group chat linked to a class, if one has been. */
-export async function chatForClass(db: Db, classId: string): Promise<string | null> {
-  const rows = await db
+export async function chatForClass(db: TenantDb, classId: string): Promise<string | null> {
+  const rows = await db.raw
     .select({ chatId: zaloChats.chatId })
     .from(zaloChats)
-    .where(eq(zaloChats.classId, classId));
+    .where(db.own(zaloChats, eq(zaloChats.classId, classId)));
   return rows[0]?.chatId ?? null;
 }
 
 /** Account ids for a set of staff records. Mirrors push.accountIdsForStaff. */
-export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<string[]> {
+export async function accountIdsForStaff(db: TenantDb, staffIds: string[]): Promise<string[]> {
   if (!staffIds.length) return [];
-  const rows = await db
+  const rows = await db.raw
     .select({ id: accounts.id })
     .from(accounts)
-    .where(inArray(accounts.staffId, staffIds));
+    .where(db.own(accounts, inArray(accounts.staffId, staffIds)));
   return rows.map((r) => r.id);
 }
 
@@ -283,9 +307,15 @@ export async function accountIdsForStaff(db: Db, staffIds: string[]): Promise<st
  * Upserts on chat_id, so pairing a chat that is already paired MOVES it. Without that, a parent
  * who re-pairs after a mistake would keep receiving the first target's notifications forever,
  * from a row nobody can see they own — the same trap push_tokens avoids.
+ *
+ * The conflict target stays the bare `chat_id`, which is globally unique: one handset, one
+ * conversation with the bot, whichever school it last paired with. `tenant_id` is therefore in
+ * the update set as well as the insert — a chat that re-pairs with another school's code moves
+ * schools with it, and leaving the old school stamped on it would keep that school's cron
+ * fanning out to a family it no longer serves.
  */
 async function linkChat(
-  db: Db,
+  db: TenantDb,
   chat: { chatId: string; kind: ZaloChatKind; displayName?: string | null },
   target: ZaloTarget,
 ): Promise<void> {
@@ -307,6 +337,7 @@ async function linkChat(
     .onConflictDoUpdate({
       target: zaloChats.chatId,
       set: {
+        tenantId: db.tenantId,
         kind: chat.kind,
         accountId: target.accountId ?? null,
         parentId: target.parentId ?? null,
@@ -339,7 +370,7 @@ export type PairCode = { code: string; expiresAt: string };
 
 /** Issue a single-use code for a person or a class. */
 export async function createPairCode(
-  db: Db,
+  db: TenantDb,
   target: ZaloTarget,
   createdBy?: string | null,
 ): Promise<PairCode> {
@@ -360,7 +391,7 @@ export async function createPairCode(
 }
 
 /** Codes a person or class currently has outstanding — so the UI can show one instead of piling up. */
-export async function pendingCodes(db: Db): Promise<
+export async function pendingCodes(db: TenantDb): Promise<
   Array<{
     code: string;
     accountId: string | null;
@@ -371,7 +402,7 @@ export async function pendingCodes(db: Db): Promise<
   }>
 > {
   const now = new Date().toISOString();
-  const rows = await db
+  const rows = await db.raw
     .select({
       code: zaloPairCodes.code,
       accountId: zaloPairCodes.accountId,
@@ -381,7 +412,7 @@ export async function pendingCodes(db: Db): Promise<
       expiresAt: zaloPairCodes.expiresAt,
     })
     .from(zaloPairCodes)
-    .where(and(isNull(zaloPairCodes.usedAt), gt(zaloPairCodes.expiresAt, now)));
+    .where(db.own(zaloPairCodes, isNull(zaloPairCodes.usedAt), gt(zaloPairCodes.expiresAt, now)));
   return rows;
 }
 
@@ -394,6 +425,11 @@ export type RedeemOutcome = 'ok' | 'unknown' | 'expired' | 'used' | 'wrong_conte
  * person's private chat as if it were the class group, and a personal code typed into a group
  * would send that person's fee slips to everyone in it. Both are silent privacy failures, so the
  * kind of code and the kind of chat must agree.
+ *
+ * tenant-unscoped lookup: the person typing the code has no session, and `zalo_pair_codes.code`
+ * is globally unique for that reason (same as `invites.code`). The code IS the credential, and
+ * the school is whatever the row it matched says — read off the row and used to scope the link
+ * that follows, so a code minted by school A can only ever produce a chat belonging to A.
  */
 export async function redeemCode(
   db: Db,
@@ -410,7 +446,10 @@ export async function redeemCode(
   const wantsGroup = Boolean(row.classId);
   if (wantsGroup !== (chat.kind === 'group')) return 'wrong_context';
 
-  await linkChat(db, chat, {
+  // The code has now selected a school. Everything after this line — the link, the audit row —
+  // belongs to it.
+  setActorTenant(row.tenantId);
+  await linkChat(new TenantDb(db, row.tenantId), chat, {
     accountId: row.accountId,
     parentId: row.parentId,
     studentId: row.studentId,
@@ -436,12 +475,11 @@ export async function redeemCode(
 }
 
 /** Drop spent and expired codes. Rides the daily job, like push.pruneLedger. */
-export async function pruneCodes(db: Db): Promise<void> {
-  await db
-    .delete(zaloPairCodes)
-    .where(
-      or(lt(zaloPairCodes.expiresAt, new Date().toISOString()), isNotNull(zaloPairCodes.usedAt)),
-    );
+export async function pruneCodes(db: TenantDb): Promise<void> {
+  await db.delete(
+    zaloPairCodes,
+    or(lt(zaloPairCodes.expiresAt, new Date().toISOString()), isNotNull(zaloPairCodes.usedAt)),
+  );
 }
 
 /**
@@ -539,6 +577,11 @@ const UNLINK_CMDS = new Set(['/unlink', '/huy']);
  * in — is a bot that gets removed from the class group.
  *
  * Never throws. A malformed update must not become a webhook retry storm.
+ *
+ * Takes the UNSCOPED handle, and is the reason the route that calls it does too. Nothing about an
+ * inbound delivery says which school it concerns until a row has been found: `/unlink` is
+ * answered from the chat itself, and a code lookup is what selects a school in the first place.
+ * Both selectors are globally unique, and both callees below resolve the school from the row.
  */
 export async function handleUpdate(db: Db, env: Env, update: ZaloUpdate): Promise<void> {
   const msg = update?.message;

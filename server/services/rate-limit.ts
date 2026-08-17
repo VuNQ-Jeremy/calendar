@@ -35,6 +35,24 @@ export const LOGIN_POLICY: LimitPolicy = { limit: 8, periodMs: MINUTE };
  */
 export const INVITE_POLICY: LimitPolicy = { limit: 15, periodMs: MINUTE };
 
+/**
+ * School creation, keyed by IP. A person creates one school; three an hour absorbs typos and
+ * retries while stopping a script cold.
+ */
+export const SIGNUP_POLICY: LimitPolicy = { limit: 3, periodMs: 60 * MINUTE };
+
+/**
+ * The whole platform, one key, one day. This deliberately breaks the shard-by-key rule the rest
+ * of this file follows, and the trade is worth stating: a per-IP cap does nothing against a
+ * botnet with a thousand addresses, and a global ceiling is the only thing that does. Legitimate
+ * signup volume is a handful a week, so the serialisation a single Durable Object imposes costs
+ * nothing here — unlike on login, where it would queue every sign-in in the school.
+ *
+ * The limiter is memory-only, so an eviction resets the window early. That is the same
+ * fail-permissive posture as everything else here: this is a circuit breaker, not a quota.
+ */
+export const SIGNUP_GLOBAL_POLICY: LimitPolicy = { limit: 30, periodMs: 24 * 60 * MINUTE };
+
 /** One log line per isolate, not one per request — a missing binding would otherwise flood. */
 let warnedMissing = false;
 
@@ -95,3 +113,11 @@ export function loginKey(email: string): string {
 export function inviteKey(): string {
   return `invite:${ip()}`;
 }
+
+/** School creation, per IP. Pair it with the global key below — neither is sufficient alone. */
+export function signupKey(): string {
+  return `signup:${ip()}`;
+}
+
+/** The one intentionally global limiter key. See SIGNUP_GLOBAL_POLICY for why. */
+export const SIGNUP_GLOBAL_KEY = 'signup:all';

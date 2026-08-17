@@ -6,7 +6,7 @@ import type {
   ClientActionFunctionArgs,
 } from 'react-router';
 import { TestDetailScreen } from '../../src/tests/test-detail.jsx';
-import { createDb } from '../../server/db/index';
+import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as testsSvc from '../../server/services/tests';
@@ -29,8 +29,8 @@ import { withLiveAction } from '../../server/live';
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const session = await requireStaff(request, env);
+  const db = tenantDbFor(env, session);
   const id = params.id!;
   const test = await testsSvc.get(db, id);
   const [links, questions, allStudents, attempts, classes, gradeLevels, types, totalPoints] =
@@ -100,8 +100,8 @@ function preprocessTestRaw(raw: Record<string, unknown>): Record<string, unknown
 
 async function actionImpl({ request, params, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
-  await requireStaff(request, env);
-  const db = createDb(env);
+  const session = await requireStaff(request, env);
+  const db = tenantDbFor(env, session);
   const id = params.id!;
   const formData = await request.formData();
   const intent = formData.get('intent') as string;
