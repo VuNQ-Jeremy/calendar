@@ -639,7 +639,10 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-8);
+  /* Inline padding, not a max-width: the blurred strip and its bottom border must
+     still span the full window, while the title inside lines up with the .content
+     rail below it. The max() collapses to plain --space-8 below the rail width. */
+  padding: var(--space-5) max(var(--space-8), calc((100% - var(--layout-xl)) / 2 + var(--space-8)));
   background: var(--bg-page);
   background: color-mix(in srgb, var(--bg-page) 85%, transparent);
   -webkit-backdrop-filter: blur(10px);
@@ -685,12 +688,54 @@ body {
   flex-direction: column;
   gap: var(--space-6);
   width: 100%;
+  /* A rail, so a page does not run the full width of a 27" monitor — /config rows
+     were 1545px wide to hold three short strings. Generous on purpose: this is an
+     app with real data grids (tuition, rankings, questions, platform), not an
+     article, so it stops the sprawl without cramping a table. .topbar matches this
+     rail with inline padding so a page title stays aligned with its content. */
+  max-width: var(--layout-xl);
+  margin-inline: auto;
 }
 /* page fills the viewport; inner panels scroll instead of the page */
 .content--fill {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* The three genuinely full-bleed pages — calendar, the feedback board and the
+     assessments split — scroll inner panels and need every pixel. Declared after
+     .content so equal specificity resolves in this direction. */
+  max-width: none;
+}
+
+/* Narrow viewports, part two. This block has to sit AFTER .topbar and .content
+   rather than joining the sidebar-rail block further up: these selectors are all
+   single-class, a media query adds no specificity, and the base rules are declared
+   below that block — so an override placed there would silently lose. */
+@media (max-width: 720px) {
+  /* Padding never reduced before this, so a 390px phone spent 64px of its width on
+     page gutters on top of the 64px icon rail, leaving a ~262px content column —
+     which is what broke the tab strip below. */
+  .topbar,
+  .content {
+    padding: var(--space-4);
+  }
+  /* .mochi-tabs is inline-flex with the default nowrap, so in a narrow column the
+     tabs shrink, their labels wrap onto three lines, the control grows as tall as
+     it is wide, and --radius-pill rounds the active tab into a circle (measured
+     83x83 at 390px). Let the strip scroll instead, and clamp the container radius
+     so a scrolling box can never read as a circle. Overridden here rather than in
+     the DS components.css: that file is the binding visual contract, and this is
+     responsive shell behaviour, which app.css owns. */
+  .mochi-tabs {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+  }
+  .mochi-tabs__tab {
+    flex: none;
+    white-space: nowrap;
+  }
 }
 
 /* user menu */

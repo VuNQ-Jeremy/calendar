@@ -51,6 +51,17 @@
   --cocoa-500: #A9744F;
   --cocoa-700: #6E472C;
 
+  /* ---- Accent: Rose (warm red) ----
+     `rose` is one of the six DATA colours in shared/tokens.ts — it is stored in
+     staff.color, students.color, classes.color, events.color and
+     flashcard_topics.color — but it had no ramp here, so every consumer carried
+     the literals instead. Same values, now named. --rose-400 is deliberately the
+     same hex as --danger: one is a category hue, the other a status, and they
+     are allowed to drift apart later. */
+  --rose-100: #FBE3DD;
+  --rose-400: #DC6A52;   /* base */
+  --rose-700: #A23A25;   /* text-safe */
+
   /* ---- Warm neutrals (cream → cocoa-ink) ---- */
   --cream-50:  #FFFCF8;   /* page background */
   --cream-100: #FDF6EC;   /* raised surface tint */
@@ -90,6 +101,10 @@
   --border-subtle:  var(--sand-300);
   --border-strong:  var(--sand-400);
   --border-focus:   var(--orange-400);
+  /* Consumed by .tokensearch__field / __menu in app.css and by the flashcard
+     image strip. It was never defined, so those borders resolved to the initial
+     `medium currentColor` — a thick dark line where a hairline was intended. */
+  --border-soft:    var(--sand-300);
 
   /* Brand / primary action */
   --brand:          var(--orange-400);
@@ -111,6 +126,22 @@
   --cat-orange:      var(--orange-400);
   --cat-orange-soft: var(--orange-100);
   --cat-orange-ink:  var(--orange-700);
+  /* cocoa and rose complete the six-colour DATA palette in shared/tokens.ts.
+     Both were reachable only as literals before. */
+  --cat-cocoa:       var(--cocoa-500);
+  --cat-cocoa-soft:  var(--cocoa-100);
+  --cat-cocoa-ink:   var(--cocoa-700);
+  --cat-rose:        var(--rose-400);
+  --cat-rose-soft:   var(--rose-100);
+  --cat-rose-ink:    var(--rose-700);
+
+  /* Status tints. The badge component carried these as raw hex — the only two
+     status pairs in the system that bypassed a token. Warning has no ramp of its
+     own, so the literals live here rather than in a component file. */
+  --warning-soft:   #FBEFD0;
+  --warning-ink:    #8A6512;
+  --danger-soft:    var(--rose-100);
+  --danger-ink:     var(--rose-700);
 
   /* Focus ring */
   --ring: 0 0 0 3px rgba(247, 154, 78, 0.35);

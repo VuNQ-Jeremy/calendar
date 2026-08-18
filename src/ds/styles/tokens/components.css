@@ -130,8 +130,8 @@
 .mochi-badge.is-blue    { background: var(--cat-blue-soft); color: var(--cat-blue-ink); }
 .mochi-badge.is-orange  { background: var(--cat-orange-soft); color: var(--cat-orange-ink); }
 .mochi-badge.is-success { background: var(--green-100); color: var(--green-700); }
-.mochi-badge.is-warning { background: #FBEFD0; color: #8a6512; }
-.mochi-badge.is-danger  { background: #FBE3DD; color: #a23a25; }
+.mochi-badge.is-warning { background: var(--warning-soft); color: var(--warning-ink); }
+.mochi-badge.is-danger  { background: var(--danger-soft);  color: var(--danger-ink); }
 
 /* ---------- Tag (subject / category pill with dot) ---------- */
 .mochi-tag {
