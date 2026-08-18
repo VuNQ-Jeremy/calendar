@@ -39,7 +39,7 @@ export function SpeciesShowcaseScreen() {
   const [potColor, setPotColor] = React.useState('cocoa');
 
   return (
-    <>
+    <div className="content">
       <PageHeader title={t('garden_show_title')} subtitle={t('garden_show_sub')} />
 
       <Card style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -109,6 +109,6 @@ export function SpeciesShowcaseScreen() {
           </span>
         </div>
       </Card>
-    </>
+    </div>
   );
 }

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0289 — 2026-08-18
+fix(garden): the plant showcase was missing the page's padding rail entirely
+
 ## v0.0288 — 2026-08-18
 feat(garden): ten collectible plant species
 
