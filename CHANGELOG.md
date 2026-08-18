@@ -6,7 +6,7 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
-## v0.0286 — 2026-08-18
+## v0.0288 — 2026-08-18
 feat(garden): ten collectible plant species
 
 The vườn cây từ vựng now grows one of ten plants — cà chua, hướng dương, ớt, dâu tây, xương rồng,
