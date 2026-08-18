@@ -135,6 +135,13 @@ test.describe('CRUD: the garden plant lifecycle', () => {
     await expect(widget).toContainText('1 this month');
     await expect(widget.getByRole('button', { name: 'Harvest' })).toHaveCount(0);
 
+    // ---- The unlock lands in the same breath as the harvest that paid for it. ----
+    const unlock = sk.dlgOf('New plant unlocked!');
+    await expect(unlock).toContainText('Tomato');
+    // Dismissing keeps the plant as it was; the species is still there to pick later.
+    await unlock.getByRole('button', { name: 'Not now' }).click();
+    await expect(sp.getByText('New plant unlocked!')).toHaveCount(0);
+
     // ---- Student: that fruit unlocked a species, and the harvest re-seeded the pot, so this is
     // exactly the moment the switch is allowed. ----
     await widget.getByRole('button', { name: 'Name your plant' }).click();

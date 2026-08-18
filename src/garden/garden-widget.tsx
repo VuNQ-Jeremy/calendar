@@ -7,7 +7,7 @@ import { PALETTE, colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import { formatDmy, formatDmyTime } from '../../shared/logic/dates.js';
 import { PlantSvg, stageKey } from './plant-art.jsx';
-import { SPECIES, nextUnlock } from '../../shared/garden-art';
+import { SPECIES, newlyUnlocked, nextUnlock, type SpeciesArt } from '../../shared/garden-art';
 import { MAX_STAGE, daysBetweenVn } from '../../shared/logic/garden';
 import { parseModes } from '../../shared/logic/flashcards';
 import type { GardenSettings, PlantStage, PlantView } from '../../shared/logic/garden';
@@ -97,7 +97,7 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
   const { t } = useLang();
   // Two fetchers, not one: the harvest reply drives the celebration, and a rename landing in the
   // same slot would replay it.
-  const harvestFetcher = useFetcher<{ ok?: boolean; error?: string }>();
+  const harvestFetcher = useFetcher<{ ok?: boolean; error?: string; fruitsTotal?: number }>();
   const nameFetcher = useFetcher();
   const [editing, setEditing] = React.useState<{
     plantName: string;
@@ -105,6 +105,12 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
     species: string;
   } | null>(null);
   const [flash, setFlash] = React.useState<'done' | 'failed' | null>(null);
+  /** Species this harvest just opened up, and which of them the student is replanting as. */
+  const [unlocked, setUnlocked] = React.useState<SpeciesArt[]>([]);
+  const [replant, setReplant] = React.useState<string | null>(null);
+  // The loader's fruit count is already the NEW one by the time the reply lands, so the count to
+  // compare against has to be captured at the tap.
+  const fruitBeforeHarvest = React.useRef(0);
   const [celebrating, setCelebrating] = React.useState(false);
   const [popping, setPopping] = React.useState(false);
 
@@ -128,6 +134,13 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
     const ok = harvestReply.ok === true;
     setFlash(ok ? 'done' : 'failed');
     setCelebrating(ok);
+    if (ok && typeof harvestReply.fruitsTotal === 'number') {
+      const fresh = newlyUnlocked(fruitBeforeHarvest.current, harvestReply.fruitsTotal);
+      if (fresh.length) {
+        setUnlocked(fresh);
+        setReplant(fresh[0].id);
+      }
+    }
     const id = setTimeout(() => {
       setFlash(null);
       setCelebrating(false);
@@ -143,9 +156,25 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
   const harvesting = harvestFetcher.state !== 'idle';
 
   const harvest = () => {
+    fruitBeforeHarvest.current = plant.fruitsTotal;
     const fd = new FormData();
     fd.set('intent', 'harvest');
     harvestFetcher.submit(fd, { method: 'post' });
+  };
+
+  /**
+   * Replant as a different species, straight from the celebration. The harvest has just re-seeded
+   * the plant, so the server's stage-1 window is open — this is the one moment the choice needs no
+   * explaining.
+   */
+  const saveReplant = () => {
+    if (replant) {
+      const fd = new FormData();
+      fd.set('intent', 'plant-update');
+      fd.set('species', replant);
+      nameFetcher.submit(fd, { method: 'post' });
+    }
+    setUnlocked([]);
   };
 
   const saveName = () => {
@@ -314,6 +343,44 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
           </Link>
         )}
       </div>
+
+      {unlocked.length > 0 && (
+        <Modal
+          open={true}
+          onClose={() => setUnlocked([])}
+          title={t('garden_unlocked_title')}
+          width={420}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setUnlocked([])}>
+                {t('garden_replant_skip')}
+              </Button>
+              <Button variant="primary" onClick={saveReplant}>
+                {t('garden_replant_as')}
+              </Button>
+            </>
+          }
+        >
+          <div className="m-row" style={{ gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {unlocked.map((s) => (
+              <div key={s.id} className="m-stack" style={{ alignItems: 'center', gap: 2 }}>
+                <PlantSvg stage={5} species={s.id} potColor={data.potColor} size={96} />
+                <span style={{ fontWeight: 700, color: 'var(--text-strong)' }}>
+                  {t(`garden_species_${s.id}` as Parameters<typeof t>[0])}
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* The harvest just re-seeded the pot, so every unlocked species is plantable right
+              now — including the ones earned earlier and passed over. */}
+          <SpeciesPicker
+            value={replant ?? data.species}
+            fruitsTotal={plant.fruitsTotal}
+            canChange={true}
+            onChange={setReplant}
+          />
+        </Modal>
+      )}
 
       {editing && (
         <Modal

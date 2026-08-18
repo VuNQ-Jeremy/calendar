@@ -5,7 +5,7 @@ import { ChevronRight, Clock, Flame, Pencil, Sprout } from 'lucide-react-native'
 import { daysBetweenVn } from '@mochi/shared/logic/garden';
 import { formatDmy, formatDmyTime } from '@mochi/shared/logic/dates';
 import { parseModes } from '@mochi/shared/logic/flashcards';
-import { SPECIES, nextUnlock } from '@mochi/shared/garden-art';
+import { SPECIES, newlyUnlocked, nextUnlock, type SpeciesArt } from '@mochi/shared/garden-art';
 import { useLang } from '~/lib/i18n';
 import { useHarvest, usePlant, useUpdatePlant } from '~/lib/use-garden';
 import { useTheme } from '~/theme';
@@ -55,6 +55,9 @@ export function GardenWidget() {
   } | null>(null);
   const [flash, setFlash] = React.useState<'done' | 'failed' | null>(null);
   const [celebrating, setCelebrating] = React.useState(false);
+  /** Species this harvest just opened up, and which of them the student is replanting as. */
+  const [unlocked, setUnlocked] = React.useState<SpeciesArt[]>([]);
+  const [replant, setReplant] = React.useState<string | null>(null);
   const [popping, setPopping] = React.useState(false);
 
   // A stage-up is only visible by comparing payloads, so the pop is triggered from the change
@@ -72,10 +75,18 @@ export function GardenWidget() {
   }, [stage]);
 
   const onHarvest = () => {
+    // Captured at the tap: by the time the reply lands the query has already refetched the new
+    // total, so there would be nothing left to compare against.
+    const before = data?.fruitsTotal ?? 0;
     harvest.mutate(undefined, {
-      onSuccess: () => {
+      onSuccess: (res) => {
         setFlash('done');
         setCelebrating(true);
+        const fresh = newlyUnlocked(before, res.fruitsTotal);
+        if (fresh.length) {
+          setUnlocked(fresh);
+          setReplant(fresh[0].id);
+        }
       },
       // A 409 is what a double tap looks like — a normal outcome, reported, not thrown at the user.
       onError: () => setFlash('failed'),
@@ -243,6 +254,73 @@ export function GardenWidget() {
           </Body>
           <ChevronRight size={16} color={th.color.brand} />
         </Pressable>
+      ) : null}
+
+      {unlocked.length > 0 ? (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setUnlocked([])}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('garden_replant_skip')}
+            onPress={() => setUnlocked([])}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(60,40,25,0.45)',
+              justifyContent: 'center',
+              padding: th.spacing[6],
+            }}
+          >
+            <Pressable
+              style={{
+                backgroundColor: th.color.surfaceCard,
+                borderRadius: th.radius.xl,
+                padding: th.spacing[5],
+                gap: th.spacing[4],
+              }}
+            >
+              <Heading>{t('garden_unlocked_title')}</Heading>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: th.spacing[3],
+                  justifyContent: 'center',
+                }}
+              >
+                {unlocked.map((sp) => (
+                  <View key={sp.id} style={{ alignItems: 'center' }}>
+                    <PlantSvg stage={5} species={sp.id} potColor={data.potColor} size={96} />
+                    <Body style={{ fontFamily: th.font.bodyBold }}>
+                      {t(`garden_species_${sp.id}` as Parameters<typeof t>[0])}
+                    </Body>
+                  </View>
+                ))}
+              </View>
+              {/* The harvest just re-seeded the pot, so every unlocked species is plantable right
+                  now — including ones earned earlier and passed over. */}
+              <SpeciesPicker
+                value={replant ?? data.species}
+                fruitsTotal={data.fruitsTotal}
+                canChange={true}
+                onChange={setReplant}
+              />
+              <View style={{ flexDirection: 'row', gap: th.spacing[3] }}>
+                <Button variant="secondary" style={{ flex: 1 }} onPress={() => setUnlocked([])}>
+                  {t('garden_replant_skip')}
+                </Button>
+                <Button
+                  style={{ flex: 1 }}
+                  loading={updatePlant.isPending}
+                  onPress={() => {
+                    if (replant) updatePlant.mutate({ species: replant });
+                    setUnlocked([]);
+                  }}
+                >
+                  {t('garden_replant_as')}
+                </Button>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       ) : null}
 
       {editing ? (
