@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   LOCKED_PALETTE,
@@ -100,5 +102,27 @@ describe('every species can be drawn', () => {
     );
     expect(hues.size).toBeLessThanOrEqual(2); // one fill, one ink — a silhouette, not a preview
     expect(LOCKED_PALETTE.gloss).toBe(0);
+  });
+});
+
+/**
+ * `updatePlant` refuses a species change by RETURNING `{ ok: false }`, not by throwing — a caller
+ * that ignores the result gets a silent no-op and tells the student their new plant was saved.
+ * That is exactly what shipped once: the web action mapped the refusal to a 409 and the JSON API
+ * did not, so the phone showed success and changed nothing.
+ *
+ * Both callers are pinned here rather than in a route test, because the bug is an omission and
+ * an omission has no test to fail.
+ */
+describe('every caller of updatePlant reads its answer', () => {
+  const callers = ['app/routes/api.garden.plant.tsx', 'app/routes/flashcards.tsx'];
+
+  it.each(callers)('%s does not discard the refusal', (file) => {
+    const src = readFileSync(resolve(process.cwd(), file), 'utf8');
+    const call = /(?:const\s+\w+\s*=\s*)?await\s+(?:\w+\.)?updatePlant\(/.exec(src);
+    expect(call, `${file} no longer calls updatePlant — update this test`).not.toBeNull();
+    // A bare `await …updatePlant(` with nothing bound to it is the shape of the bug.
+    expect(call![0].startsWith('const'), `${file} throws the result away`).toBe(true);
+    expect(src).toMatch(/\.ok\b/);
   });
 });

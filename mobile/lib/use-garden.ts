@@ -86,20 +86,27 @@ export function useSnapshot(classId: string | undefined, month: string | undefin
 // ---- Writes ----
 
 /**
- * Rename the plant / repaint the pot.
+ * Rename the plant / repaint the pot / choose a species.
  *
  * The reply is the full refreshed plant, so it goes straight into the cache — the editor closes
  * onto the new name with no round trip. The blanket garden invalidate still runs behind it, because
  * the name also appears on the student's card in the class garden.
+ *
+ * A 409 (`growing` / `locked` / `unknown_species`) means the server refused a species change. The
+ * picker only offers species the server would accept, so this is a race — the plant grew on another
+ * device between the read and the tap — and the answer is the same either way: re-read, so the
+ * screen stops showing a choice that did not happen.
  */
 export function useUpdatePlant() {
   const qc = useQueryClient();
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['garden'] });
   return useMutation({
     mutationFn: (patch: PlantPatchInput) => api.garden.updatePlant(patch),
     onSuccess: (row) => {
       qc.setQueryData(qk.gardenPlant(ictToday()), row);
-      void qc.invalidateQueries({ queryKey: ['garden'] });
+      refresh();
     },
+    onError: refresh,
   });
 }
 

@@ -67,7 +67,10 @@ export const action = withAuth(
     // A plant belongs to the student who grew it; there is no reason for staff to rename it.
     if (user.kind !== 'student') throw fail('forbidden', 403);
     const patch = await parsePatchBody(request, PlantPatchInput);
-    await svc.updatePlant(db, user.user.id, patch);
+    const updated = await svc.updatePlant(db, user.user.id, patch);
+    // 409, like harvest: a species refused because the plant is mid-growth or not yet earned is a
+    // state conflict. Returning the plant with a 200 would tell the client its write succeeded.
+    if (!updated.ok) throw fail(updated.error, 409);
     return loadPlant(db, user.user.id);
   },
   { live: 'garden' },
