@@ -353,19 +353,17 @@ export function FlashcardTopicsScreen() {
                   }
                 >
                   <div className="topic-card__head">
-                    {/* Two lines: the ordinal, then the name. `Unit 1` is a position in a
-                        sequence a teacher actually teaches in order, so it reads as an eyebrow
-                        above the title rather than a badge competing beside it. A deck outside a
-                        book has no ordinal and gets no empty line — hence the modifier class
-                        rather than an always-rendered span. */}
-                    <div className={'topic-card__name' + (unitNo != null ? ' is-unit' : '')}>
-                      {unitNo != null && (
-                        <span className="topic-card__eyebrow">
-                          {t('vc_unit_badge', { n: unitNo })}
-                        </span>
-                      )}
-                      <span className="topic-card__title">{topic.name}</span>
-                    </div>
+                    {/* One row, two pills: the name on the left, the ordinal on the right. Both are
+                        single-line BY CONSTRUCTION, and that is what keeps the coloured band exactly
+                        the same height on every card in the grid — a name that wrapped to two lines
+                        made the bands ragged down a column, which is the more visible defect than a
+                        truncated title. `title` carries the full name for the truncated case. */}
+                    <span className="topic-card__name" title={topic.name}>
+                      {topic.name}
+                    </span>
+                    {unitNo != null && (
+                      <span className="topic-card__unit">{t('vc_unit_badge', { n: unitNo })}</span>
+                    )}
                   </div>
                   {isStaff && (
                     // Own row below the name: the icons crowded the title into an ellipsis at the
