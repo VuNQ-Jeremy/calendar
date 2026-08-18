@@ -602,38 +602,305 @@ OT.stages[5] = [
   },
 ];
 
-// ART PENDING (Task 8)
-const DAUTAY = pending(
-  'dautay',
-  6,
-  paletteOf({
+/* ── dâu tây (strawberry) ──────────────────────────────────────────────────────────────────
+ *
+ * The low one. Where every other species reaches upward, this spreads: leaves fan out just above
+ * the rim and the berries hang low and wide, so its silhouette is unmistakable in a grid even
+ * before the red arrives. The seeds on the berries are what sell them at 96px.
+ */
+const DAUTAY_CROWN: PartSpec[] = [
+  { kind: 'path', d: 'M48 57 C47.6 54 47.4 51.5 47.6 49', stroke: 'stem', strokeWidth: 4 },
+  { kind: 'path', d: 'M47.8 52 C43 50 38.5 47.5 35.5 44', stroke: 'stem', strokeWidth: 3 },
+  { kind: 'path', d: 'M47.8 52 C52.5 50 57 47.5 60 44.5', stroke: 'stem', strokeWidth: 3 },
+];
+
+/** A berry: rounded shoulders tapering to a blunt point, with a leafy cap and a few seeds. */
+function berry(cx: number, cy: number, s: number): PartSpec {
+  return {
+    kind: 'group',
+    parts: [
+      {
+        kind: 'path',
+        d: `M${cx - 6 * s} ${cy - 3 * s} C${cx - 6.6 * s} ${cy + 3 * s} ${cx - 2.6 * s} ${cy + 7.6 * s} ${cx} ${cy + 8 * s} C${cx + 2.6 * s} ${cy + 7.6 * s} ${cx + 6.6 * s} ${cy + 3 * s} ${cx + 6 * s} ${cy - 3 * s} C${cx + 3 * s} ${cy - 6 * s} ${cx - 3 * s} ${cy - 6 * s} ${cx - 6 * s} ${cy - 3 * s} Z`,
+        fill: 'fruit',
+        stroke: 'fruitInk',
+        strokeWidth: 3,
+      },
+      // The cap, drawn as three short spikes rather than a leaf — a leaf here reads as a hat.
+      {
+        kind: 'path',
+        d: `M${cx - 5 * s} ${cy - 4.4 * s} L${cx - 1.6 * s} ${cy - 2.6 * s} L${cx} ${cy - 5.6 * s} L${cx + 1.6 * s} ${cy - 2.6 * s} L${cx + 5 * s} ${cy - 4.4 * s}`,
+        stroke: 'stem',
+        strokeWidth: 2.6,
+      },
+      { kind: 'circle', cx: cx - 2.4 * s, cy: cy + 1.6 * s, r: 0.9 * s, fill: 'eye' },
+      { kind: 'circle', cx: cx + 2.2 * s, cy: cy + 0.6 * s, r: 0.9 * s, fill: 'eye' },
+      { kind: 'circle', cx: cx - 0.2 * s, cy: cy + 4.4 * s, r: 0.9 * s, fill: 'eye' },
+    ],
+  };
+}
+
+const DAUTAY: SpeciesArt = {
+  id: 'dautay',
+  unlockAt: 6,
+  palette: paletteOf({
     petal: OFF_WHITE,
-    petalInk: inkOf(OFF_WHITE),
+    petalInk: mix(OFF_WHITE, DEEP, 0.34),
+    eye: CREAM,
+    eyeInk: inkOf(YELLOW),
     fruit: RED,
     fruitInk: inkOf(RED),
     gloss: 0.6,
   }),
-);
+  stages: {
+    1: SEED_PARTS,
+    2: [
+      { kind: 'path', d: 'M48 57 C47.6 53.5 47.4 50 47.6 47', stroke: 'stem', strokeWidth: 4 },
+      { kind: 'leaf', x: 46.4, y: 47.5, dir: -1, shape: 'round', baseAngle: -18, droopAngle: 40 },
+      { kind: 'leaf', x: 49, y: 48, dir: 1, shape: 'round', baseAngle: -14, droopAngle: 42 },
+    ],
+    3: [
+      ...DAUTAY_CROWN,
+      { kind: 'leaf', x: 36, y: 44.5, dir: -1, shape: 'round', scale: 1.05, baseAngle: -6, droopAngle: 40 },
+      { kind: 'leaf', x: 59.5, y: 45, dir: 1, shape: 'round', scale: 1.05, baseAngle: -4, droopAngle: 42 },
+      { kind: 'leaf', x: 47.4, y: 46, dir: 1, shape: 'pointed', scale: 0.9, baseAngle: -48, droopAngle: 22 },
+    ],
+    4: [],
+    5: [],
+  },
+};
+DAUTAY.stages[4] = [
+  ...DAUTAY.stages[3],
+  {
+    kind: 'group',
+    droop: { rotate: 16, cx: 47.8, cy: 52 },
+    parts: [
+      { kind: 'petalRing', cx: 40, cy: 32, count: 5, rx: 3.6, ry: 4.8, dy: 4.8, petalStrokeWidth: 2.6 },
+      { kind: 'circle', cx: 40, cy: 32, r: 2.4, fill: 'eye', stroke: 'eyeInk', strokeWidth: 2.2 },
+      { kind: 'path', d: 'M44 44 C42.4 40 40.8 36 40.2 33', stroke: 'stem', strokeWidth: 2.6 },
+      { kind: 'petalRing', cx: 56.5, cy: 34, count: 5, rx: 3, ry: 4, dy: 4, petalStrokeWidth: 2.4 },
+      { kind: 'circle', cx: 56.5, cy: 34, r: 2, fill: 'eye', stroke: 'eyeInk', strokeWidth: 2 },
+      { kind: 'path', d: 'M52.5 44.5 C54 41 55.6 37.5 56.4 35', stroke: 'stem', strokeWidth: 2.6 },
+    ],
+  },
+];
+DAUTAY.stages[5] = [
+  ...DAUTAY.stages[3],
+  {
+    kind: 'group',
+    droop: { translate: [1, 3] },
+    parts: [
+      { kind: 'path', d: 'M40 46 C36.5 42 33 38.5 30.5 36', stroke: 'stem', strokeWidth: 2.8 },
+      berry(29, 38, 1.05),
+      { kind: 'path', d: 'M55 46.5 C58.5 43 62 40 64.5 38', stroke: 'stem', strokeWidth: 2.8 },
+      berry(66, 40, 0.9),
+      { kind: 'path', d: 'M47.6 47 C47.4 43.5 47.4 40 47.6 37.5', stroke: 'stem', strokeWidth: 2.8 },
+      berry(47.5, 30, 0.82),
+    ],
+  },
+];
 
-// ART PENDING (Task 8)
-const XUONGRONG = pending(
-  'xuongrong',
-  9,
-  paletteOf({ petal: PINK, petalInk: inkOf(PINK), fruit: RED, fruitInk: inkOf(RED), gloss: 0.4 }),
-);
+/* ── xương rồng (cactus) ───────────────────────────────────────────────────────────────────
+ *
+ * The species with no leaves at all: fat pads growing off a fat trunk, spines as short strokes,
+ * one improbable pink crown. Wilting cannot droop what has no leaves, so the pads LEAN — every
+ * droop here rotates about the joint where that pad meets the trunk.
+ */
+const SPINE = (d: string): PartSpec => ({ kind: 'path', d, stroke: 'leafInk', strokeWidth: 1.8, opacity: 0.8 });
 
-// ART PENDING (Task 8)
-const XOAI = pending(
-  'xoai',
-  12,
-  paletteOf({
+/**
+ * Trunk and arms are CAPSULES: one thick round-capped stroke in ink, the same path again in green
+ * a few units thinner. Outlines first, fills after — the trick the class tree already uses — so
+ * an arm meeting the trunk merges into one silhouette instead of showing a seam. Drawing them as
+ * closed outlined paths instead needs a boolean union, which SVG has no way to express.
+ */
+const CACTUS_BODY = 17;
+const CACTUS_ARM = 11;
+const capsule = (d: string, w: number, role: 'leaf' | 'leafInk'): PartSpec => ({
+  kind: 'path',
+  d,
+  stroke: role,
+  strokeWidth: w,
+});
+
+/** `top` is how high the trunk reaches; arms are given as their own paths. */
+function cactus(top: number, arms: string[]): PartSpec[] {
+  const trunk = `M48 57 L48 ${top}`;
+  return [
+    capsule(trunk, CACTUS_BODY, 'leafInk'),
+    ...arms.map((a) => capsule(a, CACTUS_ARM, 'leafInk')),
+    capsule(trunk, CACTUS_BODY - 5.6, 'leaf'),
+    ...arms.map((a) => capsule(a, CACTUS_ARM - 4.4, 'leaf')),
+  ];
+}
+
+/** Right arm elbows out and up; left is deliberately higher and shorter — never a mirror. */
+const CACTUS_ARM_R = 'M50 44 Q57.5 44 57.5 37';
+const CACTUS_ARM_L = 'M46 38 Q39 38 39 32.5';
+
+const XUONGRONG: SpeciesArt = {
+  id: 'xuongrong',
+  unlockAt: 9,
+  palette: paletteOf({
+    leaf: '#7FB069',
+    leafInk: inkOf('#7FB069'),
+    stem: inkOf('#7FB069'),
+    petal: PINK,
+    petalInk: inkOf(PINK),
+    eye: CREAM,
+    eyeInk: inkOf(YELLOW),
+    fruit: RED,
+    fruitInk: inkOf(RED),
+    gloss: 0.4,
+  }),
+  stages: {
+    1: SEED_PARTS,
+    2: [
+      ...cactus(43, []),
+      SPINE('M44 50 L41.5 49'),
+      SPINE('M52 50 L54.5 49'),
+      SPINE('M44 45 L41.5 44'),
+      SPINE('M52 45 L54.5 44'),
+    ],
+    3: [],
+    4: [],
+    5: [],
+  },
+};
+const CACTUS_SPINES: PartSpec[] = [
+  SPINE('M44 51 L41.5 50'),
+  SPINE('M52 51 L54.5 50'),
+  SPINE('M44 45 L41.5 44'),
+  SPINE('M52 45 L54.5 44'),
+  SPINE('M44 39 L41.5 38'),
+  SPINE('M52 39 L54.5 38'),
+];
+XUONGRONG.stages[3] = [...cactus(35, [CACTUS_ARM_R]), ...CACTUS_SPINES];
+XUONGRONG.stages[4] = [
+  ...cactus(27, [CACTUS_ARM_R, CACTUS_ARM_L]),
+  ...CACTUS_SPINES,
+  SPINE('M44 33 L41.5 32'),
+  // The crown sits ON the trunk's crest, so it leans with the plant rather than on a stalk.
+  {
+    kind: 'group',
+    droop: { rotate: 8, cx: 48, cy: 27 },
+    parts: [
+      { kind: 'petalRing', cx: 48, cy: 23, count: 6, rx: 3.6, ry: 5, dy: 5, petalStrokeWidth: 2.6 },
+      { kind: 'circle', cx: 48, cy: 23, r: 2.6, fill: 'eye', stroke: 'eyeInk', strokeWidth: 2.2 },
+    ],
+  },
+];
+XUONGRONG.stages[5] = [
+  ...XUONGRONG.stages[4],
+  // Cactus fruit sits directly on the arms — no stalk to hang from, which is why these are plain
+  // circles rather than the `fruit` primitive.
+  {
+    kind: 'group',
+    droop: { rotate: 6, cx: 48, cy: 40 },
+    parts: [
+      { kind: 'circle', cx: 57.5, cy: 34, r: 3.8, fill: 'fruit', stroke: 'fruitInk', strokeWidth: 2.8 },
+      { kind: 'circle', cx: 39, cy: 29.5, r: 3.4, fill: 'fruit', stroke: 'fruitInk', strokeWidth: 2.6 },
+    ],
+  },
+];
+
+/* ── xoài (mango) ──────────────────────────────────────────────────────────────────────────
+ *
+ * The only true TREE in the set: a forking trunk, long slender leaves, and at stage 5 two heavy
+ * fruit hanging on visible stalks. Mangoes are not round, so they are drawn as tilted ellipses
+ * with their own stalks rather than as the `fruit` primitive.
+ */
+const XOAI_TRUNK: PartSpec[] = [
+  { kind: 'path', d: 'M48 57 C47.4 50 47.8 44 48 39', stroke: 'stem', strokeWidth: 5 },
+  { kind: 'path', d: 'M48 44 C44 41 40 38 36.5 35.5', stroke: 'stem', strokeWidth: 3.6 },
+  { kind: 'path', d: 'M48 41 C52 38.5 56.5 35.5 59.5 33', stroke: 'stem', strokeWidth: 3.6 },
+];
+
+const XOAI: SpeciesArt = {
+  id: 'xoai',
+  unlockAt: 12,
+  palette: paletteOf({
+    leaf: '#4F9A57',
+    leafInk: inkOf('#4F9A57'),
+    stem: '#6E5136',
     petal: CREAM,
-    petalInk: inkOf(CREAM),
+    petalInk: inkOf(YELLOW),
+    eye: CREAM,
+    eyeInk: inkOf(YELLOW),
     fruit: MANGO,
     fruitInk: inkOf(MANGO),
     gloss: 0.7,
   }),
-);
+  stages: {
+    1: SEED_PARTS,
+    2: [
+      { kind: 'path', d: 'M48 57 C47.6 52 48.2 47.5 48 43.5', stroke: 'stem', strokeWidth: 4.2 },
+      { kind: 'leaf', x: 46.6, y: 44, dir: -1, shape: 'pointed', scale: 0.86, baseAngle: -16, droopAngle: 42 },
+      { kind: 'leaf', x: 49.4, y: 45.5, dir: 1, shape: 'pointed', scale: 0.86, baseAngle: -10, droopAngle: 44 },
+    ],
+    3: [
+      ...XOAI_TRUNK,
+      { kind: 'leaf', x: 35.5, y: 35.5, dir: -1, shape: 'pointed', scale: 1.06, baseAngle: -18, droopAngle: 42 },
+      { kind: 'leaf', x: 60.5, y: 33, dir: 1, shape: 'pointed', scale: 1.06, baseAngle: -14, droopAngle: 44 },
+      { kind: 'leaf', x: 48.2, y: 38.5, dir: -1, shape: 'pointed', scale: 0.94, baseAngle: -52, droopAngle: 20 },
+      { kind: 'leaf', x: 48.6, y: 37, dir: 1, shape: 'pointed', scale: 0.94, baseAngle: -46, droopAngle: 24 },
+    ],
+    4: [],
+    5: [],
+  },
+};
+XOAI.stages[4] = [
+  ...XOAI.stages[3],
+  // A panicle, not one flower: a spray of tiny cream dots on a thin spike, which is what a mango
+  // in bloom actually looks like.
+  {
+    kind: 'group',
+    droop: { rotate: 18, cx: 48, cy: 39 },
+    parts: [
+      { kind: 'path', d: 'M48 39 C47.6 34 47.8 29 48 25.5', stroke: 'stem', strokeWidth: 2.4 },
+      { kind: 'path', d: 'M48 32 C45.5 30 43.5 27.5 42.5 25', stroke: 'stem', strokeWidth: 2 },
+      { kind: 'path', d: 'M48 30 C50.5 28 52.5 25.5 53.5 23.5', stroke: 'stem', strokeWidth: 2 },
+      { kind: 'circle', cx: 48, cy: 24, r: 2.4, fill: 'petal', stroke: 'petalInk', strokeWidth: 2 },
+      { kind: 'circle', cx: 42, cy: 23.6, r: 2.1, fill: 'petal', stroke: 'petalInk', strokeWidth: 1.9 },
+      { kind: 'circle', cx: 54.2, cy: 22.4, r: 2.1, fill: 'petal', stroke: 'petalInk', strokeWidth: 1.9 },
+      { kind: 'circle', cx: 45.4, cy: 28.6, r: 1.7, fill: 'petal', stroke: 'petalInk', strokeWidth: 1.7 },
+      { kind: 'circle', cx: 51, cy: 27.4, r: 1.7, fill: 'petal', stroke: 'petalInk', strokeWidth: 1.7 },
+    ],
+  },
+];
+XOAI.stages[5] = [
+  ...XOAI.stages[3],
+  {
+    kind: 'group',
+    droop: { translate: [1, 3] },
+    parts: [
+      { kind: 'path', d: 'M37 37 C35 39.5 33 42 32 44', stroke: 'stem', strokeWidth: 2.8 },
+      {
+        kind: 'ellipse',
+        cx: 30,
+        cy: 48,
+        rx: 6.4,
+        ry: 8,
+        fill: 'fruit',
+        stroke: 'fruitInk',
+        strokeWidth: 3.2,
+        rotate: { deg: -18, cx: 30, cy: 48 },
+      },
+      { kind: 'path', d: 'M60 34.5 C61.5 37 63 39.5 63.5 41.5', stroke: 'stem', strokeWidth: 2.8 },
+      {
+        kind: 'ellipse',
+        cx: 65,
+        cy: 45.5,
+        rx: 5.6,
+        ry: 7,
+        fill: 'fruit',
+        stroke: 'fruitInk',
+        strokeWidth: 3,
+        rotate: { deg: 16, cx: 65, cy: 45.5 },
+      },
+    ],
+  },
+];
 
 // ART PENDING (Task 9)
 const QUAT = pending(
