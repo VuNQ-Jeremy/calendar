@@ -488,7 +488,9 @@ function SpeciesPicker({
               disabled={locked || !canChange}
               onPress={() => onChange(s.id)}
               style={{
-                width: 76,
+                // Two rows for ten species, matching the web — a third row pushed the pot-colour
+                // picker off the bottom of the sheet.
+                width: 64,
                 alignItems: 'center',
                 paddingVertical: th.spacing[1],
                 borderRadius: th.radius.md,
@@ -497,10 +499,10 @@ function SpeciesPicker({
                 backgroundColor: selected ? th.color.brandSoft : 'transparent',
               }}
             >
-              <PlantSvg stage={5} species={s.id} locked={locked} potColor="cocoa" size={56} />
+              <PlantSvg stage={5} species={s.id} locked={locked} potColor="cocoa" size={52} />
               <Muted
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
                   textAlign: 'center',
                   color: locked ? th.color.textMuted : th.color.textStrong,
                   fontWeight: selected ? '700' : '500',
@@ -509,7 +511,7 @@ function SpeciesPicker({
                 {name}
               </Muted>
               {locked ? (
-                <Muted style={{ fontSize: 10 }}>
+                <Muted style={{ fontSize: 9 }}>
                   {t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}
                 </Muted>
               ) : null}

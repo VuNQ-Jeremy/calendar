@@ -471,19 +471,21 @@ function SpeciesPicker({
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: 2,
-                padding: 4,
-                width: 76,
+                gap: 0,
+                padding: 3,
+                // Narrow enough that ten species are two rows, not three: a third row pushed the
+                // pot-colour picker below the fold of the dialog.
+                width: 64,
                 borderRadius: 'var(--radius-md)',
                 border: `2px solid ${selected ? 'var(--brand)' : 'transparent'}`,
                 background: selected ? 'var(--brand-soft)' : 'transparent',
                 cursor: locked || !canChange ? 'default' : 'pointer',
               }}
             >
-              <PlantSvg stage={5} species={s.id} locked={locked} potColor="cocoa" size={56} />
+              <PlantSvg stage={5} species={s.id} locked={locked} potColor="cocoa" size={52} />
               <span
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: selected ? 700 : 500,
                   color: locked ? 'var(--text-muted)' : 'var(--text-strong)',
                   textAlign: 'center',
@@ -493,7 +495,7 @@ function SpeciesPicker({
                 {name}
               </span>
               {locked && (
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                   {t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}
                 </span>
               )}
