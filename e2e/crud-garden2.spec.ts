@@ -79,6 +79,15 @@ test.describe('CRUD: the garden plant lifecycle', () => {
     const rename = sk.dlgOf('Name your plant');
     await rename.locator('input.mochi-input').fill('Bé Xanh');
     await rename.getByRole('button', { name: 'Violet' }).click();
+
+    // The species grid doubles as the collection: what is earned, what is next, and how far.
+    // With no fruit banked yet only the starter is pickable, and the rest say what they cost.
+    const species = (name: string) => rename.getByRole('button', { name, exact: true });
+    await expect(species('Classic')).toHaveAttribute('aria-pressed', 'true');
+    await expect(species('Tomato')).toBeDisabled();
+    await expect(species('Apricot blossom')).toBeDisabled();
+    await expect(rename).toContainText('1 more fruit');
+
     post = sk.posted('/vocabulary');
     await rename.locator('.m-dialog__foot .mochi-btn.is-primary').click();
     await post;
@@ -125,6 +134,27 @@ test.describe('CRUD: the garden plant lifecycle', () => {
     await expect(widget).toContainText('1 in total');
     await expect(widget).toContainText('1 this month');
     await expect(widget.getByRole('button', { name: 'Harvest' })).toHaveCount(0);
+
+    // ---- Student: that fruit unlocked a species, and the harvest re-seeded the pot, so this is
+    // exactly the moment the switch is allowed. ----
+    await widget.getByRole('button', { name: 'Name your plant' }).click();
+    const replant = sk.dlgOf('Name your plant');
+    await expect(replant.getByRole('button', { name: 'Tomato', exact: true })).toBeEnabled();
+    // Still out of reach, and still saying by how much.
+    await expect(replant.getByRole('button', { name: 'Apricot blossom', exact: true })).toBeDisabled();
+    await replant.getByRole('button', { name: 'Tomato', exact: true }).click();
+    post = sk.posted('/vocabulary');
+    await replant.locator('.m-dialog__foot .mochi-btn.is-primary').click();
+    await post;
+
+    await sp.reload();
+    await widget.getByRole('button', { name: 'Name your plant' }).click();
+    const after = sk.dlgOf('Name your plant');
+    await expect(after.getByRole('button', { name: 'Tomato', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await after.getByRole('button', { name: 'Cancel' }).click();
 
     // ---- Staff sees the same fruit on the class garden. ----
     await page.goto(CLASS_PATH);

@@ -7,6 +7,7 @@ import { PALETTE, colorOf } from '../lib/core.js';
 import { useLang } from '../lib/i18n.jsx';
 import { formatDmy, formatDmyTime } from '../../shared/logic/dates.js';
 import { PlantSvg, stageKey } from './plant-art.jsx';
+import { SPECIES, nextUnlock } from '../../shared/garden-art';
 import { MAX_STAGE, daysBetweenVn } from '../../shared/logic/garden';
 import { parseModes } from '../../shared/logic/flashcards';
 import type { GardenSettings, PlantStage, PlantView } from '../../shared/logic/garden';
@@ -98,9 +99,11 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
   // same slot would replay it.
   const harvestFetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const nameFetcher = useFetcher();
-  const [editing, setEditing] = React.useState<{ plantName: string; potColor: string } | null>(
-    null,
-  );
+  const [editing, setEditing] = React.useState<{
+    plantName: string;
+    potColor: string;
+    species: string;
+  } | null>(null);
   const [flash, setFlash] = React.useState<'done' | 'failed' | null>(null);
   const [celebrating, setCelebrating] = React.useState(false);
   const [popping, setPopping] = React.useState(false);
@@ -151,6 +154,7 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
     fd.set('intent', 'plant-update');
     fd.set('plantName', editing.plantName.trim());
     fd.set('potColor', editing.potColor);
+    fd.set('species', editing.species);
     nameFetcher.submit(fd, { method: 'post' });
     setEditing(null);
   };
@@ -203,17 +207,21 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
               {t('garden_unnamed')}
             </span>
           )}
-          {data.hasPlant && (
-            <IconButton
-              label={t('garden_rename')}
-              size="sm"
-              onClick={() =>
-                setEditing({ plantName: data.plantName ?? '', potColor: data.potColor })
-              }
-            >
-              <MIcon name="edit" size={16} />
-            </IconButton>
-          )}
+          {/* Reachable with an empty pot too: choosing what to grow is the one decision a
+              student with no plant yet can actually make. */}
+          <IconButton
+            label={t('garden_rename')}
+            size="sm"
+            onClick={() =>
+              setEditing({
+                plantName: data.plantName ?? '',
+                potColor: data.potColor,
+                species: data.species,
+              })
+            }
+          >
+            <MIcon name="edit" size={16} />
+          </IconButton>
         </div>
 
         <div className="m-row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -334,6 +342,15 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
               onChange={(e) => setEditing((d) => (d ? { ...d, plantName: e.target.value } : d))}
             />
           </div>
+          <SpeciesPicker
+            value={editing.species}
+            fruitsTotal={plant.fruitsTotal}
+            // The server accepts a species only while the pot is empty, the plant is dead, or it
+            // is still a seed. Showing the grid as pickable outside that window would invite a
+            // 409 the student cannot act on, so it is shown locked instead — with the reason.
+            canChange={!data.hasPlant || plant.dead || plant.stage <= 1}
+            onChange={(species) => setEditing((d) => (d ? { ...d, species } : d))}
+          />
           <ColorPicker
             label={t('garden_pot_color')}
             value={editing.potColor}
@@ -342,6 +359,89 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
         </Modal>
       )}
     </Card>
+  );
+}
+
+/**
+ * The collection, as a grid of pots.
+ *
+ * Locked species are drawn rather than hidden — a goal you can see pulls harder than a mystery,
+ * and "còn 3 quả nữa" turns tonight's round into progress toward something specific. The same
+ * grid does duty as the picker and as the collection screen, which is why there is no separate
+ * collection screen.
+ */
+function SpeciesPicker({
+  value,
+  fruitsTotal,
+  canChange,
+  onChange,
+}: {
+  value: string;
+  fruitsTotal: number;
+  canChange: boolean;
+  onChange: (species: string) => void;
+}) {
+  const { t } = useLang();
+  const next = nextUnlock(fruitsTotal);
+  return (
+    <div className="mochi-field">
+      <label className="mochi-field__label">{t('garden_species')}</label>
+      <div className="m-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {SPECIES.map((s) => {
+          const locked = s.unlockAt > fruitsTotal;
+          const selected = s.id === value;
+          const name = t(`garden_species_${s.id}` as Parameters<typeof t>[0]);
+          return (
+            <button
+              key={s.id}
+              type="button"
+              disabled={locked || !canChange}
+              onClick={() => onChange(s.id)}
+              title={locked ? `${name} — ${t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}` : name}
+              aria-label={name}
+              aria-pressed={selected}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                padding: 4,
+                width: 76,
+                borderRadius: 'var(--radius-md)',
+                border: `2px solid ${selected ? 'var(--brand)' : 'transparent'}`,
+                background: selected ? 'var(--brand-soft)' : 'transparent',
+                cursor: locked || !canChange ? 'default' : 'pointer',
+              }}
+            >
+              <PlantSvg stage={5} species={s.id} locked={locked} potColor="cocoa" size={56} />
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: selected ? 700 : 500,
+                  color: locked ? 'var(--text-muted)' : 'var(--text-strong)',
+                  textAlign: 'center',
+                  lineHeight: 1.2,
+                }}
+              >
+                {name}
+              </span>
+              {locked && (
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+        {!canChange
+          ? t('garden_species_growing')
+          : next
+            ? t('garden_species_locked', { n: next.unlockAt - fruitsTotal })
+            : t('garden_species_all')}
+      </span>
+    </div>
   );
 }
 
