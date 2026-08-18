@@ -149,6 +149,16 @@ export function FlashcardTopicsScreen() {
   const [modal, setModal] = React.useState<TopicDraft | null>(null);
   const [generating, setGenerating] = React.useState(false);
   const [rail, setRail] = React.useState<RailValue>({ kind: 'all' });
+  /**
+   * Where each book sits in the rail's own order, so the grid can group a book's units together
+   * rather than interleaving two books' Unit 1s. `curricula` arrives already ordered by the server
+   * (sortOrder, then name), so its index IS the order the teacher sees in the rail above the grid.
+   */
+  const bookRank = React.useMemo(() => {
+    const m = new Map<string, number>();
+    curricula.forEach((c, i) => m.set(c.id, i));
+    return m;
+  }, [curricula]);
   const [curriculumModal, setCurriculumModal] = React.useState<CurriculumDraft | null>(null);
   const [importing, setImporting] = React.useState(false);
   const [assigning, setAssigning] = React.useState<{
@@ -321,12 +331,28 @@ export function FlashcardTopicsScreen() {
               if (rail.kind === 'loose') return !u;
               return u?.curriculumId === rail.id;
             })
-            // Inside a book, unit order is the book's order. Elsewhere the server's order stands.
-            .sort((a, b) =>
-              rail.kind === 'curriculum'
-                ? (units[a.id]?.unitNo ?? 0) - (units[b.id]?.unitNo ?? 0)
-                : 0,
-            )
+            /**
+             * A book is taught in order, so its units read in order — on `All units` too, not just
+             * inside one book, where the previous version stopped and left the server's newest-first
+             * order showing 6, 5, 4 … 1.
+             *
+             * Book, then unit number, then loose decks last. Comparing through `cmp` rather than
+             * subtracting matters: an unnumbered deck ranks at Infinity, and `Infinity - Infinity`
+             * is NaN, which silently makes a comparator return "equal-ish" garbage. The sort is
+             * stable (ES2019), so decks that tie — the loose ones — keep the server's order.
+             */
+            .sort((a, b) => {
+              const ua = units[a.id];
+              const ub = units[b.id];
+              if (!ua || !ub) return ua ? -1 : ub ? 1 : 0;
+              const cmp = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1);
+              return (
+                cmp(
+                  bookRank.get(ua.curriculumId) ?? Infinity,
+                  bookRank.get(ub.curriculumId) ?? Infinity,
+                ) || cmp(ua.unitNo ?? Infinity, ub.unitNo ?? Infinity)
+              );
+            })
             .map((topic) => {
               const c = colorOf(topic.color);
               const unitNo = units[topic.id]?.unitNo ?? null;
