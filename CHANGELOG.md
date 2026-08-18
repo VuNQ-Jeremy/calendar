@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0268 — 2026-08-18
+Revert the topbar rail tweak: .topbar is dead CSS, nothing renders it. Page titles come from PageHeader inside .content, so they already inherit the rail.
+
 ## v0.0267 — 2026-08-18
 Give the app shell a 1440px rail so pages stop running edge-to-edge, and align the sticky topbar to it. Fix the 390px tab strip rounding its active tab into a circle, and step page padding down on phones. Define the missing --border-soft token and name cocoa, rose and the two status badge tints.
 

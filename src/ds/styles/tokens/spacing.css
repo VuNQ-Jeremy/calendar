@@ -20,10 +20,10 @@
   --layout-sm:  640px;
   --layout-md:  840px;
   --layout-lg:  1100px;
-  /* The app-shell rail (.topbar + .content). Wider than --layout-lg because this
-     is an app with real data grids — tuition, rankings, questions, platform —
-     rather than prose; it exists to stop a page running the full width of a 27"
-     monitor, not to set a reading measure. */
+  /* The app-shell rail (.content). Wider than --layout-lg because this is an app
+     with real data grids — tuition, rankings, questions, platform — rather than
+     prose; it exists to stop a page running the full width of a 27" monitor, not
+     to set a reading measure. */
   --layout-xl:  1440px;
   --sidebar-w:     260px;
   --gutter:        var(--space-6);

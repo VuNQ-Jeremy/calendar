@@ -639,10 +639,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  /* Inline padding, not a max-width: the blurred strip and its bottom border must
-     still span the full window, while the title inside lines up with the .content
-     rail below it. The max() collapses to plain --space-8 below the rail width. */
-  padding: var(--space-5) max(var(--space-8), calc((100% - var(--layout-xl)) / 2 + var(--space-8)));
+  padding: var(--space-5) var(--space-8);
   background: var(--bg-page);
   background: color-mix(in srgb, var(--bg-page) 85%, transparent);
   -webkit-backdrop-filter: blur(10px);
@@ -691,8 +688,9 @@ body {
   /* A rail, so a page does not run the full width of a 27" monitor — /config rows
      were 1545px wide to hold three short strings. Generous on purpose: this is an
      app with real data grids (tuition, rankings, questions, platform), not an
-     article, so it stops the sprawl without cramping a table. .topbar matches this
-     rail with inline padding so a page title stays aligned with its content. */
+     article, so it stops the sprawl without cramping a table. Page titles need no
+     separate treatment: PageHeader (.m-pagehead) renders inside .content, so it
+     inherits the rail. (.topbar is dead CSS — nothing renders it.) */
   max-width: var(--layout-xl);
   margin-inline: auto;
 }
@@ -707,15 +705,14 @@ body {
   max-width: none;
 }
 
-/* Narrow viewports, part two. This block has to sit AFTER .topbar and .content
-   rather than joining the sidebar-rail block further up: these selectors are all
-   single-class, a media query adds no specificity, and the base rules are declared
-   below that block — so an override placed there would silently lose. */
+/* Narrow viewports, part two. This block has to sit AFTER .content rather than
+   joining the sidebar-rail block further up: these selectors are all single-class,
+   a media query adds no specificity, and .content is declared below that block —
+   so an override placed there would silently lose. */
 @media (max-width: 720px) {
   /* Padding never reduced before this, so a 390px phone spent 64px of its width on
      page gutters on top of the 64px icon rail, leaving a ~262px content column —
      which is what broke the tab strip below. */
-  .topbar,
   .content {
     padding: var(--space-4);
   }
