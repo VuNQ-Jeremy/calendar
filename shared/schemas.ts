@@ -779,9 +779,27 @@ export type ScrollbarStyle = (typeof SCROLLBAR_STYLES)[number];
 export const TAB_BAR_STYLES = ['pill', 'dock', 'indicator'] as const;
 export type TabBarStyle = (typeof TAB_BAR_STYLES)[number];
 
+/**
+ * How a deck reads in the /vocabulary grid — where its colour goes, now that the colour is the
+ * card rather than a 12px dot beside the title.
+ *
+ * `band` a colour bar across the top of the card holding the title; `full` the whole card in the
+ * colour; `tint` the whole card in the pale soft shade. Web-only for now: these are ids the
+ * `html[data-vocab-card]` rules in src/styles/app.css key off, and the phone's vocabulary screen
+ * does not read them. It receives the key regardless (the schemas here are non-strict) rather
+ * than 400ing on it, which is what keeps an older app build working against a newer server.
+ *
+ * `band` is the default because it is the only one of the three that leaves the rest of the card
+ * alone: `full` needs white inks for the description and the staff icons, since --text-muted grey
+ * does not survive a mid-tone background.
+ */
+export const VOCAB_CARD_STYLES = ['band', 'full', 'tint'] as const;
+export type VocabCardStyle = (typeof VOCAB_CARD_STYLES)[number];
+
 export const UiPrefsInput = z.object({
   scrollbar: z.enum(SCROLLBAR_STYLES).optional(),
   mobileTabBar: z.enum(TAB_BAR_STYLES).optional(),
+  vocabCard: z.enum(VOCAB_CARD_STYLES).optional(),
 });
 export type UiPrefsInput = z.infer<typeof UiPrefsInput>;
 

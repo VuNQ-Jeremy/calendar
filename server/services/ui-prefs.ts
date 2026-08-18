@@ -1,5 +1,5 @@
 import type { TenantDb } from '../db/index';
-import type { ScrollbarStyle, TabBarStyle } from '../../shared/schemas';
+import type { ScrollbarStyle, TabBarStyle, VocabCardStyle } from '../../shared/schemas';
 import { record } from './audit';
 import { deleteJson, readJson, readSchoolJson, writeJson, writeSchoolJson } from './user-settings';
 
@@ -26,9 +26,23 @@ function sameJson(a: unknown, b: unknown): boolean {
  * account.
  */
 
-export type UiPrefs = { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
+export type UiPrefs = {
+  scrollbar: ScrollbarStyle;
+  mobileTabBar: TabBarStyle;
+  vocabCard: VocabCardStyle;
+};
 
-export const DEFAULT_UI_PREFS: UiPrefs = { scrollbar: 'slim', mobileTabBar: 'pill' };
+/**
+ * `readJson`/`readSchoolJson` fall back to this whole object when no row exists, and merge it
+ * under a stored one — so a school that set `scrollbar` before `vocabCard` existed reads back
+ * the default for the new key rather than `undefined`. That is what lets a key be added here
+ * without a migration.
+ */
+export const DEFAULT_UI_PREFS: UiPrefs = {
+  scrollbar: 'slim',
+  mobileTabBar: 'pill',
+  vocabCard: 'band',
+};
 
 export const UI_PREFS_KEY = 'ui-prefs';
 

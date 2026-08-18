@@ -332,34 +332,23 @@ export function FlashcardTopicsScreen() {
               return (
                 <FC
                   key={topic.id}
+                  className="topic-card"
                   interactive={true}
                   onClick={() => navigate(`/vocabulary/${topic.slug ?? topic.id}`)}
-                  style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
+                  // The colour is PUBLISHED here and spent in CSS, not spent here. Which of the
+                  // three treatments a school gets is `uiPrefs.vocabCard`, applied once as
+                  // `html[data-vocab-card]` in _app.tsx — so this component renders one DOM shape
+                  // and never has to know which variant is in force.
+                  style={
+                    {
+                      cursor: 'pointer',
+                      '--topic-color': c.base,
+                      '--topic-soft': c.soft,
+                    } as React.CSSProperties
+                  }
                 >
-                  <div className="m-row" style={{ gap: 10, alignItems: 'center' }}>
-                    <span
-                      style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 999,
-                        background: c.base,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color: 'var(--text-strong)',
-                        fontSize: 'var(--text-md)',
-                        flex: 1,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {topic.name}
-                    </div>
+                  <div className="topic-card__head">
+                    <div className="topic-card__name">{topic.name}</div>
                   </div>
                   {isStaff && (
                     // Own row below the name: the icons crowded the title into an ellipsis at the
@@ -370,12 +359,7 @@ export function FlashcardTopicsScreen() {
                     // not on this container: with three icons the container's own dead space sits
                     // right under the middle of the card, and swallowing clicks there turned "click
                     // the card to open the topic" into a coin flip.
-                    <div
-                      className="lrow__actions"
-                      // -6 against the card's 10px column gap: the buttons should read as belonging
-                      // to the title above them, not float equidistant between title and description.
-                      style={{ alignSelf: 'flex-start', marginTop: -6 }}
-                    >
+                    <div className="lrow__actions topic-card__actions">
                       {gardenStaff && (
                         <FIB
                           label={t('garden_assign')}
@@ -418,21 +402,8 @@ export function FlashcardTopicsScreen() {
                       </FIB>
                     </div>
                   )}
-                  {topic.description && (
-                    <div
-                      style={{
-                        color: 'var(--text-muted)',
-                        fontSize: 'var(--text-sm)',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as React.CSSProperties['WebkitBoxOrient'],
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {topic.description}
-                    </div>
-                  )}
-                  <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                  {topic.description && <div className="topic-card__desc">{topic.description}</div>}
+                  <div className="topic-card__count">
                     {t('fc_word_count', { n: topic.wordCount })}
                   </div>
                 </FC>

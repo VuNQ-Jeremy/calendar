@@ -20,8 +20,8 @@ import type { GardenSettings } from '../shared/logic/garden.js';
 import { CHECKIN_MAX_TIERS, type CheckinSettings } from '../shared/logic/checkin.js';
 import { PRONOUNCE_CURVES, type PronounceCurve } from '../shared/logic/flashcards.js';
 import type { ActivityTypeRow } from '../server/services/checkin-activity-types.js';
-import { TAB_BAR_STYLES } from '../shared/schemas.js';
-import type { ScrollbarStyle, TabBarStyle } from '../shared/schemas.js';
+import { TAB_BAR_STYLES, VOCAB_CARD_STYLES } from '../shared/schemas.js';
+import type { ScrollbarStyle, TabBarStyle, VocabCardStyle } from '../shared/schemas.js';
 
 const { Button, IconButton, Badge, Checkbox } = DS;
 
@@ -33,7 +33,7 @@ interface ConfigLoaderData {
   canEditGradeLevels: boolean;
   classLevels: ClassLevelRow[];
   subjects: SubjectRow[];
-  uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle };
+  uiPrefs: { scrollbar: ScrollbarStyle; mobileTabBar: TabBarStyle; vocabCard: VocabCardStyle };
   parentPortal: { enabled: boolean };
   tuitionSettings: TuitionSettings;
   rankingWeights: RankingWeights;
@@ -94,6 +94,17 @@ const TB_LABEL: Record<TabBarStyle, string> = {
   pill: 'cfg_tb_pill',
   dock: 'cfg_tb_dock',
   indicator: 'cfg_tb_indicator',
+};
+
+/**
+ * Labels for the /vocabulary deck-card treatments. Previewed inline like the scrollbar presets
+ * rather than described like the tab bar: the whole point of the setting is what the grid LOOKS
+ * like, and the mock is drawn in CSS (`.vcmock--<id>`) off the same ids app.css keys off.
+ */
+const VC_LABEL: Record<VocabCardStyle, string> = {
+  band: 'cfg_vc_band',
+  full: 'cfg_vc_full',
+  tint: 'cfg_vc_tint',
 };
 
 type TypeDraft = { id?: string; name: string };
@@ -1606,6 +1617,49 @@ function TabBarSection({ value }: { value: TabBarStyle }) {
 }
 
 /**
+ * How a deck's colour lands on the /vocabulary grid. Optimistic like the two above, and like the
+ * scrollbar it previews for real — the preset is an attribute on <html>, so setting it here
+ * restyles any deck grid already rendered behind this dialog.
+ */
+function VocabCardSection({ value }: { value: VocabCardStyle }) {
+  const fetcher = useFetcher();
+  const { t } = useLang();
+  const [local, setLocal] = React.useState<VocabCardStyle | null>(null);
+  const vocabCard = local ?? value;
+
+  const pick = (key: VocabCardStyle) => {
+    setLocal(key);
+    document.documentElement.dataset.vocabCard = key; // instant whole-app preview
+    const fd = new FormData();
+    fd.set('intent', 'ui-prefs');
+    fd.set('vocabCard', key);
+    fetcher.submit(fd, { action: '/config', method: 'post' });
+  };
+
+  return (
+    <div className="theme-preset">
+      {VOCAB_CARD_STYLES.map((key) => (
+        <button
+          key={key}
+          type="button"
+          className={'preset preset--vc' + (vocabCard === key ? ' is-active' : '')}
+          onClick={() => pick(key)}
+        >
+          <div className={'vcmock vcmock--' + key}>
+            <div className="vcmock__head">
+              <i className="vcmock__name" />
+            </div>
+            <i className="vcmock__line" />
+            <i className="vcmock__line vcmock__line--short" />
+          </div>
+          <div className="preset__name">{t(VC_LABEL[key])}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * Whether parents see the children screens. Optimistic like the two sections above.
  *
  * Worth being precise in the copy, because the switch is narrower than it looks: parents have
@@ -1875,6 +1929,15 @@ function SystemConfigScreen() {
           summary: t(TB_LABEL[uiPrefs.mobileTabBar]),
           width: 720,
           render: () => <TabBarSection value={uiPrefs.mobileTabBar} />,
+        },
+        {
+          id: 'vocabCard',
+          icon: 'sparkle',
+          title: t('cfg_vc_title'),
+          sub: t('cfg_vc_sub'),
+          summary: t(VC_LABEL[uiPrefs.vocabCard]),
+          width: 720,
+          render: () => <VocabCardSection value={uiPrefs.vocabCard} />,
         },
         {
           id: 'parentPortal',

@@ -3510,3 +3510,180 @@ html .sb::-webkit-scrollbar-thumb:active {
   white-space: nowrap;
   border: 0;
 }
+
+/* ===================== Vocabulary deck cards =====================
+   Where a deck's colour goes in the /vocabulary grid. The preset is chosen on /config and
+   applied as data-vocab-card on <html>, exactly like the scrollbar above; the card itself
+   (src/flashcards/index.tsx) only publishes --topic-color / --topic-soft and knows nothing
+   about which variant is in force.
+
+   Base rules = 'band' (the default, no attribute needed).
+
+   --topic-ink is the whole contrast story in one variable. On 'band' and 'tint' the body of
+   the card is still a light surface, so it stays at the muted grey every other card uses; on
+   'full' the card is a mid-tone colour where that grey dies, and it flips to white. Every ink
+   below reads it rather than naming a colour, so a fourth variant only has to set it once. */
+
+.topic-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  --topic-ink: var(--text-muted);
+}
+
+.topic-card__name {
+  font-weight: 700;
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  flex: 1;
+  min-width: 0;
+  /* The grid's column minimum is 240px, so a long deck name has to end somewhere. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-card__desc {
+  color: var(--topic-ink);
+  font-size: var(--text-sm);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.topic-card__count {
+  color: var(--topic-ink);
+  font-size: var(--text-sm);
+}
+
+/* -6 against the card's 10px column gap: the buttons should read as belonging to the title
+   above them, not float equidistant between title and description. */
+.topic-card__actions {
+  align-self: flex-start;
+  margin-top: -6px;
+}
+
+/* --- band (default): a colour bar across the top, title on a white pill ---
+   The negative margins pull the band out past .mochi-card's --space-6 padding so it meets the
+   card's edges; the top radii then have to be restated, or the square corners of the band show
+   through the card's rounded ones. */
+.topic-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--topic-color);
+  margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-6)) 0;
+  padding: 14px var(--space-6);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.topic-card__head .topic-card__name {
+  background: var(--surface-card);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  /* flex:1 above would stretch the pill the full width of the band; this keeps it hugging the
+     name while still allowing the ellipsis, which needs a bounded width to trigger. */
+  flex: 0 1 auto;
+}
+
+/* --- full: the whole card in the colour --- */
+html[data-vocab-card='full'] .topic-card {
+  background: var(--topic-color);
+  border-color: transparent;
+  --topic-ink: rgba(255, 255, 255, 0.92);
+}
+html[data-vocab-card='full'] .topic-card__head {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+/* The staff icons are drawn in --text-body, which vanishes on a mid-tone card. */
+html[data-vocab-card='full'] .topic-card__actions .mochi-icon-btn {
+  color: #fff;
+}
+html[data-vocab-card='full'] .topic-card__actions .mochi-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* --- tint: the whole card in the pale soft shade ---
+   No pill behind the title here: on a background this light a white pill is invisible, and the
+   default dark ink already reads. */
+html[data-vocab-card='tint'] .topic-card {
+  background: var(--topic-soft);
+}
+html[data-vocab-card='tint'] .topic-card__head {
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
+  background: transparent;
+  padding: 0;
+  flex: 1;
+}
+
+/* --- /config preview mocks for the three deck-card treatments ---
+   A miniature of one card in the grid: a head with the deck name in it, then two body lines.
+   Violet stands in for "the deck's colour" the way the tab-bar mocks stand in for a real bar. */
+.preset--vc {
+  width: 128px;
+}
+.vcmock {
+  height: 60px;
+  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--sand-300);
+  background: var(--surface-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.vcmock__head {
+  display: flex;
+  align-items: center;
+  padding: 5px 6px;
+  background: var(--cat-violet);
+}
+.vcmock__name {
+  display: block;
+  height: 7px;
+  width: 46px;
+  border-radius: 999px;
+  background: var(--surface-card);
+}
+.vcmock__line {
+  display: block;
+  height: 4px;
+  width: 44px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--taupe-400);
+}
+.vcmock__line--short {
+  width: 26px;
+}
+/* full — the whole card in the colour, name still on its white pill */
+.vcmock--full {
+  background: var(--cat-violet);
+  border-color: transparent;
+}
+.vcmock--full .vcmock__head {
+  background: transparent;
+}
+.vcmock--full .vcmock__line {
+  background: rgba(255, 255, 255, 0.92);
+}
+/* tint — the whole card in the soft shade, no pill (it would not read on a background this pale) */
+.vcmock--tint {
+  background: var(--cat-violet-soft);
+}
+.vcmock--tint .vcmock__head {
+  background: transparent;
+}
+.vcmock--tint .vcmock__name {
+  background: var(--cat-violet-ink);
+}

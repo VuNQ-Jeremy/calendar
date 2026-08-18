@@ -87,11 +87,11 @@ test.describe('CRUD: config', () => {
   test('every setting is a row that opens into its modal', async ({ page }) => {
     const row = (title: string) => page.locator(`.cfg-row:has(.lrow__title:text-is("${title}"))`);
 
-    // Seventeen settings, grouped. The summary is the point — it is what replaces scrolling.
+    // Eighteen settings, grouped. The summary is the point — it is what replaces scrolling.
     // This count is deliberately exact: adding a setting without a row would otherwise pass
     // silently. Bump it when you add one (13 -> 16 came with check-in and túi mù, 17 with
-    // the pronunciation forgiveness curve).
-    await expect(page.locator('.cfg-row')).toHaveCount(17);
+    // the pronunciation forgiveness curve, 18 with the vocabulary deck-card style).
+    await expect(page.locator('.cfg-row')).toHaveCount(18);
     await expect(row('Assessment types').locator('.cfg-row__value')).toHaveText(/of \d+ active/);
     await expect(row('Ranking weights').locator('.cfg-row__value')).toHaveText(/^\d+ \/ \d+$/);
 
@@ -104,5 +104,54 @@ test.describe('CRUD: config', () => {
 
     await page.keyboard.press('Escape');
     await expect(dlg).toHaveCount(0);
+  });
+
+  /**
+   * The vocabulary deck-card style, the third `ui-prefs` preset alongside the scrollbar and the
+   * phone's tab bar.
+   *
+   * What is actually under test is the WIRING, not the CSS: the preset is stored school-wide and
+   * applied as `data-vocab-card` on <html>, so the assertion is that the attribute follows the
+   * click, survives a reload (which proves it was written, not just previewed optimistically),
+   * and that the row's summary agrees with the active preset in the modal.
+   *
+   * Restores `band` at the end. It is the default, and the value is school-wide — left on `full`
+   * it would silently restyle /vocabulary for every other spec in the run.
+   */
+  test('vocabulary deck cards: pick a style, and it sticks school-wide', async ({ page }) => {
+    const k = ui(page);
+    const row = page.locator('.cfg-row:has(.lrow__title:text-is("Vocabulary deck cards"))');
+    const html = page.locator('html');
+
+    await expect(row.locator('.cfg-row__value')).toHaveText('Colour band');
+    await expect(html).toHaveAttribute('data-vocab-card', 'band');
+
+    const card = await openConfigEntry(page, 'Vocabulary deck cards');
+    await expect(card.locator('button.preset.preset--vc')).toHaveCount(3);
+    await expect(card.locator('button.preset.preset--vc.is-active')).toHaveCount(1);
+
+    // Picking previews instantly AND saves in the same click, like the scrollbar preset.
+    let post = k.posted('/config');
+    await card.getByRole('button', { name: 'Full colour' }).click();
+    await expect(html).toHaveAttribute('data-vocab-card', 'full');
+    await post;
+
+    await page.reload();
+    await expect(html).toHaveAttribute('data-vocab-card', 'full');
+    await expect(row.locator('.cfg-row__value')).toHaveText('Full colour');
+
+    // ---- The grid actually honours it: the deck card carries the class the CSS keys off. ----
+    await page.goto('/vocabulary');
+    await expect(html).toHaveAttribute('data-vocab-card', 'full');
+    await expect(page.locator('.mochi-card.topic-card').first()).toBeVisible();
+
+    // ---- Put the school back on the default. ----
+    await page.goto('/config');
+    const back = await openConfigEntry(page, 'Vocabulary deck cards');
+    post = k.posted('/config');
+    await back.getByRole('button', { name: 'Colour band' }).click();
+    await post;
+    await page.reload();
+    await expect(html).toHaveAttribute('data-vocab-card', 'band');
   });
 });

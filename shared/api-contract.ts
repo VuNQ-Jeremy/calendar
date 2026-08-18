@@ -185,6 +185,7 @@ export const UiPrefs = z
   .object({
     scrollbar: z.enum(['slim', 'inset', 'brand', 'ghost']),
     mobileTabBar: z.enum(['pill', 'dock', 'indicator']),
+    vocabCard: z.enum(['band', 'full', 'tint']),
   })
   .meta({ id: 'UiPrefs' });
 

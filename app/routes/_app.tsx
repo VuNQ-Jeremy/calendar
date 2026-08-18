@@ -419,7 +419,11 @@ export default function AppLayout() {
 
   React.useEffect(() => {
     document.documentElement.dataset.scrollbar = uiPrefs.scrollbar;
-  }, [uiPrefs.scrollbar]);
+    // Same trick as the scrollbar, and for the same reason: /vocabulary then needs no loader of
+    // its own for this — the deck card publishes its colour as a custom property and the
+    // `html[data-vocab-card]` rules decide what to do with it.
+    document.documentElement.dataset.vocabCard = uiPrefs.vocabCard;
+  }, [uiPrefs.scrollbar, uiPrefs.vocabCard]);
 
   const openFeedback = () => {
     setFeedbackDraft(newFeedbackDraft(user));
