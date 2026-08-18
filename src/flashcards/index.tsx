@@ -329,6 +329,7 @@ export function FlashcardTopicsScreen() {
             )
             .map((topic) => {
               const c = colorOf(topic.color);
+              const unitNo = units[topic.id]?.unitNo ?? null;
               return (
                 <FC
                   key={topic.id}
@@ -344,11 +345,27 @@ export function FlashcardTopicsScreen() {
                       cursor: 'pointer',
                       '--topic-color': c.base,
                       '--topic-soft': c.soft,
+                      // The palette's text-safe shade of the same hue. `base` is tuned to be a
+                      // surface and fails contrast as small text — `ink` is what ICON_TINT already
+                      // pairs with `soft` for exactly this reason.
+                      '--topic-strong': c.ink,
                     } as React.CSSProperties
                   }
                 >
                   <div className="topic-card__head">
-                    <div className="topic-card__name">{topic.name}</div>
+                    {/* Two lines: the ordinal, then the name. `Unit 1` is a position in a
+                        sequence a teacher actually teaches in order, so it reads as an eyebrow
+                        above the title rather than a badge competing beside it. A deck outside a
+                        book has no ordinal and gets no empty line — hence the modifier class
+                        rather than an always-rendered span. */}
+                    <div className={'topic-card__name' + (unitNo != null ? ' is-unit' : '')}>
+                      {unitNo != null && (
+                        <span className="topic-card__eyebrow">
+                          {t('vc_unit_badge', { n: unitNo })}
+                        </span>
+                      )}
+                      <span className="topic-card__title">{topic.name}</span>
+                    </div>
                   </div>
                   {isStaff && (
                     // Own row below the name: the icons crowded the title into an ellipsis at the

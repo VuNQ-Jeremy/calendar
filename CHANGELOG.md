@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0264 — 2026-08-18
+Vocabulary deck cards show the unit number as an eyebrow above the unit name, on two lines.
+
 ## v0.0263 — 2026-08-18
 Vocabulary deck cards now carry the deck's colour instead of a dot beside the title, with the treatment (colour band, full colour, soft tint) picked in System Config as a third ui-prefs preset.
 
