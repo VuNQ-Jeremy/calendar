@@ -342,14 +342,10 @@ const CLASSIC: SpeciesArt = {
 /* ── the other nine ────────────────────────────────────────────────────────────────────── */
 
 /**
- * Placeholder art: the classic geometry wearing the species' own palette. Each is replaced by a
- * real drawing in its art commit; until then a student who unlocks one sees a recoloured classic
- * rather than an empty pot, which is the failure mode worth having.
+ * A species' palette, stated as its difference from the classic's. Roles a species never uses
+ * (a blossom tree has no fruit; a cactus has no seed above ground) simply inherit — every role
+ * still resolves to a real hex, so no drawing can fall back to black.
  */
-function pending(id: string, unlockAt: number, palette: SpeciesPalette): SpeciesArt {
-  return { id, unlockAt, palette, stages: CLASSIC.stages };
-}
-
 const paletteOf = (over: Partial<SpeciesPalette>): SpeciesPalette => ({
   ...CLASSIC.palette,
   ...over,
@@ -902,43 +898,296 @@ XOAI.stages[5] = [
   },
 ];
 
-// ART PENDING (Task 9)
-const QUAT = pending(
-  'quat',
-  16,
-  paletteOf({
+/* ── quất (kumquat) ────────────────────────────────────────────────────────────────────────
+ *
+ * The Tết tier opens with abundance: a dense round canopy studded with small oranges. The canopy
+ * is built the way the class tree's is — every outline stroked first, every fill painted after —
+ * so overlapping clumps read as one shape instead of a pile of circles with lines through them.
+ */
+function canopy(clumps: { cx: number; cy: number; r: number }[]): PartSpec[] {
+  return [
+    ...clumps.map(
+      (c): PartSpec => ({
+        kind: 'circle',
+        cx: c.cx,
+        cy: c.cy,
+        r: c.r,
+        stroke: 'leafInk',
+        strokeWidth: 3.4,
+      }),
+    ),
+    ...clumps.map((c): PartSpec => ({ kind: 'circle', cx: c.cx, cy: c.cy, r: c.r, fill: 'leaf' })),
+  ];
+}
+
+const QUAT_TRUNK: PartSpec = {
+  kind: 'path',
+  d: 'M48 57 C47.4 51 47.8 46 48 41',
+  stroke: 'stem',
+  strokeWidth: 4.6,
+};
+
+/** A little orange sitting in the foliage. No stalk: it is nested, not hung. */
+const kumquat = (cx: number, cy: number, r = 3.2): PartSpec => ({
+  kind: 'circle',
+  cx,
+  cy,
+  r,
+  fill: 'fruit',
+  stroke: 'fruitInk',
+  strokeWidth: 2.6,
+});
+
+const QUAT: SpeciesArt = {
+  id: 'quat',
+  unlockAt: 16,
+  palette: paletteOf({
+    leaf: '#5FA95F',
+    leafInk: inkOf('#5FA95F'),
+    stem: '#6E5136',
     petal: OFF_WHITE,
-    petalInk: inkOf(OFF_WHITE),
+    petalInk: mix(OFF_WHITE, DEEP, 0.34),
+    eye: CREAM,
+    eyeInk: inkOf(YELLOW),
     fruit: KUMQUAT,
     fruitInk: inkOf(KUMQUAT),
     gloss: 0.7,
   }),
-);
+  stages: {
+    1: SEED_PARTS,
+    2: [
+      { kind: 'path', d: 'M48 57 C47.6 52.5 48.2 48 48 44', stroke: 'stem', strokeWidth: 4.2 },
+      { kind: 'leaf', x: 46.6, y: 44.5, dir: -1, shape: 'round', scale: 0.9, baseAngle: -12, droopAngle: 42 },
+      { kind: 'leaf', x: 49.4, y: 45.5, dir: 1, shape: 'round', scale: 0.9, baseAngle: -8, droopAngle: 44 },
+    ],
+    3: [QUAT_TRUNK, ...canopy([{ cx: 48, cy: 36, r: 11 }, { cx: 38.5, cy: 41, r: 7.5 }, { cx: 57, cy: 40.5, r: 7 }])],
+    4: [],
+    5: [],
+  },
+};
+const QUAT_FULL_CANOPY = canopy([
+  { cx: 48, cy: 32, r: 13 },
+  { cx: 34.5, cy: 39, r: 9.5 },
+  { cx: 61, cy: 38, r: 9 },
+  { cx: 41, cy: 23, r: 8 },
+  { cx: 56, cy: 22.5, r: 7.5 },
+  { cx: 48, cy: 44, r: 8.5 },
+]);
+QUAT.stages[4] = [
+  QUAT_TRUNK,
+  ...QUAT_FULL_CANOPY,
+  // Tiny white citrus flowers, tucked into the leaves rather than perched on top.
+  {
+    kind: 'group',
+    droop: { rotate: 6, cx: 48, cy: 41 },
+    parts: [
+      { kind: 'petalRing', cx: 39, cy: 27, count: 5, rx: 2.4, ry: 3.4, dy: 3.4, petalStrokeWidth: 2.2 },
+      { kind: 'circle', cx: 39, cy: 27, r: 1.6, fill: 'eye', stroke: 'eyeInk', strokeWidth: 1.8 },
+      { kind: 'petalRing', cx: 55.5, cy: 30, count: 5, rx: 2.2, ry: 3.2, dy: 3.2, petalStrokeWidth: 2.2 },
+      { kind: 'circle', cx: 55.5, cy: 30, r: 1.5, fill: 'eye', stroke: 'eyeInk', strokeWidth: 1.7 },
+      { kind: 'petalRing', cx: 46.5, cy: 20, count: 5, rx: 2.2, ry: 3, dy: 3, petalStrokeWidth: 2 },
+      { kind: 'circle', cx: 46.5, cy: 20, r: 1.4, fill: 'eye', stroke: 'eyeInk', strokeWidth: 1.6 },
+    ],
+  },
+];
+QUAT.stages[5] = [
+  QUAT_TRUNK,
+  ...QUAT_FULL_CANOPY,
+  // Seven of them: abundance is the whole idea of a Tết kumquat, and a sparse one reads as sick.
+  {
+    kind: 'group',
+    droop: { rotate: 6, cx: 48, cy: 41 },
+    parts: [
+      kumquat(37, 32.5),
+      kumquat(58.5, 31, 3),
+      kumquat(48, 22.5, 3.4),
+      kumquat(30.5, 41.5, 2.8),
+      kumquat(63.5, 41, 2.8),
+      kumquat(43, 40, 3),
+      kumquat(53.5, 43.5, 2.8),
+    ],
+  },
+];
 
-// ART PENDING (Task 9)
-const DAO = pending(
-  'dao',
-  20,
-  paletteOf({
+/* ── đào & mai (Tết blossom trees) ─────────────────────────────────────────────────────────
+ *
+ * The two prestige unlocks, and the only species with no fruit at all: for a blossom tree, full
+ * bloom IS the reward, so stage 5 is a canopy of flowers instead. Their charm is restraint —
+ * bare dark branches, almost no leaves, and the blossoms doing all the talking. They share a
+ * skeleton builder but never the same branches: a mai that is a recoloured đào would cheapen the
+ * top of the ladder.
+ */
+type Bloom = { cx: number; cy: number; s: number };
+
+function blossomTree(branches: string[], blooms: Bloom[], buds: Bloom[]): PartSpec[] {
+  return [
+    ...branches.map(
+      (d, i): PartSpec => ({ kind: 'path', d, stroke: 'stem', strokeWidth: i === 0 ? 4.6 : 3 }),
+    ),
+    ...buds.map(
+      (b): PartSpec => ({
+        kind: 'circle',
+        cx: b.cx,
+        cy: b.cy,
+        r: 2.2 * b.s,
+        fill: 'petal',
+        stroke: 'petalInk',
+        strokeWidth: 2,
+      }),
+    ),
+    ...blooms.flatMap((b): PartSpec[] => [
+      {
+        kind: 'petalRing',
+        cx: b.cx,
+        cy: b.cy,
+        count: 5,
+        rx: 2.6 * b.s,
+        ry: 3.4 * b.s,
+        dy: 3.4 * b.s,
+        petalStrokeWidth: 2.2,
+      },
+      { kind: 'circle', cx: b.cx, cy: b.cy, r: 1.5 * b.s, fill: 'eye', stroke: 'eyeInk', strokeWidth: 1.6 },
+    ]),
+  ];
+}
+
+const DAO_BRANCHES = [
+  'M48 57 C47 50 48 44 47.5 38',
+  'M47.8 47 C43 44 38.5 40 35.5 35',
+  'M47.6 42 C52 39.5 56.5 35.5 59 31',
+  'M47.5 38 C46.5 33 47 28 47.5 23.5',
+];
+
+const DAO: SpeciesArt = {
+  id: 'dao',
+  unlockAt: 20,
+  palette: paletteOf({
+    stem: '#5E4632',
+    leaf: '#6FA86A',
+    leafInk: inkOf('#6FA86A'),
     petal: BLOSSOM,
     petalInk: inkOf(BLOSSOM),
+    eye: YELLOW,
+    eyeInk: inkOf(YELLOW),
     fruit: BLOSSOM,
     fruitInk: inkOf(BLOSSOM),
     gloss: 0,
   }),
+  stages: {
+    1: SEED_PARTS,
+    2: [
+      { kind: 'path', d: 'M48 57 C47.4 52.5 48 48 47.6 44', stroke: 'stem', strokeWidth: 4.2 },
+      { kind: 'leaf', x: 46.4, y: 44.5, dir: -1, shape: 'pointed', scale: 0.76, baseAngle: -18, droopAngle: 42 },
+      { kind: 'leaf', x: 49, y: 45.5, dir: 1, shape: 'pointed', scale: 0.76, baseAngle: -12, droopAngle: 44 },
+    ],
+    3: [
+      ...blossomTree(DAO_BRANCHES.slice(0, 3), [], []),
+      { kind: 'leaf', x: 36.5, y: 35.5, dir: -1, shape: 'pointed', scale: 0.8, baseAngle: -22, droopAngle: 40 },
+      { kind: 'leaf', x: 58, y: 31.5, dir: 1, shape: 'pointed', scale: 0.8, baseAngle: -18, droopAngle: 42 },
+    ],
+    4: [],
+    5: [],
+  },
+};
+DAO.stages[4] = [
+  ...blossomTree(
+    DAO_BRANCHES,
+    [
+      { cx: 35, cy: 33.5, s: 1 },
+      { cx: 59.5, cy: 29, s: 0.92 },
+    ],
+    [
+      { cx: 47.5, cy: 22.5, s: 1 },
+      { cx: 42, cy: 38, s: 0.85 },
+    ],
+  ),
+  { kind: 'leaf', x: 50, y: 34, dir: 1, shape: 'pointed', scale: 0.72, baseAngle: -30, droopAngle: 38 },
+];
+DAO.stages[5] = blossomTree(
+  DAO_BRANCHES,
+  [
+    { cx: 35, cy: 33.5, s: 1.06 },
+    { cx: 59.5, cy: 29, s: 1 },
+    { cx: 47.5, cy: 21.5, s: 1.06 },
+    { cx: 41.5, cy: 28, s: 0.86 },
+    { cx: 53.5, cy: 36.5, s: 0.9 },
+    { cx: 40.5, cy: 41.5, s: 0.82 },
+    { cx: 55, cy: 22.5, s: 0.8 },
+  ],
+  [
+    { cx: 29.5, cy: 39.5, s: 0.9 },
+    { cx: 64, cy: 36, s: 0.85 },
+  ],
 );
 
-// ART PENDING (Task 9)
-const MAI = pending(
-  'mai',
-  25,
-  paletteOf({
+/** Mai: its own branches (a wider, lower fork), golden blossoms, and a brown eye. */
+const MAI_BRANCHES = [
+  'M48 57 C48.6 51 47.6 45 48 40',
+  'M48 45 C43.5 43.5 38 41 33.5 37.5',
+  'M48 43 C53 41.5 58.5 38.5 62.5 34.5',
+  'M48 40 C47.4 35.5 48 30.5 47.6 26',
+];
+
+const MAI: SpeciesArt = {
+  id: 'mai',
+  unlockAt: 25,
+  palette: paletteOf({
+    stem: '#5E4632',
+    leaf: '#6FA86A',
+    leafInk: inkOf('#6FA86A'),
     petal: YELLOW,
     petalInk: inkOf(YELLOW),
+    eye: '#B4762B',
+    eyeInk: inkOf('#B4762B'),
     fruit: YELLOW,
     fruitInk: inkOf(YELLOW),
     gloss: 0,
   }),
+  stages: {
+    1: SEED_PARTS,
+    2: [
+      { kind: 'path', d: 'M48 57 C48.4 52.5 47.8 48 48.2 44', stroke: 'stem', strokeWidth: 4.2 },
+      { kind: 'leaf', x: 47, y: 44.5, dir: -1, shape: 'pointed', scale: 0.76, baseAngle: -14, droopAngle: 42 },
+      { kind: 'leaf', x: 49.6, y: 45.5, dir: 1, shape: 'pointed', scale: 0.76, baseAngle: -20, droopAngle: 44 },
+    ],
+    3: [
+      ...blossomTree(MAI_BRANCHES.slice(0, 3), [], []),
+      { kind: 'leaf', x: 34.5, y: 37.5, dir: -1, shape: 'pointed', scale: 0.8, baseAngle: -16, droopAngle: 40 },
+      { kind: 'leaf', x: 61.5, y: 35, dir: 1, shape: 'pointed', scale: 0.8, baseAngle: -22, droopAngle: 42 },
+    ],
+    4: [],
+    5: [],
+  },
+};
+MAI.stages[4] = [
+  ...blossomTree(
+    MAI_BRANCHES,
+    [
+      { cx: 33, cy: 35.5, s: 1 },
+      { cx: 63, cy: 32.5, s: 0.92 },
+    ],
+    [
+      { cx: 47.6, cy: 25, s: 1 },
+      { cx: 53, cy: 39, s: 0.85 },
+    ],
+  ),
+  { kind: 'leaf', x: 45.6, y: 36, dir: -1, shape: 'pointed', scale: 0.72, baseAngle: -34, droopAngle: 38 },
+];
+MAI.stages[5] = blossomTree(
+  MAI_BRANCHES,
+  [
+    { cx: 33, cy: 35.5, s: 1.06 },
+    { cx: 63, cy: 32.5, s: 1 },
+    { cx: 47.6, cy: 24, s: 1.08 },
+    { cx: 39.5, cy: 30.5, s: 0.88 },
+    { cx: 56, cy: 27, s: 0.9 },
+    { cx: 42, cy: 43, s: 0.82 },
+    { cx: 55.5, cy: 40, s: 0.84 },
+  ],
+  [
+    { cx: 28, cy: 41, s: 0.9 },
+    { cx: 67, cy: 38.5, s: 0.85 },
+  ],
 );
 
 /** Ordered by unlock threshold — the order the picker shows them in. */
