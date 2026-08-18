@@ -19,7 +19,7 @@
  * Output directories are scratch. Do not commit them.
  */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createElement } from 'react';
@@ -31,6 +31,9 @@ function arg(name, fallback = undefined) {
   const i = process.argv.indexOf(`--${name}`);
   return i === -1 ? fallback : process.argv[i + 1];
 }
+
+/** Presence test, so a trailing `--png` (whose "value" is undefined) still counts. */
+const flag = (name) => process.argv.includes(`--${name}`);
 
 const outDir = arg('out');
 const only = arg('species');
@@ -81,6 +84,44 @@ for (const s of species) {
   }
 }
 console.log(`rendered ${written} file(s) for ${species.length} species → ${outDir}`);
+
+/**
+ * A contact sheet: every rendered drawing on one page, labelled, at 2× so the strokes are
+ * readable. `--png` additionally rasterizes it with Playwright, which is the only way to actually
+ * LOOK at a new species without deploying — an SVG file is just text until something paints it.
+ */
+if (flag('sheet') || flag('png')) {
+  const files = (await readdir(outDir)).filter((f) => f.endsWith('.svg')).sort();
+  const cells = [];
+  for (const name of files) {
+    const svg = (await readFile(join(outDir, name), 'utf8')).replace(
+      /width="96" height="96"/,
+      'width="192" height="192"',
+    );
+    cells.push(`<figure><div>${svg}</div><figcaption>${name.replace('.svg', '')}</figcaption></figure>`);
+  }
+  const html = `<!doctype html><meta charset="utf-8"><style>
+    body { margin: 0; padding: 24px; background: #FAF7F2; font: 13px/1.4 system-ui, sans-serif; color: #2E2419; }
+    .grid { display: grid; grid-template-columns: repeat(7, 192px); gap: 18px; }
+    figure { margin: 0; text-align: center; }
+    figure div { background: #fff; border: 1px solid #E8DFD4; border-radius: 12px; }
+    figcaption { margin-top: 6px; font-size: 11px; color: #6E6259; }
+  </style><div class="grid">${cells.join('')}</div>`;
+  const sheet = join(outDir, 'sheet.html');
+  await writeFile(sheet, html, 'utf8');
+  console.log(`contact sheet → ${sheet}`);
+
+  if (flag('png')) {
+    const { chromium } = await import('playwright');
+    const browser = await chromium.launch();
+    const page = await browser.newPage({ viewportSize: { width: 1520, height: 900 } });
+    await page.goto(`file://${join(process.cwd(), sheet)}`);
+    const png = join(outDir, 'sheet.png');
+    await page.screenshot({ path: png, fullPage: true });
+    await browser.close();
+    console.log(`contact sheet PNG → ${png}`);
+  }
+}
 
 if (!baseline) process.exit(0);
 
