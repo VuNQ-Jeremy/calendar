@@ -27,7 +27,7 @@ release read as the original plant, which is what they were.
 Underneath, every drawing moved out of the two hand-synced renderers into one shared registry of
 plain part data, so a plant is authored once and both web and Expo draw it. `scripts/render-plants.mjs`
 renders any species to SVG or a PNG contact sheet, and gates the port with a parity diff. Staff get
-a showcase page at /garden/species listing every plant, its stages and what it costs. Migration 0050
+a showcase page at /garden-species listing every plant, its stages and what it costs. Migration 0050
 adds `species` (defaulting to the original drawing, so nothing changed appearance) plus a dormant
 `companion` column reserved for pets.
 

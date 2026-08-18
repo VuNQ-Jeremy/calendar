@@ -162,7 +162,7 @@ export const NAV: NavSection[] = [
       // because it is a catalogue of the whole game, not a view of anyone's class.
       {
         id: 'garden-species',
-        path: '/garden/species',
+        path: '/garden-species',
         tk: 'nav_garden_species',
         icon: 'sprout',
         adminOnly: true,

@@ -160,10 +160,11 @@ export default [
     route('rankings/:month?', 'routes/rankings.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),
     route('vocabulary/:slug', 'routes/flashcards.$slug.tsx'),
-    // Static segment BEFORE the optional class id: without it `/garden/species` matches
-    // `:classId` and the class garden goes looking for a class called "species". Same trap as
-    // logs/notifications below. Admin-only, enforced in the route with requireAdmin.
-    route('garden/species', 'routes/garden.species.tsx'),
+    // A SIBLING of the garden, not a child of it. `/garden/species` would be captured by the
+    // optional `:classId` below, and — even with a static segment declared first — NavLink marks
+    // ancestors active by prefix, so the sidebar would light up the class garden and expand the
+    // wrong section. Admin-only, enforced in the route with requireAdmin.
+    route('garden-species', 'routes/garden-species.tsx'),
     // Class id (and the album's month) in the PATH for the same cache reason as tuition below.
     route('garden/:classId?', 'routes/garden.tsx'),
     route('garden/:classId/album/:month', 'routes/garden.$classId.album.$month.tsx'),
