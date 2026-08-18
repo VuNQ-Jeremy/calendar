@@ -546,6 +546,8 @@ export const GardenPlantResponse = PlantView.extend({
   hasPlant: z.boolean(),
   plantName: Nullable(z.string()),
   potColor: z.string(),
+  /** Species id — see shared/garden-art.ts. 'classic' for a pot nothing has been planted in. */
+  species: z.string(),
   /** Harvests in the current ICT month, derived from the event log. */
   fruitMonth: z.number().int(),
   assignments: z.array(StudentAssignmentChip),

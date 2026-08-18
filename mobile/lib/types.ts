@@ -392,6 +392,8 @@ export interface GardenPlantResponse extends PlantView {
   hasPlant: boolean;
   plantName: string | null;
   potColor: string;
+  /** Species id — see shared/garden-art.ts. 'classic' for a pot nothing has been planted in. */
+  species: string;
   /** Harvests in the current ICT month, derived from the event log. */
   fruitMonth: number;
   assignments: StudentAssignmentChip[];

@@ -181,6 +181,103 @@ describe('watering and harvesting', () => {
   });
 });
 
+/**
+ * The species guard. The rules being pinned here are the ones a reader cannot infer from the
+ * column: WHEN a species may be chosen (unplanted, dead, or still a seed) and WHICH ones are on
+ * offer (thresholds against the stored lifetime fruit, never a number from the client).
+ */
+describe('choosing a species', () => {
+  async function devStaff(d, name) {
+    return peopleSvc.createStaff(d, {
+      name,
+      email: `s${crypto.randomUUID()}@test.com`,
+      role: 'Teacher',
+    });
+  }
+
+  it('accepts the starter on a seed, and closes the window once it grows', async () => {
+    const d = db();
+    const topic = await seedTopic(d);
+    const { student } = await seedClassWithStudent(d);
+    await play(d, student.id, topic.id); // the row is created at stage 1
+
+    // Nothing harvested yet, so everything above the starter is still locked.
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'cachua' })).toMatchObject({
+      ok: false,
+      error: 'locked',
+    });
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'classic' })).toMatchObject({
+      ok: true,
+    });
+
+    await play(d, student.id, topic.id); // stage 2 — now something is being grown
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'classic' })).toMatchObject({
+      ok: false,
+      error: 'growing',
+    });
+  });
+
+  it('re-opens the window at harvest, with the fruit that harvest just banked', async () => {
+    const d = db();
+    const { student } = await seedClassWithStudent(d);
+    const staff = await devStaff(d, 'Harvest dev');
+    await gardenSvc.devSetPlant(d, staff.id, { studentId: student.id, stage: 5, idleDays: 0 });
+
+    const picked = await gardenSvc.harvest(d, student.id);
+    expect(picked).toMatchObject({ ok: true, fruitsTotal: 1 });
+
+    // The harvest re-seeded the plant AND paid for the first unlock — both in one moment.
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'cachua' })).toMatchObject({
+      ok: true,
+    });
+    expect((await gardenSvc.getPlant(d, student.id)).species).toBe('cachua');
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'mai' })).toMatchObject({
+      ok: false,
+      error: 'locked',
+    });
+  });
+
+  it('survives the plant dying and coming back', async () => {
+    const d = db();
+    const topic = await seedTopic(d);
+    const { student } = await seedClassWithStudent(d);
+    const staff = await devStaff(d, 'Death dev');
+    await gardenSvc.devSetPlant(d, staff.id, { studentId: student.id, stage: 0, idleDays: 0 });
+
+    // A dead pot is a plantable pot.
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'classic' })).toMatchObject({
+      ok: true,
+    });
+    await play(d, student.id, topic.id); // revive
+    expect((await gardenSvc.getPlant(d, student.id)).species).toBe('classic');
+  });
+
+  it('refuses a species no registry knows', async () => {
+    const d = db();
+    const topic = await seedTopic(d);
+    const { student } = await seedClassWithStudent(d);
+    await play(d, student.id, topic.id);
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'khong-co-cay-nay' })).toMatchObject(
+      { ok: false, error: 'unknown_species' },
+    );
+  });
+
+  it('writes nothing at all for a student who has never planted', async () => {
+    const d = db();
+    const { student } = await seedClassWithStudent(d);
+
+    // No row means no fruit, so the starter is the only answer — and it is already the default.
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'classic' })).toMatchObject({
+      ok: true,
+    });
+    expect(await gardenSvc.updatePlant(d, student.id, { species: 'cachua' })).toMatchObject({
+      ok: false,
+      error: 'locked',
+    });
+    expect(await gardenSvc.getPlant(d, student.id)).toBeNull();
+  });
+});
+
 describe('assignments', () => {
   it('counts only qualifying rounds played after the assignment was made', async () => {
     const d = db();

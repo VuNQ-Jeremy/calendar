@@ -43,6 +43,7 @@ async function loadPlant(db: Parameters<typeof svc.getPlant>[0], studentId: stri
     hasPlant: plant !== null,
     plantName: plant?.plantName ?? null,
     potColor: plant?.potColor ?? 'orange',
+    species: plant?.species ?? 'classic',
     ...view,
     fruitMonth,
     assignments,

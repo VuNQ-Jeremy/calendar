@@ -71,6 +71,7 @@ async function loadGarden(
           plant,
           plantName: record?.plantName ?? null,
           potColor: record?.potColor ?? 'orange',
+          species: record?.species ?? 'classic',
           fruitMonth,
           classId: classesOf[0]?.id ?? null,
           assignments,
@@ -215,7 +216,10 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     if (plantRaw.plantName === '') plantRaw.plantName = null;
     const parsed = parsePatch(PlantPatchInput, plantRaw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await gardenSvc.updatePlant(db, su.user.id, parsed.data);
+    const updated = await gardenSvc.updatePlant(db, su.user.id, parsed.data);
+    // 409 for the same reason harvest uses it: a species refused because the plant is mid-growth
+    // (or not yet earned) is a state conflict, not a malformed request.
+    if (!updated.ok) return Response.json({ ok: false, error: updated.error }, { status: 409 });
     return { ok: true };
   }
 

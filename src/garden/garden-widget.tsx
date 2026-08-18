@@ -59,6 +59,8 @@ export type StudentGardenData = {
   plant: PlantView;
   plantName: string | null;
   potColor: string;
+  /** Species id — see shared/garden-art.ts. 'classic' until the student chooses otherwise. */
+  species: string;
   /** Fruit harvested during the current ICT month. */
   fruitMonth: number;
   /** First class, for the "class garden" link. Null for a student in no class. */

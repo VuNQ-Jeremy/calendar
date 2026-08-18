@@ -57,6 +57,7 @@ import {
   type PlantTransition,
   type PlantView,
 } from '../../shared/logic/garden';
+import { speciesOf } from '../../shared/garden-art';
 import { composeUtcFromIct, ictDateOf } from '../../shared/logic/tests';
 import { modeAllowed, parseModes } from '../../shared/logic/flashcards';
 import { record } from './audit';
@@ -916,18 +917,57 @@ export async function harvest(
   return { ok: true, fruitsTotal: t.state.fruitsTotal };
 }
 
-/** Rename the plant / repaint the pot. Only meaningful once a plant exists. */
+/** Why a species change was refused. Name and pot colour are never refused. */
+export type PlantPatchError = 'growing' | 'locked' | 'unknown_species';
+
+/**
+ * Rename the plant / repaint the pot / choose a species. Only meaningful once a plant exists.
+ *
+ * Name and colour are pure decoration and always allowed. The species is not: it is the shape of
+ * the thing being grown, so it may only be chosen at planting — while the pot is empty, while the
+ * plant is dead, or while it is still a seed. Stage 1 is what makes the reward loop work, because
+ * a harvest re-seeds the plant: the harvest that earns a species is also the moment its window
+ * opens. From stage 2 the student is growing something, and swapping it mid-growth would make the
+ * plant a skin rather than a plant.
+ *
+ * Two rules keep the guard honest:
+ *
+ *  1. **The plant is settled in memory first.** A row that still says stage 3 but has been
+ *     neglected for a month IS dead, whether or not the cron has written that down yet — every
+ *     other garden read derives it the same way.
+ *  2. **The unlock is checked against the stored `fruitsTotal`, never a number from the client.**
+ *     With no row at all there is provably no fruit, so only the starter is available — and since
+ *     the column defaults to it, that case needs no write at all.
+ */
 export async function updatePlant(
   db: TenantDb,
   studentId: string,
   patch: PlantPatchInput,
-): Promise<void> {
+  nowIso: string = new Date().toISOString(),
+): Promise<{ ok: true } | { ok: false; error: PlantPatchError }> {
   const set: Partial<typeof gardenPlants.$inferInsert> = {};
   if (patch.plantName !== undefined) set.plantName = patch.plantName ?? null;
   if (patch.potColor !== undefined) set.potColor = patch.potColor;
-  if (!Object.keys(set).length) return;
-  set.updatedAt = new Date().toISOString();
+
+  if (patch.species !== undefined) {
+    const art = speciesOf(patch.species);
+    if (art.id !== patch.species) return { ok: false, error: 'unknown_species' };
+    const record = await getPlant(db, studentId);
+    if (!record) {
+      // An empty pot: nothing to write, and nothing but the starter to write it with.
+      return art.unlockAt === 0 ? { ok: true } : { ok: false, error: 'locked' };
+    }
+    const settings = await getGardenSettings(db);
+    const view = plantView(record.state, settings, ictDateOf(nowIso));
+    if (!view.dead && view.stage >= 2) return { ok: false, error: 'growing' };
+    if (art.unlockAt > record.state.fruitsTotal) return { ok: false, error: 'locked' };
+    set.species = patch.species;
+  }
+
+  if (!Object.keys(set).length) return { ok: true };
+  set.updatedAt = nowIso;
   await db.update(gardenPlants, set, eq(gardenPlants.studentId, studentId));
+  return { ok: true };
 }
 
 export async function water(

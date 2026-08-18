@@ -992,13 +992,21 @@ const garden: PathDoc[] = [
       {
         method: 'patch',
         auth: 'user',
-        summary: 'Rename or re-pot your own plant',
-        description: 'Students only. An empty `plantName` means "unnamed", not the empty string.',
+        summary: 'Rename, re-pot or re-species your own plant',
+        description:
+          'Students only. An empty `plantName` means "unnamed", not the empty string. `species` ' +
+          'is accepted only while the plant is unplanted, dead, or still a seed (stage 1, which ' +
+          'is where a harvest leaves it), and only for a species the student has unlocked with ' +
+          'lifetime fruit.',
         request: { schema: PlantPatchInput, patch: true },
         responses: {
           200: ok(c.GardenPlantResponse, 'The plant after the change.'),
           403: err('forbidden', 'the caller is not a student'),
           405: err('method_not_allowed', 'only PATCH is served here'),
+          409: err(
+            'growing | locked | unknown_species',
+            'the plant is past the seed stage, the species is not unlocked, or no such species',
+          ),
         },
       },
     ],

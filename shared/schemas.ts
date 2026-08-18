@@ -1291,6 +1291,12 @@ export const PlantPatchInput = z.object({
     .nullish()
     .or(z.literal('').transform(() => null)),
   potColor: z.string().min(1).max(20).optional(),
+  /**
+   * Species id from shared/garden-art.ts. Free-form here for the same reason `potColor` is — the
+   * set of legal values belongs to the art registry, not to the wire format — and the service
+   * rejects both an unknown id and one the student has not unlocked yet.
+   */
+  species: z.string().min(1).max(20).optional(),
 });
 export type PlantPatchInput = z.infer<typeof PlantPatchInput>;
 
