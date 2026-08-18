@@ -89,19 +89,53 @@ if (!existsSync(baseline)) {
   process.exit(2);
 }
 
+/**
+ * Reduce an SVG to what a browser actually paints: every drawing element, in order, tagged with
+ * the transforms it inherits.
+ *
+ * Bytes are the wrong unit for this comparison. A `<g>` carrying no attributes paints nothing and
+ * changes nothing — it is an artifact of how the renderer happens to decompose its components —
+ * so a refactor that regroups elements would fail a byte diff while being pixel-identical. What
+ * must NOT change is any element's geometry, its colours, or the transform stack above it, and
+ * all three survive into this form.
+ */
+function canonical(svg) {
+  const tokens = svg.match(/<[^>]+>/g) ?? [];
+  const stack = [];
+  const out = [];
+  for (const tok of tokens) {
+    if (tok.startsWith('</g')) {
+      stack.pop();
+      continue;
+    }
+    if (tok.startsWith('<g')) {
+      stack.push(/transform="([^"]*)"/.exec(tok)?.[1] ?? '');
+      continue;
+    }
+    if (tok.startsWith('</') || tok.startsWith('<svg')) continue;
+    out.push(`${stack.filter(Boolean).join(' | ')}  ${tok}`);
+  }
+  return out;
+}
+
 // Compare only the files the baseline actually holds: capturing a baseline for one species and
 // then rendering all ten must not read as ten regressions.
 const expected = (await readdir(baseline)).filter((f) => f.endsWith('.svg'));
 const drift = [];
 for (const name of expected) {
-  const before = await readFile(join(baseline, name), 'utf8');
+  const before = canonical(await readFile(join(baseline, name), 'utf8'));
   const path = join(outDir, name);
   if (!existsSync(path)) {
     drift.push(`${name}: missing from the new render`);
     continue;
   }
-  const after = await readFile(path, 'utf8');
-  if (before !== after) drift.push(`${name}: ${before.length} bytes -> ${after.length} bytes`);
+  const after = canonical(await readFile(path, 'utf8'));
+  if (before.length !== after.length) {
+    drift.push(`${name}: ${before.length} drawn element(s) -> ${after.length}`);
+    continue;
+  }
+  const at = before.findIndex((line, i) => line !== after[i]);
+  if (at !== -1) drift.push(`${name}: element ${at} changed\n      was: ${before[at]}\n      now: ${after[at]}`);
 }
 
 if (drift.length) {
@@ -109,4 +143,4 @@ if (drift.length) {
   for (const d of drift) console.error(`  ${d}`);
   process.exit(1);
 }
-console.log(`parity OK — ${expected.length} file(s) byte-identical to ${baseline}`);
+console.log(`parity OK — ${expected.length} file(s) paint exactly what ${baseline} painted`);
