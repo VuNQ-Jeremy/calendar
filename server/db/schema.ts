@@ -1224,6 +1224,10 @@ export const gardenPlants = sqliteTable(
     plantName: text('plant_name'),
     /** App palette key, same vocabulary as students.color. */
     potColor: text('pot_color').notNull().default('orange'),
+    /** Species id from shared/garden-art.ts; 'classic' is the drawing that predates species. */
+    species: text('species').notNull().default('classic'),
+    /** Reserved for pets — dormant, see docs/superpowers/specs/2026-08-18-garden-species-design.md. */
+    companion: text('companion'),
     /** 0..5 — 0 empty/dead, 1 seed, 2 sprout, 3 young plant, 4 purple flower, 5 fruit. */
     stage: integer('stage').notNull(),
     isDead: integer('is_dead', { mode: 'boolean' }).notNull().default(false),

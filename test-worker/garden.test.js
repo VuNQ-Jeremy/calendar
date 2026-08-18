@@ -69,6 +69,8 @@ describe('a qualifying round grows the plant', () => {
     expect(plant.state.stage).toBe(1);
     expect(plant.state.isDead).toBe(false);
     expect(plant.potColor).toBe('orange');
+    // 0050: the row the first play creates carries the pre-species drawing.
+    expect(plant.species).toBe('classic');
 
     const events = await d.raw
       .select()
@@ -174,6 +176,8 @@ describe('watering and harvesting', () => {
     const plant = await gardenSvc.getPlant(d, student.id);
     expect(plant.plantName).toBe('Bé Xanh');
     expect(plant.potColor).toBe('violet');
+    // A patch that does not mention the species must leave it alone.
+    expect(plant.species).toBe('classic');
   });
 });
 

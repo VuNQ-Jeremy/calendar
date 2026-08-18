@@ -134,6 +134,8 @@ export interface PlantRecord {
   state: PlantState;
   plantName: string | null;
   potColor: string;
+  /** Species id from shared/garden-art.ts. Appearance, not lifecycle — see `rowToState`. */
+  species: string;
   updatedAt: string;
 }
 
@@ -163,6 +165,7 @@ export async function getPlant(db: TenantDb, studentId: string): Promise<PlantRe
     state: rowToState(row),
     plantName: row.plantName,
     potColor: row.potColor,
+    species: row.species,
     updatedAt: row.updatedAt,
   };
 }
