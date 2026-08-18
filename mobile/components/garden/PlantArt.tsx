@@ -12,106 +12,57 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { categoryColor, type ColorIdKey } from '@mochi/shared/tokens';
+import {
+  LOCKED_PALETTE,
+  inkOf,
+  mix,
+  softOf,
+  speciesOf,
+  type PartSpec,
+  type SpeciesPalette,
+} from '@mochi/shared/garden-art';
 
 /**
- * Vocabulary-garden artwork (cây từ vựng) — the React Native port of `src/garden/plant-art.tsx`.
+ * Vocabulary-garden artwork (cây từ vựng) — the React Native renderer.
  *
- * Every path string, every coordinate table and all the colour maths is byte-for-byte the web's:
- * `react-native-svg` implements the same SVG model, so the drawing transfers verbatim and the two
- * clients cannot drift into two different plants. Read the web file for what the six stages mean
- * and why the parts are composed rather than drawn per stage.
+ * The plant itself is DATA, shared with the web: `shared/garden-art.ts` holds every species' parts
+ * per stage, and both this file and `src/garden/plant-art.tsx` draw the same list. That is what
+ * stops the two clients from drifting into two different gardens — there is nothing left to
+ * hand-port when a species is added. Read the shared module for what the stages mean.
  *
- * Four deliberate differences, all forced by the renderer:
+ * Four deliberate differences from the web renderer, all forced by react-native-svg:
  *
  *  1. **`fill="none"` is explicit on every stroke-only shape.** The web sets it once on the root
  *     `<svg>` and lets it inherit; RN SVG defaults a shape's fill to BLACK, so an inherited-fill
- *     path would render as a black blob. `strokeWidth` is explicit for the same reason.
- *  2. **Three-argument `rotate(a cx cy)` transforms become `<G rotation origin>`.** The string form
- *     is a web SVG convenience this renderer does not parse the same way.
+ *     path would render as a black blob. `strokeWidth`/`strokeLinecap` are explicit likewise.
+ *  2. **Three-argument `rotate(a cx cy)` becomes `<G rotation origin>`.** The string form is a web
+ *     SVG convenience this renderer does not parse the same way — which is exactly why every
+ *     rotation in the shared data carries its own origin.
  *  3. **The wilt is a palette, not a filter.** The web desaturates with CSS
- *     `filter: saturate(0.55)`; RN SVG has no filters, so `WILTED` is baked from `LIVE` with the
- *     same `mix()` helper that already builds `DEAD`. This is why the wilt still shows under
- *     reduced motion: it is colour, which carries state, not animation.
+ *     `filter: saturate(0.55)`; RN SVG has no filters, so `wiltedOf` bakes the species' own palette
+ *     greyer. This is why the wilt still shows under reduced motion: it is colour, which carries
+ *     state, not animation.
  *  4. **Animations are Reanimated on a wrapping `View`, never on SVG internals.** All four web
  *     animations (pop, sway, droop, harvest) are whole-drawing transforms, so a wrapper is enough
  *     and the SVG subtree stays static.
  *
  * The six pot hues come from `categoryColor` in shared/tokens — the same six the database stores.
- * The handful of hexes below are the ones the web file owns outright and no token exposes.
  */
 
-/* ── colour plumbing (verbatim from the web) ──────────────────────────────────────────────── */
+/* ── chrome colours (the plant's own live in the registry) ────────────────────────────────── */
 
-const HEX_RE = /^#([0-9a-f]{6})$/i;
-
-function toRgb(hex: string): [number, number, number] {
-  const m = HEX_RE.exec(hex.trim());
-  if (!m) return [0, 0, 0];
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-function mix(a: string, b: string, t: number): string {
-  const [ar, ag, ab] = toRgb(a);
-  const [br, bg, bb] = toRgb(b);
-  const ch = (x: number, y: number) =>
-    Math.round(x + (y - x) * t)
-      .toString(16)
-      .padStart(2, '0');
-  return `#${ch(ar, br)}${ch(ag, bg)}${ch(ab, bb)}`;
-}
-
-/** Warm near-black — the direction every `ink` in the design system leans. */
-const DEEP = '#2E2419';
 const WHITE = '#FFFFFF';
 const ASH = '#8C857D';
-
-const softOf = (hex: string) => mix(hex, WHITE, 0.72);
-const inkOf = (hex: string) => mix(hex, DEEP, 0.42);
 
 /** `categoryColor[id].base` is the same literal the web reads as `colorOf(id).hex`. */
 const hexOf = (id: string | null | undefined): string =>
   categoryColor[(id ?? 'violet') as ColorIdKey]?.base ?? categoryColor.violet.base;
 
-const GREEN = hexOf('green');
-const VIOLET = hexOf('violet');
-const ORANGE = hexOf('orange');
 const SOIL = categoryColor.cocoa.base;
 const SOIL_INK = categoryColor.cocoa.ink;
-const SEED = '#E3C08C';
+// The class tree is not a species — it has one look for every class, so it keeps its own two hues.
+const GREEN = hexOf('green');
 const YELLOW = '#F5C24B';
-
-interface PlantPalette {
-  stem: string;
-  leaf: string;
-  leafInk: string;
-  petal: string;
-  petalInk: string;
-  eye: string;
-  eyeInk: string;
-  fruit: string;
-  fruitInk: string;
-  seed: string;
-  soil: string;
-  soilInk: string;
-  gloss: number;
-}
-
-const LIVE: PlantPalette = {
-  stem: inkOf(GREEN),
-  leaf: GREEN,
-  leafInk: inkOf(GREEN),
-  petal: VIOLET,
-  petalInk: inkOf(VIOLET),
-  eye: YELLOW,
-  eyeInk: inkOf(YELLOW),
-  fruit: ORANGE,
-  fruitInk: inkOf(ORANGE),
-  seed: SEED,
-  soil: SOIL,
-  soilInk: SOIL_INK,
-  gloss: 0.7,
-};
 
 /**
  * Wilted: the web's `saturate(0.55)` rebuilt as pigment.
@@ -119,29 +70,22 @@ const LIVE: PlantPalette = {
  * 0.45 toward ASH is the mix that reads closest to the filter — enough that a wilting plant is
  * obviously off-colour at 96px, not so much that it looks dead, which is a different state with its
  * own palette below. The gloss dims but does not vanish: a wilting plant's fruit is still fruit.
+ * Applied to whichever species is planted, so a wilting chili wilts in chili colours.
  */
 const wiltOf = (hex: string) => mix(hex, ASH, 0.45);
-const WILTED: PlantPalette = {
-  stem: wiltOf(LIVE.stem),
-  leaf: wiltOf(LIVE.leaf),
-  leafInk: wiltOf(LIVE.leafInk),
-  petal: wiltOf(LIVE.petal),
-  petalInk: wiltOf(LIVE.petalInk),
-  eye: wiltOf(LIVE.eye),
-  eyeInk: wiltOf(LIVE.eyeInk),
-  fruit: wiltOf(LIVE.fruit),
-  fruitInk: wiltOf(LIVE.fruitInk),
-  seed: wiltOf(LIVE.seed),
-  soil: wiltOf(LIVE.soil),
-  soilInk: wiltOf(LIVE.soilInk),
-  gloss: 0.35,
-};
+function wiltedOf(p: SpeciesPalette): SpeciesPalette {
+  const out = { ...p, gloss: 0.35 };
+  for (const role of Object.keys(p) as (keyof SpeciesPalette)[]) {
+    if (role !== 'gloss' && role !== 'white') (out[role] as string) = wiltOf(p[role] as string);
+  }
+  return out;
+}
 
 // Dead is grey-brown rather than plain grey: a colourless plant next to a coloured pot looks
 // like a rendering bug, a brown one looks like something that died.
 const GONE = '#A79C90';
 const GONE_INK = '#6B6259';
-const DEAD: PlantPalette = {
+const DEAD: SpeciesPalette = {
   stem: GONE_INK,
   leaf: GONE,
   leafInk: GONE_INK,
@@ -154,10 +98,12 @@ const DEAD: PlantPalette = {
   seed: GONE,
   // Kept a couple of steps darker than the withered plant, or the grey leaves disappear into
   // the grey soil and the whole pot reads as one lump.
-  soil: '#7F7566',
   soilInk: '#524A40',
+  white: WHITE,
   gloss: 0,
 };
+/** The soil is chrome, so its hexes live here rather than on any species' palette. */
+const DEAD_SOIL = '#7F7566';
 
 /** Pot fill/rim. Dead and wilted both drain the hue, but keep it — students know their own pot. */
 function potColors(id: string | undefined, dead: boolean, wilted: boolean) {
@@ -165,58 +111,6 @@ function potColors(id: string | undefined, dead: boolean, wilted: boolean) {
   const tint = dead ? mix(base, ASH, 0.7) : wilted ? mix(base, ASH, 0.45) : base;
   return { fill: softOf(tint), line: inkOf(tint) };
 }
-
-/* ── geometry (verbatim) ──────────────────────────────────────────────────────────────────── */
-
-/**
- * Everything is laid out on a 96×96 box: the pot rim spans y 56–66, the plant's root is at
- * (48, 57), and the pot foot is at y=89. Left and right are never exact mirrors — that
- * asymmetry is the whole hand-drawn look.
- */
-const STEM: Record<number, string> = {
-  2: 'M48 57 C46.4 52 49.2 47 48.6 42.4',
-  3: 'M48 57 C46 47.5 50.2 37 48.6 28.5',
-  // Stage 4/5 leans left so the flower and the bud can sit on opposite sides of the stem.
-  4: 'M48 57 C50 47 46.5 36 42.5 27',
-};
-
-interface LeafSpec {
-  x: number;
-  y: number;
-  dir: 1 | -1;
-  round?: boolean;
-}
-
-const LEAVES: Record<number, LeafSpec[]> = {
-  2: [
-    { x: 46.5, y: 42, dir: -1, round: true },
-    { x: 49.6, y: 43, dir: 1, round: true },
-  ],
-  3: [
-    { x: 47, y: 50, dir: -1 },
-    { x: 48.4, y: 44, dir: 1 },
-    { x: 49.6, y: 37, dir: -1 },
-    { x: 49, y: 31, dir: 1 },
-  ],
-  4: [
-    { x: 47, y: 51, dir: -1 },
-    { x: 48.6, y: 45, dir: 1 },
-    { x: 48.6, y: 38, dir: -1 },
-    { x: 50, y: 32, dir: 1 },
-  ],
-};
-
-/**
- * Two fruits, not three: at 96px a third one just muddies the silhouette. They hang wide and
- * high enough to clear both the pot rim and the leaf mass.
- */
-const FRUITS = [
-  { cx: 27.5, cy: 42, r: 7, stalk: 'M47 47 C41 42 33 37.5 28 35.5' },
-  { cx: 67, cy: 44, r: 6.5, stalk: 'M48.6 43 C55 38.5 62.5 36.5 67 37.8' },
-];
-
-const FLOWER_AT = { cx: 41, cy: 19 };
-const STEM_TIP_4 = { x: 42.5, y: 27 };
 
 /* ── parts ────────────────────────────────────────────────────────────────────────────────── */
 
@@ -303,7 +197,16 @@ function Leaf({
   scale = 1,
   fill,
   line,
-}: LeafSpec & { angle: number; scale?: number; fill: string; line: string }) {
+}: {
+  x: number;
+  y: number;
+  dir: 1 | -1;
+  angle: number;
+  round?: boolean;
+  scale?: number;
+  fill: string;
+  line: string;
+}) {
   return (
     <G transform={`translate(${x} ${y}) scale(${dir * scale} ${scale}) rotate(${angle})`}>
       <Path
@@ -328,97 +231,146 @@ function Leaf({
   );
 }
 
-/** Five rounded petals around a yellow eye. The purple is the point — it is what "nở hoa" means. */
-function Flower({ cx, cy, p }: { cx: number; cy: number; p: PlantPalette }) {
-  return (
-    <G>
-      {[0, 72, 144, 216, 288].map((a) => (
-        <G key={a} rotation={a} origin={`${cx}, ${cy}`}>
-          <Ellipse
-            cx={cx}
-            cy={cy - 7.2}
-            rx={5.4}
-            ry={7.4}
-            fill={p.petal}
-            stroke={p.petalInk}
-            strokeWidth={3.2}
-          />
-        </G>
-      ))}
-      <Circle cx={cx} cy={cy} r={4.6} fill={p.eye} stroke={p.eyeInk} strokeWidth={3} />
-    </G>
-  );
-}
+/* ── the parts renderer ───────────────────────────────────────────────────────────────────── */
 
-/** The bud promises stage 5 — it is why stage 4 does not read as "finished". */
-function Bud({ p }: { p: PlantPalette }) {
-  return (
-    <G>
-      <Path
-        d="M47.5 39.5 C52.5 37 58.5 33.5 61.5 29"
-        fill="none"
-        stroke={p.stem}
-        strokeWidth={3.6}
-        strokeLinecap="round"
-      />
-      <G rotation={16} origin="62.5, 25">
-        <Ellipse
-          cx={62.5}
-          cy={25}
-          rx={4.4}
-          ry={5.8}
-          fill={p.petal}
-          stroke={p.petalInk}
-          strokeWidth={3}
-        />
-      </G>
-      <Path
-        d="M60.2 30 C58.4 28.8 57.8 27 58 25.6"
-        fill="none"
-        stroke={p.stem}
-        strokeWidth={2.6}
-        strokeLinecap="round"
-      />
-      <Path
-        d="M64.6 30.2 C66.6 29.2 67.4 27.4 67.2 26"
-        fill="none"
-        stroke={p.stem}
-        strokeWidth={2.6}
-        strokeLinecap="round"
-      />
-    </G>
-  );
-}
+/**
+ * One registry part → one RN SVG element. The mirror of `renderPart` in the web renderer, with
+ * the three RN adaptations from the header: fills are always explicit, rotations become
+ * `<G rotation origin>`, and stroke caps are spelled out because nothing inherits.
+ */
+function renderPart(
+  part: PartSpec,
+  p: SpeciesPalette,
+  droop: boolean,
+  key: string,
+): React.ReactElement {
+  const hue = (role: keyof SpeciesPalette | undefined) =>
+    role === undefined ? 'none' : (p[role] as string);
 
-function Fruit({
-  cx,
-  cy,
-  r,
-  stalk,
-  p,
-}: {
-  cx: number;
-  cy: number;
-  r: number;
-  stalk: string;
-  p: PlantPalette;
-}) {
-  return (
-    <G>
-      <Path d={stalk} fill="none" stroke={p.stem} strokeWidth={3.4} strokeLinecap="round" />
-      <Circle cx={cx} cy={cy} r={r} fill={p.fruit} stroke={p.fruitInk} strokeWidth={3.2} />
-      {p.gloss > 0 && (
+  switch (part.kind) {
+    case 'path':
+      return (
         <Path
-          d={`M${cx - r * 0.55} ${cy - r * 0.3} C${cx - r * 0.5} ${cy - r * 0.75} ${cx - r * 0.1} ${cy - r * 0.9} ${cx + r * 0.2} ${cy - r * 0.8}`}
-          fill="none"
-          stroke={WHITE}
-          strokeWidth={2.2}
-          opacity={p.gloss * 0.75}
+          key={key}
+          d={part.d}
+          fill={hue(part.fill)}
+          stroke={hue(part.stroke)}
+          strokeWidth={part.strokeWidth}
+          opacity={part.opacity}
+          strokeDasharray={part.dash}
           strokeLinecap="round"
+          strokeLinejoin="round"
         />
-      )}
-    </G>
-  );
+      );
+    case 'circle':
+      return (
+        <Circle
+          key={key}
+          cx={part.cx}
+          cy={part.cy}
+          r={part.r}
+          fill={hue(part.fill)}
+          stroke={hue(part.stroke)}
+          strokeWidth={part.strokeWidth}
+        />
+      );
+    case 'ellipse': {
+      const el = (
+        <Ellipse
+          cx={part.cx}
+          cy={part.cy}
+          rx={part.rx}
+          ry={part.ry}
+          fill={hue(part.fill)}
+          stroke={hue(part.stroke)}
+          strokeWidth={part.strokeWidth}
+        />
+      );
+      return part.rotate ? (
+        <G key={key} rotation={part.rotate.deg} origin={`${part.rotate.cx}, ${part.rotate.cy}`}>
+          {el}
+        </G>
+      ) : (
+        <G key={key}>{el}</G>
+      );
+    }
+    case 'leaf':
+      return (
+        <Leaf
+          key={key}
+          x={part.x}
+          y={part.y}
+          dir={part.dir}
+          scale={part.scale}
+          round={part.shape === 'round'}
+          angle={droop ? part.droopAngle : part.baseAngle}
+          fill={p.leaf}
+          line={p.leafInk}
+        />
+      );
+    case 'petalRing': {
+      const step = 360 / part.count;
+      return (
+        <G key={key}>
+          {Array.from({ length: part.count }, (_, i) => (
+            <G key={i} rotation={i * step} origin={`${part.cx}, ${part.cy}`}>
+              <Ellipse
+                cx={part.cx}
+                cy={part.cy - part.dy}
+                rx={part.rx}
+                ry={part.ry}
+                fill={p.petal}
+                stroke={p.petalInk}
+                strokeWidth={part.petalStrokeWidth ?? 3.2}
+              />
+            </G>
+          ))}
+        </G>
+      );
+    }
+    case 'fruit': {
+      const { cx, cy, r } = part;
+      return (
+        <G key={key}>
+          <Path
+            d={part.stalk}
+            fill="none"
+            stroke={p.stem}
+            strokeWidth={3.4}
+            strokeLinecap="round"
+          />
+          <Circle cx={cx} cy={cy} r={r} fill={p.fruit} stroke={p.fruitInk} strokeWidth={3.2} />
+          {p.gloss > 0 && (
+            <Path
+              d={`M${cx - r * 0.55} ${cy - r * 0.3} C${cx - r * 0.5} ${cy - r * 0.75} ${cx - r * 0.1} ${cy - r * 0.9} ${cx + r * 0.2} ${cy - r * 0.8}`}
+              fill="none"
+              stroke={p.white}
+              strokeWidth={2.2}
+              opacity={p.gloss * 0.75}
+              strokeLinecap="round"
+            />
+          )}
+        </G>
+      );
+    }
+    case 'group': {
+      const children = part.parts.map((child, i) => renderPart(child, p, droop, `${key}.${i}`));
+      const inner = part.transform ? <G transform={part.transform}>{children}</G> : <G>{children}</G>;
+      const d = droop ? part.droop : undefined;
+      if (!d) return <G key={key}>{inner}</G>;
+      // Rotation carries its own origin (the whole reason the data spells it out); translate is
+      // the sag the classic fruits use.
+      return 'rotate' in d ? (
+        <G key={key} rotation={d.rotate} origin={`${d.cx}, ${d.cy}`}>
+          {inner}
+        </G>
+      ) : (
+        <G key={key} translateX={d.translate[0]} translateY={d.translate[1]}>
+          {inner}
+        </G>
+      );
+    }
+  }
 }
 
 /* ── the plant ────────────────────────────────────────────────────────────────────────────── */
@@ -436,6 +388,8 @@ export function PlantSvg({
   wilted = false,
   dead = false,
   potColor = 'cocoa',
+  species = 'classic',
+  locked = false,
   size = 96,
   animateStageUp = false,
   sway = false,
@@ -446,6 +400,10 @@ export function PlantSvg({
   dead?: boolean;
   /** Palette id — violet | green | blue | orange | cocoa | rose. */
   potColor?: string;
+  /** Species id from shared/garden-art.ts. An unknown id draws the classic plant. */
+  species?: string;
+  /** Draw as a grey silhouette — the picker's preview of a species not yet earned. */
+  locked?: boolean;
   size?: number;
   /** One-shot pop, for the round that grew the plant. */
   animateStageUp?: boolean;
@@ -455,12 +413,14 @@ export function PlantSvg({
   harvesting?: boolean;
 }): React.ReactElement {
   // Death is not a stage, it is a state: whatever the student had grown, a dead plant is a dead
-  // plant, so the dead drawing and palette win over `stage`.
-  const p = dead ? DEAD : wilted ? WILTED : LIVE;
+  // plant, so the dead drawing and palette win over `stage` and over the species.
+  const art = speciesOf(species);
+  const live = locked ? LOCKED_PALETTE : art.palette;
+  const p = dead ? DEAD : wilted ? wiltedOf(live) : live;
   const pot = potColors(potColor, dead, wilted && !dead);
   const droop = wilted && !dead;
-  const leafAngle = (round?: boolean) => (droop ? 40 : round ? -8 : -20);
-  const stemKey = stage >= 4 ? 4 : stage;
+  const soil = dead ? DEAD_SOIL : wilted ? wiltOf(SOIL) : SOIL;
+  const parts = stage >= 1 && stage <= 5 ? art.stages[stage as 1 | 2 | 3 | 4 | 5] : [];
 
   const reduced = useReducedMotion();
   const scale = useSharedValue(1);
@@ -530,8 +490,8 @@ export function PlantSvg({
     <Animated.View style={[{ width: size, height: size }, animStyle]}>
       <Svg width={size} height={size} viewBox="0 0 96 96" fill="none">
         <Pot fill={pot.fill} line={pot.line} />
-        <Soil fill={p.soil} />
-        {(dead || stage >= 1) && <Mound fill={p.soil} line={p.soilInk} />}
+        <Soil fill={soil} />
+        {(dead || stage >= 1) && <Mound fill={soil} line={p.soilInk} />}
 
         {stage === 0 && !dead && (
           // Nothing planted: a dashed arch where the plant will be, plus sparkles, so the empty
@@ -594,73 +554,13 @@ export function PlantSvg({
           </G>
         ) : (
           <G rotation={droop ? 7 : 0} origin="48, 57">
-            {stage === 1 && (
-              <G rotation={-14} origin="48, 51">
-                <Ellipse
-                  cx={48}
-                  cy={51}
-                  rx={5.8}
-                  ry={6.8}
-                  fill={p.seed}
-                  stroke={p.soilInk}
-                  strokeWidth={3.2}
-                />
-                <Path
-                  d="M48 46.2 C46.5 48.4 46.5 52.4 47.8 55"
-                  fill="none"
-                  stroke={p.soilInk}
-                  strokeWidth={2}
-                  opacity={0.6}
-                  strokeLinecap="round"
-                />
-              </G>
-            )}
-
-            {stage >= 2 && (
-              <Path
-                d={STEM[stemKey]}
-                fill="none"
-                stroke={p.stem}
-                strokeWidth={4.2}
-                strokeLinecap="round"
-              />
-            )}
-
-            {(LEAVES[stemKey] ?? []).map((l) => (
-              <Leaf
-                key={`${l.x}-${l.y}`}
-                {...l}
-                angle={leafAngle(l.round)}
-                fill={p.leaf}
-                line={p.leafInk}
-              />
-            ))}
-
-            {/* Fruit before flower: the flower is the focal point and belongs on top. */}
-            {stage >= 5 && (
-              <G translateX={droop ? 1 : 0} translateY={droop ? 3 : 0}>
-                {FRUITS.map((f) => (
-                  <Fruit key={f.cx} {...f} p={p} />
-                ))}
-              </G>
-            )}
-
-            {stage >= 4 && (
-              <>
-                <G rotation={droop ? 24 : 0} origin={`${STEM_TIP_4.x}, ${STEM_TIP_4.y}`}>
-                  <Flower cx={FLOWER_AT.cx} cy={FLOWER_AT.cy} p={p} />
-                </G>
-                <G rotation={droop ? 14 : 0} origin="47.5, 39.5">
-                  <Bud p={p} />
-                </G>
-              </>
-            )}
+            {parts.map((part, i) => renderPart(part, p, droop, String(i)))}
           </G>
         )}
 
         {/* Only once something is in the ground — over flat soil the lip would just look like a
             second, taller mound. */}
-        {(dead || stage >= 1) && <SoilLip fill={p.soil} />}
+        {(dead || stage >= 1) && <SoilLip fill={soil} />}
       </Svg>
     </Animated.View>
   );
