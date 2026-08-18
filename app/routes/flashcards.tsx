@@ -224,7 +224,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
 
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
-    await flashcardsSvc.removeTopic(db, id);
+    await flashcardsSvc.removeTopic(db, id, { isPlatformAdmin: staff.isPlatformAdmin });
     return { ok: true };
   }
 
@@ -340,7 +340,12 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     const parsed = parsePatch(FlashcardTopicInput, raw);
     if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
-    await flashcardsSvc.updateTopic(db, id, parsed.data);
+    // The flag, like the curriculum intents above, is passed from the session rather than read
+    // inside the service: without it a platform admin's edit of a LIBRARY deck updates zero rows
+    // and still returns ok, which is how recolouring one silently did nothing.
+    await flashcardsSvc.updateTopic(db, id, parsed.data, {
+      isPlatformAdmin: staff.isPlatformAdmin,
+    });
     return { ok: true };
   }
 

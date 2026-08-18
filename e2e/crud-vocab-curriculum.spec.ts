@@ -92,8 +92,8 @@ test.describe('CRUD: vocabulary curriculum', () => {
 
     // Filtering to a book with no units empties the grid; "All units" brings the seeded decks back.
     await page.getByText(name, { exact: false }).click();
-    // Assert the empty STATE, not a card count: the page's own empty panel and the "Assigned
-    // vocabulary" panel are `.mochi-card` too, so counting them can never reach zero.
+    // Assert the empty STATE, not a card count: the page's own empty panel is a `.mochi-card`
+    // too, so counting them can never reach zero.
     await expect(page.getByText('No topics yet')).toBeVisible();
     await page.getByText('All units', { exact: true }).click();
     await expect(page.getByText('Not in a book', { exact: true })).toBeVisible();

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0262 — 2026-08-18
+Move the staff Assigned vocabulary list off /vocabulary into a dialog opened from the page header, and drop the per-deck assigned tag. Fix platform admins silently failing to edit or delete a platform-library deck: the list read through db.pool while the write fenced with db.own, so recolouring one changed zero rows and still returned ok.
+
 ## v0.0261 — 2026-08-18
 Fix two real bugs found by the e2e suite: a platform admin could enter another school with no way out, and deleting a curriculum asked for confirmation with a neutral button instead of a red one.
 

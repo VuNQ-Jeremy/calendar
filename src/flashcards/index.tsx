@@ -156,6 +156,7 @@ export function FlashcardTopicsScreen() {
     existing: VocabAssignmentRow | null;
   } | null>(null);
   const [tracking, setTracking] = React.useState<AssignmentBlock | null>(null);
+  const [showAssignments, setShowAssignments] = React.useState(false);
   const [confirm, confirmNode] = useConfirm();
   const isStaff = kind === 'staff';
 
@@ -238,6 +239,25 @@ export function FlashcardTopicsScreen() {
         actions={
           isStaff && (
             <span className="m-row" style={{ gap: 10, flexWrap: 'wrap' }}>
+              {/* Only once the garden's tables are actually there — `gardenStaff` is null while a
+                  deploy is ahead of its migration, and a button that opens an empty dialog is
+                  worse than no button. */}
+              {gardenStaff && (
+                <FBtn
+                  variant="secondary"
+                  iconLeft={<MIcon name="clipboard" size={18} />}
+                  onClick={() => setShowAssignments(true)}
+                >
+                  {/* One element, not two: DS.Button wraps its children in a single span, so a
+                      bare {label}{badge} pair would sit flush against each other. */}
+                  <span className="m-row" style={{ gap: 6, alignItems: 'center' }}>
+                    {t('garden_assignments')}
+                    {gardenStaff.assignments.length > 0 && (
+                      <Badge>{gardenStaff.assignments.length}</Badge>
+                    )}
+                  </span>
+                </FBtn>
+              )}
               {canUseAi && (
                 <FBtn
                   variant="secondary"
@@ -415,18 +435,6 @@ export function FlashcardTopicsScreen() {
                   <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
                     {t('fc_word_count', { n: topic.wordCount })}
                   </div>
-                  {(openByTopic.get(topic.id) ?? []).length > 0 && (
-                    <span style={{ alignSelf: 'flex-start' }}>
-                      <Tag color="orange" dot={false}>
-                        {t('garden_assigned_tag', {
-                          date: formatDmyTime(
-                            openByTopic.get(topic.id)![0].deadline,
-                            openByTopic.get(topic.id)![0].deadlineTime,
-                          ),
-                        })}
-                      </Tag>
-                    </span>
-                  )}
                 </FC>
               );
             })}
@@ -439,20 +447,6 @@ export function FlashcardTopicsScreen() {
             sub={isStaff ? t('fc_no_topics_sub') : undefined}
           />
         </FC>
-      )}
-
-      {isStaff && gardenStaff && (
-        <AssignmentsPanel
-          data={gardenStaff}
-          onEdit={(block) =>
-            setAssigning({
-              topic: { id: block.assignment.topicId, name: block.assignment.topicName },
-              existing: block.assignment,
-            })
-          }
-          onTrack={setTracking}
-          onDelete={delAssignment}
-        />
       )}
 
       {modal && (
@@ -480,6 +474,20 @@ export function FlashcardTopicsScreen() {
           onClose={() => setImporting(false)}
         />
       )}
+      {showAssignments && gardenStaff && (
+        <AssignmentsModal
+          data={gardenStaff}
+          onClose={() => setShowAssignments(false)}
+          onEdit={(block) =>
+            setAssigning({
+              topic: { id: block.assignment.topicId, name: block.assignment.topicName },
+              existing: block.assignment,
+            })
+          }
+          onTrack={setTracking}
+          onDelete={delAssignment}
+        />
+      )}
       {assigning && gardenStaff && (
         <AssignModal
           topic={assigning.topic}
@@ -500,25 +508,46 @@ export function FlashcardTopicsScreen() {
 
 // ---- Assignments (staff) ----
 
-function AssignmentsPanel({
+/**
+ * Giao bài từ vựng — what is currently assigned, and how far each class has got.
+ *
+ * A dialog rather than a panel under the topic grid: it is a teacher's occasional check, not
+ * something to read past on every visit, and as a panel it pushed the decks themselves below the
+ * fold on a laptop. The header button carries the count, so the page still says at a glance
+ * whether anything is out.
+ *
+ * Track and Edit open ON TOP of this one rather than replacing it — `Modal` keeps a stack and
+ * Escape only closes the topmost (src/ui.tsx), so coming back from a progress table lands on the
+ * list it was opened from instead of on the bare page.
+ */
+function AssignmentsModal({
   data,
+  onClose,
   onEdit,
   onTrack,
   onDelete,
 }: {
   data: StaffGardenData;
+  onClose: () => void;
   onEdit: (block: AssignmentBlock) => void;
   onTrack: (block: AssignmentBlock) => void;
   onDelete: (block: AssignmentBlock) => void;
 }) {
   const { t } = useLang();
   return (
-    <FC style={{ marginTop: 16 }}>
-      <div style={{ fontWeight: 700, color: 'var(--text-strong)', fontSize: 'var(--text-md)' }}>
-        {t('garden_assignments')}
-      </div>
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={t('garden_assignments')}
+      width={560}
+      footer={
+        <FBtn variant="secondary" onClick={onClose}>
+          {t('close')}
+        </FBtn>
+      }
+    >
       {data.assignments.length ? (
-        <div className="m-stack" style={{ gap: 8, marginTop: 10 }}>
+        <div className="m-stack" style={{ gap: 8 }}>
           {data.assignments.map((block) => {
             const a = block.assignment;
             const overdue = a.deadline < data.today;
@@ -572,7 +601,7 @@ function AssignmentsPanel({
       ) : (
         <Empty icon="clipboard" title={t('garden_no_assignments')} />
       )}
-    </FC>
+    </Modal>
   );
 }
 

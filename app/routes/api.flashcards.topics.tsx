@@ -18,12 +18,14 @@ const routes = crud({
     await svc.createTopic(db, input);
     return svc.listTopics(db);
   },
-  update: async (id, patch, { db }) => {
-    await svc.updateTopic(db, id, patch);
+  // `user.isPlatformAdmin` widens the write fence to the platform library, and only there:
+  // school staff keep the `own` scope they have always had. Same flag /vocabulary passes.
+  update: async (id, patch, { db, user }) => {
+    await svc.updateTopic(db, id, patch, { isPlatformAdmin: user.isPlatformAdmin });
     return svc.listTopics(db);
   },
-  remove: async (id, { db }) => {
-    await svc.removeTopic(db, id);
+  remove: async (id, { db, user }) => {
+    await svc.removeTopic(db, id, { isPlatformAdmin: user.isPlatformAdmin });
     return svc.listTopics(db);
   },
 });

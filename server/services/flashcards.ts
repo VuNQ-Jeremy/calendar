@@ -14,7 +14,7 @@ import {
 import { chunk, SCOPED_MAX_BOUND_PARAMS, type TenantDb } from '../db/index';
 import * as gardenSvc from './garden';
 import type { GardenOutcome } from './garden';
-import { record, recordCreate, recordDelete } from './audit';
+import { record, recordCreate } from './audit';
 import {
   DEFAULT_REVIEW_SETTINGS,
   foldAnswers,
@@ -432,21 +432,32 @@ export async function createTopicWithWords(
 /**
  * Rename / recolour a topic.
  *
- * The before/after snapshots read `own`, not `pool`, deliberately: the update below is
- * `own`-scoped, so a library id or another school's id changes nothing, and snapshotting a row
- * this school may not edit would put it in the activity log anyway.
+ * `pool` for a platform admin, `own` for everyone else — the row predicate `editableTopicIds`
+ * draws for words, drawn here for the topic itself. `own` alone made a library deck *immutable
+ * rather than read-only*: `listTopics` reads through `db.pool`, so a library topic (`tenant_id
+ * NULL`) is listed to every school and to the platform admin who owns it, but the update matched
+ * nobody — zero rows changed, and the route still answered `{ ok: true }`. A recolour from
+ * /vocabulary therefore closed its dialog and did nothing at all.
+ *
+ * The fence is spelled out at both use sites rather than hoisted into a helper so that
+ * `test/tenant-scope.test.ts` can see it, and so a reader of this function never has to go
+ * looking for what scopes it.
+ *
+ * The before/after snapshots read through the same predicate as the write: snapshotting a row
+ * this caller may not edit would put it in the activity log anyway, and NOT snapshotting one
+ * they may edit would drop a real library edit out of the log.
  */
 export async function updateTopic(
   db: TenantDb,
   id: string,
   patch: Partial<FlashcardTopicInput>,
+  opts: { isPlatformAdmin?: boolean } = {},
 ): Promise<void> {
-  const readOwn = () =>
-    db.raw
-      .select()
-      .from(flashcardTopics)
-      .where(db.own(flashcardTopics, eq(flashcardTopics.id, id)));
-  const before = (await readOwn())[0];
+  const fence = opts.isPlatformAdmin
+    ? db.pool(flashcardTopics, eq(flashcardTopics.id, id))
+    : db.own(flashcardTopics, eq(flashcardTopics.id, id));
+  const readRow = () => db.raw.select().from(flashcardTopics).where(fence);
+  const before = (await readRow())[0];
   const set: Partial<typeof flashcardTopics.$inferInsert> = {};
   if (patch.name !== undefined) {
     set.name = patch.name;
@@ -455,20 +466,39 @@ export async function updateTopic(
   if (patch.description !== undefined) set.description = patch.description ?? null;
   if (patch.color !== undefined) set.color = patch.color;
   if (Object.keys(set).length) {
-    await db.update(flashcardTopics, set, eq(flashcardTopics.id, id));
+    // `db.raw.update`, not `db.update`: the sanctioned wrapper is hard-wired to `own`, which is
+    // exactly the predicate a platform admin needs widened. `fence` above is the replacement,
+    // and it is never weaker — `pool` only ever adds the library, never another school.
+    await db.raw.update(flashcardTopics).set(set).where(fence);
   }
-  const after = (await readOwn())[0];
+  const after = (await readRow())[0];
   if (!sameJson(before, after)) {
     record({ action: 'update', entityType: 'flashcard', entityId: id, before, after });
   }
 }
 
-export async function removeTopic(db: TenantDb, id: string): Promise<void> {
-  // Both statements are `own`-scoped, so a platform-library topic and a neighbouring school's
-  // topic delete nothing AND log nothing — the row simply does not exist from here.
-  // FK cascade clears words, results, and mastery rows.
-  await recordDelete(db, 'flashcard', flashcardTopics, id);
-  await db.delete(flashcardTopics, eq(flashcardTopics.id, id));
+/**
+ * Delete a topic. Same two-tier fence as `updateTopic` — a school deletes only its own, a
+ * platform admin may also delete from the library; another school's topic matches neither and
+ * so deletes nothing AND logs nothing, which is the "looks like it does not exist" answer it
+ * should get. FK cascade clears words, results, and mastery rows.
+ *
+ * The snapshot is taken here rather than through `recordDelete`, whose own read is `own`-scoped:
+ * routed through it, a platform admin's library delete would have succeeded silently and left
+ * no activity-log entry behind.
+ */
+export async function removeTopic(
+  db: TenantDb,
+  id: string,
+  opts: { isPlatformAdmin?: boolean } = {},
+): Promise<void> {
+  const fence = opts.isPlatformAdmin
+    ? db.pool(flashcardTopics, eq(flashcardTopics.id, id))
+    : db.own(flashcardTopics, eq(flashcardTopics.id, id));
+  const before = (await db.raw.select().from(flashcardTopics).where(fence).limit(1))[0];
+  if (!before) return;
+  record({ action: 'delete', entityType: 'flashcard', entityId: id, before });
+  await db.raw.delete(flashcardTopics).where(fence);
 }
 
 // ---- Words ----

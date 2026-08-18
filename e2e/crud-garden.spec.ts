@@ -21,16 +21,20 @@ test.describe('CRUD: vocabulary assignments', () => {
     await signInStaff(page);
     await page.goto('/vocabulary');
 
-    // A fresh topic, so the assignment panel and the "assigned" tag are unambiguous.
+    // A fresh topic, so the assignment row is unambiguous.
     await page.getByRole('button', { name: 'New topic' }).click();
     await page.getByLabel('Topic name').fill(topic);
     let post = k.posted('/vocabulary');
     await k.submit().click();
     await post;
-    // `.is-interactive` picks the topic card out of the grid: the assignments panel below also
-    // carries the topic name, and an unscoped `.mochi-card` would match both.
     const card = page.locator('.mochi-card.is-interactive', { hasText: topic });
     await expect(card).toBeVisible();
+
+    // "Assigned vocabulary" is the header button that opens the assignments dialog. Its
+    // accessible name picks up the count Badge beside the label, so the match is a substring
+    // one (Playwright's default) rather than exact.
+    const openAssignments = page.getByRole('button', { name: 'Assigned vocabulary' });
+    const listOf = () => k.dlgOf('Assigned vocabulary');
 
     // ---- Assign it. The default deadline is a week out, so the date picker stays shut. ----
     await card.getByRole('button', { name: 'Assign' }).click();
@@ -65,22 +69,27 @@ test.describe('CRUD: vocabulary assignments', () => {
     await dlg.locator('.m-dialog__foot .mochi-btn.is-primary').click();
     await post;
 
-    // The card grows an "Assigned · due …" tag, and the panel below lists the assignment.
-    await expect(card).toContainText('Assigned', { timeout: 15_000 });
-    const panel = page.locator('.mochi-card', {
-      has: page.getByText('Assigned vocabulary', { exact: true }),
-    });
-    const row = panel.locator('.lrow', { hasText: topic });
+    // The header button grows a count badge, and the dialog behind it lists the assignment. The
+    // topic CARD stays clean — it deliberately carries no "assigned" tag any more.
+    //
+    // The badge's PRESENCE, not its number: specs run in parallel against one test env and a
+    // neighbouring one may have an assignment of its own out at the same time. Everything below
+    // is scoped to this spec's own throwaway topic for the same reason.
+    await expect(openAssignments.locator('.mochi-badge')).toBeVisible({ timeout: 15_000 });
+    await expect(card).not.toContainText('6:30 pm');
+    await openAssignments.click();
+    let row = listOf().locator('.lrow', { hasText: topic });
     await expect(row).toBeVisible();
     await expect(row).toContainText(CLASS);
-    // The deadline now prints its time beside the date, here and on the topic card's tag.
+    // The deadline prints its time beside the date.
     await expect(row).toContainText('6:30 pm');
-    await expect(card).toContainText('6:30 pm');
     // The mode restriction shows as badges on the assignment row.
     await expect(row).toContainText('Unscramble');
     await expect(row).toContainText('Type it');
 
-    // ---- Track it: nobody has played the new topic, so every member is behind. ----
+    // ---- Track it: nobody has played the new topic, so every member is behind. Progress opens
+    // ON TOP of the list dialog rather than replacing it — Modal keeps a stack — so the list is
+    // still there to go back to afterwards. ----
     await row.getByRole('button', { name: 'Progress' }).click();
     const track = k.dlgOf(`Progress · ${topic}`);
     await expect(track).toContainText(CLASS);
@@ -89,6 +98,7 @@ test.describe('CRUD: vocabulary assignments', () => {
     await expect(track.getByText('Not done').first()).toBeVisible();
     // Scoped to the footer: the dialog's own X is also labelled "Close".
     await track.locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
+    await expect(row).toBeVisible();
 
     // ---- Edit the ask. The saved mode restriction comes back checked; clearing it returns the
     // assignment to any-mode counting and drops the badges. ----
@@ -119,18 +129,25 @@ test.describe('CRUD: vocabulary assignments', () => {
     await expect(track2.locator('.lrow', { hasText: 'Leo Park' })).toContainText('0/5');
     await track2.locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
 
-    // ---- Deleting the topic warns that the assignment goes with it. ----
+    // ---- Deleting the topic warns that the assignment goes with it. The topic's own buttons are
+    // on the page behind the list, so close the list first. ----
+    await listOf().locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
     await card.getByRole('button', { name: 'Delete' }).click();
     const confirm = k.dlgOf('Delete topic');
     await expect(confirm).toContainText(CLASS);
     await confirm.getByRole('button', { name: 'Cancel' }).click();
 
-    // ---- Delete the assignment on its own; the topic and the earned rounds survive. ----
+    // ---- Delete the assignment on its own; the topic and the earned rounds survive. The confirm
+    // is raised by the PAGE's useConfirm, so it is a sibling of the list dialog, not a descendant
+    // — `dlgOf('Delete assignment')` matches it alone. ----
+    await openAssignments.click();
+    row = listOf().locator('.lrow', { hasText: topic });
     await row.getByRole('button', { name: 'Delete' }).click();
     post = k.posted('/vocabulary');
     await k.dlgOf('Delete assignment').locator('.mochi-btn.is-danger').click();
     await post;
-    await expect(panel.locator('.lrow', { hasText: topic })).toHaveCount(0);
+    await expect(listOf().locator('.lrow', { hasText: topic })).toHaveCount(0);
+    await listOf().locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
     await expect(card).toBeVisible();
 
     // Cleanup.

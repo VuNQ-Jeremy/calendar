@@ -72,6 +72,17 @@ DELETE FROM flashcard_results;
 DELETE FROM vocab_word_topics;
 DELETE FROM flashcard_words;
 DELETE FROM flashcard_topics;
+-- One PLATFORM LIBRARY deck: `tenant_id NULL` is the schema's one nullable discriminator, and it
+-- means "readable by every school, writable only by a platform admin" (server/services/flashcards.ts).
+-- Re-inserted after the wipe above rather than left to seed.sql, which predates the two-tier pool.
+--
+-- It exists so crud-vocab-library.spec.ts can prove a platform admin's edit of a library deck
+-- actually lands. That was silently a no-op until 2026-08-18: the list reads through `db.pool` and
+-- the update wrote through `db.own`, so recolouring one changed zero rows and still answered ok.
+-- Every other spec locates topics by their own throwaway name, so one extra seeded deck is inert.
+INSERT INTO flashcard_topics (id, tenant_id, name, slug, description, color, created_at) VALUES
+  ('fct-library-0001', NULL, 'Library Starter Deck', 'library-starter-deck',
+   'Shared across every school. Only a platform admin may edit it.', 'violet', datetime('now'));
 -- Curriculum spine (migration 0047). Decks reference it ON DELETE SET NULL, so it does not cascade
 -- off the topic wipe above and has to be explicit. Ordered after flashcard_topics so the decks are
 -- already gone and the SET NULL has nothing to do.
