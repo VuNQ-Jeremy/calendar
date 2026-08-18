@@ -6,56 +6,30 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
-## v0.0285 — 2026-08-18
-fix(garden): the species grid no longer pushes the pot colour out of the dialog
+## v0.0286 — 2026-08-18
+feat(garden): ten collectible plant species
 
-## v0.0284 — 2026-08-18
-fix(garden): the JSON API returns 409 when a species change is refused
+The vườn cây từ vựng now grows one of ten plants — cà chua, hướng dương, ớt, dâu tây, xương rồng,
+xoài, quất, đào and mai vàng alongside the original — each unlocked by lifetime harvested fruit
+(0, 1, 2, 4, 6, 9, 12, 16, 20, 25). Unlocks are derived at read time from the fruit a student has
+already banked, so there is no unlock table and nothing to keep in sync.
 
-## v0.0283 — 2026-08-18
-feat(garden): harvest celebrates a new plant and offers to replant as it
+A species can only be chosen at planting: while the pot is empty, while the plant is dead, or
+while it is still a seed — which is exactly where a harvest leaves it, so the fruit that earns a
+plant also opens the window to plant it. The harvest that crosses a threshold says what it just
+earned and offers to replant as it.
 
-## v0.0282 — 2026-08-18
-feat(garden): species picker on the phone too
+The picker doubles as the collection: locked plants are drawn as grey silhouettes with what they
+still cost, rather than hidden. Species travels with the plant everywhere it already went — class
+gardens, frozen monthly albums, share cards and the report card — and albums written before this
+release read as the original plant, which is what they were.
 
-## v0.0281 — 2026-08-18
-feat(garden): the species picker, with locked plants shown as goals
-
-## v0.0280 — 2026-08-18
-feat(garden): species rides through class gardens, albums, share cards and reports
-
-## v0.0279 — 2026-08-18
-feat(garden): kumquat, peach and apricot blossom species art — the collection is complete
-
-## v0.0278 — 2026-08-18
-feat(garden): strawberry, cactus and mango species art
-
-## v0.0277 — 2026-08-18
-feat(garden): tomato, sunflower and chili species art
-
-## v0.0276 — 2026-08-18
-chore(garden): contact sheet + PNG rasterizer in the plant render harness
-
-## v0.0275 — 2026-08-18
-feat(garden): species can be chosen at planting, guarded by stage and lifetime fruit
-
-## v0.0274 — 2026-08-18
-refactor(mobile): the plant is drawn from the shared species registry
-
-## v0.0273 — 2026-08-18
-refactor(garden): the web plant is drawn from the shared species registry
-
-## v0.0272 — 2026-08-18
-chore(garden): SVG render harness for previewing species and gating art parity
-
-## v0.0271 — 2026-08-18
-feat(garden): shared species registry — classic ported to data, plus the unlock ladder
-
-## v0.0270 — 2026-08-18
-feat(garden): species + companion columns on garden_plants (0050)
-
-## v0.0269 — 2026-08-18
-docs: garden species design spec + implementation plan
+Underneath, every drawing moved out of the two hand-synced renderers into one shared registry of
+plain part data, so a plant is authored once and both web and Expo draw it. `scripts/render-plants.mjs`
+renders any species to SVG or a PNG contact sheet, and gates the port with a parity diff. Staff get
+a showcase page at /garden/species listing every plant, its stages and what it costs. Migration 0050
+adds `species` (defaulting to the original drawing, so nothing changed appearance) plus a dormant
+`companion` column reserved for pets.
 
 ## v0.0268 — 2026-08-18
 Revert the topbar rail tweak: .topbar is dead CSS, nothing renders it. Page titles come from PageHeader inside .content, so they already inherit the rail.

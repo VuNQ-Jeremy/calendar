@@ -158,6 +158,16 @@ export const NAV: NavSection[] = [
         adminOnly: true,
         staffOnly: true,
       },
+      // Every plant a student can grow, as a reference sheet. Admin rather than staff only
+      // because it is a catalogue of the whole game, not a view of anyone's class.
+      {
+        id: 'garden-species',
+        path: '/garden/species',
+        tk: 'nav_garden_species',
+        icon: 'sprout',
+        adminOnly: true,
+        staffOnly: true,
+      },
       // Diagnostics, not a report: it reads every student's rows at once, so admin only. The
       // route enforces it with requireAdmin — this flag only hides the link.
       { id: 'logs', path: '/logs', tk: 'nav_logs', icon: 'list', adminOnly: true, staffOnly: true },

@@ -160,6 +160,10 @@ export default [
     route('rankings/:month?', 'routes/rankings.tsx'),
     route('vocabulary', 'routes/flashcards.tsx'),
     route('vocabulary/:slug', 'routes/flashcards.$slug.tsx'),
+    // Static segment BEFORE the optional class id: without it `/garden/species` matches
+    // `:classId` and the class garden goes looking for a class called "species". Same trap as
+    // logs/notifications below. Admin-only, enforced in the route with requireAdmin.
+    route('garden/species', 'routes/garden.species.tsx'),
     // Class id (and the album's month) in the PATH for the same cache reason as tuition below.
     route('garden/:classId?', 'routes/garden.tsx'),
     route('garden/:classId/album/:month', 'routes/garden.$classId.album.$month.tsx'),
