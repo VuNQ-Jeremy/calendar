@@ -193,7 +193,15 @@ export function CurriculumModal({
 
   const del = async () => {
     if (!d.id) return;
-    if (!(await confirm({ title: t('vc_delete_q'), message: t('vc_delete_msg') }))) return;
+    // Destructive and irreversible, so it gets the red button and a verb, like every other
+    // delete in the app — this was the one confirm that asked "Confirm" in neutral primary.
+    const ok = await confirm({
+      title: t('vc_delete_q'),
+      message: t('vc_delete_msg'),
+      confirmLabel: t('delete'),
+      danger: true,
+    });
+    if (!ok) return;
     const fd = new FormData();
     fd.set('intent', 'curriculum-delete');
     fd.set('id', d.id);

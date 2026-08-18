@@ -122,6 +122,17 @@ export default function Platform() {
                           </PBtn>
                         </Form>
                       )}
+                      {/* The way back out. The banner in _app.tsx links HERE rather than
+                          submitting anything, so without this button the override could be set
+                          and never cleared — a platform admin stuck reading another school. */}
+                      {inside && (
+                        <Form method="post">
+                          <input type="hidden" name="intent" value="exit-tenant" />
+                          <PBtn type="submit" size="sm">
+                            {t('platform_exit')}
+                          </PBtn>
+                        </Form>
+                      )}
                       <Form method="post">
                         <input
                           type="hidden"

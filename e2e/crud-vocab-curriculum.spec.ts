@@ -20,6 +20,15 @@ test.describe('CRUD: vocabulary curriculum', () => {
     await page.goto('/vocabulary');
   });
 
+  /**
+   * Dismiss the open dialog via its FOOTER Close.
+   *
+   * The dialog shell renders its own "Close" icon button in the header, so a bare
+   * getByRole('button', { name: 'Close' }) matches two elements and fails strict mode.
+   */
+  const closeDialog = (page: import('@playwright/test').Page) =>
+    page.locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
+
   /** Create a curriculum through the real dialog and return its name. */
   async function makeCurriculum(page: import('@playwright/test').Page, name: string) {
     const k = ui(page);
@@ -83,7 +92,9 @@ test.describe('CRUD: vocabulary curriculum', () => {
 
     // Filtering to a book with no units empties the grid; "All units" brings the seeded decks back.
     await page.getByText(name, { exact: false }).click();
-    await expect(page.locator('.mochi-card')).toHaveCount(0);
+    // Assert the empty STATE, not a card count: the page's own empty panel and the "Assigned
+    // vocabulary" panel are `.mochi-card` too, so counting them can never reach zero.
+    await expect(page.getByText('No topics yet')).toBeVisible();
     await page.getByText('All units', { exact: true }).click();
     await expect(page.getByText('Not in a book', { exact: true })).toBeVisible();
   });
@@ -94,7 +105,9 @@ test.describe('CRUD: vocabulary curriculum', () => {
     const name = `E2E import curriculum ${stamp}`;
     const csv = [
       'unit,unit_name,word,pos,ipa,meaning_vi,example_en,example_answer,topics',
-      `1,E2E Unit One,alpha${stamp},n,/ˈælfə/,chữ alpha,The alpha comes first.,alpha${stamp},school`,
+      // The example must CONTAIN the answer, or the parser strips it and flags the row — the
+      // answer is the stamped word, so the sentence has to carry the stamp too.
+      `1,E2E Unit One,alpha${stamp},n,/ˈælfə/,chữ alpha,The alpha${stamp} comes first.,alpha${stamp},school`,
       `1,E2E Unit One,bravo${stamp},n,/ˈbrɑːvəʊ/,chữ bravo,,,`,
       // No meaning and no definition: must arrive UNCHECKED, so only two of the three import.
       `1,E2E Unit One,charlie${stamp},n,,,,,`,
@@ -112,6 +125,9 @@ test.describe('CRUD: vocabulary curriculum', () => {
 
     // Review phase: one unit, three words, and the meaningless row flagged.
     await expect(page.getByText('Found 1 units and 3 words.')).toBeVisible();
+    // Units arrive COLLAPSED (`open: false` in curriculum.tsx), so the per-word issue badges are
+    // not on the page until the unit is expanded. The summary above is what shows by default.
+    await page.getByRole('button', { name: 'Show words' }).click();
     await expect(page.getByText('No meaning')).toBeVisible();
     // Two of three start checked, so the button offers exactly two.
     await expect(page.getByRole('button', { name: 'Import 2 words' })).toBeVisible();
@@ -120,7 +136,7 @@ test.describe('CRUD: vocabulary curriculum', () => {
     await page.getByRole('button', { name: 'Import 2 words' }).click();
     await post;
     await expect(page.getByText('Imported 1 units and 2 words.')).toBeVisible();
-    await page.getByRole('button', { name: 'Close' }).click();
+    await closeDialog(page);
 
     // The unit became a deck, filed under the book and numbered.
     await page.getByText(name, { exact: false }).click();
@@ -140,17 +156,23 @@ test.describe('CRUD: vocabulary curriculum', () => {
     await page.getByRole('button', { name: 'Import 2 words' }).click();
     await post;
     await expect(page.getByText('Imported 0 units and 0 words.')).toBeVisible();
-    await page.getByRole('button', { name: 'Close' }).click();
+    await closeDialog(page);
 
     // Clean up: deleting the book leaves the deck behind, unnumbered — so remove both.
-    await deck.click();
+    // Click the TITLE, not the card: Playwright clicks an element's centre, and on a card this
+    // short the centre lands on the assign icon, whose handler calls stopPropagation — so the
+    // card's own navigate never fires. A real user clicks the body.
+    await deck.getByText('E2E Unit One', { exact: true }).click();
     await page.waitForURL(/\/vocabulary\/[^/]+$/);
     await page.goto('/vocabulary');
     await page
       .locator('span.m-row', { hasText: name })
       .getByRole('button', { name: 'Edit' })
       .click();
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    // Scoped to the dialog: a deck card is on the page behind it with its own "Delete" icon
+    // button, so the page-wide lookup matches two elements here (it does not in the test above,
+    // where no deck exists yet).
+    await k.dlg.getByRole('button', { name: 'Delete', exact: true }).click();
     const gone = k.posted('/vocabulary');
     await k.confirmDanger('Delete this curriculum?').click();
     await gone;

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0261 — 2026-08-18
+Fix two real bugs found by the e2e suite: a platform admin could enter another school with no way out, and deleting a curriculum asked for confirmation with a neutral button instead of a red one.
+
 ## v0.0260 — 2026-08-17
 Add a test suite for the mobile app: a fast vitest logic suite over lib/, a packaging guard that fails a bundle built without its API URL, and Maestro emulator flows. Also fixes mobile's typecheck and four stale tests.
 
