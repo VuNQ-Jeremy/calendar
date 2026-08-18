@@ -19,7 +19,7 @@
  * Output directories are scratch. Do not commit them.
  */
 
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createElement } from 'react';
