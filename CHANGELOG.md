@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0272 — 2026-08-18
+chore(garden): SVG render harness for previewing species and gating art parity
+
 ## v0.0271 — 2026-08-18
 feat(garden): shared species registry — classic ported to data, plus the unlock ladder
 

@@ -31,3 +31,9 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Scratch output from scripts/render-plants.mjs — previews and parity baselines. Regenerable,
+# and a baseline is only meaningful next to the commit it was captured at.
+.baseline-plants/
+.current-plants/
+.preview-plants/
