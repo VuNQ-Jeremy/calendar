@@ -268,6 +268,7 @@ function GardenMonthCard({ studentId, month }: { studentId: string; month: strin
               wilted={plant.wilted}
               dead={plant.dead}
               potColor={g!.potColor}
+              species={g!.species}
               size={44}
             />
             <span style={{ fontSize: 'var(--text-sm)' }}>

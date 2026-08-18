@@ -1100,6 +1100,8 @@ export interface GardenMonthSummary extends GardenMonthTally {
   plant: PlantView | null;
   plantName: string | null;
   potColor: string;
+  /** Species id — see shared/garden-art.ts. */
+  species: string;
   /** Lifetime fruit, for context beside the month's own count. */
   fruitsTotal: number;
 }
@@ -1133,6 +1135,7 @@ function emptyGardenMonth(month: string): GardenMonthSummary {
     plant: null,
     plantName: null,
     potColor: 'orange',
+    species: 'classic',
     fruitsTotal: 0,
   };
 }
@@ -1198,6 +1201,7 @@ export async function gardenMonthByStudent(
     s.plant = plantView(rowToState(row), cfg, vnToday);
     s.plantName = row.plantName;
     s.potColor = row.potColor;
+    s.species = row.species;
     s.fruitsTotal = row.fruitsTotal;
   }
 
@@ -1212,6 +1216,8 @@ export interface GardenMember extends PlantView {
   color: string;
   plantName: string | null;
   potColor: string;
+  /** Species id — see shared/garden-art.ts. */
+  species: string;
   fruitMonth: number;
 }
 
@@ -1300,6 +1306,8 @@ export async function classGarden(
       color: r.color,
       plantName: r.plant?.plantName ?? null,
       potColor: r.plant?.potColor ?? 'orange',
+      // A student with no plant row still needs a species to draw the empty pot's hint with.
+      species: r.plant?.species ?? 'classic',
       fruitMonth: fruit.get(r.studentId) ?? 0,
       ...plantView(r.plant ? rowToState(r.plant) : null, cfg, vnToday),
     })),
@@ -1359,6 +1367,7 @@ export async function snapshotMonth(
         color: m.color,
         plantName: m.plantName,
         potColor: m.potColor,
+        species: m.species,
         stage: m.stage,
         wilted: m.wilted,
         dead: m.dead,

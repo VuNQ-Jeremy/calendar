@@ -492,6 +492,16 @@ describe('the daily sweep', () => {
     expect(snap.className).toBe(cls.name);
     expect(snap.data.members).toHaveLength(1);
     expect(snap.data.members[0].name).toBe('Gardener');
+    // The freeze maps member fields one by one, so a new field is only in the album if it was
+    // added there too — an omission would silently repaint every keepsake as the classic plant.
+    expect(snap.data.members[0].species).toBe('classic');
+  });
+
+  it('gives a student with no plant row a species to draw the empty pot with', async () => {
+    const d = db();
+    const { cls, student } = await seedClassWithStudent(d);
+    const garden = await gardenSvc.classGarden(d, cls.id, ictDateOf(new Date().toISOString()));
+    expect(garden.members[0]).toMatchObject({ studentId: student.id, species: 'classic' });
   });
 
   it('persists overdue decay and reports who to warn', async () => {

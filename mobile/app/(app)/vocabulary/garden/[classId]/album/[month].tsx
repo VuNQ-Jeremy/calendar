@@ -89,6 +89,8 @@ export default function GardenAlbumScreen() {
                         color: m.color,
                         plantName: m.plantName,
                         potColor: m.potColor,
+                        // Albums frozen before species existed were all the classic drawing.
+                        species: m.species ?? 'classic',
                         stage: m.stage,
                         wilted: m.wilted,
                         dead: m.dead,

@@ -408,6 +408,8 @@ export interface GardenMemberRow extends PlantView {
   color: string;
   plantName: string | null;
   potColor: string;
+  /** Species id — see shared/garden-art.ts. */
+  species: string;
   fruitMonth: number;
 }
 

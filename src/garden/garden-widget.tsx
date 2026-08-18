@@ -179,6 +179,7 @@ export function GardenWidget({ data }: { data: StudentGardenData | null }) {
           wilted={plant.wilted}
           dead={plant.dead}
           potColor={data.potColor}
+          species={data.species}
           size={128}
           animateStageUp={popping}
           className={celebrating ? 'garden-harvest' : ''}

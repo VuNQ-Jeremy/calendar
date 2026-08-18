@@ -124,6 +124,7 @@ export function GardenWidget() {
             wilted={data.wilted}
             dead={data.dead}
             potColor={data.potColor}
+            species={data.species}
             size={PLANT_SIZE}
             animateStageUp={popping}
             sway={true}

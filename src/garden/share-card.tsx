@@ -344,6 +344,7 @@ function ShareStage({ garden, vnToday }: ShareLoaderData) {
                 wilted={m.wilted}
                 dead={m.dead}
                 potColor={m.potColor}
+                species={m.species}
                 size={72}
               />
               <div

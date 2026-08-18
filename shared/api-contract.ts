@@ -561,6 +561,8 @@ export const GardenMemberRow = PlantView.extend({
   color: z.string(),
   plantName: Nullable(z.string()),
   potColor: z.string(),
+  /** Species id — see shared/garden-art.ts. */
+  species: z.string(),
   fruitMonth: z.number().int(),
 }).meta({ id: 'GardenMemberRow' });
 
@@ -581,6 +583,8 @@ export const GardenSnapshotMember = z
     color: z.string(),
     plantName: Nullable(z.string()),
     potColor: z.string(),
+    /** Absent in albums frozen before species existed — read those as 'classic'. */
+    species: z.string().optional(),
     stage: PlantStage,
     wilted: z.boolean(),
     dead: z.boolean(),
@@ -633,6 +637,8 @@ export const GardenMonthSummary = GardenMonthTally.extend({
   plant: Nullable(PlantView),
   plantName: Nullable(z.string()),
   potColor: z.string(),
+  /** Species id — see shared/garden-art.ts. */
+  species: z.string(),
   /** Lifetime fruit, for context beside the month's own count. */
   fruitsTotal: z.number().int(),
 }).meta({ id: 'GardenMonthSummary' });

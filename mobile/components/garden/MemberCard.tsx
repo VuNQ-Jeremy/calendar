@@ -23,6 +23,8 @@ export interface CardMember {
   color: string;
   plantName: string | null;
   potColor: string;
+  /** Species id — see shared/garden-art.ts. */
+  species: string;
   stage: PlantStage;
   wilted: boolean;
   dead: boolean;
@@ -39,6 +41,7 @@ export function memberCard(m: GardenMemberRow): CardMember {
     color: m.color,
     plantName: m.plantName,
     potColor: m.potColor,
+    species: m.species,
     stage: m.stage,
     wilted: m.wilted,
     dead: m.dead,
@@ -97,6 +100,7 @@ export function MemberCard({
         wilted={m.wilted}
         dead={m.dead}
         potColor={m.potColor}
+        species={m.species}
         size={96}
         sway={healthy}
       />

@@ -686,6 +686,11 @@ export interface GardenSnapshotMember {
   color: string;
   plantName: string | null;
   potColor: string;
+  /**
+   * Species id — see shared/garden-art.ts. Optional because albums frozen before species existed
+   * have no such key, and those plants were the classic drawing: read it as `?? 'classic'`.
+   */
+  species?: string;
   stage: PlantStage;
   wilted: boolean;
   dead: boolean;
