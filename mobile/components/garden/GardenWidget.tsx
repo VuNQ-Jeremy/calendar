@@ -5,6 +5,7 @@ import { ChevronRight, Clock, Flame, Pencil, Sprout } from 'lucide-react-native'
 import { daysBetweenVn } from '@mochi/shared/logic/garden';
 import { formatDmy, formatDmyTime } from '@mochi/shared/logic/dates';
 import { parseModes } from '@mochi/shared/logic/flashcards';
+import { SPECIES, nextUnlock } from '@mochi/shared/garden-art';
 import { useLang } from '~/lib/i18n';
 import { useHarvest, usePlant, useUpdatePlant } from '~/lib/use-garden';
 import { useTheme } from '~/theme';
@@ -50,6 +51,7 @@ export function GardenWidget() {
   const [editing, setEditing] = React.useState<{
     plantName: string;
     potColor: ColorIdValue;
+    species: string;
   } | null>(null);
   const [flash, setFlash] = React.useState<'done' | 'failed' | null>(null);
   const [celebrating, setCelebrating] = React.useState(false);
@@ -143,20 +145,21 @@ export function GardenWidget() {
             ) : (
               <Muted style={{ flex: 1, fontStyle: 'italic' }}>{t('garden_unnamed')}</Muted>
             )}
-            {data.hasPlant ? (
-              <IconButton
-                size="sm"
-                label={t('garden_rename')}
-                onPress={() =>
-                  setEditing({
-                    plantName: data.plantName ?? '',
-                    potColor: data.potColor as ColorIdValue,
-                  })
-                }
-              >
-                <Pencil size={16} color={th.color.textMuted} />
-              </IconButton>
-            ) : null}
+            {/* Reachable with an empty pot too: choosing what to grow is the one decision a
+                student with no plant yet can actually make. */}
+            <IconButton
+              size="sm"
+              label={t('garden_rename')}
+              onPress={() =>
+                setEditing({
+                  plantName: data.plantName ?? '',
+                  potColor: data.potColor as ColorIdValue,
+                  species: data.species,
+                })
+              }
+            >
+              <Pencil size={16} color={th.color.textMuted} />
+            </IconButton>
           </View>
 
           <View
@@ -272,6 +275,13 @@ export function GardenWidget() {
                 value={editing.plantName}
                 onChangeText={(plantName) => setEditing((d) => (d ? { ...d, plantName } : d))}
               />
+              <SpeciesPicker
+                value={editing.species}
+                fruitsTotal={data.fruitsTotal}
+                // Same window the server enforces: empty pot, dead plant, or still a seed.
+                canChange={!data.hasPlant || data.dead || data.stage <= 1}
+                onChange={(species) => setEditing((d) => (d ? { ...d, species } : d))}
+              />
               <ColorPicker
                 label={t('garden_pot_color')}
                 value={editing.potColor}
@@ -289,6 +299,7 @@ export function GardenWidget() {
                     updatePlant.mutate({
                       plantName: editing.plantName.trim() || null,
                       potColor: editing.potColor,
+                      species: editing.species,
                     });
                     setEditing(null);
                   }}
@@ -358,5 +369,83 @@ function AssignmentChip({ chip, today }: { chip: StudentAssignmentChip; today: s
         </Muted>
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * The collection, as a grid of pots — the mobile twin of `SpeciesPicker` in
+ * src/garden/garden-widget.tsx, down to the strings and the unlock rule.
+ *
+ * Locked species are drawn rather than hidden: a goal you can see pulls harder than a mystery,
+ * and "còn 3 quả nữa" turns tonight's round into progress toward something specific.
+ */
+function SpeciesPicker({
+  value,
+  fruitsTotal,
+  canChange,
+  onChange,
+}: {
+  value: string;
+  fruitsTotal: number;
+  canChange: boolean;
+  onChange: (species: string) => void;
+}) {
+  const th = useTheme();
+  const { t } = useLang();
+  const next = nextUnlock(fruitsTotal);
+  return (
+    <View style={{ gap: th.spacing[2] }}>
+      <Muted>{t('garden_species')}</Muted>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: th.spacing[2] }}>
+        {SPECIES.map((s) => {
+          const locked = s.unlockAt > fruitsTotal;
+          const selected = s.id === value;
+          const name = t(`garden_species_${s.id}` as Parameters<typeof t>[0]);
+          return (
+            <Pressable
+              key={s.id}
+              accessibilityRole="button"
+              accessibilityLabel={name}
+              accessibilityState={{ selected, disabled: locked || !canChange }}
+              disabled={locked || !canChange}
+              onPress={() => onChange(s.id)}
+              style={{
+                width: 76,
+                alignItems: 'center',
+                paddingVertical: th.spacing[1],
+                borderRadius: th.radius.md,
+                borderWidth: 2,
+                borderColor: selected ? th.color.brand : 'transparent',
+                backgroundColor: selected ? th.color.brandSoft : 'transparent',
+              }}
+            >
+              <PlantSvg stage={5} species={s.id} locked={locked} potColor="cocoa" size={56} />
+              <Muted
+                style={{
+                  fontSize: 11,
+                  textAlign: 'center',
+                  color: locked ? th.color.textMuted : th.color.textStrong,
+                  fontWeight: selected ? '700' : '500',
+                }}
+              >
+                {name}
+              </Muted>
+              {locked ? (
+                <Muted style={{ fontSize: 10 }}>
+                  {t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}
+                </Muted>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+      <Muted>
+        {!canChange
+          ? t('garden_species_growing')
+          : next
+            ? t('garden_species_locked', { n: next.unlockAt - fruitsTotal })
+            : t('garden_species_all')}
+      </Muted>
+    </View>
   );
 }
