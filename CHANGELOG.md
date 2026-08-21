@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0292 — 2026-08-21
+Public marketing landing page at / — bilingual VI/EN, warm Mochi brand, signup/login CTAs; signed-in visits still reach the app
+
 ## v0.0289 — 2026-08-18
 fix(garden): the plant showcase was missing the page's padding rail entirely
 

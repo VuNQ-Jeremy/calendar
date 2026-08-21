@@ -1,6 +1,10 @@
 import { type RouteConfig, index, layout, route } from '@react-router/dev/routes';
 
 export default [
+  // The public marketing landing page. Outside the _app layout, like /login and /signup: an
+  // unauthenticated visitor must see it instead of being bounced to /login. Its loader sends
+  // signed-in users on to their home screen, so `/` still works as an app entry.
+  index('routes/home.tsx'),
   route('login', 'routes/login.tsx'),
   // Public school creation. Outside the _app layout, like /login: there is no session yet.
   route('signup', 'routes/signup.tsx'),
@@ -143,7 +147,6 @@ export default [
   route('flashcards/:slug', 'routes/flashcards.legacy.$slug.tsx'),
 
   layout('routes/_app.tsx', [
-    index('routes/home.tsx'),
     route('dashboard', 'routes/dashboard.tsx'),
     route('calendar', 'routes/calendar.tsx'),
     route('classes', 'routes/classes.tsx'),
