@@ -759,6 +759,50 @@ describe('invites service — admin reset-login', () => {
     const result = await invitesSvc.resetLogin(d, { role: 'Student', studentId: student.id });
     expect(result).toBeNull();
   });
+
+  it('refuses a person id from another school, indistinguishably from no-account', async () => {
+    // Regression: the person id arrives straight from a form, and everything downstream of the
+    // fence runs on the raw handle — without the db.own() check on the person row, an Admin of
+    // ANY school could delete another school's account by posting its person UUID.
+    const dOther = new TenantDb(createRawDb(env), 'tnt-e2e-other-school');
+    const student = await peopleSvc.createStudent(dOther, {
+      name: 'Elsewhere Student',
+      color: 'blue',
+      classIds: [],
+    });
+    const [invite] = await invitesSvc.createLinked(dOther, [
+      { role: 'Student', studentId: student.id },
+    ]);
+    const redeemed = await authSvc.redeemInvite(dOther.raw, invite.code, {
+      name: 'x',
+      password: 'pw123456',
+    });
+    expect(redeemed).not.toBeNull();
+
+    // Same admin action, wrong school: answers exactly like "no account", and nothing is deleted.
+    const result = await invitesSvc.resetLogin(db(), { role: 'Student', studentId: student.id });
+    expect(result).toBeNull();
+    const survivor = await dOther.raw.query.accounts.findFirst({
+      where: eq(accounts.studentId, student.id),
+    });
+    expect(survivor).toBeTruthy();
+  });
+});
+
+describe('safeNextPath', () => {
+  it('accepts an ordinary same-origin path and rejects everything that could leave the origin', () => {
+    expect(authSvc.safeNextPath('/dashboard')).toBe('/dashboard');
+    expect(authSvc.safeNextPath('/tuition/2026-08')).toBe('/tuition/2026-08');
+    // Protocol-relative: a Location of '//evil.com' resolves against the current scheme and
+    // leaves the origin — startsWith('/') alone is an open redirect.
+    expect(authSvc.safeNextPath('//evil.com')).toBeNull();
+    // Backslash normalises to slash in browser URL parsing, so '/\' is '//' in disguise.
+    expect(authSvc.safeNextPath('/\\evil.com')).toBeNull();
+    expect(authSvc.safeNextPath('https://evil.com')).toBeNull();
+    expect(authSvc.safeNextPath('/calendar.data')).toBeNull();
+    expect(authSvc.safeNextPath('')).toBeNull();
+    expect(authSvc.safeNextPath(null)).toBeNull();
+  });
 });
 
 describe('auth service — password reset', () => {

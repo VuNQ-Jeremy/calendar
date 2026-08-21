@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0297 — 2026-08-21
+Fix the review findings: student-target Zalo pairing delivers again, reset-login is tenant-fenced, open-redirect and last-method races closed
+
 ## v0.0296 — 2026-08-21
 Review of the login-methods rework: two blocking findings (dropped Zalo student-pairing route, cross-tenant reset-login)
 

@@ -20,13 +20,15 @@ import {
  * tenant-unscoped by construction: the caller has no session, and a phone number may match
  * accounts in more than one school (the eventual picker's `schoolName` disambiguates that).
  */
-export const action = withPublic(async ({ request, rawDb, env }) => {
+export const action = withPublic(async ({ request, rawDb, env, ctx }) => {
   const input = await parseBody(request, OtpRequestInput);
   if (!(await allow(env, otpRequestKey(), OTP_REQUEST_POLICY))) throw fail('rate_limited', 429);
   const normalized = normalizePhone(input.phone);
   if (normalized && !(await allow(env, otpPhoneKey(normalized), OTP_PHONE_POLICY))) {
     throw fail('rate_limited', 429);
   }
-  const result = await requestLoginCode(rawDb, env, input.phone, input.purpose);
+  const result = await requestLoginCode(rawDb, env, input.phone, input.purpose, (p) =>
+    ctx.waitUntil(p),
+  );
   return result;
 });

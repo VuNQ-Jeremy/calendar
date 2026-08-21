@@ -203,20 +203,36 @@ export async function createLinked(db: TenantDb, targets: LinkedTarget[]): Promi
  * family-level Zalo pairing (`zalo_chats.parentId`/`studentId`) is untouched, so passwordless
  * redeem is still reachable on the new account if it was before.
  *
- * Returns null when the person has no account yet — nothing to reset.
+ * Returns null when the person is not in the caller's school, or has no account yet — the two
+ * cases deliberately answer identically, so this cannot be used to probe whether a guessed
+ * person id exists elsewhere.
  */
 export async function resetLogin(
   db: TenantDb,
   target: LinkedTarget,
 ): Promise<{ code: string } | null> {
-  const [accountCol, personId] =
+  const [personTable, accountCol, personId] =
     target.role === 'Student'
-      ? ([accounts.studentId, target.studentId] as const)
+      ? ([students, accounts.studentId, target.studentId] as const)
       : target.role === 'Staff'
-        ? ([accounts.staffId, target.staffId] as const)
-        : ([accounts.parentId, target.parentId] as const);
+        ? ([staff, accounts.staffId, target.staffId] as const)
+        : ([parents, accounts.parentId, target.parentId] as const);
 
-  // tenant-unscoped: `accounts` is auth-owned, the same exemption `needsInvite` above relies on.
+  // The tenant fence, and it is load-bearing: `personId` arrives straight from a form, and
+  // everything below runs on the raw handle (`accounts` carries no usable scope of its own
+  // here). Without this check, an Admin of ANY school could delete another school's account by
+  // posting a foreign person id — the exact cross-tenant hole the TenantDb wrappers exist to
+  // make impossible. NOTE the tenant-scope tripwire cannot see the delete below (it only
+  // inspects `.from(...)` reads), so this read IS the enforcement; do not remove it as
+  // "redundant".
+  const [person] = await db.raw
+    .select({ id: personTable.id })
+    .from(personTable)
+    .where(db.own(personTable, eq(personTable.id, personId)));
+  if (!person) return null;
+
+  // tenant-unscoped: `accounts` is auth-owned, the same exemption `needsInvite` above relies
+  // on — safe here only because the person row was fenced to the caller's school just above.
   const [account] = await db.raw.select().from(accounts).where(eq(accountCol, personId));
   if (!account) return null;
 

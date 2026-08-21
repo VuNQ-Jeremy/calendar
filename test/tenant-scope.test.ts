@@ -57,6 +57,11 @@ const RAW_DB_ALLOWLIST = [
   'app/routes/logout.tsx',
   'app/routes/signup.tsx',
   'app/routes/platform.tsx',
+  // The Google OAuth callback mints the session — like login.tsx, nobody has one on the way in.
+  'app/routes/auth.google.callback.tsx',
+  // Opened from an email link, possibly on a device that has never signed in; the token is the
+  // credential and the account row it names is what selects the school.
+  'app/routes/verify-email.tsx',
   'workers/',
 ];
 

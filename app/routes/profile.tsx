@@ -1,7 +1,11 @@
 import React from 'react';
-import { eq } from 'drizzle-orm';
+import { eq, and, or, ne, exists } from 'drizzle-orm';
 import { useOutletContext, useFetcher, useLoaderData } from 'react-router';
-import type { ActionFunctionArgs, ClientActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import type {
+  ActionFunctionArgs,
+  ClientActionFunctionArgs,
+  LoaderFunctionArgs,
+} from 'react-router';
 import { ProfileScreen } from '../../src/screens-extra.jsx';
 import type { AppContext } from './_app.js';
 import { tenantDbFor } from '../../server/db';
@@ -148,22 +152,29 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   }
 
   if (intent === 'unlink-google') {
-    const [acctRow] = await db.raw
-      .select({ passwordHash: accounts.passwordHash })
+    // The last-method guard is IN the UPDATE's WHERE, not a read beforehand — this races with
+    // removePassword from another tab, and read-then-write would let both proceed. See
+    // removePassword in server/services/auth.ts for the full reasoning; D1 serialising writes
+    // is what makes the conditional write sufficient.
+    const pairedChat = exists(
+      db.raw
+        .select({ id: zaloChats.id })
+        .from(zaloChats)
+        .where(db.own(zaloChats, eq(zaloChats.accountId, account.id))),
+    );
+    await db.raw
+      .update(accounts)
+      .set({ googleSub: null })
+      .where(
+        and(eq(accounts.id, account.id), or(ne(accounts.passwordHash, NO_PASSWORD), pairedChat)),
+      );
+    const [after] = await db.raw
+      .select({ googleSub: accounts.googleSub })
       .from(accounts)
       .where(eq(accounts.id, account.id));
-    const hasChat =
-      (
-        await db.raw
-          .select({ id: zaloChats.id })
-          .from(zaloChats)
-          .where(db.own(zaloChats, eq(zaloChats.accountId, account.id)))
-          .limit(1)
-      ).length > 0;
-    if (acctRow?.passwordHash === NO_PASSWORD && !hasChat) {
+    if (after?.googleSub) {
       return Response.json({ intent, error: 'prof_unlink_needs_method' }, { status: 400 });
     }
-    await db.raw.update(accounts).set({ googleSub: null }).where(eq(accounts.id, account.id));
     return { intent, ok: true };
   }
 

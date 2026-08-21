@@ -79,7 +79,7 @@ type ParentDraft = {
 export function StudentsScreen() {
   const { students, staff, parents, invites, classes, flashcardStats } =
     useLoaderData() as PeopleLoaderData;
-  const { user } = useOutletContext<{ user: { user: { role: string } } }>();
+  const { user } = useOutletContext<{ user: { user: { id: string; role: string } } }>();
   const isAdmin = user.user.role === 'Admin';
   const fetcher = useFetcher();
   const resetLoginFetcher = useFetcher<{ ok?: boolean; code?: string; error?: string }>();
@@ -346,7 +346,9 @@ export function StudentsScreen() {
                 <MIB label={t('edit')} size="sm" onClick={() => setStaffModal({ ...u })}>
                   <MIcon name="edit" size={16} />
                 </MIB>
-                {isAdmin && (
+                {/* Not for yourself — the action deletes your own account mid-session, and the
+                    server refuses it anyway (people.tsx `cannot_reset_self`). */}
+                {isAdmin && u.id !== user.user.id && (
                   <MIB
                     label={t('reset_login')}
                     size="sm"

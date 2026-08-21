@@ -178,11 +178,11 @@ export const OtpSetPasswordResult = z.object({ ok: z.literal(true) }).meta({
   id: 'OtpSetPasswordResult',
 });
 
-/** One account a phone number resolved to, shown only after the code has been proven correct. */
+/** One account a phone number resolved to, shown only after the code has been proven correct.
+ * `schoolName` is the user-facing disambiguator; internal ids beyond `accountId` stay server-side. */
 export const OtpCandidate = z
   .object({
     accountId: z.string(),
-    tenantId: z.string(),
     name: z.string(),
     kind: z.enum(['staff', 'student', 'parent']),
     schoolName: z.string(),

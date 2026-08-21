@@ -4,7 +4,7 @@ import type { LoaderFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../../app/load-context';
 import { createRawDb } from '../../server/db/internal';
 import { accounts } from '../../server/db/schema';
-import { requireUser, createSession } from '../../server/services/auth';
+import { requireUser, createSession, safeNextPath } from '../../server/services/auth';
 import {
   exchangeAndValidate,
   matchGoogleAccount,
@@ -80,6 +80,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const headers = new Headers();
   headers.append('Set-Cookie', clearCookie);
   headers.append('Set-Cookie', sessionHeader);
-  const dest = payload.next && payload.next.startsWith('/') ? payload.next : '/dashboard';
+  // Re-sanitized even though auth.google.tsx already did: the cookie is unsigned, so its
+  // payload is only as trustworthy as the browser that carried it.
+  const dest = safeNextPath(payload.next) ?? '/dashboard';
   return redirect(dest, { headers });
 }

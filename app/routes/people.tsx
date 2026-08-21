@@ -65,6 +65,12 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
       return Response.json({ error: 'forbidden' }, { status: 403 });
     }
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+    // Resetting yourself deletes your own account mid-request: the session dies with it and the
+    // replacement code is shown exactly once to a page you can no longer act from. Refuse — a
+    // second Admin (or scripts/reset-password.mjs) is the path for this one person.
+    if (entity === 'staff' && id === user.user.id) {
+      return Response.json({ error: 'cannot_reset_self' }, { status: 400 });
+    }
     const target =
       entity === 'student'
         ? ({ role: 'Student', studentId: id } as const)

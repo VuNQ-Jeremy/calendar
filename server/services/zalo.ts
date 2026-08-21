@@ -288,6 +288,9 @@ export async function chatsForParentRecordsOf(
  * the account being created even exists — unlike every other lookup in this file, so it takes the
  * unscoped `Db` rather than a `TenantDb`, the same way `redeemCode`/`unlinkByChatId` do for the
  * same reason (no session to scope from yet).
+ *
+ * tenant-unscoped: the person ids come off the invite row, and the invite code already selected
+ * the school — a UUID minted by one school cannot name a person in another.
  */
 export async function hasFamilyChat(
   rawDb: Db,

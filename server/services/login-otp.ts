@@ -47,9 +47,11 @@ const MAX_ATTEMPTS = 5;
 
 export type OtpPurpose = 'login' | 'set-password';
 
+/** What the picker shows the (code-verified) caller. Deliberately free of internal ids beyond
+ * `accountId` — `tenantId` stays server-side on ResolvedAccount; `schoolName` is the
+ * user-facing disambiguator. */
 export type OtpCandidate = {
   accountId: string;
-  tenantId: string;
   name: string;
   kind: 'staff' | 'student' | 'parent';
   schoolName: string;
@@ -77,6 +79,7 @@ async function codeHash(id: string, code: string): Promise<string> {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type ResolvedAccount = OtpCandidate & {
+  tenantId: string;
   studentId: string | null;
   parentId: string | null;
 };
@@ -90,6 +93,9 @@ type ResolvedAccount = OtpCandidate & {
  *       family-phone path, for a student who typed a parent's number and has no phone of their
  *       own on the account.
  * Suspended tenants are excluded, same as `userFromToken`.
+ *
+ * tenant-unscoped: the caller has no session, so the phone IS the selector — it may legitimately
+ * match accounts in several schools, and the school comes off each row it finds (module header).
  */
 async function resolveAccounts(rawDb: Db, phone: string): Promise<ResolvedAccount[]> {
   const direct = await rawDb
@@ -176,6 +182,9 @@ async function resolveAccounts(rawDb: Db, phone: string): Promise<ResolvedAccoun
  * a class group. Account-level pairing (`zalo_chats.account_id`) is preferred and person-accurate;
  * the family routes (a parent account's own paired chat, or a student's parents' chats, and vice
  * versa) are unioned in because most families pair through one side of it, not both.
+ *
+ * tenant-unscoped: keyed on account/person ids that `resolveAccounts` just resolved — UUIDs that
+ * each already belong to exactly one school, the same reasoning as `needsInvite`.
  */
 async function chatsFor(rawDb: Db, resolved: ResolvedAccount[]): Promise<string[]> {
   if (!resolved.length) return [];
@@ -183,42 +192,46 @@ async function chatsFor(rawDb: Db, resolved: ResolvedAccount[]): Promise<string[
   const parentIds = resolved.filter((r) => r.kind === 'parent').map((r) => r.parentId!);
   const studentIds = resolved.filter((r) => r.kind === 'student').map((r) => r.studentId!);
 
-  const [byAccount, byParent, viaChildrenOfParents, viaParentsOfStudents] = await Promise.all([
-    rawDb
-      .select({ chatId: zaloChats.chatId })
-      .from(zaloChats)
-      .where(and(eq(zaloChats.kind, 'user'), inArray(zaloChats.accountId, accountIds))),
-    parentIds.length
-      ? rawDb
-          .select({ chatId: zaloChats.chatId })
-          .from(zaloChats)
-          .where(and(eq(zaloChats.kind, 'user'), inArray(zaloChats.parentId, parentIds)))
-      : Promise.resolve([]),
-    parentIds.length
-      ? rawDb
-          .select({ chatId: zaloChats.chatId })
-          .from(zaloChats)
-          .innerJoin(parentStudents, eq(parentStudents.studentId, zaloChats.studentId))
-          .where(and(eq(zaloChats.kind, 'user'), inArray(parentStudents.parentId, parentIds)))
-      : Promise.resolve([]),
-    studentIds.length
-      ? rawDb
-          .select({ chatId: zaloChats.chatId })
-          .from(zaloChats)
-          .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
-          .where(and(eq(zaloChats.kind, 'user'), inArray(parentStudents.studentId, studentIds)))
-      : Promise.resolve([]),
-    studentIds.length
-      ? rawDb
-          .select({ chatId: zaloChats.chatId })
-          .from(zaloChats)
-          .where(and(eq(zaloChats.kind, 'user'), inArray(zaloChats.studentId, studentIds)))
-      : Promise.resolve([]),
-  ]);
+  const [byAccount, byParent, viaChildrenOfParents, viaParentsOfStudents, byStudent] =
+    await Promise.all([
+      rawDb
+        .select({ chatId: zaloChats.chatId })
+        .from(zaloChats)
+        .where(and(eq(zaloChats.kind, 'user'), inArray(zaloChats.accountId, accountIds))),
+      parentIds.length
+        ? rawDb
+            .select({ chatId: zaloChats.chatId })
+            .from(zaloChats)
+            .where(and(eq(zaloChats.kind, 'user'), inArray(zaloChats.parentId, parentIds)))
+        : Promise.resolve([]),
+      parentIds.length
+        ? rawDb
+            .select({ chatId: zaloChats.chatId })
+            .from(zaloChats)
+            .innerJoin(parentStudents, eq(parentStudents.studentId, zaloChats.studentId))
+            .where(and(eq(zaloChats.kind, 'user'), inArray(parentStudents.parentId, parentIds)))
+        : Promise.resolve([]),
+      studentIds.length
+        ? rawDb
+            .select({ chatId: zaloChats.chatId })
+            .from(zaloChats)
+            .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
+            .where(and(eq(zaloChats.kind, 'user'), inArray(parentStudents.studentId, studentIds)))
+        : Promise.resolve([]),
+      // The student-target pairing — docs/zalo.md's DEFAULT route, since most students have no
+      // parents row at all. Dropping this arm strands exactly those families: resolveAccounts
+      // finds them, no chat is found, and the request silently answers with the decoy.
+      studentIds.length
+        ? rawDb
+            .select({ chatId: zaloChats.chatId })
+            .from(zaloChats)
+            .where(and(eq(zaloChats.kind, 'user'), inArray(zaloChats.studentId, studentIds)))
+        : Promise.resolve([]),
+    ]);
 
   return [
     ...new Set(
-      [byAccount, byParent, viaChildrenOfParents, viaParentsOfStudents]
+      [byAccount, byParent, viaChildrenOfParents, viaParentsOfStudents, byStudent]
         .flat()
         .map((r) => r.chatId),
     ),
@@ -227,11 +240,19 @@ async function chatsFor(rawDb: Db, resolved: ResolvedAccount[]): Promise<string[
 
 export type RequestLoginCodeResult = { challengeId: string; devCode?: string };
 
+/**
+ * @param waitUntil Pass the request's `ctx.waitUntil` so the Zalo sends run after the response.
+ *   Two reasons, both about the decoy: a match otherwise awaits N sequential Bot API round
+ *   trips that a decoy never makes — a wall-clock tell the identical response shape exists to
+ *   prevent — and a family with several paired chats otherwise stares at a spinner for the
+ *   duration. Omit it (tests do) and the sends are awaited inline as before.
+ */
 export async function requestLoginCode(
   rawDb: Db,
   env: Env,
   phoneInput: string,
   purpose: OtpPurpose = 'login',
+  waitUntil?: (promise: Promise<unknown>) => void,
 ): Promise<RequestLoginCodeResult> {
   // The decoy: an unstored, freshly-minted id. verifyLoginCode does equivalent work against it
   // and fails with the same shape and timing as a wrong code on a real challenge.
@@ -271,8 +292,15 @@ export async function requestLoginCode(
     resolved.length === 1
       ? `Mã ${label} Mochi cho ${resolved[0].name}: ${code} (hiệu lực 5 phút). Không chia sẻ mã này.`
       : `Mã ${label} Mochi: ${code} (hiệu lực 5 phút). Không chia sẻ mã này.`;
-  for (const chatId of chatIds) await sendText(env, chatId, text);
+  // Sequential like broadcastText — the Bot API's ~120 req/min ceiling punishes bursts.
+  const deliver = (async () => {
+    for (const chatId of chatIds) await sendText(env, chatId, text);
+  })();
+  if (waitUntil) waitUntil(deliver);
+  else await deliver;
 
+  // Full phone in meta: a deliberate privacy deviation, same as login()'s full email — this row
+  // is admin-only, 90-day-purged, and the security view needs it to spot a targeted number.
   record({ action: 'login_code_requested', meta: { phone, purpose, matched: resolved.length } });
 
   // Test-environment-only escape (see globals.d.ts) — a decoy never reaches this line, so the
@@ -322,7 +350,6 @@ async function mintSession(
 function toCandidate(r: ResolvedAccount): OtpCandidate {
   return {
     accountId: r.accountId,
-    tenantId: r.tenantId,
     name: r.name,
     kind: r.kind,
     schoolName: r.schoolName,
@@ -456,4 +483,3 @@ export async function setPasswordViaOtp(
   record({ action: 'password_reset', meta: { stage: 'completed', method: 'zalo_otp' } });
   return 'ok';
 }
-

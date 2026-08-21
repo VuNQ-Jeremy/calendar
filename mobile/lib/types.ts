@@ -198,7 +198,6 @@ export interface OtpRequestResult {
 /** One account a phone number resolved to, shown only after the code has been proven correct. */
 export interface OtpCandidate {
   accountId: string;
-  tenantId: string;
   name: string;
   kind: 'staff' | 'student' | 'parent';
   schoolName: string;

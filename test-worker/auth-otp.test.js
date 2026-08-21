@@ -12,7 +12,14 @@ import {
 } from '../server/services/login-otp';
 import { verifyPassword } from '../server/services/crypto';
 import { createSession } from '../server/services/auth';
-import { accounts, parents, parentStudents, zaloChats, loginCodes, sessions } from '../server/db/schema';
+import {
+  accounts,
+  parents,
+  parentStudents,
+  zaloChats,
+  loginCodes,
+  sessions,
+} from '../server/db/schema';
 
 /**
  * Zalo OTP login/recovery — the enumeration-safety and brute-force invariants matter more than
@@ -53,7 +60,10 @@ function chatsMessaged() {
 }
 
 /** A student account with a phone of its own, paired 1:1 to a Zalo chat. */
-async function seedStudentWithPhone(d, { name = 'Leo', phone = '+84900111111', chatId = 'c-student' }) {
+async function seedStudentWithPhone(
+  d,
+  { name = 'Leo', phone = '+84900111111', chatId = 'c-student' },
+) {
   const studentRow = await peopleSvc.createStudent(d, { name, color: 'blue', classIds: [] });
   const accountId = crypto.randomUUID();
   await d.insert(accounts).values({
@@ -143,6 +153,46 @@ describe('requestLoginCode', () => {
     // though two accounts will show up in the picker once the code is verified.
     expect(chatsMessaged()).toEqual(['c-family']);
     expect(challengeId).toBeTruthy();
+  });
+
+  it('delivers via a STUDENT-target pairing — docs/zalo.md’s default route, no parents row at all', async () => {
+    // Regression: chatsFor once computed this arm and dropped it (five queries, four
+    // destructured names), which silently decoy’d every family paired the most common way —
+    // and let a passwordless redeem (gated on hasFamilyChat, where the route IS checked)
+    // create an account no code could ever reach.
+    const d = db();
+    const studentRow = await peopleSvc.createStudent(d, {
+      name: 'Chỉ Mã Học Sinh',
+      color: 'blue',
+      classIds: [],
+    });
+    const accountId = crypto.randomUUID();
+    await d.insert(accounts).values({
+      id: accountId,
+      email: `${crypto.randomUUID()}@mochi.local`,
+      passwordHash: '!',
+      studentId: studentRow.id,
+      phoneE164: '+84900666777',
+      createdAt: new Date().toISOString(),
+    });
+    // Paired via studentId ONLY — no accountId, no parents row anywhere.
+    await d.insert(zaloChats).values({
+      id: crypto.randomUUID(),
+      chatId: 'c-student-target',
+      kind: 'user',
+      studentId: studentRow.id,
+      createdAt: new Date().toISOString(),
+    });
+
+    const { challengeId } = await requestLoginCode(d.raw, ON, '0900666777');
+    expect(chatsMessaged()).toEqual(['c-student-target']);
+
+    const code = textsSent()
+      .at(-1)
+      .match(/(\d{6})/)[1];
+    const outcome = await verifyLoginCode(d.raw, challengeId, code);
+    expect(outcome.ok).toBe(true);
+    expect(outcome.session.token).toBeTruthy();
   });
 
   it('never targets a group chat', async () => {
@@ -251,9 +301,7 @@ describe('verifyLoginCode', () => {
     const stillDead = await verifyLoginCode(d.raw, challengeId, code);
     expect(stillDead.ok).toBe(false);
 
-    const row = (
-      await d.raw.select().from(loginCodes).where(eq(loginCodes.id, challengeId))
-    )[0];
+    const row = (await d.raw.select().from(loginCodes).where(eq(loginCodes.id, challengeId)))[0];
     expect(row.attempts).toBe(5);
   });
 
@@ -316,7 +364,11 @@ describe('pickAccount', () => {
 describe('phone mirror (server/services/people.ts)', () => {
   it('mirrors an updated parent phone onto both the person row and their account', async () => {
     const d = db();
-    const parentRow = await peopleSvc.createParent(d, { name: 'Bố Nam', color: 'green', studentIds: [] });
+    const parentRow = await peopleSvc.createParent(d, {
+      name: 'Bố Nam',
+      color: 'green',
+      studentIds: [],
+    });
     const accountId = crypto.randomUUID();
     await d.insert(accounts).values({
       id: accountId,
@@ -336,8 +388,14 @@ describe('phone mirror (server/services/people.ts)', () => {
 
   it('clears the mirror rather than crashing on an unparseable phone', async () => {
     const d = db();
-    const parentRow = await peopleSvc.createParent(d, { name: 'Mẹ An', color: 'green', studentIds: [] });
-    await expect(peopleSvc.updateParent(d, parentRow.id, { phone: 'not-a-phone' })).resolves.toBeTruthy();
+    const parentRow = await peopleSvc.createParent(d, {
+      name: 'Mẹ An',
+      color: 'green',
+      studentIds: [],
+    });
+    await expect(
+      peopleSvc.updateParent(d, parentRow.id, { phone: 'not-a-phone' }),
+    ).resolves.toBeTruthy();
     const [personRow] = await d.raw.select().from(parents).where(eq(parents.id, parentRow.id));
     expect(personRow.phoneE164).toBeNull();
   });
@@ -405,7 +463,12 @@ describe('setPasswordViaOtp (Zalo forgot-password)', () => {
     const code = lastCodeSent();
     await verifyLoginCode(d.raw, challengeId, code);
 
-    const outcome = await setPasswordViaOtp(d.raw, challengeId, 'not-a-real-account', 'somePassword123');
+    const outcome = await setPasswordViaOtp(
+      d.raw,
+      challengeId,
+      'not-a-real-account',
+      'somePassword123',
+    );
     expect(outcome).toBe('invalid');
   });
 });

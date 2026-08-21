@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser } from '../../server/services/auth';
+import { requireUser, safeNextPath } from '../../server/services/auth';
 import { googleEnabled, beginGoogleAuth } from '../../server/services/google-auth';
 import { oauthCookie } from '../../server/session';
 
@@ -19,8 +19,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (!googleEnabled(env)) throw redirect('/login');
 
   const url = new URL(request.url);
-  const nextParam = url.searchParams.get('next');
-  const next = nextParam && nextParam.startsWith('/') && !nextParam.endsWith('.data') ? nextParam : null;
+  const next = safeNextPath(url.searchParams.get('next'));
   const link = url.searchParams.get('link') === '1';
 
   if (link) {

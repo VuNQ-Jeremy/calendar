@@ -35,6 +35,7 @@ import {
   redeemInvite,
   findOpenInvite,
   homeFor,
+  safeNextPath,
   requestReset,
   resetPassword,
 } from '../../server/services/auth';
@@ -76,7 +77,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 // ---- Action ----
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = context.get(cloudflareCtx).env;
+  const { env, ctx } = context.get(cloudflareCtx);
   // tenant-unscoped, deliberately: nobody on this route has a session yet. Signing in resolves a
   // school from the account, and redeeming resolves one from the invite code — which is why
   // `invites.code` is globally unique. A scoped handle here would have nothing to scope to.
@@ -85,7 +86,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const intent = formData.get('intent') as string;
   const url = new URL(request.url);
   const next = url.searchParams.get('next');
-  const dest = next && next.startsWith('/') && !next.endsWith('.data') ? next : '/dashboard';
+  const dest = safeNextPath(next) ?? '/dashboard';
 
   if (intent === 'login') {
     const email = (formData.get('email') as string) ?? '';
@@ -130,8 +131,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (normalized && !(await allow(env, otpPhoneKey(normalized), OTP_PHONE_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
-    const result = await requestLoginCode(db, env, phone, purpose);
-    return Response.json({ intent, challengeId: result.challengeId, devCode: result.devCode ?? null });
+    const result = await requestLoginCode(db, env, phone, purpose, (p) => ctx.waitUntil(p));
+    return Response.json({
+      intent,
+      challengeId: result.challengeId,
+      devCode: result.devCode ?? null,
+    });
   }
 
   if (intent === 'otp-verify') {
@@ -660,7 +665,9 @@ export default function Login() {
             disabled={resendSeconds > 0 || otpFetcher.state !== 'idle'}
             onClick={() => requestOtp(otpPhone)}
           >
-            {resendSeconds > 0 ? t('auth_otp_resend_in', { n: resendSeconds }) : t('auth_otp_resend')}
+            {resendSeconds > 0
+              ? t('auth_otp_resend_in', { n: resendSeconds })
+              : t('auth_otp_resend')}
           </button>
         </p>
         <p className="auth-foot">
@@ -745,11 +752,9 @@ export default function Login() {
           value={otpNewPasswordConfirm}
           onChange={(e) => setOtpNewPasswordConfirm(e.target.value)}
         />
-        {otpNewPassword &&
-          otpNewPasswordConfirm &&
-          otpNewPassword !== otpNewPasswordConfirm && (
-            <div className="auth-error">{t('auth_pw_nomatch')}</div>
-          )}
+        {otpNewPassword && otpNewPasswordConfirm && otpNewPassword !== otpNewPasswordConfirm && (
+          <div className="auth-error">{t('auth_pw_nomatch')}</div>
+        )}
         {otpError && <div className="auth-error">{otpError}</div>}
         <LBtn
           type="button"
@@ -851,15 +856,16 @@ export default function Login() {
             </p>
           </>
         ) : (
-          <AuthField icon="lock" type="password" name="password" placeholder={t('auth_choose_pw')} />
+          <AuthField
+            icon="lock"
+            type="password"
+            name="password"
+            placeholder={t('auth_choose_pw')}
+          />
         )}
         {canGoPasswordless && (
           <p className="auth-foot" style={{ margin: '0 0 12px' }}>
-            <button
-              type="button"
-              className="auth-link"
-              onClick={() => setPasswordless((v) => !v)}
-            >
+            <button type="button" className="auth-link" onClick={() => setPasswordless((v) => !v)}>
               {passwordless ? t('auth_redeem_use_password') : t('auth_redeem_use_zalo')}
             </button>
           </p>

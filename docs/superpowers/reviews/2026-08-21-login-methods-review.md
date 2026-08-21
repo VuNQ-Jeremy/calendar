@@ -181,6 +181,20 @@ migrations, Brevo with no domain purchase, Google web-only and login-only, admin
 two stale "parents cannot log in" comments were corrected. Docs updated in `docs/security.md` and
 `docs/zalo.md`.
 
+## Addendum — resolved same day
+
+All findings fixed in the follow-up commit: F1 (fifth `chatsFor` arm restored, regression test
+seeds a `studentId`-target pairing), F2 (`resetLogin` now fences the person row with `db.own()`
+before touching the account; cross-tenant test added), F3 (`safeNextPath` helper in
+services/auth.ts, all three call sites converted, unit-tested against `//` and `/\`), F4 (both
+last-method guards moved into the UPDATE's WHERE clause — D1's write serialisation is what makes
+the conditional write race-free), F5 (Zalo sends moved to `ctx.waitUntil`), F6 (`tenantId`
+trimmed from the pick payload; reset-login refuses self and hides the button; audit-meta comment
+added). Two latent suite-breakers found while fixing: the new unscoped-by-design reads lacked
+`tenant-unscoped:` markers, and `auth.google.callback.tsx`/`verify-email.tsx` were missing from
+the `createRawDb` allowlist — both would have failed `test/tenant-scope.test.ts` on its next run;
+markers and allowlist entries added.
+
 ## R4 — suites not run
 
 `npm run test:worker` and `npm run test:e2e:staging` were **not** run: CLAUDE.md restricts them to

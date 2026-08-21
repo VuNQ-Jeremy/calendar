@@ -1,4 +1,4 @@
-import { eq, and, lt, ne, inArray } from 'drizzle-orm';
+import { eq, and, lt, ne, or, inArray, isNotNull, exists } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { redirect } from 'react-router';
 import { createRawDb } from '../db/internal';
@@ -280,6 +280,22 @@ export async function requireStaff(request: Request, env: Env): Promise<SessionU
   return sessionUser;
 }
 
+/**
+ * A `?next=` value it is safe to redirect to after a successful sign-in, or null.
+ *
+ * Same-origin PATHS only. `startsWith('/')` alone is an open redirect: browsers resolve
+ * `//evil.com` (and `/\evil.com` — backslash normalises to slash in URL parsing) as
+ * protocol-relative, so a Location built from either leaves the origin — and doing so right
+ * after a REAL sign-in is a premium phishing primitive. `.data` is the single-fetch suffix,
+ * a document navigation target for no one.
+ */
+export function safeNextPath(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return null;
+  if (raw.endsWith('.data')) return null;
+  return raw;
+}
+
 /** Where a signed-in user belongs when they land somewhere they may not be. */
 export function homeFor(kind: SessionUser['kind']): string {
   if (kind === 'staff') return '/dashboard';
@@ -408,7 +424,12 @@ function linkedIdOf(invite: typeof invites.$inferSelect): string | null {
 export async function redeemInvite(
   db: Db,
   code: string,
-  { name, email, password, phone }: { name: string; email?: string; password?: string; phone?: string },
+  {
+    name,
+    email,
+    password,
+    phone,
+  }: { name: string; email?: string; password?: string; phone?: string },
 ): Promise<{ accountId: string } | null | 'no_login_method'> {
   const invite = await findOpenInvite(db, code);
   if (!invite) return null;
@@ -711,7 +732,10 @@ export async function verifyEmail(db: Db, token: string): Promise<boolean> {
       .update(accounts)
       .set({ emailVerifiedAt: new Date().toISOString() })
       .where(eq(accounts.id, row.accountId)),
-    db.update(emailVerifications).set({ used: 1 }).where(eq(emailVerifications.tokenHash, tokenHash)),
+    db
+      .update(emailVerifications)
+      .set({ used: 1 })
+      .where(eq(emailVerifications.tokenHash, tokenHash)),
   ]);
   attributeAccount(row.accountId);
   record({ action: 'email_verify', meta: { stage: 'completed' } });
@@ -770,28 +794,36 @@ export type RemovePasswordResult = 'ok' | 'needs_another_method';
  * Go passwordless (back to `NO_PASSWORD`). Guarded here, not just at the route: an account may
  * never end up with NO working login method, so this refuses unless a Google sub is pinned or an
  * account-paired Zalo chat exists. Purges every OTHER session, same as `changePassword`.
+ *
+ * The guard lives in the UPDATE's WHERE clause, not in a read beforehand: this and the
+ * unlink-google intent (app/routes/profile.tsx) can race from two tabs, and read-then-write
+ * would let each observe the other's method still present and both proceed — a methodless
+ * account. D1 serialises writes, so a conditional write means whichever commits second simply
+ * matches zero rows; the re-read below is only to learn which outcome this request got.
  */
 export async function removePassword(
   db: Db,
   accountId: string,
   currentTokenHash: string,
 ): Promise<RemovePasswordResult> {
-  const account = await db.query.accounts.findFirst({ where: eq(accounts.id, accountId) });
-  if (!account) return 'needs_another_method';
+  // tenant-unscoped: keyed on the caller's own account id, resolved from their session —
+  // `accounts`/`zalo_chats.account_id` are auth-owned, the same exemption changePassword uses.
+  const pairedChat = exists(
+    db.select({ id: zaloChats.id }).from(zaloChats).where(eq(zaloChats.accountId, accountId)),
+  );
+  await db
+    .update(accounts)
+    .set({ passwordHash: NO_PASSWORD })
+    .where(and(eq(accounts.id, accountId), or(isNotNull(accounts.googleSub), pairedChat)));
 
-  const pairedChat = await db
-    .select({ id: zaloChats.id })
-    .from(zaloChats)
-    .where(eq(zaloChats.accountId, accountId))
-    .limit(1);
-  if (!account.googleSub && pairedChat.length === 0) return 'needs_another_method';
+  const after = await db.query.accounts.findFirst({ where: eq(accounts.id, accountId) });
+  if (!after || after.passwordHash !== NO_PASSWORD) return 'needs_another_method';
 
-  await db.batch([
-    db.update(accounts).set({ passwordHash: NO_PASSWORD }).where(eq(accounts.id, accountId)),
-    db
-      .delete(sessions)
-      .where(and(eq(sessions.accountId, accountId), ne(sessions.token, currentTokenHash))),
-  ]);
+  // Log out every other device, keep the session performing the change. Outside the guarded
+  // write on purpose — it must only run once the write is known to have applied.
+  await db
+    .delete(sessions)
+    .where(and(eq(sessions.accountId, accountId), ne(sessions.token, currentTokenHash)));
   attributeAccount(accountId);
   record({ action: 'password_change', meta: { removed: true } });
   return 'ok';
