@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0296 — 2026-08-21
+Review of the login-methods rework: two blocking findings (dropped Zalo student-pairing route, cross-tenant reset-login)
+
 ## v0.0295 — 2026-08-21
 Landing: DevInspector mounted (Alt+hover shows source line, Alt+click copies it); overlay coordinates fixed for window-scrolled pages
 
