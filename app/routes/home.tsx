@@ -5,6 +5,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { getUser, homeFor } from '../../server/services/auth';
 import { MIcon } from '../../src/icons.jsx';
 import { useLang, getCal, LANG_KEY } from '../../src/lib/i18n.jsx';
+import { DevInspector } from '../../src/dev-inspector.jsx';
 
 // Baloo 2 / IBM Plex Mono, not the app's Fredoka / DM Mono: those two ship no
 // Vietnamese subset, so accented heading glyphs fall back per-character and get
@@ -328,6 +329,13 @@ export default function Landing() {
           <Link to="/signup">{t('landing_signup_short')}</Link>
         </div>
       </footer>
+
+      {/* Alt+hover shows which source line rendered an element; Alt+click copies the
+          file:line reference — for iterating on this page's content over chat. Always
+          mounted here (there is no user to gate on, unlike _app.tsx): the data-loc
+          attributes it reads are stamped into the public markup by the build anyway,
+          and the overlay is inert until Alt is held. */}
+      <DevInspector />
     </div>
   );
 }

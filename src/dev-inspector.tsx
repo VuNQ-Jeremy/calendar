@@ -73,11 +73,14 @@ export function DevInspector() {
 
   return (
     <div className="dev-inspector" aria-hidden>
+      {/* The container is position:fixed, so viewport coordinates are the right ones —
+          adding window.scrollY here misplaced the overlay on pages where the window
+          itself scrolls (the landing page), and was a no-op in the app shell. */}
       <div
         className="dev-inspector__box"
         style={{
-          top: rect.top + window.scrollY,
-          left: rect.left + window.scrollX,
+          top: rect.top,
+          left: rect.left,
           width: rect.width,
           height: rect.height,
         }}
@@ -85,8 +88,8 @@ export function DevInspector() {
       <div
         className="dev-inspector__badge"
         style={{
-          top: rect.bottom + window.scrollY + 4,
-          left: rect.left + window.scrollX,
+          top: rect.bottom + 4,
+          left: rect.left,
         }}
       >
         {copied ? 'copied ✓' : loc}

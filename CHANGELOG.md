@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0295 — 2026-08-21
+Landing: DevInspector mounted (Alt+hover shows source line, Alt+click copies it); overlay coordinates fixed for window-scrolled pages
+
 ## v0.0294 — 2026-08-21
 Landing: attendance float card no longer paints behind the rotated calendar
 
