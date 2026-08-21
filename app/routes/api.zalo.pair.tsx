@@ -9,10 +9,13 @@ import { ZaloPairInput } from '../../shared/schemas';
  *   POST   /api/zalo/pair        — issue a code for yourself, a parent, or a class group
  *   DELETE /api/zalo/pair?id=    — unlink a conversation
  *
- * Issuing is staff-gated rather than self-service because two of the three targets are people
- * who cannot log in: a parent has no session (see server/services/auth.ts), and a class group has
- * no identity at all. A teacher generating the code and passing it on IS the flow, not a
- * workaround for one.
+ * Issuing is staff-gated rather than self-service because the `parent` and `class` targets name
+ * somebody OTHER than the caller: a parent's own family (who may have no account yet at all, or
+ * be signed in on a different device) and a class group have no way to ask for their own code. A
+ * teacher generating the code and passing it on IS the flow. A signed-in account pairing ITSELF
+ * uses the `self` target here, or the equivalent self-service intent on Profile — see
+ * app/routes/profile.tsx's `zalo-pair` intent, added once login-methods gave every kind of
+ * account (parent included) a session to call it from.
  */
 export const loader = withAuth('staff', async ({ db }) => {
   const [links, codes] = await Promise.all([zalo.listLinks(db), zalo.pendingCodes(db)]);

@@ -703,15 +703,64 @@ interface PwStatus {
   error: string | null;
 }
 
+interface ZaloStatus {
+  paired: boolean;
+  hasPassword: boolean;
+  busy: boolean;
+  code: string | null;
+}
+
+interface EmailVerifyStatus {
+  hasRealEmail: boolean;
+  verified: boolean;
+  busy: boolean;
+  sent: boolean;
+  devUrl: string | null;
+}
+
+interface GoogleStatus {
+  show: boolean;
+  linked: boolean;
+  busy: boolean;
+  error: string | null;
+}
+
+interface RemovePwStatus {
+  busy: boolean;
+  error: string | null;
+}
+
 interface ProfileScreenProps {
   user: AppUser;
   onSave: (updates: Partial<AppUser> & Record<string, unknown>) => void;
   onLogout: () => void;
   onChangePassword: (currentPassword: string, newPassword: string) => void;
   pwStatus: PwStatus;
+  zaloStatus: ZaloStatus;
+  onZaloPair: () => void;
+  emailVerifyStatus: EmailVerifyStatus;
+  onVerifyEmail: () => void;
+  googleStatus: GoogleStatus;
+  onUnlinkGoogle: () => void;
+  onRemovePassword: () => void;
+  removePwStatus: RemovePwStatus;
 }
 
-function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: ProfileScreenProps) {
+function ProfileScreen({
+  user,
+  onSave,
+  onLogout,
+  onChangePassword,
+  pwStatus,
+  zaloStatus,
+  onZaloPair,
+  emailVerifyStatus,
+  onVerifyEmail,
+  googleStatus,
+  onUnlinkGoogle,
+  onRemovePassword,
+  removePwStatus,
+}: ProfileScreenProps) {
   const { t } = useLang();
   const [f, setF] = React.useState<ProfileFields>(() => ({
     name: user.name,
@@ -885,7 +934,7 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
           </p>
           <div style={{ marginBottom: 24 }}>
             <h3 style={{ margin: '0 0 12px', fontSize: 'var(--text-md)', fontWeight: 600 }}>
-              {t('prof_change_pw')}
+              {zaloStatus.hasPassword ? t('prof_change_pw') : t('prof_set_pw')}
             </h3>
             <form
               onSubmit={(e) => {
@@ -893,18 +942,20 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
                 submitPw();
               }}
             >
-              <div className="mochi-field" style={{ marginBottom: 12 }}>
-                <label className="mochi-field__label">{t('prof_current_pw')}</label>
-                <div className="auth-field">
-                  <input
-                    className="mochi-input auth-input"
-                    type={showPw ? 'text' : 'password'}
-                    value={curPw}
-                    onChange={(e) => setCurPw(e.target.value)}
-                    autoComplete="current-password"
-                  />
+              {zaloStatus.hasPassword && (
+                <div className="mochi-field" style={{ marginBottom: 12 }}>
+                  <label className="mochi-field__label">{t('prof_current_pw')}</label>
+                  <div className="auth-field">
+                    <input
+                      className="mochi-input auth-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={curPw}
+                      onChange={(e) => setCurPw(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="mochi-field" style={{ marginBottom: 12 }}>
                 <label className="mochi-field__label">{t('prof_new_pw')}</label>
                 <div className="auth-field">
@@ -953,12 +1004,165 @@ function ProfileScreen({ user, onSave, onLogout, onChangePassword, pwStatus }: P
                 <XBtn
                   type="submit"
                   variant="primary"
-                  disabled={pwStatus.busy || !curPw || !newPw || !confirmPw}
+                  disabled={
+                    pwStatus.busy ||
+                    (zaloStatus.hasPassword && !curPw) ||
+                    !newPw ||
+                    !confirmPw
+                  }
                 >
-                  {t('prof_change_pw')}
+                  {zaloStatus.hasPassword ? t('prof_change_pw') : t('prof_set_pw')}
                 </XBtn>
               </div>
             </form>
+            {zaloStatus.hasPassword && (
+              <div style={{ marginTop: 14 }}>
+                {removePwStatus.error && (
+                  <div className="auth-error" style={{ marginBottom: 8 }}>
+                    {t(removePwStatus.error)}
+                  </div>
+                )}
+                <XBtn
+                  variant="secondary"
+                  size="sm"
+                  onClick={onRemovePassword}
+                  disabled={removePwStatus.busy}
+                >
+                  {t('prof_remove_pw')}
+                </XBtn>
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              marginBottom: 24,
+              paddingTop: 24,
+              borderTop: '1px solid var(--border-subtle)',
+            }}
+          >
+            <h3 style={{ margin: '0 0 12px', fontSize: 'var(--text-md)', fontWeight: 600 }}>
+              {t('prof_login_security')}
+            </h3>
+            <div className="m-row" style={{ gap: 8, marginBottom: 10, alignItems: 'center' }}>
+              <MIcon
+                name={zaloStatus.paired ? 'check' : 'message'}
+                size={16}
+                style={{ color: zaloStatus.paired ? 'var(--brand)' : 'var(--text-muted)' }}
+              />
+              <span style={{ fontSize: 'var(--text-sm)' }}>
+                {zaloStatus.paired ? t('prof_zalo_paired') : t('prof_zalo_not_paired')}
+              </span>
+            </div>
+            {!zaloStatus.paired && (
+              <XBtn variant="secondary" size="sm" onClick={onZaloPair} disabled={zaloStatus.busy}>
+                {t('prof_zalo_connect')}
+              </XBtn>
+            )}
+            {zaloStatus.code && (
+              <div className="auth-hint-code" style={{ marginTop: 10 }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-lg)',
+                    fontWeight: 700,
+                    letterSpacing: '0.1em',
+                  }}
+                >
+                  {zaloStatus.code}
+                </div>
+                <div className="m-muted" style={{ fontSize: 'var(--text-xs)' }}>
+                  {t('prof_zalo_code_hint')}
+                </div>
+              </div>
+            )}
+            <div className="m-row" style={{ gap: 8, marginTop: 14 }}>
+              <span style={{ fontSize: 'var(--text-sm)' }}>
+                {t('prof_password_status')}:{' '}
+                <strong>
+                  {zaloStatus.hasPassword ? t('prof_password_set') : t('prof_password_unset')}
+                </strong>
+              </span>
+            </div>
+            {emailVerifyStatus.hasRealEmail && (
+              <div style={{ marginTop: 14 }}>
+                <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+                  <MIcon
+                    name={emailVerifyStatus.verified ? 'check' : 'mail'}
+                    size={16}
+                    style={{
+                      color: emailVerifyStatus.verified ? 'var(--brand)' : 'var(--text-muted)',
+                    }}
+                  />
+                  <span style={{ fontSize: 'var(--text-sm)' }}>
+                    {emailVerifyStatus.verified
+                      ? t('prof_email_verified')
+                      : t('prof_email_not_verified')}
+                  </span>
+                </div>
+                {!emailVerifyStatus.verified && !emailVerifyStatus.sent && (
+                  <XBtn
+                    variant="secondary"
+                    size="sm"
+                    style={{ marginTop: 8 }}
+                    onClick={onVerifyEmail}
+                    disabled={emailVerifyStatus.busy}
+                  >
+                    {t('prof_verify_email')}
+                  </XBtn>
+                )}
+                {emailVerifyStatus.sent && (
+                  <p className="m-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 8 }}>
+                    {t('auth_sent_to')} {user.email}
+                    {emailVerifyStatus.devUrl && (
+                      <>
+                        {' '}
+                        <strong>[dev]</strong>{' '}
+                        <a href={emailVerifyStatus.devUrl} style={{ color: 'var(--brand)' }}>
+                          {emailVerifyStatus.devUrl}
+                        </a>
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+            {googleStatus.show && (
+              <div style={{ marginTop: 14 }}>
+                <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+                  <MIcon
+                    name={googleStatus.linked ? 'check' : 'mail'}
+                    size={16}
+                    style={{
+                      color: googleStatus.linked ? 'var(--brand)' : 'var(--text-muted)',
+                    }}
+                  />
+                  <span style={{ fontSize: 'var(--text-sm)' }}>
+                    {googleStatus.linked ? t('prof_google_linked') : t('prof_google_not_linked')}
+                  </span>
+                </div>
+                {googleStatus.error && (
+                  <div className="auth-error" style={{ marginTop: 8 }}>
+                    {t(googleStatus.error)}
+                  </div>
+                )}
+                <div style={{ marginTop: 8 }}>
+                  {googleStatus.linked ? (
+                    <XBtn
+                      variant="secondary"
+                      size="sm"
+                      onClick={onUnlinkGoogle}
+                      disabled={googleStatus.busy}
+                    >
+                      {t('prof_unlink_google')}
+                    </XBtn>
+                  ) : (
+                    <a className="mochi-btn is-secondary is-sm" href="/auth/google?link=1">
+                      {t('prof_link_google')}
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <div className="m-row" style={{ gap: 12 }}>
             <XBtn variant="danger" iconLeft={<MIcon name="logout" size={16} />} onClick={onLogout}>

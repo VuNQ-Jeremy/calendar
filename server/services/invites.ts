@@ -3,7 +3,7 @@ import { invites, students, staff, parents, accounts } from '../db/schema';
 import type { TenantDb } from '../db';
 import type { InviteInput } from '../../shared/schemas';
 import { makeInviteCode } from '../../shared/logic/invite-code';
-import { recordCreate, recordDelete } from './audit';
+import { record, recordCreate, recordDelete } from './audit';
 
 export type InviteRow = {
   id: string;
@@ -188,6 +188,43 @@ export async function createLinked(db: TenantDb, targets: LinkedTarget[]): Promi
     return created;
   }
   throw new Error('could not generate a unique invite code');
+}
+
+/**
+ * Admin escape hatch: the everyday recovery when a family has neither the old password nor a
+ * working Zalo/Google login. Deletes the person's account entirely — not just its password —
+ * and mints a fresh linked invite in its place, exactly as if this were their first one.
+ *
+ * The delete matters, not just resets the hash: `redeemInvite`'s linked path refuses to attach a
+ * SECOND account to a person who already has one (server/services/auth.ts), by design — one
+ * login per person. Deleting the old account first is what lets the fresh code above redeem
+ * normally, and it cascades cleanly: `sessions`, `login_codes.account_id`, `zalo_chats.account_id`
+ * (the person's own self-pair) and the rest all reference `accounts.id` `ON DELETE CASCADE`. A
+ * family-level Zalo pairing (`zalo_chats.parentId`/`studentId`) is untouched, so passwordless
+ * redeem is still reachable on the new account if it was before.
+ *
+ * Returns null when the person has no account yet — nothing to reset.
+ */
+export async function resetLogin(
+  db: TenantDb,
+  target: LinkedTarget,
+): Promise<{ code: string } | null> {
+  const [accountCol, personId] =
+    target.role === 'Student'
+      ? ([accounts.studentId, target.studentId] as const)
+      : target.role === 'Staff'
+        ? ([accounts.staffId, target.staffId] as const)
+        : ([accounts.parentId, target.parentId] as const);
+
+  // tenant-unscoped: `accounts` is auth-owned, the same exemption `needsInvite` above relies on.
+  const [account] = await db.raw.select().from(accounts).where(eq(accountCol, personId));
+  if (!account) return null;
+
+  await db.raw.delete(accounts).where(eq(accounts.id, account.id));
+  record({ action: 'delete', entityType: 'account', entityId: account.id });
+
+  const [invite] = await createLinked(db, [target]);
+  return { code: invite.code };
 }
 
 /**

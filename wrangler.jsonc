@@ -89,6 +89,12 @@
       "name": "calendar-test",
       // env blocks do not inherit top-level compatibility_flags — must be repeated here.
       "compatibility_flags": ["nodejs_als"],
+      // Zalo OTP dev-code escape (server/services/login-otp.ts, globals.d.ts). Test-env ONLY —
+      // it makes requestLoginCode disclose the plaintext code, which is what lets the e2e suite
+      // drive the login flow without a real Zalo delivery. Never add this to the top-level vars.
+      "vars": {
+        "AUTH_DEV_CODES": "1",
+      },
       "assets": {
         "directory": "./build/client",
         "binding": "ASSETS",

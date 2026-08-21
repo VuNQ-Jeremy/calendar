@@ -703,16 +703,29 @@ export const LoginInput = z.object({
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 
+/**
+ * `password` is optional and `phone` new: a student/parent invite may be redeemed passwordless,
+ * using a Zalo-reachable phone instead — `redeemInvite` enforces "at least one working method"
+ * server-side (a valid password, OR a phone with a reachable Zalo chat). Staff invites still
+ * require a password; the service, not this schema, knows which invites are staff-linked.
+ */
 export const RedeemInviteInput = z.object({
   code: z.string().min(1).max(20),
   name: z.string().trim().min(1).max(200),
   email: z.string().max(320).optional(),
-  password: NewPassword,
+  password: NewPassword.optional(),
+  phone: z.string().max(24).optional(),
 });
 export type RedeemInviteInput = z.infer<typeof RedeemInviteInput>;
 
+/**
+ * `currentPassword` may be empty: a passwordless (Zalo-only) account is SETTING its first
+ * password, not changing one, and `changePassword` skips the current-password check entirely for
+ * that case (server/services/auth.ts). An account that already has a real password still gets
+ * refused with `wrong_current_password` if this is blank, same as any other wrong value.
+ */
 export const ChangePasswordInput = z.object({
-  currentPassword: z.string().min(1).max(200),
+  currentPassword: z.string().max(200),
   newPassword: NewPassword,
 });
 export type ChangePasswordInput = z.infer<typeof ChangePasswordInput>;
@@ -721,6 +734,38 @@ export const RequestResetInput = z.object({
   email: z.string().min(1).max(320),
 });
 export type RequestResetInput = z.infer<typeof RequestResetInput>;
+
+/**
+ * Zalo OTP login/recovery. `phone` is un-normalized user input (normalizePhone runs server-side);
+ * the loose bounds just keep a pasted essay or an empty body from reaching the service.
+ */
+export const OtpPurpose = z.enum(['login', 'set-password']);
+export type OtpPurpose = z.infer<typeof OtpPurpose>;
+
+export const OtpRequestInput = z.object({
+  phone: z.string().min(1).max(24),
+  purpose: OtpPurpose.default('login'),
+});
+export type OtpRequestInput = z.infer<typeof OtpRequestInput>;
+
+export const OtpSetPasswordInput = z.object({
+  challengeId: z.string().min(1).max(100),
+  accountId: z.string().min(1),
+  newPassword: NewPassword,
+});
+export type OtpSetPasswordInput = z.infer<typeof OtpSetPasswordInput>;
+
+export const OtpVerifyInput = z.object({
+  challengeId: z.string().min(1).max(100),
+  code: z.string().regex(/^\d{6}$/, 'Expected a 6-digit code'),
+});
+export type OtpVerifyInput = z.infer<typeof OtpVerifyInput>;
+
+export const OtpPickInput = z.object({
+  challengeId: z.string().min(1).max(100),
+  accountId: z.string().min(1),
+});
+export type OtpPickInput = z.infer<typeof OtpPickInput>;
 
 /** Self-service profile edit. Deliberately narrower than StaffInput — no role, no id. */
 export const ProfileInput = z.object({

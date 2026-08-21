@@ -770,6 +770,11 @@ const en_strings = {
   rel_other: 'Other',
   student_remove_q: 'Remove student?',
   student_remove_msg: '{name} will be removed from all classes.',
+  reset_login: 'Reset login',
+  reset_login_q: 'Reset login?',
+  reset_login_msg:
+    "This clears {name}'s password and signs them out everywhere. You'll get a fresh invite code to give them.",
+  reset_login_confirm: 'Reset login',
   staff_remove_q: 'Remove teacher?',
   staff_remove_msg: '{name} will lose access.',
   parent_remove_q: 'Remove parent?',
@@ -852,9 +857,30 @@ const en_strings = {
   prof_upload_avatar: 'Upload photo',
   prof_remove_avatar: 'Remove photo',
   prof_change_pw: 'Change password',
+  prof_set_pw: 'Set a password',
+  prof_remove_pw: 'Remove password',
+  prof_remove_pw_needs_method: 'Add another way to sign in before removing your password.',
   prof_current_pw: 'Current password',
   prof_new_pw: 'New password',
   prof_pw_changed: 'Password changed ✓',
+  prof_login_security: 'Sign-in & security',
+  prof_zalo_paired: 'Zalo connected — you can sign in with a code sent there.',
+  prof_zalo_not_paired: 'Zalo not connected yet.',
+  prof_zalo_connect: 'Connect Zalo',
+  prof_zalo_code_hint: 'Send this code to the Mochi bot on Zalo within 24 hours.',
+  prof_password_status: 'Password',
+  prof_password_set: 'Set',
+  prof_password_unset: 'Not set',
+  prof_email_verified: 'Email verified',
+  prof_email_not_verified: 'Email not verified yet',
+  prof_verify_email: 'Verify email',
+  auth_email_not_real: "This account's email can't receive mail.",
+  verify_email_title: 'Verify your email',
+  verify_email_missing: 'This link is missing its verification token.',
+  verify_email_confirm: 'Confirm this is your email address.',
+  verify_email_button: 'Verify email',
+  verify_email_done: 'Email verified ✓',
+  verify_email_invalid: 'This link has expired or already been used.',
   fb_title: 'Feedback',
   fb_sub: 'Ideas, bug reports, and praise from your team',
   fb_log: 'Log feedback',
@@ -952,6 +978,7 @@ const en_strings = {
   auth_reset_sub_sent: 'Check your inbox for a reset link.',
   auth_reset_sub: "We'll send a reset link to your email.",
   auth_send_reset: 'Send reset link',
+  auth_reset_via_zalo: 'Reset via Zalo instead',
   auth_sent_to: 'Sent to',
   auth_back_signin: '← Back to sign in',
   auth_enter_email: 'Enter your email.',
@@ -968,6 +995,34 @@ const en_strings = {
   auth_join: 'Join Mochi',
   auth_add_name_pw: 'Add your name and a password to finish.',
   auth_password_too_short: 'Password must be at least 8 characters.',
+  auth_no_login_method: "That phone isn't reachable on Zalo yet — pick a password instead.",
+  auth_redeem_use_zalo: "Use Zalo, skip the password",
+  auth_redeem_use_password: 'Use a password instead',
+  auth_redeem_passwordless_hint: "You'll sign in with a code sent via Zalo.",
+  // Zalo OTP login
+  auth_tab_zalo: 'Zalo',
+  auth_tab_email: 'Email',
+  auth_otp_phone_sub: "We'll send a login code to your family's Zalo.",
+  auth_otp_send_code: 'Send code',
+  auth_otp_code_sent_generic: 'If this number is registered, a code has been sent via Zalo.',
+  auth_otp_enter_code: 'Enter the 6-digit code',
+  auth_otp_verify: 'Verify',
+  auth_otp_resend: 'Resend code',
+  auth_otp_resend_in: 'Resend in {n}s',
+  auth_otp_invalid: 'Incorrect or expired code.',
+  auth_otp_change_number: 'Use a different number',
+  auth_otp_pick_title: 'Which account is this?',
+  // Google sign-in
+  auth_google_signin: 'Sign in with Google',
+  auth_google_failed: 'Something went wrong signing in with Google. Please try again.',
+  auth_google_no_account:
+    "This Google email isn't linked to a Mochi account — sign in with your password, then link it from Profile.",
+  prof_google_sub_taken: 'This Google account is already linked to a different Mochi account.',
+  prof_link_google: 'Link Google',
+  prof_unlink_google: 'Unlink Google',
+  prof_google_linked: 'Google linked',
+  prof_google_not_linked: 'Google not linked',
+  prof_unlink_needs_method: 'Add another way to sign in before unlinking Google.',
   err_generic_title: 'Something went wrong',
   err_generic_msg: 'An unexpected error occurred. Please try again.',
   err_not_found_title: 'Page not found',
@@ -1761,56 +1816,6 @@ const en_strings = {
   rep_tm_title: 'Mystery bags',
   rep_tm_line: '{bags} bags · {misses} misses',
   rank_checkin: 'Check-in',
-} as const;
-
-export type MsgKey = keyof typeof en_strings;
-
-export const STRINGS = {
-  en: en_strings,
-  vi: {
-    language: 'Ngôn ngữ',
-    cancel: 'Hủy',
-    save: 'Lưu',
-    add: 'Thêm',
-    delete: 'Xóa',
-    remove: 'Gỡ',
-    edit: 'Sửa',
-    close: 'Đóng',
-    done: 'Xong',
-    confirm: 'Xác nhận',
-    copy: 'Sao chép',
-    copied: 'Đã sao chép',
-    today: 'Hôm nay',
-    dp_pick_date: 'Chọn ngày',
-    dp_clear: 'Xoá',
-    dp_prev_month: 'Tháng trước',
-    dp_next_month: 'Tháng sau',
-    all: 'Tất cả',
-    open_label: 'Mở',
-    search: 'Tìm kiếm…',
-    no_class: 'Không có lớp',
-    class: 'Lớp',
-    color: 'Màu',
-    role_teacher: 'Giáo viên',
-    role_admin: 'Quản trị',
-    role_assistant: 'Trợ giảng',
-    nav_overview: 'Tổng quan',
-    nav_teaching: 'Giảng dạy',
-    nav_grading: 'Chấm điểm',
-    nav_learning: 'Học tập',
-    nav_admin: 'Quản trị',
-    nav_dashboard: 'Bảng điều khiển',
-    nav_calendar: 'Lịch',
-    nav_classes: 'Lớp học',
-    nav_people: 'Mọi người',
-    nav_materials: 'Tài liệu',
-    nav_tuition: 'Học phí',
-    nav_config: 'Cấu hình hệ thống',
-    nav_feedback: 'Phản hồi',
-    cta_feedback: 'Gửi phản hồi',
-    dash_greeting: 'Chào buổi sáng, {name}',
-    dash_sub_none: '{date} · Hôm nay không có lịch nào',
-    dash_sub_one: '{date} · 1 sự kiện hôm nay',
   // ---- Public landing page (routes/home.tsx) ----
   landing_nav_features: 'Features',
   landing_nav_how: 'Get started',
@@ -1884,6 +1889,56 @@ export const STRINGS = {
   landing_cta_sub:
     'Create your school for free, invite your first classes, and watch next week fall neatly into place.',
   landing_footer_tag: 'Mochi — made with a lot of love, for small schools.',
+} as const;
+
+export type MsgKey = keyof typeof en_strings;
+
+export const STRINGS = {
+  en: en_strings,
+  vi: {
+    language: 'Ngôn ngữ',
+    cancel: 'Hủy',
+    save: 'Lưu',
+    add: 'Thêm',
+    delete: 'Xóa',
+    remove: 'Gỡ',
+    edit: 'Sửa',
+    close: 'Đóng',
+    done: 'Xong',
+    confirm: 'Xác nhận',
+    copy: 'Sao chép',
+    copied: 'Đã sao chép',
+    today: 'Hôm nay',
+    dp_pick_date: 'Chọn ngày',
+    dp_clear: 'Xoá',
+    dp_prev_month: 'Tháng trước',
+    dp_next_month: 'Tháng sau',
+    all: 'Tất cả',
+    open_label: 'Mở',
+    search: 'Tìm kiếm…',
+    no_class: 'Không có lớp',
+    class: 'Lớp',
+    color: 'Màu',
+    role_teacher: 'Giáo viên',
+    role_admin: 'Quản trị',
+    role_assistant: 'Trợ giảng',
+    nav_overview: 'Tổng quan',
+    nav_teaching: 'Giảng dạy',
+    nav_grading: 'Chấm điểm',
+    nav_learning: 'Học tập',
+    nav_admin: 'Quản trị',
+    nav_dashboard: 'Bảng điều khiển',
+    nav_calendar: 'Lịch',
+    nav_classes: 'Lớp học',
+    nav_people: 'Mọi người',
+    nav_materials: 'Tài liệu',
+    nav_tuition: 'Học phí',
+    nav_config: 'Cấu hình hệ thống',
+    nav_feedback: 'Phản hồi',
+    cta_feedback: 'Gửi phản hồi',
+    dash_greeting: 'Chào buổi sáng, {name}',
+    dash_sub_none: '{date} · Hôm nay không có lịch nào',
+    dash_sub_one: '{date} · 1 sự kiện hôm nay',
     dash_sub_many: '{date} · {count} sự kiện hôm nay',
     stat_classes: 'Lớp đang hoạt động',
     stat_students: 'Học sinh',
@@ -2542,6 +2597,11 @@ export const STRINGS = {
     rel_other: 'Khác',
     student_remove_q: 'Gỡ học sinh?',
     student_remove_msg: '{name} sẽ bị gỡ khỏi tất cả lớp.',
+    reset_login: 'Đặt lại đăng nhập',
+    reset_login_q: 'Đặt lại đăng nhập?',
+    reset_login_msg:
+      'Thao tác này xóa mật khẩu của {name} và đăng xuất mọi thiết bị. Bạn sẽ nhận được mã mời mới để đưa cho họ.',
+    reset_login_confirm: 'Đặt lại đăng nhập',
     staff_remove_q: 'Gỡ giáo viên?',
     staff_remove_msg: '{name} sẽ mất quyền truy cập.',
     parent_remove_q: 'Gỡ phụ huynh?',
@@ -2624,9 +2684,30 @@ export const STRINGS = {
     prof_upload_avatar: 'Tải ảnh lên',
     prof_remove_avatar: 'Xóa ảnh',
     prof_change_pw: 'Đổi mật khẩu',
+    prof_set_pw: 'Đặt mật khẩu',
+    prof_remove_pw: 'Xóa mật khẩu',
+    prof_remove_pw_needs_method: 'Thêm cách đăng nhập khác trước khi xóa mật khẩu.',
     prof_current_pw: 'Mật khẩu hiện tại',
     prof_new_pw: 'Mật khẩu mới',
     prof_pw_changed: 'Đã đổi mật khẩu ✓',
+    prof_login_security: 'Đăng nhập & bảo mật',
+    prof_zalo_paired: 'Đã kết nối Zalo — bạn có thể đăng nhập bằng mã gửi qua đó.',
+    prof_zalo_not_paired: 'Chưa kết nối Zalo.',
+    prof_zalo_connect: 'Kết nối Zalo',
+    prof_zalo_code_hint: 'Gửi mã này cho bot Mochi trên Zalo trong vòng 24 giờ.',
+    prof_password_status: 'Mật khẩu',
+    prof_password_set: 'Đã đặt',
+    prof_password_unset: 'Chưa đặt',
+    prof_email_verified: 'Email đã xác minh',
+    prof_email_not_verified: 'Email chưa được xác minh',
+    prof_verify_email: 'Xác minh email',
+    auth_email_not_real: 'Email của tài khoản này không thể nhận thư.',
+    verify_email_title: 'Xác minh email',
+    verify_email_missing: 'Liên kết này thiếu mã xác minh.',
+    verify_email_confirm: 'Xác nhận đây là email của bạn.',
+    verify_email_button: 'Xác minh email',
+    verify_email_done: 'Đã xác minh email ✓',
+    verify_email_invalid: 'Liên kết đã hết hạn hoặc đã được sử dụng.',
     fb_title: 'Phản hồi',
     fb_sub: 'Ý tưởng, báo lỗi và lời khen từ nhóm của bạn',
     fb_log: 'Ghi phản hồi',
@@ -2723,6 +2804,7 @@ export const STRINGS = {
     auth_reset_sub_sent: 'Kiểm tra hộp thư để nhận liên kết đặt lại.',
     auth_reset_sub: 'Chúng tôi sẽ gửi liên kết đặt lại đến email của bạn.',
     auth_send_reset: 'Gửi liên kết đặt lại',
+    auth_reset_via_zalo: 'Đặt lại qua Zalo',
     auth_sent_to: 'Đã gửi đến',
     auth_back_signin: '← Quay lại đăng nhập',
     auth_enter_email: 'Nhập email của bạn.',
@@ -2739,6 +2821,34 @@ export const STRINGS = {
     auth_join: 'Tham gia Mochi',
     auth_add_name_pw: 'Thêm tên và mật khẩu để hoàn tất.',
     auth_password_too_short: 'Mật khẩu phải có ít nhất 8 ký tự.',
+    auth_no_login_method: 'Số này chưa kết nối Zalo — hãy chọn mật khẩu thay thế.',
+    auth_redeem_use_zalo: 'Dùng Zalo, không cần mật khẩu',
+    auth_redeem_use_password: 'Dùng mật khẩu thay thế',
+    auth_redeem_passwordless_hint: 'Bạn sẽ đăng nhập bằng mã gửi qua Zalo.',
+    // Zalo OTP login
+    auth_tab_zalo: 'Zalo',
+    auth_tab_email: 'Email',
+    auth_otp_phone_sub: 'Mã đăng nhập sẽ được gửi qua Zalo của gia đình bạn.',
+    auth_otp_send_code: 'Gửi mã',
+    auth_otp_code_sent_generic: 'Nếu số này đã đăng ký, mã đã được gửi qua Zalo.',
+    auth_otp_enter_code: 'Nhập mã 6 số',
+    auth_otp_verify: 'Xác nhận',
+    auth_otp_resend: 'Gửi lại mã',
+    auth_otp_resend_in: 'Gửi lại sau {n}s',
+    auth_otp_invalid: 'Mã không đúng hoặc đã hết hạn.',
+    auth_otp_change_number: 'Dùng số khác',
+    auth_otp_pick_title: 'Đây là tài khoản nào?',
+    // Google sign-in
+    auth_google_signin: 'Đăng nhập bằng Google',
+    auth_google_failed: 'Đã có lỗi khi đăng nhập bằng Google. Vui lòng thử lại.',
+    auth_google_no_account:
+      'Email Google này chưa liên kết với tài khoản Mochi — đăng nhập bằng mật khẩu rồi liên kết trong Hồ sơ.',
+    prof_google_sub_taken: 'Tài khoản Google này đã được liên kết với một tài khoản Mochi khác.',
+    prof_link_google: 'Liên kết Google',
+    prof_unlink_google: 'Hủy liên kết Google',
+    prof_google_linked: 'Đã liên kết Google',
+    prof_google_not_linked: 'Chưa liên kết Google',
+    prof_unlink_needs_method: 'Thêm cách đăng nhập khác trước khi hủy liên kết Google.',
     err_generic_title: 'Đã xảy ra lỗi',
     err_generic_msg: 'Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.',
     err_not_found_title: 'Không tìm thấy trang',
@@ -3516,28 +3626,6 @@ export const STRINGS = {
     rep_tm_title: 'Túi mù',
     rep_tm_line: '{bags} túi · {misses} lần thiếu',
     rank_checkin: 'Check-in',
-  },
-} satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
-
-export type LangId = keyof typeof STRINGS;
-
-/**
- * Look up a key, interpolating {placeholder} vars. Falls back to English, then to the key
- * itself, so a missing string is visible rather than blank.
- *
- * Moved verbatim from the `t` callback in src/lib/i18n.tsx — do not change the semantics.
- */
-export function translate(
-  lang: string,
-  key: string,
-  vars?: Record<string, string | number>,
-): string {
-  const dict = (STRINGS[lang as LangId] ?? STRINGS.en) as Record<string, string>;
-  const en = STRINGS.en as Record<string, string>;
-  let s = dict[key] ?? en[key] ?? key;
-  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(String(vars[k]));
-  return s;
-}
     // ---- Public landing page (routes/home.tsx) ----
     landing_nav_features: 'Tính năng',
     landing_nav_how: 'Bắt đầu',
@@ -3611,3 +3699,25 @@ export function translate(
     landing_cta_sub:
       'Tạo trường miễn phí, mời vài lớp đầu tiên, và xem tuần tới của bạn tự xếp vào hàng.',
     landing_footer_tag: 'Mochi — làm với thật nhiều yêu thương, cho những ngôi trường nhỏ.',
+  },
+} satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
+
+export type LangId = keyof typeof STRINGS;
+
+/**
+ * Look up a key, interpolating {placeholder} vars. Falls back to English, then to the key
+ * itself, so a missing string is visible rather than blank.
+ *
+ * Moved verbatim from the `t` callback in src/lib/i18n.tsx — do not change the semantics.
+ */
+export function translate(
+  lang: string,
+  key: string,
+  vars?: Record<string, string | number>,
+): string {
+  const dict = (STRINGS[lang as LangId] ?? STRINGS.en) as Record<string, string>;
+  const en = STRINGS.en as Record<string, string>;
+  let s = dict[key] ?? en[key] ?? key;
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(String(vars[k]));
+  return s;
+}

@@ -68,10 +68,14 @@ export const parents = sqliteTable(
     name: text('name').notNull(),
     email: text('email'),
     phone: text('phone'),
+    /** Canonical E.164 mirror of `phone`, kept in sync by server/services/people.ts on every
+     * write — see migrations/0051_login_methods.sql. What the Zalo OTP resolution algorithm
+     * actually matches against; `phone` stays the free-text display value. */
+    phoneE164: text('phone_e164'),
     color: text('color').notNull().default('green'),
     relation: text('relation'),
   },
-  (t) => [index('idx_parents_tenant').on(t.tenantId)],
+  (t) => [index('idx_parents_tenant').on(t.tenantId), index('idx_parents_phone').on(t.phoneE164)],
 );
 
 /**
@@ -398,14 +402,32 @@ export const accounts = sqliteTable(
     id: text('id').primaryKey(),
     tenantId: text('tenant_id').notNull(),
     email: text('email').notNull().unique(),
+    /**
+     * NOT NULL on purpose — a passwordless account (Zalo-only login) stores the `NO_PASSWORD`
+     * sentinel from server/services/crypto.ts rather than a nullable column, so this table never
+     * needs the rebuild migration 0045 needed for `tenants` (a DROP TABLE fires FK actions on D1).
+     * `login()`/`changePassword()` route the sentinel to the same DUMMY_HASH path as a missing
+     * account, so a passwordless account fails a password attempt with identical timing.
+     */
     passwordHash: text('password_hash').notNull(),
     isPlatformAdmin: integer('is_platform_admin', { mode: 'boolean' }).notNull().default(false),
     staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
     studentId: text('student_id').references(() => students.id, { onDelete: 'set null' }),
     parentId: text('parent_id').references(() => parents.id, { onDelete: 'set null' }),
     createdAt: text('created_at'),
+    /** Canonical E.164 login phone for the Zalo OTP flow — see migrations/0051_login_methods.sql. */
+    phoneE164: text('phone_e164'),
+    /** Google's stable subject id, pinned on first successful Google sign-in. */
+    googleSub: text('google_sub'),
+    /** Set only by the pull-based /verify-email flow; cleared whenever `email` changes. Gates
+     * the email-match branch of Google sign-in — see server/services/google-auth.ts. */
+    emailVerifiedAt: text('email_verified_at'),
   },
-  (t) => [index('idx_accounts_tenant').on(t.tenantId)],
+  (t) => [
+    index('idx_accounts_tenant').on(t.tenantId),
+    index('idx_accounts_phone').on(t.phoneE164),
+    uniqueIndex('idx_accounts_google_sub').on(t.googleSub),
+  ],
 );
 
 export const sessions = sqliteTable(
@@ -441,6 +463,53 @@ export const passwordResets = sqliteTable('password_resets', {
   expiresAt: text('expires_at').notNull(),
   used: integer('used').notNull().default(0),
 });
+
+/**
+ * Pull-based email verification — see migrations/0052_email_verifications.sql and
+ * server/services/email.ts. `email` is a snapshot of the address the token was actually mailed
+ * to, since `accounts.email` may change (and clear `emailVerifiedAt`) before the link is clicked.
+ */
+export const emailVerifications = sqliteTable('email_verifications', {
+  tokenHash: text('token_hash').primaryKey(),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => accounts.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  used: integer('used').notNull().default(0),
+});
+
+/**
+ * Zalo OTP login/recovery challenges — see migrations/0051_login_methods.sql and
+ * server/services/login-otp.ts, which is the only reader/writer of this table.
+ *
+ * `id` salts `codeHash` (SHA-256(id + ':' + code)) so a rainbow table cannot be precomputed once
+ * for the whole table. `attempts` is a hard DB-backed ceiling independent of the DO rate limiter,
+ * which fails open by design — this is the real backstop against guessing a 6-digit code.
+ */
+export const loginCodes = sqliteTable(
+  'login_codes',
+  {
+    id: text('id').primaryKey(),
+    phoneE164: text('phone_e164').notNull(),
+    codeHash: text('code_hash').notNull(),
+    /** 'login' | 'set-password'. A 'set-password' challenge never mints a session on its own —
+     * see the otp-set-password intent (Phase 4). */
+    purpose: text('purpose').notNull().default('login'),
+    accountId: text('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
+    /** JSON array of the zalo_chats.chatId values the code was sent to — audit only. */
+    chatIds: text('chat_ids').notNull().default('[]'),
+    attempts: integer('attempts').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    verifiedAt: text('verified_at'),
+    consumedAt: text('consumed_at'),
+  },
+  (t) => [
+    index('idx_login_codes_phone').on(t.phoneE164),
+    index('idx_login_codes_expires').on(t.expiresAt),
+  ],
+);
 
 /**
  * `ref` stays globally unique: it is the handle on an issue in one GitHub repo, so "F-12" must
@@ -817,9 +886,11 @@ export const userSettings = sqliteTable(
  *
  * One row per paired Zalo conversation, keyed on Zalo's own `chat_id`. Exactly one of
  * accountId / parentId / classId is set; the invariant lives in server/services/zalo.ts because
- * SQLite cannot state it. `parentId` points at `parents` rather than `accounts` on purpose:
- * parent accounts cannot log in, so a parent has no session to pair from and reaches the bot
- * through a staff-issued code instead.
+ * SQLite cannot state it. `parentId` points at `parents` rather than `accounts` on purpose: this
+ * link predates the parent portal, back when a parent account genuinely had no session — a
+ * parent CAN log in now (Profile is their whole app, and since login-methods, Zalo OTP too), but
+ * `parentId` is also how a FAMILY reaches the bot before any account exists at all, which
+ * `accountId` alone could never cover.
  *
  * `chatId` stays globally unique — it is Zalo's own id for a conversation, and there is one bot.
  * `tenantId` records which school paired it, which is how the webhook resolves a school from an

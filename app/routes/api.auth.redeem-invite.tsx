@@ -17,7 +17,9 @@ export const action = withPublic(async ({ request, rawDb, env }) => {
     name: input.name,
     email: input.email,
     password: input.password,
+    phone: input.phone,
   });
+  if (result === 'no_login_method') throw fail('no_login_method', 400);
   if (!result) throw fail('invalid_invite', 400);
 
   const token = await createSession(rawDb, result.accountId, true, MOBILE_TTL_DAYS);

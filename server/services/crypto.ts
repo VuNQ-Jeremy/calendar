@@ -2,6 +2,17 @@
 // deriveBits; exceeding it throws instead of derating, so this must stay <=100_000.
 const ITERATIONS = 100_000;
 
+/**
+ * Sentinel stored in `accounts.password_hash` for a passwordless (Zalo-only) account.
+ *
+ * `verifyPassword` only ever accepts a `pbkdf2$<iter>$<salt>$<hash>` string, so this can never
+ * match any password — and `login()`/`changePassword()` route it to the same DUMMY_HASH branch
+ * as a missing account, so a passwordless account fails a password attempt with identical
+ * timing to a wrong-password one. Keeping the column NOT NULL avoids the nullable rebuild
+ * migration 0045 needed for `tenants` (a DROP TABLE fires FK actions on D1).
+ */
+export const NO_PASSWORD = '!';
+
 function b64(buf: Uint8Array): string {
   return btoa(String.fromCharCode(...buf));
 }

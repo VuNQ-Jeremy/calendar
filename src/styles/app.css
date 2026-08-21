@@ -104,6 +104,36 @@ body {
   justify-content: flex-end;
   margin-bottom: var(--space-4);
 }
+.auth-tabs-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-6);
+}
+.auth-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.auth-pick-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: left;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-body);
+  cursor: pointer;
+}
+.auth-pick-item:hover {
+  background: var(--surface-hover);
+}
+.auth-pick-item strong {
+  color: var(--text-strong);
+}
 .auth-title {
   font-family: var(--font-display);
   font-size: var(--text-2xl);

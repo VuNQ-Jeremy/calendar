@@ -67,6 +67,29 @@ The fee slip is the odd one out on purpose. A student link is *whoever redeemed 
 code*, which may be the student; fine for a class reminder reaching a teenager, wrong for a bill.
 So money resolves through `parents` records only and answers `not_linked` rather than sending.
 
+On request, from `server/services/login-otp.ts` — the bot's **second consumer**, and the reason
+`zalo_chats` now matters to login, not just notifications:
+
+| Message | When |
+|---|---|
+| `Mã đăng nhập Mochi cho <tên>: 123456 (hiệu lực 5 phút). Không chia sẻ mã này.` | one account matched the phone |
+| `Mã đăng nhập Mochi: 123456 (hiệu lực 5 phút). Không chia sẻ mã này.` | several accounts share the phone (the name would leak who else is on it) |
+| `Mã đặt lại mật khẩu Mochi: ...` | same shapes, for the `purpose: 'set-password'` recovery variant |
+
+Text only, **never a link** — the whole point of phone+code over anything Zalo-native is that the
+family never has to tap something inside the chat. Delivery reuses `sendText`, so it inherits the
+same no-op-without-`ZALO_BOT_TOKEN` and sequential-send behavior as everything else in this file.
+The resolution algorithm that decides which chats receive it — union of the account's own pairing
+and its family's — lives in `login-otp.ts` and is documented there and in `docs/security.md`'s
+enumeration-safety section; this file only owns the delivery mechanics.
+
+**Self-service pairing.** A signed-in account can request its own code from Profile → "Kết nối
+Zalo" (a thin wrapper over `createPairCode(db, { accountId })`, the exact `self` target
+`api.zalo.pair.tsx` already supported for staff). This is what lets a parent or student pair
+their own chat without a teacher's involvement — the staff-issued codes in the table below are
+still there for the cases where the person cannot pair themselves (a class group, someone else's
+child).
+
 ---
 
 ## Pairing

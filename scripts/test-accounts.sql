@@ -113,6 +113,15 @@ DELETE FROM class_prices;
 -- run's "no links yet" assertion fail. Codes never cascade at all — they outlive their target.
 DELETE FROM zalo_chats;
 DELETE FROM zalo_pair_codes;
+-- Zalo OTP login/recovery challenges (migration 0051). Never cascades off anything the resets
+-- above touch, so a leaked one from a failed run would poison the next run's rate-limit-free
+-- "one live challenge per phone" assumption.
+DELETE FROM login_codes;
+-- Email verification tokens (migration 0052). Cascades off accounts, but the accounts this
+-- sweep re-inserts above are ON CONFLICT UPDATEs, not fresh rows, so a stale verification row
+-- from a prior run would otherwise survive and let a spec's "not verified yet" assertion see a
+-- leftover verified state.
+DELETE FROM email_verifications;
 -- Check-in kiosk + túi mù. Checks/items cascade off events, but activity types, the bag
 -- ledger and gift redemptions are keyed to students that seed.sql keeps — a leaked bag would
 -- shift the next run's tally assertions. Also drop the settings row so earn mode is default.
@@ -189,10 +198,36 @@ UPDATE accounts SET tenant_id = 'tnt_mochi_0001'
   WHERE email IN ('dev@mochi.edu', 'vunq@mochi.edu');
 
 -- Linked to seed student s1 (Leo Park) so the student sees real demo data.
-INSERT INTO accounts (id, email, password_hash, student_id, created_at) VALUES
+INSERT INTO accounts (id, email, password_hash, student_id, phone_e164, created_at) VALUES
   ('acc-e2e-student-0001', 'vunq@mochi.edu',
    'pbkdf2$100000$3SWEZIbyW5qVC83vVx3TtQ==$r862GZCJplV5TZ2Eg0gWJjzU+UiJJi8I35V3Kem957M=',
-   's1', datetime('now'))
+   's1', '+84900000001', datetime('now'))
 ON CONFLICT(email) DO UPDATE SET
   password_hash = excluded.password_hash,
-  student_id    = excluded.student_id;
+  student_id    = excluded.student_id,
+  phone_e164    = excluded.phone_e164;
+
+-- A parent account (p1, Mina Park — already linked to s1 via parent_students in seed.sql)
+-- sharing the SAME phone number as the student above. This is deliberate: the Zalo OTP picker
+-- (server/services/login-otp.ts `resolve`) is only reachable when one phone number resolves to
+-- more than one account — a parent's own account (matched directly) plus their child's account
+-- (matched through parents.phone_e164 -> parent_students) is the real-world shape that produces
+-- it, and crud-login-otp.spec.ts exercises the picker against exactly this pair.
+UPDATE parents SET phone_e164 = '+84900000001' WHERE id = 'p1';
+INSERT INTO accounts (id, email, password_hash, parent_id, phone_e164, created_at) VALUES
+  ('acc-e2e-parent-0001', 'mina.park@mochi.edu',
+   'pbkdf2$100000$3SWEZIbyW5qVC83vVx3TtQ==$r862GZCJplV5TZ2Eg0gWJjzU+UiJJi8I35V3Kem957M=',
+   'p1', '+84900000001', datetime('now'))
+ON CONFLICT(email) DO UPDATE SET
+  password_hash = excluded.password_hash,
+  parent_id     = excluded.parent_id,
+  phone_e164    = excluded.phone_e164;
+UPDATE accounts SET tenant_id = 'tnt_mochi_0001' WHERE email = 'mina.park@mochi.edu';
+
+-- The paired Zalo chat itself — without this, `login-otp.ts` finds zero chats for the phone
+-- above and every OTP request answers with the enumeration-safe decoy, same as an unregistered
+-- number. Paired to the PARENT record (route (a), direct — this is p1's own chat), which is also
+-- what the family-phone route (b) reaches through parent_students for s1.
+INSERT INTO zalo_chats (id, tenant_id, chat_id, kind, parent_id, created_at)
+VALUES ('zc-e2e-family-0001', 'tnt_mochi_0001', 'chat-e2e-family-0001', 'user', 'p1', datetime('now'))
+ON CONFLICT(chat_id) DO UPDATE SET parent_id = excluded.parent_id, student_id = NULL, class_id = NULL, account_id = NULL;

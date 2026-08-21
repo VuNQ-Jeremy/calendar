@@ -98,4 +98,77 @@ test.describe('CRUD: invite redemption', () => {
     await del;
     await expect(parentRow).toHaveCount(0);
   });
+
+  test('passwordless redeem: refused with no paired Zalo chat, succeeds once one exists', async ({
+    page,
+    browser,
+  }) => {
+    const k = ui(page);
+    const stamp = Date.now();
+
+    /** Add a student via People (optionally linked to the seeded parent "Mina Park", who has a
+     * paired Zalo chat in test-accounts.sql), and return their invite code. */
+    const addStudentAndGetCode = async (name: string, linkToExistingParent: boolean) => {
+      await page.goto('/people');
+      await page.getByRole('button', { name: 'Add student' }).click();
+      await k.textIn('Full name').fill(name);
+      if (linkToExistingParent) {
+        await k.dlg.getByText('Link an existing parent').click();
+        await k.dlg.locator('.m-select__trigger').click();
+        await page.getByRole('option', { name: 'Mina Park', exact: true }).click();
+      }
+      const post = k.posted('/people');
+      await k.submit().click();
+      await post;
+      const codesDlg = k.dlgOf('Invite codes ready');
+      const codeLocator = codesDlg.getByText(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/).first();
+      await expect(codeLocator).toBeVisible();
+      const code = (await codeLocator.innerText()).trim();
+      await codesDlg.getByRole('button', { name: 'Done' }).click();
+      return code;
+    };
+
+    const noChatCode = await addStudentAndGetCode(`E2E no-chat student ${stamp}`, false);
+    const withChatCode = await addStudentAndGetCode(`E2E with-chat student ${stamp}`, true);
+
+    /** Open the redeem flow anonymously, toggle to Zalo, and submit. */
+    const redeemPasswordless = async (code: string, phone: string) => {
+      const ctx = await browser.newContext();
+      const visitor = await ctx.newPage();
+      await visitor.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
+      await visitor.goto('/login');
+      await visitor.getByRole('button', { name: 'I have an invite code' }).click();
+      await visitor.locator('input.auth-code').fill(code);
+      await visitor.getByRole('button', { name: 'Continue' }).click();
+      await expect(visitor.locator('h2.auth-title')).toHaveText(/invited/);
+      await visitor.getByRole('button', { name: 'Use Zalo, skip the password' }).click();
+      await visitor.locator('input[placeholder="0901 234 567"]').fill(phone);
+      const post = visitor.waitForResponse(
+        (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/login.data',
+      );
+      await visitor.locator('form[action="/login"] button[type="submit"]').click();
+      const res = await post;
+      const landed = res.ok() ? new URL(visitor.url()).pathname : null;
+      await ctx.close();
+      return { ok: res.ok(), landed };
+    };
+
+    const refused = await redeemPasswordless(noChatCode, '0909111221');
+    expect(refused.ok).toBe(false);
+
+    const succeeded = await redeemPasswordless(withChatCode, '0909111222');
+    expect(succeeded.ok).toBe(true);
+    expect(succeeded.landed).toBe('/vocabulary');
+
+    // Cleanup both students.
+    await page.goto('/people');
+    for (const name of [`E2E no-chat student ${stamp}`, `E2E with-chat student ${stamp}`]) {
+      const row = page.locator('.lrow', { hasText: name });
+      await row.getByRole('button', { name: 'Delete' }).click();
+      const del = k.posted('/people');
+      await k.dlgOf('Remove student?').locator('.mochi-btn.is-danger').click();
+      await del;
+      await expect(row).toHaveCount(0);
+    }
+  });
 });

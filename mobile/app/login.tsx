@@ -1,13 +1,24 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { Eye, EyeOff, KeyRound, Lock, Mail, PawPrint, UserRound } from 'lucide-react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
+  Mail,
+  MessageCircle,
+  PawPrint,
+  UserRound,
+  Users,
+} from 'lucide-react-native';
 import { router } from 'expo-router';
 import { ApiError } from '~/lib/api';
 import * as api from '~/lib/endpoints';
 import { useAuth } from '~/lib/auth';
 import { useLang } from '~/lib/i18n';
 import { useTheme } from '~/theme';
-import { Body, Button, Card, IconButton, Input, Muted, Screen, Tag, Title } from '~/ui';
+import { Body, Button, Card, IconButton, Input, Muted, Screen, Tabs, Tag, Title } from '~/ui';
+import type { OtpCandidate } from '~/lib/types';
 
 /**
  * Port of `app/routes/login.tsx`. Four modes, minus one.
@@ -28,22 +39,32 @@ import { Body, Button, Card, IconButton, Input, Muted, Screen, Tag, Title } from
  * provided the UI says so rather than showing a broken flow — hence `m_reset_on_web`.
  */
 
-type Mode = 'login' | 'invite' | 'forgot';
+type Mode = 'login' | 'invite' | 'forgot' | 'otp-phone' | 'otp-code' | 'otp-pick';
 
 export default function Login() {
   const th = useTheme();
   const { t } = useLang();
-  const { login, redeemInvite, expired, status } = useAuth();
+  const { login, redeemInvite, requestOtp, verifyOtp, pickOtpAccount, expired, status } =
+    useAuth();
 
-  const [mode, setMode] = React.useState<Mode>('login');
+  // Zalo (phone + code) is the default landing screen, same as the web login page — this
+  // audience is Zalo-native.
+  const [mode, setMode] = React.useState<Mode>('otp-phone');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPw, setShowPw] = React.useState(false);
   const [code, setCode] = React.useState('');
   const [name, setName] = React.useState('');
+  const [redeemPasswordless, setRedeemPasswordless] = React.useState(false);
+  const [invitePhone, setInvitePhone] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [sentTo, setSentTo] = React.useState<string | null>(null);
+  const [otpPhone, setOtpPhone] = React.useState('');
+  const [otpCode, setOtpCode] = React.useState('');
+  const [otpChallengeId, setOtpChallengeId] = React.useState<string | null>(null);
+  const [otpPick, setOtpPick] = React.useState<OtpCandidate[]>([]);
+  const [resendSeconds, setResendSeconds] = React.useState(0);
 
   // A successful sign-in flips auth status; the index route then routes by role.
   React.useEffect(() => {
@@ -82,16 +103,39 @@ export default function Login() {
       login({ email: email.trim(), password }),
     );
 
-  const onRedeem = () =>
-    run(!name.trim() || !password ? 'auth_add_name_pw' : null, () =>
-      redeemInvite({
+  // Not `run()`: that helper's 400/401/422 -> "wrong email or password" mapping is right for
+  // sign-in but wrong for `no_login_method` (an unreachable phone with no password fallback).
+  const onRedeem = async () => {
+    if (!name.trim() || (!password && !invitePhone.trim())) {
+      setError('auth_add_name_pw');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await redeemInvite({
         code: code.trim().toUpperCase(),
         name: name.trim(),
         // An empty string would fail the API's .email() check — omit the key instead.
         ...(email.trim() ? { email: email.trim() } : {}),
-        password,
-      }),
-    );
+        ...(redeemPasswordless ? { phone: invitePhone.trim() } : { password }),
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(
+          err.code === 'no_login_method'
+            ? 'auth_no_login_method'
+            : err.status === 401 || err.status === 400 || err.status === 422
+              ? 'auth_wrong_creds'
+              : err.messageKey,
+        );
+      } else {
+        setError('err_generic_msg');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onForgot = () =>
     run(!email.trim() ? 'auth_enter_email' : null, async () => {
@@ -105,7 +149,60 @@ export default function Login() {
     setError(null);
     setSentTo(null);
     setPassword('');
+    setRedeemPasswordless(false);
+    setInvitePhone('');
   };
+
+  // OTP failures get their own catch: `run`'s status-code mapping is built for password login
+  // (401/400/422 -> "wrong email or password"), which is the wrong copy for an OTP challenge.
+  const runOtp = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.code === 'invalid_code' ? 'auth_otp_invalid' : err.messageKey);
+      } else {
+        setError('err_generic_msg');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onOtpRequest = () =>
+    runOtp(async () => {
+      const { challengeId } = await requestOtp(otpPhone.trim());
+      setOtpChallengeId(challengeId);
+      setOtpCode('');
+      setMode('otp-code');
+      setResendSeconds(60);
+    });
+
+  const onOtpVerify = () =>
+    runOtp(async () => {
+      if (!otpChallengeId) return;
+      const result = await verifyOtp(otpChallengeId, otpCode);
+      // A session means verifyOtp already signed the app in — the status effect below navigates
+      // away. Only a pick list needs a local state change.
+      if (result) {
+        setOtpPick(result.pick);
+        setMode('otp-pick');
+      }
+    });
+
+  const onOtpPick = (accountId: string) =>
+    runOtp(() => pickOtpAccount(otpChallengeId ?? '', accountId));
+
+  React.useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const id = setTimeout(() => setResendSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendSeconds]);
+
+  const zaloActive = mode === 'otp-phone' || mode === 'otp-code' || mode === 'otp-pick';
+  const showAuthTabs = zaloActive || mode === 'login';
 
   const pwToggle = (
     <IconButton size="sm" label={t('auth_password')} onPress={() => setShowPw((s) => !s)}>
@@ -168,6 +265,132 @@ export default function Login() {
           <Card style={{ gap: th.spacing[4] }}>
             {expired ? (
               <Body style={{ color: th.status.warning }}>{t('m_session_expired')}</Body>
+            ) : null}
+
+            {showAuthTabs ? (
+              <Tabs
+                tabs={[
+                  { id: 'zalo', label: t('auth_tab_zalo') },
+                  { id: 'email', label: t('auth_tab_email') },
+                ]}
+                value={zaloActive ? 'zalo' : 'email'}
+                onChange={(id) => reset(id === 'zalo' ? 'otp-phone' : 'login')}
+              />
+            ) : null}
+
+            {mode === 'otp-phone' ? (
+              <>
+                <Title>{t('auth_welcome')}</Title>
+                <Muted>{t('auth_otp_phone_sub')}</Muted>
+                <Input
+                  value={otpPhone}
+                  onChangeText={setOtpPhone}
+                  placeholder="0901 234 567"
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                  onSubmitEditing={onOtpRequest}
+                  returnKeyType="go"
+                  iconLeft={<MessageCircle size={18} color={th.color.textMuted} />}
+                />
+                {error ? <Body style={{ color: th.status.danger }}>{t(error)}</Body> : null}
+                <Button block loading={busy} disabled={!otpPhone.trim()} onPress={onOtpRequest}>
+                  {t('auth_otp_send_code')}
+                </Button>
+              </>
+            ) : null}
+
+            {mode === 'otp-code' ? (
+              <>
+                <Title>{t('auth_otp_enter_code')}</Title>
+                <Muted>{t('auth_otp_code_sent_generic')}</Muted>
+                <Input
+                  value={otpCode}
+                  onChangeText={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  maxLength={6}
+                  style={{ fontFamily: th.font.mono, letterSpacing: 4, textAlign: 'center' }}
+                  onSubmitEditing={onOtpVerify}
+                  returnKeyType="go"
+                  iconLeft={<KeyRound size={18} color={th.color.textMuted} />}
+                />
+                {error ? <Body style={{ color: th.status.danger }}>{t(error)}</Body> : null}
+                <Button
+                  block
+                  loading={busy}
+                  disabled={otpCode.length !== 6}
+                  onPress={onOtpVerify}
+                >
+                  {t('auth_otp_verify')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  block
+                  disabled={resendSeconds > 0 || busy}
+                  onPress={onOtpRequest}
+                >
+                  {resendSeconds > 0
+                    ? t('auth_otp_resend_in', { n: resendSeconds })
+                    : t('auth_otp_resend')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  block
+                  onPress={() => {
+                    setMode('otp-phone');
+                    setOtpCode('');
+                    setOtpChallengeId(null);
+                  }}
+                >
+                  {t('auth_otp_change_number')}
+                </Button>
+              </>
+            ) : null}
+
+            {mode === 'otp-pick' ? (
+              <>
+                <Title>{t('auth_otp_pick_title')}</Title>
+                {error ? <Body style={{ color: th.status.danger }}>{t(error)}</Body> : null}
+                <View style={{ gap: th.spacing[2] }}>
+                  {otpPick.map((c) => (
+                    <Pressable
+                      key={c.accountId}
+                      onPress={() => onOtpPick(c.accountId)}
+                      disabled={busy}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: th.spacing[3],
+                        backgroundColor: th.color.surfaceRaised,
+                        borderWidth: 1,
+                        borderColor: th.color.borderSubtle,
+                        borderRadius: th.radius.md,
+                        padding: th.spacing[3],
+                      }}
+                    >
+                      <Users size={18} color={th.color.textMuted} />
+                      <View>
+                        <Text
+                          style={{
+                            fontFamily: th.font.bodyBold,
+                            fontSize: th.text.sm.fontSize,
+                            color: th.color.textStrong,
+                          }}
+                        >
+                          {c.name}
+                        </Text>
+                        <Text
+                          style={{ fontSize: th.text.sm.fontSize, color: th.color.textMuted }}
+                        >
+                          {t('role_' + c.kind.toLowerCase())} · {c.schoolName}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
             ) : null}
 
             {mode === 'login' ? (
@@ -249,16 +472,37 @@ export default function Login() {
                   autoCapitalize="none"
                   iconLeft={<Mail size={18} color={th.color.textMuted} />}
                 />
-                <Input
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder={t('auth_choose_pw')}
-                  secureTextEntry={!showPw}
-                  autoCapitalize="none"
-                  autoComplete="new-password"
-                  iconLeft={<Lock size={18} color={th.color.textMuted} />}
-                  iconRight={pwToggle}
-                />
+                {redeemPasswordless ? (
+                  <>
+                    <Input
+                      value={invitePhone}
+                      onChangeText={setInvitePhone}
+                      placeholder="0901 234 567"
+                      keyboardType="phone-pad"
+                      autoComplete="tel"
+                      iconLeft={<MessageCircle size={18} color={th.color.textMuted} />}
+                    />
+                    <Muted>{t('auth_redeem_passwordless_hint')}</Muted>
+                  </>
+                ) : (
+                  <Input
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder={t('auth_choose_pw')}
+                    secureTextEntry={!showPw}
+                    autoCapitalize="none"
+                    autoComplete="new-password"
+                    iconLeft={<Lock size={18} color={th.color.textMuted} />}
+                    iconRight={pwToggle}
+                  />
+                )}
+                <Button
+                  variant="ghost"
+                  block
+                  onPress={() => setRedeemPasswordless((v) => !v)}
+                >
+                  {redeemPasswordless ? t('auth_redeem_use_password') : t('auth_redeem_use_zalo')}
+                </Button>
                 {error ? <Body style={{ color: th.status.danger }}>{t(error)}</Body> : null}
                 <Button block loading={busy} onPress={onRedeem}>
                   {t('auth_join')}

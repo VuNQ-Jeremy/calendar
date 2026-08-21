@@ -140,3 +140,49 @@ locked out:
 Expect `401` for roughly the first 8, then `429`. Both counters reset within a minute. Note the
 limiter is per colocation, so run this from one machine — results from two networks at once will
 look inconsistent and that is expected, not a bug.
+
+## Zalo OTP login — the new most-attacked endpoint
+
+`server/services/login-otp.ts` (`/login` intents `otp-*`, and their bearer twins
+`/api/auth/otp-*`) is unauthenticated by construction — same shape as `login()` and
+`requestReset()` above — and now carries the audience most likely to be targeted (parents and
+students, reached by phone number). Its invariants, in order of how badly a slip would hurt:
+
+**A decoy and a real request must be indistinguishable.** `requestLoginCode` always answers
+`{ challengeId }`; a phone that matches nothing gets a freshly-minted, never-stored UUID instead
+of a real challenge row. `verifyLoginCode` does equivalent hashing work against a decoy id before
+failing, with the same 1-second sleep as a wrong code against a real challenge. If this ever
+diverges — a different response shape, a missing sleep, an early return — the endpoint becomes an
+oracle for "which phone numbers are registered at this school."
+
+**The picker is reachable only after a correct code.** Showing the family's names *before* proof
+of code would itself be the enumeration leak (`phone -> who is enrolled`); `verifyLoginCode`
+re-resolves and returns `pick` only once the code has already matched.
+
+**`login_codes.attempts` is incremented in a separate `UPDATE` *before* the hash comparison.**
+This closes a parallel-guess race: without it, a burst of concurrent requests could all read the
+same `attempts` value and all get their one legitimate try. The ceiling (5) is enforced by this
+column, never by the request-scoped rate limiter alone — the limiter (`OTP_VERIFY_POLICY`) fails
+open exactly like `LOGIN_POLICY` above, so the DB counter is what actually stops a guessed code.
+
+**`AUTH_DEV_CODES` is a code-disclosure oracle, on purpose, and must exist only in `env.test`**
+(`wrangler.jsonc`) and `.dev.vars`. It is never present in the top-level `vars` block or any
+`env.prod`-equivalent config — verify this after touching `wrangler.jsonc`:
+
+    grep -n AUTH_DEV_CODES wrangler.jsonc
+
+Only the `env.test` block should match.
+
+**Passwordless accounts route to the same timing-safe failure path as a missing one.** The
+`NO_PASSWORD` sentinel (`server/services/crypto.ts`) can never satisfy `verifyPassword`, and
+`login()`/`changePassword()` both swap it for `DUMMY_HASH` before deriving — a Zalo-only account
+targeted with a guessed password fails with identical timing to a wrong password on a real
+account, never distinguishing "this account has no password" from "wrong password."
+
+Verify the enumeration property without a device:
+
+    curl -s -X POST https://calendar.ngqv0712.workers.dev/api/auth/otp-request \
+      -H 'Content-Type: application/json' -d '{"phone":"0999999999"}'
+
+The response must be exactly `{"data":{"challengeId":"..."}}` — no `devCode` field, ever, against
+production.

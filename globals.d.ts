@@ -27,6 +27,21 @@
  * "pronounce" game (app/routes/speech-assess.tsx). Optional and fail safe together: either
  * unset means /speech-assess returns 503 and the game shows its "not set up yet" notice.
  * calendar-test deliberately carries neither, so e2e stubs the route.
+ *
+ * AUTH_DEV_CODES gates the Zalo OTP dev-code escape (server/services/login-otp.ts): when set,
+ * `requestLoginCode`'s response carries the plaintext code alongside the real challengeId, which
+ * is what lets the e2e suite drive the flow without a real Zalo delivery. This must exist ONLY in
+ * `env.test` (wrangler.jsonc) and `.dev.vars` — it is a code-disclosure oracle by design, so it
+ * must never reach `env.prod` or the top-level vars block.
+ *
+ * EMAIL_API_KEY / EMAIL_FROM / EMAIL_FROM_NAME drive password-reset and verification email
+ * (server/services/email.ts, Brevo REST). All optional and fail together: missing either of the
+ * first two means every send silently no-ops, same posture as the Zalo token above.
+ *
+ * GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET drive "Sign in with Google" (web only —
+ * server/services/google-auth.ts). Both optional and fail together: either missing means
+ * `googleEnabled()` is false, the button is hidden, and /auth/google 404s rather than starting a
+ * flow that could never finish.
  */
 interface Env {
   ANTHROPIC_API_KEY?: string;
@@ -36,6 +51,12 @@ interface Env {
   GITHUB_FEEDBACK_TOKEN?: string;
   AZURE_SPEECH_KEY?: string;
   AZURE_SPEECH_REGION?: string;
+  AUTH_DEV_CODES?: string;
+  EMAIL_API_KEY?: string;
+  EMAIL_FROM?: string;
+  EMAIL_FROM_NAME?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 /** Injected by vite `define` — see vite.config.ts. e.g. "v0.0042" */

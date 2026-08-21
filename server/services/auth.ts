@@ -11,10 +11,15 @@ import {
   students,
   parents,
   passwordResets,
+  emailVerifications,
+  zaloChats,
   tenants,
 } from '../db/schema';
-import { hashPassword, verifyPassword, newToken, hashToken } from './crypto';
+import { hashPassword, verifyPassword, newToken, hashToken, NO_PASSWORD } from './crypto';
+import { sendEmail, isRealEmail } from './email';
 import { normalizeInviteCode } from '../../shared/logic/invite-code';
+import { normalizePhone } from '../../shared/logic/phone';
+import { hasFamilyChat } from './zalo';
 import { sessionCookie } from '../session';
 import { attributeAccount, record, requestMeta, setActor } from './audit';
 
@@ -318,8 +323,11 @@ export async function login(
     where: eq(accounts.email, normalizedEmail),
   });
 
-  // Always run verifyPassword — prevents user-enumeration via timing.
-  const storedHash = account?.passwordHash ?? DUMMY_HASH;
+  // Always run verifyPassword — prevents user-enumeration via timing. A passwordless
+  // (Zalo-only) account stores NO_PASSWORD, which routes here too: it can never match, and the
+  // timing is identical to a missing account or a wrong password.
+  const storedHash =
+    !account || account.passwordHash === NO_PASSWORD ? DUMMY_HASH : account.passwordHash;
   const [hashScheme, hashIterations] = storedHash.split('$');
   const valid = await verifyPassword(password, storedHash);
 
@@ -390,21 +398,51 @@ function linkedIdOf(invite: typeof invites.$inferSelect): string | null {
   return invite.studentId ?? invite.staffId ?? invite.parentId ?? null;
 }
 
+/**
+ * @param password Required for a staff invite. Optional for a student/parent invite — omitting
+ *   it redeems passwordless instead, which requires `phone` AND the family already having a
+ *   reachable Zalo chat (checked before any row is written).
+ * @returns `null` for an unknown/spent/expired code, `'no_login_method'` when neither a valid
+ *   password nor a workable phone was supplied, or the new account id on success.
+ */
 export async function redeemInvite(
   db: Db,
   code: string,
-  { name, email, password }: { name: string; email?: string; password: string },
-): Promise<{ accountId: string } | null> {
+  { name, email, password, phone }: { name: string; email?: string; password?: string; phone?: string },
+): Promise<{ accountId: string } | null | 'no_login_method'> {
   const invite = await findOpenInvite(db, code);
   if (!invite) return null;
 
+  const linkedId = linkedIdOf(invite);
+
+  // A staff account is never Zalo-only — teaching/admin tools have no OTP entry point.
+  if (invite.role === 'Staff' && !password) return 'no_login_method';
+
+  let passwordHash: string;
+  let phoneE164: string | null = null;
+  if (password) {
+    passwordHash = await hashPassword(password);
+  } else {
+    const normalized = phone ? normalizePhone(phone) : null;
+    if (!normalized) return 'no_login_method';
+    // Only a LINKED student/parent invite can go passwordless: a legacy invite has no person row
+    // yet, so no Zalo chat could possibly already be paired to it. The family must be reachable
+    // BEFORE the account is created, or a passwordless account would have no way in at all.
+    const target = invite.studentId
+      ? { studentId: invite.studentId }
+      : invite.parentId
+        ? { parentId: invite.parentId }
+        : null;
+    if (!target || !(await hasFamilyChat(db, target))) return 'no_login_method';
+    passwordHash = NO_PASSWORD;
+    phoneE164 = normalized;
+  }
+
   const accountId = crypto.randomUUID();
-  const passwordHash = await hashPassword(password);
   const now = new Date().toISOString();
   const normalizedEmail = (email || '').trim().toLowerCase() || null;
 
   // ---- Linked invite: attach an account to the row staff already created. ----
-  const linkedId = linkedIdOf(invite);
   if (linkedId) {
     const person = invite.studentId
       ? await db.query.students.findFirst({ where: eq(students.id, linkedId) })
@@ -433,6 +471,7 @@ export async function redeemInvite(
         tenantId: invite.tenantId,
         email: normalizedEmail || `invite-${accountId}@mochi.local`,
         passwordHash,
+        phoneE164,
         studentId: invite.studentId ?? null,
         staffId: invite.staffId ?? null,
         parentId: invite.parentId ?? null,
@@ -553,7 +592,16 @@ export async function redeemInvite(
   return { accountId };
 }
 
-export async function requestReset(db: Db, email: string): Promise<{ devUrl?: string }> {
+/**
+ * @param origin The request's own origin (`new URL(request.url).origin`) — `requestReset` has no
+ *   `Request` in scope, so the reset link's host has to come in from the caller.
+ */
+export async function requestReset(
+  db: Db,
+  email: string,
+  env: Env,
+  origin: string,
+): Promise<{ devUrl?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   const account = await db.query.accounts.findFirst({
     where: eq(accounts.email, normalizedEmail),
@@ -569,11 +617,21 @@ export async function requestReset(db: Db, email: string): Promise<{ devUrl?: st
   attributeAccount(account.id);
   record({ action: 'password_reset', meta: { stage: 'requested', email: normalizedEmail } });
 
-  if (import.meta.env.DEV) {
-    return { devUrl: `/login?mode=reset&token=${token}` };
+  const resetPath = `/login?mode=reset&token=${token}`;
+  if (isRealEmail(account.email)) {
+    await sendEmail(env, {
+      to: account.email,
+      subject: 'Đặt lại mật khẩu Mochi',
+      text:
+        `Đặt lại mật khẩu Mochi: ${origin}${resetPath}\n\n` +
+        'Liên kết hết hạn sau 1 giờ. Nếu không phải bạn yêu cầu, hãy bỏ qua email này.',
+    });
   }
 
-  // TODO: send via email provider
+  if (import.meta.env.DEV) {
+    return { devUrl: resetPath };
+  }
+
   return {};
 }
 
@@ -599,6 +657,68 @@ export async function resetPassword(db: Db, token: string, newPassword: string):
   return true;
 }
 
+/**
+ * Pull-based email verification: mail a link, the visitor clicks it, `verifyEmail` below consumes
+ * it. A no-op for a synthetic or missing address — there is nothing to prove ownership of.
+ *
+ * @param origin See `requestReset` — this function has no `Request` either.
+ */
+export async function requestEmailVerification(
+  db: Db,
+  accountId: string,
+  email: string,
+  env: Env,
+  origin: string,
+): Promise<{ devUrl?: string } | null> {
+  if (!isRealEmail(email)) return null;
+  const normalizedEmail = email.trim().toLowerCase();
+  const { token, hash } = await newToken();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  await db.insert(emailVerifications).values({
+    tokenHash: hash,
+    accountId,
+    email: normalizedEmail,
+    expiresAt,
+    used: 0,
+  });
+  const path = `/verify-email?token=${token}`;
+  await sendEmail(env, {
+    to: normalizedEmail,
+    subject: 'Xác minh email Mochi',
+    text: `Xác minh email của bạn: ${origin}${path}\n\nLiên kết hết hạn sau 24 giờ.`,
+  });
+  attributeAccount(accountId);
+  record({ action: 'email_verify', meta: { stage: 'requested', email: normalizedEmail } });
+
+  if (import.meta.env.DEV) return { devUrl: path };
+  return {};
+}
+
+export async function verifyEmail(db: Db, token: string): Promise<boolean> {
+  const tokenHash = await hashToken(token);
+  const row = await db.query.emailVerifications.findFirst({
+    where: eq(emailVerifications.tokenHash, tokenHash),
+  });
+  if (!row || row.used || new Date(row.expiresAt) < new Date()) return false;
+
+  // The account's email may have changed since this token was minted — a stale token must not
+  // silently verify whatever address the row carries NOW.
+  const account = await db.query.accounts.findFirst({ where: eq(accounts.id, row.accountId) });
+  if (!account || account.email !== row.email) return false;
+
+  await db.batch([
+    db
+      .update(accounts)
+      .set({ emailVerifiedAt: new Date().toISOString() })
+      .where(eq(accounts.id, row.accountId)),
+    db.update(emailVerifications).set({ used: 1 }).where(eq(emailVerifications.tokenHash, tokenHash)),
+  ]);
+  attributeAccount(row.accountId);
+  record({ action: 'email_verify', meta: { stage: 'completed' } });
+
+  return true;
+}
+
 export type ChangePasswordResult = 'ok' | 'wrong_current_password';
 
 export async function changePassword(
@@ -611,16 +731,24 @@ export async function changePassword(
   const account = await db.query.accounts.findFirst({
     where: eq(accounts.id, accountId),
   });
-  // Timing-safe: always run a verify even if account is somehow missing.
-  const storedHash = account?.passwordHash ?? DUMMY_HASH;
-  const valid = await verifyPassword(currentPassword, storedHash);
 
-  console.log('[auth] change_password.attempt', {
-    accountFound: !!account,
-    currentPasswordValid: valid,
-  });
+  // A passwordless (Zalo-only) account is SETTING its first password, not changing one — there
+  // is no current password to verify. `login()` and the generic path below both still route
+  // NO_PASSWORD to a dummy-hash comparison when this branch does NOT apply (a wrong accountId,
+  // say), so the timing-safe posture elsewhere is undisturbed by this account actually being
+  // allowed through here.
+  const allowNoCurrent = account?.passwordHash === NO_PASSWORD;
+  if (!allowNoCurrent) {
+    const storedHash = !account ? DUMMY_HASH : account.passwordHash;
+    const valid = await verifyPassword(currentPassword, storedHash);
 
-  if (!valid || !account) return 'wrong_current_password';
+    console.log('[auth] change_password.attempt', {
+      accountFound: !!account,
+      currentPasswordValid: valid,
+    });
+
+    if (!valid || !account) return 'wrong_current_password';
+  }
 
   const passwordHash = await hashPassword(newPassword);
   await db.batch([
@@ -633,5 +761,38 @@ export async function changePassword(
   // Actor is already resolved here — every caller reaches changePassword through an
   // authenticated route, so userFromToken has already run setActor for this request.
   record({ action: 'password_change' });
+  return 'ok';
+}
+
+export type RemovePasswordResult = 'ok' | 'needs_another_method';
+
+/**
+ * Go passwordless (back to `NO_PASSWORD`). Guarded here, not just at the route: an account may
+ * never end up with NO working login method, so this refuses unless a Google sub is pinned or an
+ * account-paired Zalo chat exists. Purges every OTHER session, same as `changePassword`.
+ */
+export async function removePassword(
+  db: Db,
+  accountId: string,
+  currentTokenHash: string,
+): Promise<RemovePasswordResult> {
+  const account = await db.query.accounts.findFirst({ where: eq(accounts.id, accountId) });
+  if (!account) return 'needs_another_method';
+
+  const pairedChat = await db
+    .select({ id: zaloChats.id })
+    .from(zaloChats)
+    .where(eq(zaloChats.accountId, accountId))
+    .limit(1);
+  if (!account.googleSub && pairedChat.length === 0) return 'needs_another_method';
+
+  await db.batch([
+    db.update(accounts).set({ passwordHash: NO_PASSWORD }).where(eq(accounts.id, accountId)),
+    db
+      .delete(sessions)
+      .where(and(eq(sessions.accountId, accountId), ne(sessions.token, currentTokenHash))),
+  ]);
+  attributeAccount(accountId);
+  record({ action: 'password_change', meta: { removed: true } });
   return 'ok';
 }

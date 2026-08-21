@@ -6,6 +6,11 @@ export default [
   // signed-in users on to their home screen, so `/` still works as an app entry.
   index('routes/home.tsx'),
   route('login', 'routes/login.tsx'),
+  route('verify-email', 'routes/verify-email.tsx'),
+  // Sign in with Google (web only). Both outside `_app`, like /login — no session yet on the
+  // way in, and the callback needs to mint the cookie before any app-shell loader runs.
+  route('auth/google', 'routes/auth.google.tsx'),
+  route('auth/google/callback', 'routes/auth.google.callback.tsx'),
   // Public school creation. Outside the _app layout, like /login: there is no session yet.
   route('signup', 'routes/signup.tsx'),
   route('logout', 'routes/logout.tsx'),
@@ -62,6 +67,10 @@ export default [
   route('api/auth/me', 'routes/api.auth.me.tsx'),
   route('api/auth/redeem-invite', 'routes/api.auth.redeem-invite.tsx'),
   route('api/auth/request-reset', 'routes/api.auth.request-reset.tsx'),
+  route('api/auth/otp-request', 'routes/api.auth.otp-request.tsx'),
+  route('api/auth/otp-verify', 'routes/api.auth.otp-verify.tsx'),
+  route('api/auth/otp-pick', 'routes/api.auth.otp-pick.tsx'),
+  route('api/auth/otp-set-password', 'routes/api.auth.otp-set-password.tsx'),
   route('api/auth/change-password', 'routes/api.auth.change-password.tsx'),
   route('api/bootstrap', 'routes/api.bootstrap.tsx'),
   route('api/dashboard', 'routes/api.dashboard.tsx'),

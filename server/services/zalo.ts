@@ -1,4 +1,4 @@
-import { eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { accounts, parentStudents, zaloChats, zaloPairCodes } from '../db/schema';
 import { TenantDb, type Db } from '../db/index';
 import { record, setActorTenant } from './audit';
@@ -280,6 +280,52 @@ export async function chatsForParentRecordsOf(
     .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
     .where(db.own(zaloChats, inArray(parentStudents.studentId, studentIds)));
   return [...new Set(rows.map((r) => r.chatId))];
+}
+
+/**
+ * Whether a student or parent's family already has a reachable 1:1 Zalo chat — by PERSON id, not
+ * by account. Used at invite-redeem time (server/services/auth.ts's passwordless path), BEFORE
+ * the account being created even exists — unlike every other lookup in this file, so it takes the
+ * unscoped `Db` rather than a `TenantDb`, the same way `redeemCode`/`unlinkByChatId` do for the
+ * same reason (no session to scope from yet).
+ */
+export async function hasFamilyChat(
+  rawDb: Db,
+  target: { studentId?: string | null; parentId?: string | null },
+): Promise<boolean> {
+  if (target.parentId) {
+    const [byParent, viaChildren] = await Promise.all([
+      rawDb
+        .select({ id: zaloChats.id })
+        .from(zaloChats)
+        .where(and(eq(zaloChats.kind, 'user'), eq(zaloChats.parentId, target.parentId)))
+        .limit(1),
+      rawDb
+        .select({ id: zaloChats.id })
+        .from(zaloChats)
+        .innerJoin(parentStudents, eq(parentStudents.studentId, zaloChats.studentId))
+        .where(and(eq(zaloChats.kind, 'user'), eq(parentStudents.parentId, target.parentId)))
+        .limit(1),
+    ]);
+    if (byParent.length || viaChildren.length) return true;
+  }
+  if (target.studentId) {
+    const [byStudent, viaParents] = await Promise.all([
+      rawDb
+        .select({ id: zaloChats.id })
+        .from(zaloChats)
+        .where(and(eq(zaloChats.kind, 'user'), eq(zaloChats.studentId, target.studentId)))
+        .limit(1),
+      rawDb
+        .select({ id: zaloChats.id })
+        .from(zaloChats)
+        .innerJoin(parentStudents, eq(parentStudents.parentId, zaloChats.parentId))
+        .where(and(eq(zaloChats.kind, 'user'), eq(parentStudents.studentId, target.studentId)))
+        .limit(1),
+    ]);
+    if (byStudent.length || viaParents.length) return true;
+  }
+  return false;
 }
 
 /** The group chat linked to a class, if one has been. */

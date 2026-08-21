@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { ApiError, configureApi } from './api';
 import * as api from './endpoints';
 import { unregisterToken } from './push';
-import type { AuthAccount, AuthUser } from './types';
+import type { AuthAccount, AuthUser, OtpCandidate } from './types';
 import type { LoginInput, RedeemInviteInput } from '@mochi/shared/schemas';
 
 /**
@@ -28,6 +28,13 @@ interface AuthCtxValue {
   expired: boolean;
   login: (input: LoginInput) => Promise<void>;
   redeemInvite: (input: RedeemInviteInput) => Promise<void>;
+  /** Always resolves to `{ challengeId }`, real or a decoy — see server/services/login-otp.ts. */
+  requestOtp: (phone: string) => Promise<{ challengeId: string }>;
+  /** Signs in directly when one account matched; returns the candidate list to disambiguate
+   * when the phone matched more than one, without signing in yet. */
+  verifyOtp: (challengeId: string, code: string) => Promise<{ pick: OtpCandidate[] } | null>;
+  /** Finishes an OTP login after `verifyOtp` returned a pick list. */
+  pickOtpAccount: (challengeId: string, accountId: string) => Promise<void>;
   logout: () => Promise<void>;
   /** Re-reads /api/auth/me. Call after a profile edit so the header name updates. */
   refresh: () => Promise<void>;
@@ -165,6 +172,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [finishSignIn],
   );
 
+  // Mobile only ever requests a login code — the Zalo forgot-password flow (purpose:
+  // 'set-password') is web-only for now, same as reset-by-email (see mobile/app/login.tsx).
+  const requestOtp = React.useCallback(
+    (phone: string) => api.otpRequest({ phone, purpose: 'login' }),
+    [],
+  );
+
+  const verifyOtp = React.useCallback(
+    async (challengeId: string, code: string) => {
+      const result = await api.otpVerify({ challengeId, code });
+      if ('token' in result) {
+        await finishSignIn(result.token);
+        return null;
+      }
+      return result;
+    },
+    [finishSignIn],
+  );
+
+  const pickOtpAccount = React.useCallback(
+    async (challengeId: string, accountId: string) => {
+      const { token } = await api.otpPick({ challengeId, accountId });
+      await finishSignIn(token);
+    },
+    [finishSignIn],
+  );
+
   const doLogout = React.useCallback(async () => {
     // BEFORE the session token is discarded: /api/push/unregister is authenticated, and a device
     // left registered keeps receiving notifications for an account nobody is signed into.
@@ -195,10 +229,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       expired,
       login: doLogin,
       redeemInvite: doRedeem,
+      requestOtp,
+      verifyOtp,
+      pickOtpAccount,
       logout: doLogout,
       refresh,
     }),
-    [status, user, account, expired, doLogin, doRedeem, doLogout, refresh],
+    [
+      status,
+      user,
+      account,
+      expired,
+      doLogin,
+      doRedeem,
+      requestOtp,
+      verifyOtp,
+      pickOtpAccount,
+      doLogout,
+      refresh,
+    ],
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

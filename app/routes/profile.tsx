@@ -1,17 +1,58 @@
 import React from 'react';
-import { useOutletContext, useFetcher } from 'react-router';
-import type { ActionFunctionArgs, ClientActionFunctionArgs } from 'react-router';
+import { eq } from 'drizzle-orm';
+import { useOutletContext, useFetcher, useLoaderData } from 'react-router';
+import type { ActionFunctionArgs, ClientActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import { ProfileScreen } from '../../src/screens-extra.jsx';
 import type { AppContext } from './_app.js';
 import { tenantDbFor } from '../../server/db';
+import { accounts, zaloChats } from '../../server/db/schema';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireUser, changePassword } from '../../server/services/auth';
+import {
+  requireUser,
+  changePassword,
+  removePassword,
+  requestEmailVerification,
+} from '../../server/services/auth';
+import { isRealEmail } from '../../server/services/email';
+import { googleEnabled } from '../../server/services/google-auth';
 import { sessionCookie } from '../../server/session';
-import { hashToken } from '../../server/services/crypto';
+import { hashToken, NO_PASSWORD } from '../../server/services/crypto';
 import * as peopleSvc from '../../server/services/people';
+import { createPairCode } from '../../server/services/zalo';
 import { ColorId } from '../../shared/schemas';
 import { invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
+
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const env = context.get(cloudflareCtx).env;
+  const sessionUser = await requireUser(request, env);
+  const db = tenantDbFor(env, sessionUser);
+  const [chatRows, accountRows] = await Promise.all([
+    db.raw
+      .select({ id: zaloChats.id })
+      .from(zaloChats)
+      .where(db.own(zaloChats, eq(zaloChats.accountId, sessionUser.account.id)))
+      .limit(1),
+    // tenant-unscoped: `accounts` is auth-owned, same exemption `changePassword` below relies on.
+    db.raw
+      .select({
+        passwordHash: accounts.passwordHash,
+        emailVerifiedAt: accounts.emailVerifiedAt,
+        googleSub: accounts.googleSub,
+      })
+      .from(accounts)
+      .where(eq(accounts.id, sessionUser.account.id)),
+  ]);
+  return {
+    zaloPaired: chatRows.length > 0,
+    hasPassword: accountRows[0]?.passwordHash !== NO_PASSWORD,
+    emailVerified: !!accountRows[0]?.emailVerifiedAt,
+    hasRealEmail: isRealEmail(sessionUser.account.email),
+    googleLinked: !!accountRows[0]?.googleSub,
+    googleEnabled: googleEnabled(env),
+    googleError: new URL(request.url).searchParams.get('error'),
+  };
+}
 
 async function actionImpl({ request, context }: ActionFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
@@ -52,9 +93,12 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   }
 
   if (intent === 'change-password') {
+    // currentPassword may be legitimately empty — a passwordless account is setting its FIRST
+    // password, and changePassword() itself skips the check for that case (server/services/
+    // auth.ts). Any other account submitting blank simply fails as a wrong current password.
     const currentPassword = (formData.get('currentPassword') as string) ?? '';
     const newPassword = (formData.get('newPassword') as string) ?? '';
-    if (!currentPassword || !newPassword) {
+    if (!newPassword) {
       return Response.json({ intent, error: 'auth_enter_both' }, { status: 400 });
     }
     if (newPassword.length < 8) {
@@ -78,6 +122,59 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     return { intent, ok: true };
   }
 
+  if (intent === 'send-verify-email') {
+    const result = await requestEmailVerification(
+      db.raw,
+      account.id,
+      account.email,
+      env,
+      new URL(request.url).origin,
+    );
+    if (!result) {
+      return Response.json({ intent, error: 'auth_email_not_real' }, { status: 400 });
+    }
+    return { intent, sent: true, devUrl: result.devUrl ?? null };
+  }
+
+  if (intent === 'remove-password') {
+    const rawToken = await sessionCookie.parse(request.headers.get('Cookie'));
+    const currentTokenHash =
+      rawToken && typeof rawToken === 'string' ? await hashToken(rawToken) : '';
+    const result = await removePassword(db.raw, account.id, currentTokenHash);
+    if (result === 'needs_another_method') {
+      return Response.json({ intent, error: 'prof_remove_pw_needs_method' }, { status: 400 });
+    }
+    return { intent, ok: true };
+  }
+
+  if (intent === 'unlink-google') {
+    const [acctRow] = await db.raw
+      .select({ passwordHash: accounts.passwordHash })
+      .from(accounts)
+      .where(eq(accounts.id, account.id));
+    const hasChat =
+      (
+        await db.raw
+          .select({ id: zaloChats.id })
+          .from(zaloChats)
+          .where(db.own(zaloChats, eq(zaloChats.accountId, account.id)))
+          .limit(1)
+      ).length > 0;
+    if (acctRow?.passwordHash === NO_PASSWORD && !hasChat) {
+      return Response.json({ intent, error: 'prof_unlink_needs_method' }, { status: 400 });
+    }
+    await db.raw.update(accounts).set({ googleSub: null }).where(eq(accounts.id, account.id));
+    return { intent, ok: true };
+  }
+
+  if (intent === 'zalo-pair') {
+    // Self-service, any signed-in kind: `createPairCode`'s `self` target is exactly this
+    // account's own id, unlike api.zalo.pair.tsx (staff-only — that route also mints codes for
+    // OTHER people, who cannot ask for themselves).
+    const code = await createPairCode(db, { accountId: account.id });
+    return { intent, code: code.code, expiresAt: code.expiresAt };
+  }
+
   return Response.json({ error: 'unknown intent' }, { status: 400 });
 }
 
@@ -93,9 +190,27 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
 
 export default function Profile() {
   const { user } = useOutletContext<AppContext>();
+  const {
+    zaloPaired,
+    hasPassword,
+    emailVerified,
+    hasRealEmail,
+    googleLinked,
+    googleEnabled: showGoogleLink,
+    googleError,
+  } = useLoaderData<typeof loader>();
   const saveFetcher = useFetcher();
   const logoutFetcher = useFetcher();
   const pwFetcher = useFetcher<{ intent?: string; ok?: boolean; error?: string }>();
+  const removePwFetcher = useFetcher<{ intent?: string; ok?: boolean; error?: string }>();
+  const zaloFetcher = useFetcher<{ intent?: string; code?: string; expiresAt?: string }>();
+  const googleFetcher = useFetcher<{ intent?: string; ok?: boolean; error?: string }>();
+  const verifyEmailFetcher = useFetcher<{
+    intent?: string;
+    sent?: boolean;
+    devUrl?: string | null;
+    error?: string;
+  }>();
   const [avatar, setAvatar] = React.useState('');
 
   const handleSave = (patch: Record<string, unknown>) => {
@@ -124,6 +239,30 @@ export default function Profile() {
     logoutFetcher.submit({}, { action: '/logout', method: 'post' });
   };
 
+  const handleZaloPair = () => {
+    const fd = new FormData();
+    fd.set('intent', 'zalo-pair');
+    zaloFetcher.submit(fd, { method: 'post' });
+  };
+
+  const handleVerifyEmail = () => {
+    const fd = new FormData();
+    fd.set('intent', 'send-verify-email');
+    verifyEmailFetcher.submit(fd, { method: 'post' });
+  };
+
+  const handleRemovePassword = () => {
+    const fd = new FormData();
+    fd.set('intent', 'remove-password');
+    removePwFetcher.submit(fd, { method: 'post' });
+  };
+
+  const handleUnlinkGoogle = () => {
+    const fd = new FormData();
+    fd.set('intent', 'unlink-google');
+    googleFetcher.submit(fd, { method: 'post' });
+  };
+
   const displayUser = { ...user, avatar };
   return (
     <ProfileScreen
@@ -135,6 +274,37 @@ export default function Profile() {
         busy: pwFetcher.state !== 'idle',
         ok: pwFetcher.data?.ok === true,
         error: pwFetcher.data?.error ?? null,
+      }}
+      zaloStatus={{
+        paired: zaloPaired,
+        hasPassword,
+        busy: zaloFetcher.state !== 'idle',
+        code: zaloFetcher.data?.code ?? null,
+      }}
+      onZaloPair={handleZaloPair}
+      emailVerifyStatus={{
+        hasRealEmail,
+        verified: emailVerified,
+        busy: verifyEmailFetcher.state !== 'idle',
+        sent: verifyEmailFetcher.data?.sent === true,
+        devUrl: verifyEmailFetcher.data?.devUrl ?? null,
+      }}
+      onVerifyEmail={handleVerifyEmail}
+      googleStatus={{
+        show: showGoogleLink,
+        linked: googleLinked,
+        busy: googleFetcher.state !== 'idle',
+        // googleFetcher.data.error is already an i18n key (from unlink-google's own response);
+        // googleError is one of the fixed codes /auth/google/callback redirects with.
+        error:
+          googleFetcher.data?.error ??
+          (googleError === 'google_sub_taken' ? 'prof_google_sub_taken' : null),
+      }}
+      onUnlinkGoogle={handleUnlinkGoogle}
+      onRemovePassword={handleRemovePassword}
+      removePwStatus={{
+        busy: removePwFetcher.state !== 'idle',
+        error: removePwFetcher.data?.error ?? null,
       }}
     />
   );

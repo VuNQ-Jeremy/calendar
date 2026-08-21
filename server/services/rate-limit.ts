@@ -36,6 +36,27 @@ export const LOGIN_POLICY: LimitPolicy = { limit: 8, periodMs: MINUTE };
 export const INVITE_POLICY: LimitPolicy = { limit: 15, periodMs: MINUTE };
 
 /**
+ * Zalo OTP request, keyed by IP (see otpRequestKey). Each call costs a Bot API send, so this is
+ * throttled tighter than a password attempt: three a browser can plausibly want in five minutes
+ * (typo the phone, retype, resend), far below what a phone-number sweep would need.
+ */
+export const OTP_REQUEST_POLICY: LimitPolicy = { limit: 3, periodMs: 5 * MINUTE };
+
+/**
+ * Zalo OTP request, keyed by the PHONE NUMBER (see otpPhoneKey) rather than IP — the harm this
+ * guards against is a family's Zalo chat being spammed with codes nobody asked for, which an
+ * attacker rotating IPs could otherwise do freely.
+ */
+export const OTP_PHONE_POLICY: LimitPolicy = { limit: 5, periodMs: 60 * MINUTE };
+
+/**
+ * Zalo OTP verify, keyed by IP (see otpVerifyKey). This is generous on purpose: the DB-backed
+ * per-challenge `attempts` counter in login_codes is the real ceiling on guessing one code, and
+ * it survives even if this limiter fails open — see `allow` below.
+ */
+export const OTP_VERIFY_POLICY: LimitPolicy = { limit: 10, periodMs: MINUTE };
+
+/**
  * School creation, keyed by IP. A person creates one school; three an hour absorbs typos and
  * retries while stopping a script cold.
  */
@@ -117,6 +138,27 @@ export function inviteKey(): string {
 /** School creation, per IP. Pair it with the global key below — neither is sufficient alone. */
 export function signupKey(): string {
   return `signup:${ip()}`;
+}
+
+/** Zalo OTP request, per IP — pair with `otpPhoneKey` below; neither is sufficient alone. */
+export function otpRequestKey(): string {
+  return `otp-req:${ip()}`;
+}
+
+/** Zalo OTP request, per PHONE NUMBER — the normalized E.164 form, not the raw user input. */
+export function otpPhoneKey(phone: string): string {
+  return `otp-phone:${phone}`;
+}
+
+/** Zalo OTP verify, per IP. */
+export function otpVerifyKey(): string {
+  return `otp-verify:${ip()}`;
+}
+
+/** Google OAuth callback, per IP — LOGIN_POLICY-shaped insurance against hammering the token
+ * exchange with stolen or guessed codes. */
+export function googleCallbackKey(): string {
+  return `google-callback:${ip()}`;
 }
 
 /** The one intentionally global limiter key. See SIGNUP_GLOBAL_POLICY for why. */

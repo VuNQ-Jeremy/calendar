@@ -54,9 +54,11 @@ export type AuditAction =
   | 'view'
   | 'login'
   | 'login_failed'
+  | 'login_code_requested'
   | 'logout'
   | 'password_change'
   | 'password_reset'
+  | 'email_verify'
   | 'invite_redeem';
 
 export type AuditEntry = {

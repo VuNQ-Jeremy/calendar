@@ -24,6 +24,10 @@ import {
   MaterialInput,
   MonthlyRemarkInput,
   NotifPrefsInput,
+  OtpPickInput,
+  OtpRequestInput,
+  OtpSetPasswordInput,
+  OtpVerifyInput,
   ParentInput,
   ParentPortalInput,
   PlantPatchInput,
@@ -238,6 +242,83 @@ const auth: PathDoc[] = [
           'which emails exist.',
         request: { schema: RequestResetInput },
         responses: { 200: ok(c.RequestResetResult, 'Accepted.') },
+      },
+    ],
+  },
+  {
+    path: '/api/auth/otp-request',
+    routePattern: 'api/auth/otp-request',
+    tag: 'Auth',
+    operations: [
+      {
+        method: 'post',
+        auth: 'public',
+        summary: 'Start a Zalo OTP login or recovery',
+        description:
+          'Always answers `{ challengeId }`, whether or not the phone matched anything real — ' +
+          'the endpoint must not confirm which phone numbers are registered. A real code is sent ' +
+          'as plain text to the paired Zalo chat (never a link).',
+        request: { schema: OtpRequestInput },
+        responses: { 200: ok(c.OtpRequestResult, 'A challenge id — real or a decoy.') },
+      },
+    ],
+  },
+  {
+    path: '/api/auth/otp-verify',
+    routePattern: 'api/auth/otp-verify',
+    tag: 'Auth',
+    operations: [
+      {
+        method: 'post',
+        auth: 'public',
+        summary: 'Verify a Zalo OTP code',
+        description:
+          'Replies with a session when the phone matched exactly one account, or `{ pick }` — ' +
+          'the candidate accounts to choose from — when it matched more than one. The picker is ' +
+          'reachable only after a correct code, never before.',
+        request: { schema: OtpVerifyInput },
+        responses: {
+          200: ok(c.OtpVerifyResult, 'A session, or a list of accounts to pick from.'),
+          401: err('invalid_code', 'wrong code, or an expired/unknown/spent challenge'),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/auth/otp-pick',
+    routePattern: 'api/auth/otp-pick',
+    tag: 'Auth',
+    operations: [
+      {
+        method: 'post',
+        auth: 'public',
+        summary: 'Finish an OTP login by naming which candidate account to sign into',
+        description: 'Only usable after otp-verify has returned that account in its `pick` list.',
+        request: { schema: OtpPickInput },
+        responses: {
+          200: ok(c.LoginResponse, 'A new session, same shape as login.'),
+          401: err('invalid_code', 'not a candidate for this challenge, or it is not verified'),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/auth/otp-set-password',
+    routePattern: 'api/auth/otp-set-password',
+    tag: 'Auth',
+    operations: [
+      {
+        method: 'post',
+        auth: 'public',
+        summary: 'Finish the Zalo forgot-password flow',
+        description:
+          'Spends a verified `purpose: set-password` challenge (from otp-verify/otp-pick) to ' +
+          'write a new password hash. Never mints a session — sign in afterward as usual.',
+        request: { schema: OtpSetPasswordInput },
+        responses: {
+          200: ok(c.OtpSetPasswordResult, 'Password set.'),
+          400: err('invalid_code', 'not a verified set-password challenge, or wrong candidate'),
+        },
       },
     ],
   },

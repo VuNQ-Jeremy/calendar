@@ -1,9 +1,20 @@
-import { eq } from 'drizzle-orm';
+import { eq, type SQL } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import { staff, students, parents, classStudents, parentStudents } from '../db/schema';
+import { staff, students, parents, classStudents, parentStudents, accounts } from '../db/schema';
 import { chunk, rowsPerStatement, type TenantDb } from '../db';
 import type { StudentInput, StaffInput, ParentInput } from '../../shared/schemas';
+import { normalizePhone } from '../../shared/logic/phone';
 import { record, recordCreate, recordDelete } from './audit';
+
+/**
+ * Mirror a person's raw phone onto `accounts.phone_e164` for whichever account is linked to
+ * them — what the Zalo OTP resolution algorithm (server/services/login-otp.ts) actually matches
+ * against. Unparseable or cleared input clears the mirror rather than leaving a stale value; a
+ * person with no account yet is a no-op (`db.update` touches zero rows).
+ */
+async function mirrorAccountPhone(db: TenantDb, where: SQL, phone: string | null): Promise<void> {
+  await db.update(accounts, { phoneE164: normalizePhone(phone ?? '') }, where);
+}
 
 /** JSON-shape equality — good enough for these plain assembled rows, and how audit.ts itself
  *  decides an update was a real no-op. */
@@ -72,6 +83,7 @@ export async function updateStaff(
   if (patch.color !== undefined) set.color = patch.color;
   if (patch.phone !== undefined) set.phone = patch.phone ?? null;
   if (Object.keys(set).length) await db.update(staff, set, eq(staff.id, id));
+  if (patch.phone !== undefined) await mirrorAccountPhone(db, eq(accounts.staffId, id), patch.phone);
   const rows = await db.raw
     .select()
     .from(staff)
@@ -280,6 +292,7 @@ export async function createParent(db: TenantDb, input: ParentInput): Promise<Pa
       name: input.name,
       email: input.email ?? null,
       phone: input.phone ?? null,
+      phoneE164: normalizePhone(input.phone ?? ''),
       color: input.color,
       relation: input.relation ?? null,
     }),
@@ -332,10 +345,14 @@ export async function updateParent(
   const set: Partial<typeof parents.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
   if (patch.email !== undefined) set.email = patch.email ?? null;
-  if (patch.phone !== undefined) set.phone = patch.phone ?? null;
+  if (patch.phone !== undefined) {
+    set.phone = patch.phone ?? null;
+    set.phoneE164 = normalizePhone(patch.phone ?? '');
+  }
   if (patch.color !== undefined) set.color = patch.color;
   if (patch.relation !== undefined) set.relation = patch.relation ?? null;
   if (Object.keys(set).length) ops.push(db.update(parents, set, eq(parents.id, id)));
+  if (patch.phone !== undefined) await mirrorAccountPhone(db, eq(accounts.parentId, id), patch.phone);
   if (patch.studentIds !== undefined) {
     ops.push(db.delete(parentStudents, eq(parentStudents.parentId, id)));
     if (patch.studentIds.length > 0) {

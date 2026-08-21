@@ -19,8 +19,14 @@ import {
   allow,
   loginKey,
   inviteKey,
+  otpRequestKey,
+  otpPhoneKey,
+  otpVerifyKey,
   LOGIN_POLICY,
   INVITE_POLICY,
+  OTP_REQUEST_POLICY,
+  OTP_PHONE_POLICY,
+  OTP_VERIFY_POLICY,
 } from '../../server/services/rate-limit';
 import {
   getUser,
@@ -32,6 +38,14 @@ import {
   requestReset,
   resetPassword,
 } from '../../server/services/auth';
+import {
+  requestLoginCode,
+  verifyLoginCode,
+  pickAccount,
+  setPasswordViaOtp,
+} from '../../server/services/login-otp';
+import { normalizePhone } from '../../shared/logic/phone';
+import { googleEnabled } from '../../server/services/google-auth';
 import { sessionCookie } from '../../server/session';
 import { clearCache } from '../../src/lib/cache.js';
 
@@ -52,6 +66,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     mode: url.searchParams.get('mode'),
     resetToken: url.searchParams.get('token'),
     resetDone: url.searchParams.get('reset') === 'done',
+    googleEnabled: googleEnabled(env),
+    // Only ever a fixed set of known codes from our own /auth/google/callback redirect —
+    // rendered through i18n `t()`, never interpolated raw.
+    googleError: url.searchParams.get('error'),
   };
 }
 
@@ -100,6 +118,74 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return redirect(dest, { headers: { 'Set-Cookie': cookieHeader } });
   }
 
+  if (intent === 'otp-request') {
+    const phone = (formData.get('phone') as string) ?? '';
+    const purpose = formData.get('purpose') === 'set-password' ? 'set-password' : 'login';
+    if (!(await allow(env, otpRequestKey(), OTP_REQUEST_POLICY))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
+    const normalized = normalizePhone(phone);
+    // A phone that fails to normalize still burns the per-IP limiter above but has no per-phone
+    // key to check — requestLoginCode already answers it with the same decoy shape either way.
+    if (normalized && !(await allow(env, otpPhoneKey(normalized), OTP_PHONE_POLICY))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
+    const result = await requestLoginCode(db, env, phone, purpose);
+    return Response.json({ intent, challengeId: result.challengeId, devCode: result.devCode ?? null });
+  }
+
+  if (intent === 'otp-verify') {
+    const challengeId = (formData.get('challengeId') as string) ?? '';
+    const code = (formData.get('code') as string) ?? '';
+    if (!(await allow(env, otpVerifyKey(), OTP_VERIFY_POLICY))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
+    const outcome = await verifyLoginCode(db, challengeId, code);
+    if (!outcome.ok) {
+      return Response.json({ intent, error: 'auth_otp_invalid' }, { status: 400 });
+    }
+    if ('pick' in outcome) {
+      return Response.json({ intent, pick: outcome.pick });
+    }
+    const cookieHeader = await sessionCookie.serialize(outcome.session.token, {
+      maxAge: 30 * 24 * 3600,
+    });
+    return redirect(dest, { headers: { 'Set-Cookie': cookieHeader } });
+  }
+
+  if (intent === 'otp-pick') {
+    const challengeId = (formData.get('challengeId') as string) ?? '';
+    const accountId = (formData.get('accountId') as string) ?? '';
+    if (!(await allow(env, otpVerifyKey(), OTP_VERIFY_POLICY))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
+    const outcome = await pickAccount(db, challengeId, accountId);
+    if (!outcome.ok) {
+      return Response.json({ intent, error: 'auth_otp_invalid' }, { status: 400 });
+    }
+    const cookieHeader = await sessionCookie.serialize(outcome.session.token, {
+      maxAge: 30 * 24 * 3600,
+    });
+    return redirect(dest, { headers: { 'Set-Cookie': cookieHeader } });
+  }
+
+  if (intent === 'otp-set-password') {
+    const challengeId = (formData.get('challengeId') as string) ?? '';
+    const accountId = (formData.get('accountId') as string) ?? '';
+    const newPassword = (formData.get('newPassword') as string) ?? '';
+    if (!(await allow(env, otpVerifyKey(), OTP_VERIFY_POLICY))) {
+      return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
+    }
+    if (!NewPassword.safeParse(newPassword).success) {
+      return Response.json({ intent, error: 'auth_password_too_short' }, { status: 400 });
+    }
+    const outcome = await setPasswordViaOtp(db, challengeId, accountId, newPassword);
+    if (outcome !== 'ok') {
+      return Response.json({ intent, error: 'auth_otp_invalid' }, { status: 400 });
+    }
+    return Response.json({ intent, ok: true });
+  }
+
   if (intent === 'redeem-check') {
     const code = (formData.get('code') as string) ?? '';
     if (!(await allow(env, inviteKey(), INVITE_POLICY))) {
@@ -125,19 +211,23 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const code = (formData.get('code') as string) ?? '';
     const name = (formData.get('name') as string) ?? '';
     const email = (formData.get('email') as string) ?? '';
-    const password = (formData.get('password') as string) ?? '';
+    const password = (formData.get('password') as string) || undefined;
+    const phone = (formData.get('phone') as string) || undefined;
     if (!(await allow(env, inviteKey(), INVITE_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
-    if (!name || !password) {
+    if (!name || (!password && !phone)) {
       return Response.json({ intent, error: 'auth_add_name_pw' }, { status: 400 });
     }
     // The browser path used to skip RedeemInviteInput entirely, so a one-character password
     // was accepted here while the mobile API refused it. Same rule, both clients.
-    if (!NewPassword.safeParse(password).success) {
+    if (password && !NewPassword.safeParse(password).success) {
       return Response.json({ intent, error: 'auth_password_too_short' }, { status: 400 });
     }
-    const result = await redeemInvite(db, code, { name, email, password });
+    const result = await redeemInvite(db, code, { name, email, password, phone });
+    if (result === 'no_login_method') {
+      return Response.json({ intent, error: 'auth_no_login_method' }, { status: 400 });
+    }
     if (!result) {
       return Response.json({ intent, error: 'auth_invite_invalid' }, { status: 400 });
     }
@@ -156,7 +246,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!(await allow(env, loginKey(email), LOGIN_POLICY))) {
       return Response.json({ intent, error: 'auth_rate_limited' }, { status: 429 });
     }
-    const result = await requestReset(db, email);
+    const result = await requestReset(db, email, env, url.origin);
     return Response.json({ intent, sent: true, email, devUrl: result.devUrl ?? null });
   }
 
@@ -212,17 +302,138 @@ export async function clientAction({ serverAction }: ClientActionFunctionArgs) {
 
 // ---- Default export ----
 
+/** One account an OTP phone number resolved to — the picker's own choice list. */
+type OtpCandidateLite = {
+  accountId: string;
+  name: string;
+  kind: string;
+  schoolName: string;
+};
+
+type OtpFetcherData =
+  | { intent: 'otp-request'; challengeId: string; devCode: string | null }
+  | { intent: 'otp-verify'; pick: OtpCandidateLite[] }
+  | { intent: 'otp-set-password'; ok: true }
+  | { intent: 'otp-request' | 'otp-verify' | 'otp-pick' | 'otp-set-password'; error: string };
+
 export default function Login() {
-  const { next, mode: urlMode, resetToken, resetDone } = useLoaderData<typeof loader>();
+  const {
+    next,
+    mode: urlMode,
+    resetToken,
+    resetDone,
+    googleEnabled: showGoogle,
+    googleError,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { t } = useLang();
   const checkFetcher = useFetcher<typeof action>();
+  const otpFetcher = useFetcher<typeof action>();
 
-  const initialMode = urlMode === 'reset' && resetToken ? 'reset' : 'login';
+  // Zalo (phone + code) is the default landing screen — the audience this app serves most is
+  // Zalo-native. A reset link from an email always lands on the Email tab, since that is the
+  // flow the visitor was already in.
+  const initialMode =
+    urlMode === 'reset' && resetToken ? 'reset' : resetDone ? 'login' : 'otp-phone';
   const [mode, setMode] = React.useState<string>(initialMode);
   const [remember, setRemember] = React.useState(true);
   const [showPw, setShowPw] = React.useState(false);
   const [codeValue, setCodeValue] = React.useState('');
+  const [passwordless, setPasswordless] = React.useState(false);
+  const [otpPhone, setOtpPhone] = React.useState('');
+  const [otpCode, setOtpCode] = React.useState('');
+  const [otpChallengeId, setOtpChallengeId] = React.useState<string | null>(null);
+  const [otpDevCode, setOtpDevCode] = React.useState<string | null>(null);
+  const [otpPick, setOtpPick] = React.useState<OtpCandidateLite[]>([]);
+  const [resendSeconds, setResendSeconds] = React.useState(0);
+  // 'set-password' is the Zalo forgot-password path off the 'forgot' screen — it reuses every
+  // otp-phone/otp-code/otp-pick screen above, and only the picker's action and the final step
+  // (setting a new password instead of signing in) differ.
+  const [otpPurpose, setOtpPurpose] = React.useState<'login' | 'set-password'>('login');
+  const [otpPickedAccountId, setOtpPickedAccountId] = React.useState<string | null>(null);
+  const [otpNewPassword, setOtpNewPassword] = React.useState('');
+  const [otpNewPasswordConfirm, setOtpNewPasswordConfirm] = React.useState('');
+  const [otpPasswordSet, setOtpPasswordSet] = React.useState(false);
+
+  // Fetcher submissions carry `next` explicitly: unlike a real <Form>, they do not automatically
+  // resubmit to the current URL's query string, and otp-verify/otp-pick need it to redirect
+  // correctly on success.
+  const loginAction = '/login' + (next ? `?next=${encodeURIComponent(next)}` : '');
+
+  const otpData = otpFetcher.data as OtpFetcherData | undefined;
+  const otpError = otpData && 'error' in otpData ? t(otpData.error) : null;
+
+  React.useEffect(() => {
+    if (!otpData) return;
+    if (otpData.intent === 'otp-request' && 'challengeId' in otpData) {
+      setOtpChallengeId(otpData.challengeId);
+      setOtpDevCode(otpData.devCode ?? null);
+      setOtpCode('');
+      setMode('otp-code');
+      setResendSeconds(60);
+    } else if (otpData.intent === 'otp-verify' && 'pick' in otpData) {
+      setOtpPick(otpData.pick);
+      setMode('otp-pick');
+    } else if (otpData.intent === 'otp-set-password' && 'ok' in otpData) {
+      setOtpPasswordSet(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpData]);
+
+  React.useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const id = setTimeout(() => setResendSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendSeconds]);
+
+  const requestOtp = (phone: string) => {
+    const fd = new FormData();
+    fd.set('intent', 'otp-request');
+    fd.set('phone', phone);
+    fd.set('purpose', otpPurpose);
+    otpFetcher.submit(fd, { method: 'post', action: loginAction });
+  };
+
+  const verifyOtp = () => {
+    const fd = new FormData();
+    fd.set('intent', 'otp-verify');
+    fd.set('challengeId', otpChallengeId ?? '');
+    fd.set('code', otpCode);
+    otpFetcher.submit(fd, { method: 'post', action: loginAction });
+  };
+
+  const pickOtpAccount = (accountId: string) => {
+    if (otpPurpose === 'set-password') {
+      // Setting a password never signs anyone in — collect it on the next screen instead of
+      // spending the challenge here.
+      setOtpPickedAccountId(accountId);
+      setMode('otp-new-password');
+      return;
+    }
+    const fd = new FormData();
+    fd.set('intent', 'otp-pick');
+    fd.set('challengeId', otpChallengeId ?? '');
+    fd.set('accountId', accountId);
+    otpFetcher.submit(fd, { method: 'post', action: loginAction });
+  };
+
+  const submitSetPassword = () => {
+    const fd = new FormData();
+    fd.set('intent', 'otp-set-password');
+    fd.set('challengeId', otpChallengeId ?? '');
+    fd.set('accountId', otpPickedAccountId ?? '');
+    fd.set('newPassword', otpNewPassword);
+    otpFetcher.submit(fd, { method: 'post', action: loginAction });
+  };
+
+  const zaloTabActive =
+    mode === 'otp-phone' ||
+    mode === 'otp-code' ||
+    mode === 'otp-pick' ||
+    mode === 'otp-new-password';
+  // Hidden mid-flow for a Zalo password reset — it's off the 'forgot' screen, and the tabs would
+  // otherwise offer to abandon it back to a plain sign-in.
+  const showTabs = otpPurpose === 'login' && (zaloTabActive || mode === 'login');
 
   // When redeem-check fetcher succeeds, advance to onboarding form.
   type CheckedInvite = { role: string; name: string | null; linked: boolean };
@@ -242,6 +453,15 @@ export default function Login() {
       ? t((actionData as { error: string }).error)
       : null;
   const checkError = checkData?.error ? t(checkData.error) : null;
+
+  // A fixed, known set of codes from our own /auth/google/callback redirect — never raw text
+  // from the query string.
+  const googleErrorMsg =
+    googleError === 'google_no_account'
+      ? t('auth_google_no_account')
+      : googleError
+        ? t('auth_google_failed')
+        : null;
 
   const sentData =
     actionData &&
@@ -343,6 +563,14 @@ export default function Login() {
         >
           {t('auth_have_code')}
         </LBtn>
+        {showGoogle && (
+          <>
+            {googleErrorMsg && <div className="auth-error">{googleErrorMsg}</div>}
+            <a className="mochi-btn is-secondary" style={{ width: '100%' }} href="/auth/google">
+              {t('auth_google_signin')}
+            </a>
+          </>
+        )}
         {/*
           The only way into /signup. Deliberately the quietest thing on the page: almost everyone
           arriving here belongs to a school that already exists, and creating a second one by
@@ -354,6 +582,189 @@ export default function Login() {
           </a>
         </p>
       </Form>
+    );
+  } else if (mode === 'otp-phone') {
+    form = (
+      <>
+        <h2 className="auth-title">
+          {otpPurpose === 'set-password' ? t('auth_reset_title') : t('auth_welcome')}
+        </h2>
+        <p className="auth-sub">{t('auth_otp_phone_sub')}</p>
+        <AuthField
+          icon="message"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="0901 234 567"
+          value={otpPhone}
+          onChange={(e) => setOtpPhone(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && otpPhone.trim()) {
+              e.preventDefault();
+              requestOtp(otpPhone);
+            }
+          }}
+        />
+        {otpError && <div className="auth-error">{otpError}</div>}
+        <LBtn
+          type="button"
+          variant="primary"
+          block={true}
+          disabled={otpFetcher.state !== 'idle' || !otpPhone.trim()}
+          onClick={() => requestOtp(otpPhone)}
+        >
+          {t('auth_otp_send_code')}
+        </LBtn>
+      </>
+    );
+  } else if (mode === 'otp-code') {
+    form = (
+      <>
+        <h2 className="auth-title">{t('auth_otp_enter_code')}</h2>
+        <p className="auth-sub">{t('auth_otp_code_sent_generic')}</p>
+        {otpDevCode && (
+          <div className="auth-hint-code" data-testid="otp-dev-code" style={{ marginBottom: 12 }}>
+            <strong>[dev]</strong> {otpDevCode}
+          </div>
+        )}
+        <AuthField
+          icon="key"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          placeholder="000000"
+          value={otpCode}
+          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && otpCode.length === 6) {
+              e.preventDefault();
+              verifyOtp();
+            }
+          }}
+        />
+        {otpError && <div className="auth-error">{otpError}</div>}
+        <LBtn
+          type="button"
+          variant="primary"
+          block={true}
+          disabled={otpFetcher.state !== 'idle' || otpCode.length !== 6}
+          onClick={verifyOtp}
+        >
+          {t('auth_otp_verify')}
+        </LBtn>
+        <p className="auth-foot">
+          <button
+            type="button"
+            className="auth-link"
+            disabled={resendSeconds > 0 || otpFetcher.state !== 'idle'}
+            onClick={() => requestOtp(otpPhone)}
+          >
+            {resendSeconds > 0 ? t('auth_otp_resend_in', { n: resendSeconds }) : t('auth_otp_resend')}
+          </button>
+        </p>
+        <p className="auth-foot">
+          <button
+            type="button"
+            className="auth-link"
+            onClick={() => {
+              setMode('otp-phone');
+              setOtpCode('');
+              setOtpChallengeId(null);
+              setOtpDevCode(null);
+            }}
+          >
+            {t('auth_otp_change_number')}
+          </button>
+        </p>
+      </>
+    );
+  } else if (mode === 'otp-pick') {
+    form = (
+      <>
+        <h2 className="auth-title">{t('auth_otp_pick_title')}</h2>
+        {otpError && <div className="auth-error">{otpError}</div>}
+        <div className="auth-pick-list">
+          {otpPick.map((c) => (
+            <button
+              key={c.accountId}
+              type="button"
+              className="auth-pick-item"
+              disabled={otpFetcher.state !== 'idle'}
+              onClick={() => pickOtpAccount(c.accountId)}
+            >
+              <MIcon name="users" size={18} />
+              <span>
+                <strong>{c.name}</strong>
+                <br />
+                {roleLabel(c.kind)} · {c.schoolName}
+              </span>
+            </button>
+          ))}
+        </div>
+      </>
+    );
+  } else if (mode === 'otp-new-password') {
+    form = otpPasswordSet ? (
+      <>
+        <h2 className="auth-title">{t('auth_reset_title')}</h2>
+        <div className="auth-success">
+          <MIcon name="check" size={18} />
+          {t('prof_pw_changed')}
+        </div>
+        <p className="auth-foot">
+          <button
+            type="button"
+            className="auth-link"
+            onClick={() => {
+              setOtpPurpose('login');
+              setMode('login');
+            }}
+          >
+            {t('auth_back_signin')}
+          </button>
+        </p>
+      </>
+    ) : (
+      <>
+        <h2 className="auth-title">{t('auth_reset_title')}</h2>
+        <p className="auth-sub">{t('auth_choose_pw')}</p>
+        <AuthField
+          icon="lock"
+          type="password"
+          placeholder={t('auth_choose_pw')}
+          autoComplete="new-password"
+          value={otpNewPassword}
+          onChange={(e) => setOtpNewPassword(e.target.value)}
+        />
+        <AuthField
+          icon="lock"
+          type="password"
+          placeholder={t('auth_confirm_pw')}
+          autoComplete="new-password"
+          value={otpNewPasswordConfirm}
+          onChange={(e) => setOtpNewPasswordConfirm(e.target.value)}
+        />
+        {otpNewPassword &&
+          otpNewPasswordConfirm &&
+          otpNewPassword !== otpNewPasswordConfirm && (
+            <div className="auth-error">{t('auth_pw_nomatch')}</div>
+          )}
+        {otpError && <div className="auth-error">{otpError}</div>}
+        <LBtn
+          type="button"
+          variant="primary"
+          block={true}
+          disabled={
+            otpFetcher.state !== 'idle' ||
+            otpNewPassword.length < 8 ||
+            otpNewPassword !== otpNewPasswordConfirm
+          }
+          onClick={submitSetPassword}
+        >
+          {t('auth_send_reset')}
+        </LBtn>
+      </>
     );
   } else if (mode === 'code') {
     form = (
@@ -404,6 +815,8 @@ export default function Login() {
       </>
     );
   } else if (mode === 'code-check' && checkedInvite) {
+    // Staff never goes passwordless — a teaching/admin account has no OTP entry point.
+    const canGoPasswordless = checkedInvite.role !== 'Staff';
     form = (
       <Form method="post">
         {nextInput}
@@ -424,7 +837,33 @@ export default function Login() {
           readOnly={checkedInvite.linked && !!checkedInvite.name}
         />
         <AuthField icon="mail" type="email" name="email" placeholder={t('auth_email_optional')} />
-        <AuthField icon="lock" type="password" name="password" placeholder={t('auth_choose_pw')} />
+        {passwordless ? (
+          <>
+            <AuthField
+              icon="message"
+              type="tel"
+              inputMode="tel"
+              name="phone"
+              placeholder="0901 234 567"
+            />
+            <p className="m-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 12 }}>
+              {t('auth_redeem_passwordless_hint')}
+            </p>
+          </>
+        ) : (
+          <AuthField icon="lock" type="password" name="password" placeholder={t('auth_choose_pw')} />
+        )}
+        {canGoPasswordless && (
+          <p className="auth-foot" style={{ margin: '0 0 12px' }}>
+            <button
+              type="button"
+              className="auth-link"
+              onClick={() => setPasswordless((v) => !v)}
+            >
+              {passwordless ? t('auth_redeem_use_password') : t('auth_redeem_use_zalo')}
+            </button>
+          </p>
+        )}
         {navError && <div className="auth-error">{navError}</div>}
         <LBtn type="submit" variant="primary" block={true}>
           {t('auth_join')}
@@ -481,6 +920,19 @@ export default function Login() {
             {t('auth_send_reset')}
           </LBtn>
           <p className="auth-foot">
+            <button
+              className="auth-link"
+              type="button"
+              onClick={() => {
+                setOtpPurpose('set-password');
+                setOtpPasswordSet(false);
+                setMode('otp-phone');
+              }}
+            >
+              {t('auth_reset_via_zalo')}
+            </button>
+          </p>
+          <p className="auth-foot">
             <button className="auth-link" type="button" onClick={() => setMode('login')}>
               {t('auth_back_signin')}
             </button>
@@ -514,7 +966,29 @@ export default function Login() {
     <div className="auth-wrap">
       <div className="auth-card">
         <div className="auth-card__brand">{Brand}</div>
-        <div className="auth-card__form">{form}</div>
+        <div className="auth-card__form">
+          {showTabs && (
+            <div className="auth-tabs-wrap">
+              <div className="mochi-tabs">
+                <button
+                  type="button"
+                  className={'mochi-tabs__tab' + (zaloTabActive ? ' is-active' : '')}
+                  onClick={() => setMode('otp-phone')}
+                >
+                  {t('auth_tab_zalo')}
+                </button>
+                <button
+                  type="button"
+                  className={'mochi-tabs__tab' + (mode === 'login' ? ' is-active' : '')}
+                  onClick={() => setMode('login')}
+                >
+                  {t('auth_tab_email')}
+                </button>
+              </div>
+            </div>
+          )}
+          {form}
+        </div>
       </div>
     </div>
   );

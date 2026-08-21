@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { useLoaderData, useFetcher } from 'react-router';
+import { useLoaderData, useFetcher, useOutletContext } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
 import { Modal, MSelect, ColorPicker, PageHeader, Empty, useConfirm } from '../ui.jsx';
@@ -79,7 +79,12 @@ type ParentDraft = {
 export function StudentsScreen() {
   const { students, staff, parents, invites, classes, flashcardStats } =
     useLoaderData() as PeopleLoaderData;
+  const { user } = useOutletContext<{ user: { user: { role: string } } }>();
+  const isAdmin = user.user.role === 'Admin';
   const fetcher = useFetcher();
+  const resetLoginFetcher = useFetcher<{ ok?: boolean; code?: string; error?: string }>();
+  const [resetLoginResult, setResetLoginResult] = React.useState<NewInvite[] | null>(null);
+  const [resetLoginRole, setResetLoginRole] = React.useState<string>('Student');
   const { t } = useLang();
   const relLabel = (r: string | null | undefined) =>
     t('rel_' + String(r || 'guardian').toLowerCase());
@@ -170,6 +175,38 @@ export function StudentsScreen() {
       fetcher.submit(fd, { action: '/people', method: 'post' });
     }
   };
+
+  /**
+   * The escape hatch for "neither the old password nor Zalo/Google works anymore": wipes the
+   * person's login and hands back a fresh invite code, exactly like adding them fresh. Destroys
+   * every live session for them, hence the danger confirm.
+   */
+  const ENTITY_ROLE = { student: 'Student', staff: 'Staff', parent: 'Parent' } as const;
+
+  const resetLogin = async (entity: keyof typeof ENTITY_ROLE, id: string, name: string) => {
+    if (
+      await confirm({
+        title: t('reset_login_q'),
+        message: t('reset_login_msg', { name }),
+        confirmLabel: t('reset_login_confirm'),
+        danger: true,
+      })
+    ) {
+      setResetLoginRole(ENTITY_ROLE[entity]);
+      const fd = new FormData();
+      fd.set('entity', entity);
+      fd.set('intent', 'reset-login');
+      fd.set('id', id);
+      resetLoginFetcher.submit(fd, { action: '/people', method: 'post' });
+    }
+  };
+
+  React.useEffect(() => {
+    if (resetLoginFetcher.state === 'idle' && resetLoginFetcher.data?.code) {
+      setResetLoginResult([{ role: resetLoginRole, code: resetLoginFetcher.data.code }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetLoginFetcher.state, resetLoginFetcher.data]);
 
   return (
     <div className="content">
@@ -265,6 +302,15 @@ export function StudentsScreen() {
                   >
                     <MIcon name="edit" size={16} />
                   </MIB>
+                  {isAdmin && (
+                    <MIB
+                      label={t('reset_login')}
+                      size="sm"
+                      onClick={() => resetLogin('student', s.id, s.name)}
+                    >
+                      <MIcon name="key" size={16} />
+                    </MIB>
+                  )}
                   <MIB label={t('delete')} size="sm" onClick={() => del(s)}>
                     <MIcon name="trash" size={16} />
                   </MIB>
@@ -300,6 +346,15 @@ export function StudentsScreen() {
                 <MIB label={t('edit')} size="sm" onClick={() => setStaffModal({ ...u })}>
                   <MIcon name="edit" size={16} />
                 </MIB>
+                {isAdmin && (
+                  <MIB
+                    label={t('reset_login')}
+                    size="sm"
+                    onClick={() => resetLogin('staff', u.id, u.name)}
+                  >
+                    <MIcon name="key" size={16} />
+                  </MIB>
+                )}
                 <MIB label={t('delete')} size="sm" onClick={() => delStaff(u)}>
                   <MIcon name="trash" size={16} />
                 </MIB>
@@ -357,6 +412,15 @@ export function StudentsScreen() {
                   >
                     <MIcon name="edit" size={16} />
                   </MIB>
+                  {isAdmin && (
+                    <MIB
+                      label={t('reset_login')}
+                      size="sm"
+                      onClick={() => resetLogin('parent', p.id, p.name)}
+                    >
+                      <MIcon name="key" size={16} />
+                    </MIB>
+                  )}
                   <MIB label="Delete" size="sm" onClick={() => delParent(p)}>
                     <MIcon name="trash" size={16} />
                   </MIB>
@@ -391,6 +455,9 @@ export function StudentsScreen() {
           onClose={() => setParentModal(null)}
           students={students}
         />
+      )}
+      {resetLoginResult && (
+        <InviteCodesModal invites={resetLoginResult} onClose={() => setResetLoginResult(null)} />
       )}
       {confirmNode}
     </div>

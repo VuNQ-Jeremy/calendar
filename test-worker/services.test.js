@@ -25,7 +25,8 @@ import * as questionsSvc from '../server/services/questions';
 import * as testsSvc from '../server/services/tests';
 import * as attemptsSvc from '../server/services/attempts';
 import { ictDateOf, normalizeScore } from '../shared/logic/tests';
-import { hashPassword } from '../server/services/crypto';
+import { hashPassword, NO_PASSWORD } from '../server/services/crypto';
+import { makeInviteCode } from '../shared/logic/invite-code';
 import { sessionCookie } from '../server/session';
 import {
   accounts,
@@ -49,6 +50,7 @@ import {
   classPrices,
   tuitionLines,
   tuitionMonths,
+  zaloChats,
 } from '../server/db/schema';
 
 function db() {
@@ -635,6 +637,127 @@ describe('auth service — linked invite redemption', () => {
     expect(session.user.id).toBe(parent.id);
     expect(session.user.name).toBe('Signed In Parent');
     expect(session.user.role).toBe('Parent');
+  });
+});
+
+describe('auth service — passwordless invite redemption', () => {
+  it('redeems a student invite passwordless when the family has a reachable Zalo chat', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Zalo Student',
+      color: 'blue',
+      classIds: [],
+    });
+    await d.insert(zaloChats).values({
+      id: crypto.randomUUID(),
+      chatId: `chat-${crypto.randomUUID()}`,
+      kind: 'user',
+      studentId: student.id,
+      createdAt: new Date().toISOString(),
+    });
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
+
+    const result = await authSvc.redeemInvite(d.raw, invite.code, {
+      name: 'Whatever They Typed',
+      phone: '0900555001',
+    });
+    expect(result).not.toBeNull();
+    expect(result).not.toBe('no_login_method');
+
+    const account = await d.raw.query.accounts.findFirst({
+      where: eq(accounts.studentId, student.id),
+    });
+    expect(account.passwordHash).toBe(NO_PASSWORD);
+    expect(account.phoneE164).toBe('+84900555001');
+  });
+
+  it('refuses passwordless redeem when the family has no paired Zalo chat', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'No Chat Student',
+      color: 'blue',
+      classIds: [],
+    });
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Student', studentId: student.id }]);
+
+    const result = await authSvc.redeemInvite(d.raw, invite.code, {
+      name: 'x',
+      phone: '0900555002',
+    });
+    expect(result).toBe('no_login_method');
+  });
+
+  it('refuses passwordless redeem for a staff invite even with a reachable chat', async () => {
+    const d = db();
+    const member = await peopleSvc.createStaff(d, { name: 'Zalo Teacher', color: 'orange' });
+    const [invite] = await invitesSvc.createLinked(d, [{ role: 'Staff', staffId: member.id }]);
+
+    const result = await authSvc.redeemInvite(d.raw, invite.code, {
+      name: 'x',
+      phone: '0900555003',
+    });
+    expect(result).toBe('no_login_method');
+  });
+
+  it('refuses passwordless redeem for a legacy (unlinked) invite — no person exists yet to check a chat against', async () => {
+    const d = db();
+    const invite = await invitesSvc.create(d, {
+      code: makeInviteCode(),
+      role: 'Student',
+      used: false,
+    });
+    const result = await authSvc.redeemInvite(d.raw, invite.code, {
+      name: 'New Student',
+      phone: '0900555004',
+    });
+    expect(result).toBe('no_login_method');
+  });
+});
+
+describe('invites service — admin reset-login', () => {
+  it('deletes the old account, purges its sessions, and mints a fresh redeemable code', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Locked Out',
+      color: 'blue',
+      classIds: [],
+    });
+    const [firstInvite] = await invitesSvc.createLinked(d, [
+      { role: 'Student', studentId: student.id },
+    ]);
+    const first = await authSvc.redeemInvite(d.raw, firstInvite.code, {
+      name: 'x',
+      password: 'pw123456',
+    });
+    const oldToken = await authSvc.createSession(d.raw, first.accountId, true);
+    expect(await authSvc.userFromToken(d.raw, oldToken)).not.toBeNull();
+
+    const reset = await invitesSvc.resetLogin(d, { role: 'Student', studentId: student.id });
+    expect(reset.code).toMatch(/^[A-Z2-9]{3}-[A-Z2-9]{3}$/);
+    expect(reset.code).not.toBe(firstInvite.code);
+
+    // The old session is gone — the account it belonged to no longer exists.
+    expect(await authSvc.userFromToken(d.raw, oldToken)).toBeNull();
+
+    // The fresh code redeems normally, exactly like a first invite.
+    const second = await authSvc.redeemInvite(d.raw, reset.code, {
+      name: 'Locked Out',
+      password: 'newpw123456',
+    });
+    expect(second).not.toBeNull();
+    expect(second).not.toBe('no_login_method');
+    expect(second.accountId).not.toBe(first.accountId);
+  });
+
+  it('returns null when the person has no account yet — nothing to reset', async () => {
+    const d = db();
+    const student = await peopleSvc.createStudent(d, {
+      name: 'Never Redeemed',
+      color: 'blue',
+      classIds: [],
+    });
+    const result = await invitesSvc.resetLogin(d, { role: 'Student', studentId: student.id });
+    expect(result).toBeNull();
   });
 });
 

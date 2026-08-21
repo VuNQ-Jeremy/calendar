@@ -13,6 +13,6 @@ import { allow, loginKey, LOGIN_POLICY } from '../../server/services/rate-limit'
 export const action = withPublic(async ({ request, rawDb, env }) => {
   const input = await parseBody(request, RequestResetInput);
   if (!(await allow(env, loginKey(input.email), LOGIN_POLICY))) throw fail('rate_limited', 429);
-  const result = await requestReset(rawDb, input.email);
+  const result = await requestReset(rawDb, input.email, env, new URL(request.url).origin);
   return { ok: true, ...result };
 });

@@ -57,6 +57,28 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   const intent = formData.get('intent') as string;
   const id = formData.get('id') as string | null;
 
+  if (intent === 'reset-login') {
+    // Admin-only: this destroys the person's current login entirely (see resetLogin's own
+    // comment) — a plain Teacher/Assistant can edit a roster but must not revoke a colleague's
+    // or a family's access.
+    if (user.user.role !== 'Admin') {
+      return Response.json({ error: 'forbidden' }, { status: 403 });
+    }
+    if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
+    const target =
+      entity === 'student'
+        ? ({ role: 'Student', studentId: id } as const)
+        : entity === 'staff'
+          ? ({ role: 'Staff', staffId: id } as const)
+          : entity === 'parent'
+            ? ({ role: 'Parent', parentId: id } as const)
+            : null;
+    if (!target) return Response.json({ error: 'unknown entity/intent' }, { status: 400 });
+    const result = await invitesSvc.resetLogin(db, target);
+    if (!result) return Response.json({ error: 'no_account' }, { status: 400 });
+    return { ok: true, code: result.code };
+  }
+
   if (entity === 'student') {
     if (intent === 'delete') {
       if (!id) return Response.json({ error: 'missing id' }, { status: 400 });

@@ -190,6 +190,23 @@ export interface LoginResponse {
   expiresAt: string;
 }
 
+/** Always this shape, whether or not the phone matched anything real — see login-otp.ts. */
+export interface OtpRequestResult {
+  challengeId: string;
+}
+
+/** One account a phone number resolved to, shown only after the code has been proven correct. */
+export interface OtpCandidate {
+  accountId: string;
+  tenantId: string;
+  name: string;
+  kind: 'staff' | 'student' | 'parent';
+  schoolName: string;
+}
+
+/** Either a session (one account matched) or a list to disambiguate (several did). */
+export type OtpVerifyResult = LoginResponse | { pick: OtpCandidate[] };
+
 export interface BadgeCounts {
   unusedInvites: number;
   newFeedback: number;

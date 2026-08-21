@@ -168,6 +168,34 @@ export const LoginResponse = z
   .object({ token: z.string(), expiresAt: z.string() })
   .meta({ id: 'LoginResponse' });
 
+/** Always this shape, whether or not the phone matched anything real — see login-otp.ts. */
+export const OtpRequestResult = z
+  .object({ challengeId: z.string() })
+  .meta({ id: 'OtpRequestResult' });
+
+/** setPasswordViaOtp never mints a session — the caller signs in afterward with the new password. */
+export const OtpSetPasswordResult = z.object({ ok: z.literal(true) }).meta({
+  id: 'OtpSetPasswordResult',
+});
+
+/** One account a phone number resolved to, shown only after the code has been proven correct. */
+export const OtpCandidate = z
+  .object({
+    accountId: z.string(),
+    tenantId: z.string(),
+    name: z.string(),
+    kind: z.enum(['staff', 'student', 'parent']),
+    schoolName: z.string(),
+  })
+  .meta({ id: 'OtpCandidate' });
+
+export const OtpPickList = z.object({ pick: z.array(OtpCandidate) }).meta({ id: 'OtpPickList' });
+
+/** Either a session (one account matched) or a list to disambiguate (several did). */
+export const OtpVerifyResult = z
+  .union([LoginResponse, OtpPickList])
+  .meta({ id: 'OtpVerifyResult' });
+
 /** `homeworkDue` is always 0 — the homework feature is gone, the key is kept for old builds. */
 export const BadgeCounts = z
   .object({

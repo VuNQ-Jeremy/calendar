@@ -21,6 +21,9 @@ import type {
   MaterialInput,
   MonthlyRemarkInput,
   NotifPrefsInput,
+  OtpPickInput,
+  OtpRequestInput,
+  OtpVerifyInput,
   ParentInput,
   ProfileInput,
   PlantPatchInput,
@@ -62,6 +65,8 @@ import type {
   MeResponse,
   MonthlyRemarkRow,
   MySessionsResponse,
+  OtpRequestResult,
+  OtpVerifyResult,
   ParentRow,
   ParentAttendanceResponse,
   ParentHomeResponse,
@@ -104,6 +109,22 @@ export const requestReset = (email: string) =>
     body: { email },
     auth: false,
   });
+
+/**
+ * Zalo OTP login. `otpRequest` always answers `{ challengeId }` — a real one or a decoy, see
+ * server/services/login-otp.ts — so the caller can never tell from this response alone whether
+ * the phone matched anything. `otpVerify` replies with a session when exactly one account
+ * matched, or `{ pick }` to disambiguate when it matched more than one; `otpPick` finishes that
+ * second case by naming which candidate to sign into.
+ */
+export const otpRequest = (input: OtpRequestInput) =>
+  apiFetch<OtpRequestResult>('/api/auth/otp-request', { method: 'POST', body: input, auth: false });
+
+export const otpVerify = (input: OtpVerifyInput) =>
+  apiFetch<OtpVerifyResult>('/api/auth/otp-verify', { method: 'POST', body: input, auth: false });
+
+export const otpPick = (input: OtpPickInput) =>
+  apiFetch<LoginResponse>('/api/auth/otp-pick', { method: 'POST', body: input, auth: false });
 
 export const me = () => apiFetch<MeResponse>('/api/auth/me');
 
