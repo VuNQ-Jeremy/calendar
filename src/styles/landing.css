@@ -346,6 +346,9 @@
 
 .landing-float {
   position: absolute;
+  /* above the calendar card: its rotate() makes it a stacking context that
+     otherwise paints over any float earlier in the DOM */
+  z-index: 1;
   background: #fff;
   border: 1px solid var(--l-sand);
   border-radius: 16px;

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0294 — 2026-08-21
+Landing: attendance float card no longer paints behind the rotated calendar
+
 ## v0.0293 — 2026-08-21
 Zalo phone+code login and recovery, email password reset, Sign in with Google, passwordless invites, and admin login reset
 
