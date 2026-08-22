@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0299 — 2026-08-22
+Add the Mochi paw favicon (and an apple-touch icon) — browser tabs showed the default globe because the web app had no icon at all.
+
 ## v0.0298 — 2026-08-22
 Browser tab title now names the current page (Mochi — Feedback on /feedback), derived from the sidebar nav labels and re-titled in the active language.
 
