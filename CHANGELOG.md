@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0303 — 2026-08-22
+Revert the four-pad paw experiment: back to the original three-toe mark, still on the round favicon.
+
 ## v0.0302 — 2026-08-22
 Brand paw is tilted 45 degrees again and drawn as a white outline instead of a solid fill.
 
