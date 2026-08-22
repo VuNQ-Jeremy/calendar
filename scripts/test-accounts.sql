@@ -43,6 +43,11 @@ DELETE FROM accounts WHERE email LIKE 'e2e-signup-%';
 -- sees the school default" assertion would fail.
 DELETE FROM user_settings;
 
+-- The changelog hide list (server/services/changelog.ts). Not a table of its own: it is one
+-- k/v row in `settings`, which seed.sql does not clear, so a spec that hides a release note
+-- would leak it into the next run and the next spec would see a short changelog.
+DELETE FROM settings WHERE key = 'changelog-hidden';
+
 -- Activity log (migration 0035). Append-only and unrelated to any spec's own assertions, but a
 -- leaked prior run's rows would make crud-activity.spec.ts's row-count-based checks (e.g. "exactly
 -- 3 events for this entity id") fragile across reruns against the same test database.

@@ -95,6 +95,44 @@ test.describe('CRUD: feedback and profile', () => {
     await expect(phoneInput).toHaveValue('');
   });
 
+  test('changelog: hide an entry and restore it', async ({ page }) => {
+    const k = ui(page);
+    await page.goto('/feedback');
+    await page.getByRole('button', { name: 'Changelog' }).click();
+    const dlg = k.dlgOf('Changelog');
+    const rows = dlg.locator('.lrow');
+    await expect(rows.first()).toBeVisible();
+
+    // The version chip is the row's identity — the body prose changes with every release, and
+    // the newest entry is whatever the build under test shipped with.
+    const version = (await rows.first().locator('.lrow__meta .m-row').first().innerText()).trim();
+    expect(version).toMatch(/^v\d+\.\d+$/);
+    const chip = (v: string) => dlg.getByText(v, { exact: true });
+
+    let post = k.posted('/feedback');
+    await rows.first().getByRole('button', { name: 'Hide this entry' }).click();
+    await post;
+    // Gone from the list, not merely greyed. Row COUNT is not the assertion: the page keeps
+    // showing ten entries, so hiding one just pulls the eleventh into view.
+    await expect(chip(version)).toHaveCount(0);
+
+    // It survives a reload, which is the whole point of storing it server-side.
+    await page.reload();
+    await page.getByRole('button', { name: 'Changelog' }).click();
+    await expect(chip(version)).toHaveCount(0);
+
+    // Restore through the hidden toggle, so the next run starts from a full changelog. The
+    // staging reset also clears the row (scripts/test-accounts.sql) if this spec dies here.
+    await dlg.getByRole('button', { name: /^Show hidden \(\d+\)$/ }).click();
+    const hiddenRow = rows.filter({ has: chip(version) });
+    post = k.posted('/feedback');
+    await hiddenRow.getByRole('button', { name: 'Show this entry again' }).click();
+    await post;
+    await expect(chip(version)).toBeVisible();
+    // With nothing hidden the toggle has nothing to offer and leaves.
+    await expect(dlg.getByRole('button', { name: /^Show hidden/ })).toHaveCount(0);
+  });
+
   test('change password and change it back', async ({ page }) => {
     const k = ui(page);
     const OLD = process.env.MOCHI_PASSWORD!;

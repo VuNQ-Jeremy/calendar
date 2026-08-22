@@ -130,7 +130,8 @@ export function FeedbackModal({ draft, setDraft, onClose, onSave }: FeedbackModa
 }
 
 interface FeedbackScreenProps {
-  user: { name?: string } | null;
+  /** `role` gates the changelog's hide buttons — see ChangelogList. */
+  user: { name?: string; role?: string } | null;
 }
 
 /**
@@ -141,7 +142,7 @@ interface FeedbackScreenProps {
  * chip on a feedback report is only useful if you can look up what that version changed —
  * a lookup, not a work queue, so it opens as a modal rather than sharing the board.
  */
-function ChangelogModal({ onClose }: { onClose: () => void }) {
+function ChangelogModal({ onClose, canEdit }: { onClose: () => void; canEdit: boolean }) {
   const { t } = useLang();
   return (
     <Modal
@@ -156,7 +157,7 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
         </FBtn>
       }
     >
-      <ChangelogList />
+      <ChangelogList canEdit={canEdit} />
     </Modal>
   );
 }
@@ -164,10 +165,46 @@ function ChangelogModal({ onClose }: { onClose: () => void }) {
 /** How many release notes the changelog shows at a time; scrolling to the end reveals the next batch. */
 const CHANGELOG_PAGE = 10;
 
-function ChangelogList() {
+function ChangelogList({ canEdit }: { canEdit: boolean }) {
+  const { t } = useLang();
+  // Optional, not because the loader omits it, but because a cached payload can: the route is
+  // SWR-cached (K.feedback), so the first render after this shipped reads an entry written by
+  // the build before it. `.includes` on a missing field would take the modal down.
+  const { hiddenChangelog = [] } = useLoaderData() as { hiddenChangelog?: string[] };
+  const fetcher = useFetcher();
   const [shown, setShown] = React.useState(CHANGELOG_PAGE);
+  const [showHidden, setShowHidden] = React.useState(false);
   const sentinelRef = React.useRef<HTMLDivElement>(null);
-  const more = shown < CHANGELOG.length;
+
+  /**
+   * Optimistic hides, version → hidden.
+   *
+   * The row has to leave the list on click: the write revalidates the whole route, and a list
+   * this long that sits still for a beat after a click reads as broken. Cleared when the action
+   * answers with an error, so a refused hide (a teacher whose render still had the button)
+   * cannot leave an entry hidden on screen only.
+   */
+  const [overrides, setOverrides] = React.useState<Record<string, boolean>>({});
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && (fetcher.data as { error?: string } | undefined)?.error) {
+      setOverrides({});
+    }
+  }, [fetcher.state, fetcher.data]);
+
+  const isHidden = (version: string) => overrides[version] ?? hiddenChangelog.includes(version);
+  const hiddenCount = CHANGELOG.filter((e) => isHidden(e.version)).length;
+  // Hidden entries are dropped entirely rather than greyed in place — the point of hiding one is
+  // that it stops taking up a row. `showHidden` is how an admin gets back to them.
+  const entries = showHidden ? CHANGELOG : CHANGELOG.filter((e) => !isHidden(e.version));
+  const more = shown < entries.length;
+
+  const setHidden = (version: string, hidden: boolean) => {
+    setOverrides((o) => ({ ...o, [version]: hidden }));
+    const fd = new FormData();
+    fd.set('intent', hidden ? 'changelog-hide' : 'changelog-show');
+    fd.set('version', version);
+    fetcher.submit(fd, { action: '/feedback', method: 'post' });
+  };
 
   /**
    * Reveal the next batch when the end of the list scrolls into view.
@@ -182,8 +219,8 @@ function ChangelogList() {
     const el = sentinelRef.current;
     if (!el || !more || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((x) => x.isIntersecting)) setShown((n) => n + CHANGELOG_PAGE);
+      (entries_) => {
+        if (entries_.some((x) => x.isIntersecting)) setShown((n) => n + CHANGELOG_PAGE);
       },
       { rootMargin: '160px' },
     );
@@ -193,41 +230,59 @@ function ChangelogList() {
 
   return (
     <div className="m-stack">
-      {CHANGELOG.slice(0, shown).map((e) => (
-        <div key={e.version} className="lrow" style={{ alignItems: 'flex-start' }}>
-          <div className="iconwrap" style={{ width: 40, height: 40, ...ICON_TINT('blue') }}>
-            <MIcon name="sparkle" size={18} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontWeight: 700,
-                color: 'var(--text-strong)',
-                fontSize: 'var(--text-md)',
-                textWrap: 'pretty' as React.CSSProperties['textWrap'],
-              }}
-            >
-              {e.body}
+      {entries.slice(0, shown).map((e) => {
+        const hidden = isHidden(e.version);
+        return (
+          <div
+            key={e.version}
+            className="lrow"
+            style={{ alignItems: 'flex-start', opacity: hidden ? 0.55 : 1 }}
+          >
+            <div className="iconwrap" style={{ width: 40, height: 40, ...ICON_TINT('blue') }}>
+              <MIcon name="sparkle" size={18} />
             </div>
-            <div className="lrow__meta">
-              <span
-                className="m-row"
-                style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                  fontSize: 'var(--text-md)',
+                  textWrap: 'pretty' as React.CSSProperties['textWrap'],
+                }}
               >
-                {e.version}
-              </span>
-              <span className="m-row" style={{ gap: 5 }}>
-                <MIcon name="clock" size={13} />
-                {new Date(e.date).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </span>
+                {e.body}
+              </div>
+              <div className="lrow__meta">
+                <span
+                  className="m-row"
+                  style={{ gap: 5, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                >
+                  {e.version}
+                </span>
+                <span className="m-row" style={{ gap: 5 }}>
+                  <MIcon name="clock" size={13} />
+                  {new Date(e.date).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </span>
+              </div>
             </div>
+            {canEdit && (
+              <div className="lrow__actions">
+                <FIB
+                  label={hidden ? t('fb_cl_restore') : t('fb_cl_hide')}
+                  size="sm"
+                  onClick={() => setHidden(e.version, !hidden)}
+                >
+                  <MIcon name={hidden ? 'eye' : 'trash'} size={16} />
+                </FIB>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
       {more && (
         <div
           ref={sentinelRef}
@@ -238,7 +293,19 @@ function ChangelogList() {
             variant="secondary"
             size="sm"
             onClick={() => setShown((n) => n + CHANGELOG_PAGE)}
-          >{`Show older (${CHANGELOG.length - shown})`}</FBtn>
+          >{`Show older (${entries.length - shown})`}</FBtn>
+        </div>
+      )}
+      {canEdit && hiddenCount > 0 && (
+        <div className="m-row" style={{ justifyContent: 'center' }}>
+          <FBtn
+            variant="ghost"
+            size="sm"
+            iconLeft={<MIcon name={showHidden ? 'eyeOff' : 'eye'} size={16} />}
+            onClick={() => setShowHidden((v) => !v)}
+          >
+            {showHidden ? t('fb_cl_hide_hidden') : t('fb_cl_show_hidden', { n: hiddenCount })}
+          </FBtn>
         </div>
       )}
     </div>
@@ -547,7 +614,9 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
           onSave={save}
         />
       )}
-      {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
+      {changelogOpen && (
+        <ChangelogModal onClose={() => setChangelogOpen(false)} canEdit={user?.role === 'Admin'} />
+      )}
     </div>
   );
 }

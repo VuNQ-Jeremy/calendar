@@ -9,8 +9,9 @@ import { FeedbackScreen } from '../../src/feedback.jsx';
 import type { AppContext } from './_app.js';
 import { tenantDbFor } from '../../server/db/index';
 import { cloudflareCtx } from '../../app/load-context';
-import { requireStaff } from '../../server/services/auth';
+import { requireAdmin, requireStaff } from '../../server/services/auth';
 import * as feedbackSvc from '../../server/services/feedback';
+import * as changelogSvc from '../../server/services/changelog';
 import { notifyFeedbackIssue } from '../../server/services/github';
 import { FeedbackInput, parsePatch } from '../../shared/schemas';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
@@ -20,8 +21,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const staff = await requireStaff(request, env);
   const db = tenantDbFor(env, staff);
-  const feedback = await feedbackSvc.list(db);
-  return { feedback };
+  const [feedback, hiddenChangelog] = await Promise.all([
+    feedbackSvc.list(db),
+    changelogSvc.getHiddenVersions(db),
+  ]);
+  return { feedback, hiddenChangelog };
 }
 
 export async function clientLoader({ serverLoader }: ClientLoaderFunctionArgs) {
@@ -40,6 +44,20 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
   if (intent === 'delete') {
     if (!id) return Response.json({ error: 'missing id' }, { status: 400 });
     await feedbackSvc.remove(db, id);
+    return { ok: true };
+  }
+
+  // Hiding a release note is not feedback CRUD: it edits what the whole school reads on this
+  // page, so it takes Admin where the rest of this action takes staff. The version is checked
+  // against the changelog's own heading format rather than trusted — the value goes into a
+  // stored list that every later render filters on.
+  if (intent === 'changelog-hide' || intent === 'changelog-show') {
+    await requireAdmin(request, env);
+    const version = formData.get('version');
+    if (typeof version !== 'string' || !/^v\d+\.\d+$/.test(version)) {
+      return Response.json({ error: 'bad version' }, { status: 400 });
+    }
+    await changelogSvc.setVersionHidden(db, version, intent === 'changelog-hide');
     return { ok: true };
   }
 

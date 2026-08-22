@@ -150,6 +150,35 @@ describe('FeedbackScreen', () => {
     expect(screen.getByText('Older entry 11')).toBeInTheDocument();
     expect(screen.queryByText(/Show older/)).not.toBeInTheDocument();
   });
+
+  it('offers the hide button to admins only', async () => {
+    const Stub = makeStub({ feedback: [] }, FeedbackScreen, { user: TEST_USER }); // Teacher
+    await renderStub(Stub);
+    await act(async () => {
+      screen.getByText('Changelog').click();
+    });
+    expect(screen.queryByLabelText('Hide this entry')).not.toBeInTheDocument();
+  });
+
+  it('drops a hidden entry from the changelog and offers it back', async () => {
+    const Stub = makeStub({ feedback: [], hiddenChangelog: ['v0.0001'] }, FeedbackScreen, {
+      user: { ...TEST_USER, role: 'Admin' },
+    });
+    await renderStub(Stub);
+    await act(async () => {
+      screen.getByText('Changelog').click();
+    });
+    expect(screen.queryByText('Test entry')).not.toBeInTheDocument();
+    // The list stays ten long: hiding the newest entry pulls the eleventh into the first page.
+    expect(screen.getByText('Older entry 10')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Hide this entry')).toHaveLength(10);
+
+    await act(async () => {
+      screen.getByText('Show hidden (1)').click();
+    });
+    expect(screen.getByText('Test entry')).toBeInTheDocument();
+    expect(screen.getByLabelText('Show this entry again')).toBeInTheDocument();
+  });
 });
 
 describe('FeedbackScreen board', () => {
@@ -240,7 +269,13 @@ describe('ProfileScreen', () => {
           pwStatus: { busy: false, ok: false, error: null },
           zaloStatus: { paired: false, hasPassword: true, busy: false, code: null },
           onZaloPair: () => {},
-          emailVerifyStatus: { hasRealEmail: false, verified: false, busy: false, sent: false, devUrl: null },
+          emailVerifyStatus: {
+            hasRealEmail: false,
+            verified: false,
+            busy: false,
+            sent: false,
+            devUrl: null,
+          },
           onVerifyEmail: () => {},
           googleStatus: { show: false, linked: false, busy: false, error: null },
           onUnlinkGoogle: () => {},

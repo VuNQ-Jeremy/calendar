@@ -891,6 +891,10 @@ const en_strings = {
   fb_tab_done: 'Resolved · {n}',
   fb_changelog: 'Changelog',
   fb_changelog_sub: 'What shipped in each release, newest first',
+  fb_cl_hide: 'Hide this entry',
+  fb_cl_restore: 'Show this entry again',
+  fb_cl_show_hidden: 'Show hidden ({n})',
+  fb_cl_hide_hidden: 'Hide them again',
   fb_col_empty: 'Nothing here',
   fb_drag_status: 'Drag to another column to change status',
   fb_issue_title: 'Open the GitHub issue for this report',
@@ -996,7 +1000,7 @@ const en_strings = {
   auth_add_name_pw: 'Add your name and a password to finish.',
   auth_password_too_short: 'Password must be at least 8 characters.',
   auth_no_login_method: "That phone isn't reachable on Zalo yet — pick a password instead.",
-  auth_redeem_use_zalo: "Use Zalo, skip the password",
+  auth_redeem_use_zalo: 'Use Zalo, skip the password',
   auth_redeem_use_password: 'Use a password instead',
   auth_redeem_passwordless_hint: "You'll sign in with a code sent via Zalo.",
   // Zalo OTP login
@@ -2717,6 +2721,10 @@ export const STRINGS = {
     fb_tab_done: 'Đã xử lý · {n}',
     fb_changelog: 'Nhật ký thay đổi',
     fb_changelog_sub: 'Những gì đã thay đổi ở mỗi bản phát hành, mới nhất trước',
+    fb_cl_hide: 'Ẩn mục này',
+    fb_cl_restore: 'Hiện lại mục này',
+    fb_cl_show_hidden: 'Xem {n} mục đã ẩn',
+    fb_cl_hide_hidden: 'Ẩn lại',
     fb_col_empty: 'Chưa có gì',
     fb_drag_status: 'Kéo sang cột khác để đổi trạng thái',
     fb_issue_title: 'Mở issue GitHub của báo cáo này',
@@ -3648,7 +3656,8 @@ export const STRINGS = {
     landing_garden_line: '+3 từ mới hôm nay',
     landing_features_kicker: 'Tính năng',
     landing_features_h2: 'Mọi việc của trường, một nơi gọn gàng',
-    landing_features_sub: 'Không phải mười công cụ rời rạc và ba nhóm chat lộn xộn — chỉ một Mochi.',
+    landing_features_sub:
+      'Không phải mười công cụ rời rạc và ba nhóm chat lộn xộn — chỉ một Mochi.',
     landing_f1_t: 'Lịch & điểm danh',
     landing_f1_b:
       'Xếp lớp theo tuần, điểm danh một chạm, và ai cũng biết hôm nay học gì, ở phòng nào.',
@@ -3665,19 +3674,16 @@ export const STRINGS = {
     landing_f5_b:
       'Phụ huynh xem lịch, điểm và học phí — không cần cài gì, có bot Zalo nhắc lịch mỗi ngày.',
     landing_f6_t: 'Ứng dụng cho học sinh',
-    landing_f6_b:
-      'App Android để học từ, làm bài và xem lịch — vẫn chạy tốt khi mạng chập chờn.',
+    landing_f6_b: 'App Android để học từ, làm bài và xem lịch — vẫn chạy tốt khi mạng chập chờn.',
     landing_how_kicker: 'Bắt đầu',
     landing_how_h2: 'Ba bước, không cần đội IT',
     landing_s1_t: 'Tạo trường của bạn',
-    landing_s1_b:
-      'Đăng ký mất chừng hai phút. Trường của bạn có không gian riêng, dữ liệu riêng.',
+    landing_s1_b: 'Đăng ký mất chừng hai phút. Trường của bạn có không gian riêng, dữ liệu riêng.',
     landing_s2_t: 'Mời cả trường',
     landing_s2_b:
       'Gửi mã mời XXX-XXX cho giáo viên, học sinh và phụ huynh — mỗi người vào đúng vai của mình.',
     landing_s3_t: 'Dạy và học thôi',
-    landing_s3_b:
-      'Lịch tự nhắc, điểm danh tự tổng hợp, học phí tự chốt sổ. Mochi lo phần giấy tờ.',
+    landing_s3_b: 'Lịch tự nhắc, điểm danh tự tổng hợp, học phí tự chốt sổ. Mochi lo phần giấy tờ.',
     landing_roles_kicker: 'Dành cho ai',
     landing_roles_h2: 'Mỗi người một cửa, cùng một mái nhà',
     landing_r1_tag: 'Giáo viên & quản lý',
