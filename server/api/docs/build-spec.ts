@@ -288,14 +288,19 @@ export function buildSpec(origin: string): Json {
   };
 }
 
-let cached: string | null = null;
+const cached = new Map<string, string>();
 
 /**
- * The spec as JSON text. Built once per isolate — the first caller pays a few milliseconds and
- * everyone after it is free. The origin is baked in on that first call, which is fine: one
- * deployment only ever serves one origin.
+ * The spec as JSON text. Built once per isolate per origin — the first caller for a given
+ * origin pays a few milliseconds and everyone after it is free. Keyed by origin, not a single
+ * value: once the app/marketing host split (server/origin.ts) is live, the same isolate can
+ * field requests for two different origins.
  */
 export function getSpecJson(origin: string): string {
-  if (cached === null) cached = JSON.stringify(buildSpec(origin));
-  return cached;
+  let spec = cached.get(origin);
+  if (spec === undefined) {
+    spec = JSON.stringify(buildSpec(origin));
+    cached.set(origin, spec);
+  }
+  return spec;
 }

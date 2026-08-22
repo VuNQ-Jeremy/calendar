@@ -1,10 +1,17 @@
 import { type RouteConfig, index, layout, route } from '@react-router/dev/routes';
 
 export default [
-  // The public marketing landing page. Outside the _app layout, like /login and /signup: an
-  // unauthenticated visitor must see it instead of being bounced to /login. Its loader sends
-  // signed-in users on to their home screen, so `/` still works as an app entry.
-  index('routes/home.tsx'),
+  // The public marketing site. Outside the _app layout, like /login and /signup: an
+  // unauthenticated visitor must see it instead of being bounced to /login. The layout
+  // owns the shared shell (header/nav/footer); home.tsx's loader decides landing-vs-app
+  // per host once APP_ORIGIN exists (server/origin.ts).
+  layout('routes/landing.tsx', [
+    index('routes/home.tsx'),
+    route('features', 'routes/landing.features.tsx'),
+    route('pricing', 'routes/landing.pricing.tsx'),
+    route('about', 'routes/landing.about.tsx'),
+    route('guides', 'routes/landing.guides.tsx'),
+  ]),
   route('login', 'routes/login.tsx'),
   route('verify-email', 'routes/verify-email.tsx'),
   // Sign in with Google (web only). Both outside `_app`, like /login — no session yet on the

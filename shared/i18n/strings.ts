@@ -1893,6 +1893,73 @@ const en_strings = {
   landing_cta_sub:
     'Create your school for free, invite your first classes, and watch next week fall neatly into place.',
   landing_footer_tag: 'Mochi — made with a lot of love, for small schools.',
+  // ---- Marketing site: nav, features, pricing, about, guides ----
+  landing_nav_pricing: 'Pricing',
+  landing_nav_about: 'About',
+  landing_nav_guides: 'Guides',
+  landing_menu: 'Menu',
+  landing_ft_h1: 'What Mochi does for your school',
+  landing_ft_sub:
+    'Module by module — deep enough to replace the paper stack and three separate apps.',
+  landing_ft1_p:
+    "Your whole school's week on one screen: which class, which room, which teacher — drag to reschedule and everyone sees the change instantly.",
+  landing_ft1_i1: 'One-tap attendance right on the session',
+  landing_ft1_i2: 'Session notes and homework sent straight to the class Zalo group',
+  landing_ft1_i3: 'A check-in kiosk so students mark themselves present on arrival',
+  landing_ft2_p:
+    'Set tuition per class, close each month — Mochi does the math. The slip is a themed image, one tap to send to parents over Zalo.',
+  landing_ft2_i1: 'Prices take effect by month — a change never rewrites a closed book',
+  landing_ft2_i2: 'Closing a month freezes its numbers',
+  landing_ft2_i3: "See who has paid and who hasn't",
+  landing_ft3_p:
+    "At month's end every child gets a report card: scores, attendance, the teacher's remarks — printable or sent via Zalo, bilingual out of the box.",
+  landing_ft3_i1: 'Assessment criteria your school defines',
+  landing_ft3_i2: 'A question bank and auto-scored tests',
+  landing_ft3_i3: 'Monthly rankings for motivation',
+  landing_ft4_p:
+    'Students learn vocabulary through flashcards and games, practice pronunciation scored word by word — and every word learned makes the class garden greener.',
+  landing_ft4_i1: 'Ten collectible plants unlocked by effort',
+  landing_ft4_i2: 'Curriculum vocabulary books, imported from Excel',
+  landing_ft4_i3: 'A monthly mystery-bag reward',
+  landing_ft5_p:
+    'Parents install nothing: the portal runs in the browser, and the Zalo bot messages schedules, attendance and tuition slips straight into the family chat.',
+  landing_ft5_i1: "See your child's schedule, scores and attendance anytime",
+  landing_ft5_i2: 'Automatic daily session reminders',
+  landing_ft5_i3: 'Sign in with phone + Zalo code, no password needed',
+  landing_ft6_p:
+    'An Android app for students: study, take tests, check the schedule. Work finished offline is kept and sent automatically when the connection returns.',
+  landing_ft6_i1: 'Updates itself — no reinstall',
+  landing_ft6_i2: 'Class and homework notifications',
+  landing_ft6_i3: 'Light — runs fine on modest phones',
+  landing_pr_h1: 'Pricing',
+  landing_pr_h2: 'Free while in beta',
+  landing_pr_p:
+    'Mochi is in beta and completely free — every feature, unlimited students, no card required.',
+  landing_pr_included: 'Everything included:',
+  landing_pr_i1: 'Calendar, attendance & check-in kiosk',
+  landing_pr_i2: 'Tuition & Zalo slips',
+  landing_pr_i3: 'Report cards & tests',
+  landing_pr_i4: 'Vocabulary garden & the student app',
+  landing_pr_i5: 'Parent portal & Zalo bot',
+  landing_pr_note:
+    'When Mochi gets official pricing, early schools will hear about it first and be treated right.',
+  landing_ab_h1: 'About Mochi',
+  landing_ab_p1:
+    'Mochi grew up inside a small language school in Vietnam — every feature exists because a real teacher, student or parent needed it.',
+  landing_ab_p2:
+    'We believe software for small schools should feel as warm as the classroom itself: tidy, friendly, never enterprise-cold.',
+  landing_ab_contact_h: 'Contact',
+  landing_ab_contact_p:
+    'Want a walkthrough or help getting started? The fastest way: create a free school and message us right from the Feedback page inside Mochi.',
+  landing_gd_h1: 'User guides',
+  landing_gd_sub: 'Short Vietnamese videos, recorded from the real app.',
+  landing_gd_soon: 'Coming soon',
+  landing_gd1: 'Calendar & sessions basics',
+  landing_gd2: 'Taking attendance',
+  landing_gd3: 'Tuition & sending slips',
+  landing_gd4: 'Monthly report cards',
+  landing_gd5: 'The vocabulary garden',
+  landing_gd6: 'The parent portal & Zalo bot',
 } as const;
 
 export type MsgKey = keyof typeof en_strings;
@@ -3705,6 +3772,72 @@ export const STRINGS = {
     landing_cta_sub:
       'Tạo trường miễn phí, mời vài lớp đầu tiên, và xem tuần tới của bạn tự xếp vào hàng.',
     landing_footer_tag: 'Mochi — làm với thật nhiều yêu thương, cho những ngôi trường nhỏ.',
+    // ---- Marketing site: nav, features, pricing, about, guides ----
+    landing_nav_pricing: 'Bảng giá',
+    landing_nav_about: 'Về Mochi',
+    landing_nav_guides: 'Hướng dẫn',
+    landing_menu: 'Trình đơn',
+    landing_ft_h1: 'Mochi làm được gì cho trường bạn',
+    landing_ft_sub: 'Từng phần một — đủ sâu để thay cả xấp sổ và ba ứng dụng rời.',
+    landing_ft1_p:
+      'Tuần của cả trường nằm trên một màn hình: lớp nào, phòng nào, cô nào dạy — kéo thả để dời buổi, mọi người thấy thay đổi ngay.',
+    landing_ft1_i1: 'Điểm danh một chạm ngay trên buổi học',
+    landing_ft1_i2: 'Ghi chú buổi học và bài về nhà gửi thẳng nhóm Zalo của lớp',
+    landing_ft1_i3: 'Kiosk check-in cho học sinh tự điểm danh khi đến',
+    landing_ft2_p:
+      'Đặt học phí theo lớp, chốt sổ theo tháng — Mochi tính phần còn lại. Phiếu thu là một tấm ảnh xinh xắn, chạm một lần để gửi phụ huynh qua Zalo.',
+    landing_ft2_i1: 'Giá có hiệu lực theo tháng — đổi giá không làm sai sổ đã chốt',
+    landing_ft2_i2: 'Chốt tháng để đóng băng số liệu',
+    landing_ft2_i3: 'Thấy ngay ai đã đóng, ai chưa',
+    landing_ft3_p:
+      'Cuối tháng, mỗi em một phiếu nhận xét: điểm số, chuyên cần, lời nhận xét của cô — in ra hoặc gửi qua Zalo, song ngữ sẵn.',
+    landing_ft3_i1: 'Tiêu chí nhận xét do trường tự đặt',
+    landing_ft3_i2: 'Ngân hàng câu hỏi và bài kiểm tra chấm tự động',
+    landing_ft3_i3: 'Bảng xếp hạng tháng tạo động lực',
+    landing_ft4_p:
+      'Học sinh học từ vựng bằng flashcard và trò chơi, luyện phát âm được chấm từng từ — mỗi từ học được, khu vườn của lớp lại xanh thêm.',
+    landing_ft4_i1: 'Mười loài cây sưu tầm, mở khóa bằng chăm chỉ',
+    landing_ft4_i2: 'Sách từ vựng theo chương trình, nhập từ Excel',
+    landing_ft4_i3: 'Túi mù phần thưởng mỗi tháng',
+    landing_ft5_p:
+      'Phụ huynh không cần cài gì: cổng phụ huynh chạy trên trình duyệt, bot Zalo nhắn lịch học, điểm danh và phiếu thu thẳng vào nhóm gia đình.',
+    landing_ft5_i1: 'Xem lịch, điểm, chuyên cần của con mọi lúc',
+    landing_ft5_i2: 'Nhắc buổi học tự động mỗi ngày',
+    landing_ft5_i3: 'Đăng nhập bằng số điện thoại + mã Zalo, không cần mật khẩu',
+    landing_ft6_p:
+      'App Android cho học sinh: học từ, làm bài, xem lịch. Làm xong lúc mất mạng, bài vẫn được giữ và tự gửi khi có mạng lại.',
+    landing_ft6_i1: 'Tự cập nhật — không cần cài lại',
+    landing_ft6_i2: 'Thông báo buổi học và bài tập',
+    landing_ft6_i3: 'Nhẹ — chạy tốt cả trên máy yếu',
+    landing_pr_h1: 'Bảng giá',
+    landing_pr_h2: 'Miễn phí trong thời gian beta',
+    landing_pr_p:
+      'Mochi đang trong giai đoạn beta và miễn phí hoàn toàn — đủ mọi tính năng, không giới hạn học sinh, không cần thẻ.',
+    landing_pr_included: 'Bao gồm tất cả:',
+    landing_pr_i1: 'Lịch, điểm danh & kiosk check-in',
+    landing_pr_i2: 'Học phí & phiếu thu Zalo',
+    landing_pr_i3: 'Phiếu nhận xét & bài kiểm tra',
+    landing_pr_i4: 'Vườn từ vựng & app học sinh',
+    landing_pr_i5: 'Cổng phụ huynh & bot Zalo',
+    landing_pr_note:
+      'Khi Mochi có giá chính thức, các trường tham gia sớm sẽ được báo trước và được đối đãi xứng đáng.',
+    landing_ab_h1: 'Về Mochi',
+    landing_ab_p1:
+      'Mochi lớn lên bên trong một trường ngoại ngữ nhỏ ở Việt Nam — từng tính năng ra đời vì một cô giáo, một học sinh hay một phụ huynh thật sự cần nó.',
+    landing_ab_p2:
+      'Chúng tôi tin phần mềm cho trường nhỏ nên ấm áp như chính lớp học: gọn gàng, thân thiện, không bao giờ lạnh lùng kiểu "phần mềm doanh nghiệp".',
+    landing_ab_contact_h: 'Liên hệ',
+    landing_ab_contact_p:
+      'Muốn xem Mochi tận mắt hay cần giúp bắt đầu? Nhanh nhất: tạo trường miễn phí và nhắn cho chúng tôi ngay trong mục Góp ý của Mochi.',
+    landing_gd_h1: 'Hướng dẫn sử dụng',
+    landing_gd_sub: 'Video ngắn bằng tiếng Việt, quay từ chính ứng dụng thật.',
+    landing_gd_soon: 'Sắp có',
+    landing_gd1: 'Lịch & buổi học cơ bản',
+    landing_gd2: 'Điểm danh',
+    landing_gd3: 'Học phí & gửi phiếu thu',
+    landing_gd4: 'Phiếu nhận xét hàng tháng',
+    landing_gd5: 'Vườn từ vựng',
+    landing_gd6: 'Cổng phụ huynh & bot Zalo',
   },
 } satisfies Record<'en' | 'vi', Record<MsgKey, string>>;
 

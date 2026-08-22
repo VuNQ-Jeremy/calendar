@@ -799,3 +799,217 @@
     display: none;
   }
 }
+
+/* ============================ page heads (subpages) ============================ */
+.landing-page-head {
+  max-width: 640px;
+  margin: 56px auto 8px;
+  text-align: center;
+}
+.landing-page-head h1 {
+  font-size: clamp(2rem, 4vw, 2.8rem);
+}
+.landing .landing-page-head p {
+  margin-top: 12px;
+  color: var(--l-ink-soft);
+  font-size: 1.08rem;
+}
+
+.landing-center {
+  text-align: center;
+}
+
+/* shared ✓ bullet list (features rows, pricing card) */
+.landing-checks {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  color: var(--l-ink-soft);
+  font-size: 0.95rem;
+}
+.landing-checks li {
+  display: flex;
+  gap: 9px;
+}
+.landing-checks li::before {
+  content: '✓';
+  color: var(--l-sage);
+  font-weight: 800;
+}
+
+/* ============================ features page ============================ */
+.landing-ftrows {
+  display: grid;
+  gap: 18px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.landing-ftrow {
+  background: #fff;
+  border: 1px solid var(--l-sand);
+  border-radius: var(--l-radius);
+  box-shadow: var(--l-shadow-soft);
+  padding: 28px 26px;
+}
+.landing-ftrow h2 {
+  font-size: 1.3rem;
+  margin: 14px 0 10px;
+}
+.landing .landing-ftrow > p {
+  color: var(--l-ink-soft);
+}
+
+/* ============================ pricing ============================ */
+.landing-price-card {
+  max-width: 560px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid var(--l-sand);
+  border-radius: 28px;
+  box-shadow: var(--l-shadow);
+  padding: 40px 34px;
+  text-align: center;
+}
+.landing-price-figure {
+  font-family: var(--l-display);
+  font-weight: 600;
+  font-size: 3.4rem;
+  color: var(--l-brand-deep);
+  line-height: 1;
+  margin: 18px 0 6px;
+}
+.landing .landing-price-card > p {
+  color: var(--l-ink-soft);
+}
+.landing-price-card .landing-checks {
+  text-align: left;
+  max-width: 330px;
+  margin: 16px auto 24px;
+}
+.landing-price-included {
+  font-family: var(--l-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--l-cocoa);
+  margin-top: 22px;
+}
+.landing .landing-price-note {
+  margin-top: 18px;
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--l-ink-soft);
+}
+
+/* ============================ about ============================ */
+.landing-prose {
+  max-width: 620px;
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  font-size: 1.08rem;
+}
+.landing .landing-prose p {
+  color: var(--l-ink-soft);
+}
+
+/* ============================ guides ============================ */
+.landing-guides {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+.landing-guide {
+  background: var(--l-milk);
+  border: 1px solid var(--l-sand);
+  border-radius: var(--l-radius);
+  padding: 24px 22px;
+  box-shadow: var(--l-shadow-soft);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.landing-guide__thumb {
+  font-size: 1.6rem;
+}
+.landing-guide h2 {
+  font-size: 1.02rem;
+  flex: 1;
+}
+.landing-guide__soon {
+  font-family: var(--l-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--l-sand-soft);
+  color: var(--l-cocoa);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* ============================ mobile menu ============================ */
+.landing-burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid var(--l-sand);
+  border-radius: 12px;
+  background: var(--l-cream);
+  cursor: pointer;
+  padding: 0 9px;
+}
+.landing-burger span {
+  display: block;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--l-ink);
+}
+.landing-burger:focus-visible {
+  outline: 3px solid var(--l-sky);
+  outline-offset: 2px;
+}
+.landing-mobile-menu {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .landing-burger {
+    display: flex;
+  }
+  .landing-mobile-menu {
+    display: grid;
+    gap: 4px;
+    padding: 10px 16px 14px;
+    border-bottom: 1px solid var(--l-sand);
+    background: var(--l-cream);
+  }
+  .landing-mobile-menu a {
+    padding: 10px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .landing-mobile-menu a:active {
+    background: var(--l-sand-soft);
+  }
+  .landing-guides {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .landing-guides {
+    grid-template-columns: 1fr;
+  }
+  .landing-page-head {
+    margin-top: 36px;
+  }
+  .landing-price-card {
+    padding: 32px 20px;
+  }
+}

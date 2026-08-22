@@ -28,6 +28,7 @@ import { getUser, createSession, homeFor } from '../../server/services/auth';
 import { createTenant } from '../../server/services/tenants';
 import { sessionCookie } from '../../server/session';
 import { clearCache } from '../../src/lib/cache.js';
+import { isAppHost, appUrl } from '../../server/origin';
 
 const { Button: LBtn, Tag: LTag } = DS;
 
@@ -35,6 +36,13 @@ const { Button: LBtn, Tag: LTag } = DS;
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
+  // Cookies are host-only: signing up on the marketing apex would mint a
+  // session invisible to the app. Once the split is on, this lives on the
+  // app host only.
+  if (!isAppHost(request, env)) {
+    const url = new URL(request.url);
+    return redirect(appUrl(env, url.pathname + url.search));
+  }
   const user = await getUser(request, env);
   if (user) return redirect(homeFor(user.kind));
   return {};

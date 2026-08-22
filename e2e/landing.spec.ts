@@ -55,3 +55,44 @@ test.describe('landing page', () => {
     await page.waitForURL(/\/(dashboard|vocabulary)/, { timeout: 30_000 });
   });
 });
+
+test.describe('marketing pages', () => {
+  const pages = [
+    { path: '/features', h1: /Mochi/ },
+    { path: '/pricing', h1: /Bảng giá|Pricing/ },
+    { path: '/about', h1: /Về Mochi|About/ },
+    { path: '/guides', h1: /Hướng dẫn|guides/i },
+  ];
+  for (const p of pages) {
+    test(`${p.path} renders inside the landing shell`, async ({ page }) => {
+      await page.goto(p.path);
+      await expect(page.locator('.landing-page-head h1')).toContainText(p.h1);
+      await expect(page.locator('.landing-header')).toBeVisible();
+      await expect(page.locator('.landing-footer')).toBeVisible();
+    });
+  }
+
+  test('desktop nav navigates to pricing', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('.landing-nav__links a[href="/pricing"]').click();
+    await expect(page).toHaveURL(/\/pricing$/);
+    await expect(page.locator('.landing-price-figure')).toBeVisible();
+  });
+
+  test('mobile burger menu opens and navigates', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.locator('.landing-burger').click();
+    await page.locator('.landing-mobile-menu a[href="/features"]').click();
+    await expect(page).toHaveURL(/\/features$/);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('pricing shows the signup CTA', async ({ page }) => {
+    await page.goto('/pricing');
+    await expect(page.locator('.landing-price-card a[href*="/signup"]')).toBeVisible();
+  });
+});

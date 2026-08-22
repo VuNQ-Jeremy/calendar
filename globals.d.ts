@@ -42,6 +42,12 @@
  * server/services/google-auth.ts). Both optional and fail together: either missing means
  * `googleEnabled()` is false, the button is hidden, and /auth/google 404s rather than starting a
  * flow that could never finish.
+ *
+ * APP_ORIGIN is optional. The app host's origin (e.g. https://app.example.com) once the
+ * marketing/app domain split is live (server/origin.ts). Unset means single-host mode: every
+ * behavior is identical to before the split existed, and that is the case today — no domain has
+ * been purchased yet. Not a secret, but hand-maintained here anyway: `wrangler types` cannot see
+ * `vars` either, and would silently drop this the same way it once dropped ANTHROPIC_API_KEY.
  */
 interface Env {
   ANTHROPIC_API_KEY?: string;
@@ -57,6 +63,7 @@ interface Env {
   EMAIL_FROM_NAME?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  APP_ORIGIN?: string;
 }
 
 /** Injected by vite `define` — see vite.config.ts. e.g. "v0.0042" */

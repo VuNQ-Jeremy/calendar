@@ -49,6 +49,7 @@ import { normalizePhone } from '../../shared/logic/phone';
 import { googleEnabled } from '../../server/services/google-auth';
 import { sessionCookie } from '../../server/session';
 import { clearCache } from '../../src/lib/cache.js';
+import { isAppHost, appUrl } from '../../server/origin';
 
 const { Button: LBtn, Switch: LSw, Tag: LTag } = DS;
 
@@ -56,6 +57,13 @@ const { Button: LBtn, Switch: LSw, Tag: LTag } = DS;
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
+  // Cookies are host-only: a session minted on the marketing apex would be
+  // invisible to the app. Once the split is on (APP_ORIGIN set), auth lives
+  // on the app host only — bounce there, preserving the query string.
+  if (!isAppHost(request, env)) {
+    const url = new URL(request.url);
+    return redirect(appUrl(env, url.pathname + url.search));
+  }
   const user = await getUser(request, env);
   if (user) return redirect(homeFor(user.kind));
   const url = new URL(request.url);

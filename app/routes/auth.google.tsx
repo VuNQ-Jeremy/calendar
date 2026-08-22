@@ -4,6 +4,7 @@ import { cloudflareCtx } from '../../app/load-context';
 import { requireUser, safeNextPath } from '../../server/services/auth';
 import { googleEnabled, beginGoogleAuth } from '../../server/services/google-auth';
 import { oauthCookie } from '../../server/session';
+import { isAppHost, appUrl } from '../../server/origin';
 
 /**
  * Start the Google sign-in redirect. `?next=` carries where to land after a successful login
@@ -16,6 +17,11 @@ import { oauthCookie } from '../../server/session';
  */
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
+  // Cookies are host-only: this flow must start and finish on the app host.
+  if (!isAppHost(request, env)) {
+    const here = new URL(request.url);
+    return redirect(appUrl(env, here.pathname + here.search));
+  }
   if (!googleEnabled(env)) throw redirect('/login');
 
   const url = new URL(request.url);
