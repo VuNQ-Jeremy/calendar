@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0307 — 2026-08-22
+Landing: CTA button colors survive the anchor color reset (white-on-white fix)
+
 ## v0.0306 — 2026-08-22
 Landing: restore the gap between the hero CTAs and the invite-code note (specificity fix)
 

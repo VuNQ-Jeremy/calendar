@@ -162,7 +162,11 @@
     transform 0.12s ease,
     box-shadow 0.12s ease;
 }
-.landing-btn--brand {
+/* .landing prefix on every variant that sets `color`: the buttons are <Link>
+   anchors, and the `.landing a { color: inherit }` reset is class+element
+   specificity — it silently beats a lone class (white-on-white inside the
+   orange CTA card was the symptom). Same trap as .landing-hero__note. */
+.landing .landing-btn--brand {
   background: var(--l-brand);
   color: #fff;
   box-shadow: 0 3px 0 var(--l-brand-deep);
@@ -171,7 +175,7 @@
   transform: translateY(-1px);
   box-shadow: 0 4px 0 var(--l-brand-deep);
 }
-.landing-btn--ghost {
+.landing .landing-btn--ghost {
   background: transparent;
   color: var(--l-ink);
   border: 1.5px solid var(--l-sand);
@@ -608,7 +612,7 @@
   color: #fff3e4;
   font-size: 1.08rem;
 }
-.landing-btn--light {
+.landing .landing-btn--light {
   background: #fff;
   color: var(--l-brand-deep);
   box-shadow: 0 3px 0 rgba(58, 49, 42, 0.25);
