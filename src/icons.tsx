@@ -60,11 +60,14 @@ const M_ICONS = {
     '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
   grad: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
   // Mochi's brand mark, so it is drawn here rather than borrowed: a cat's paw has FOUR toes
-  // over the pad, and Lucide's `paw-print` (what this used to be) has three. Filled, not
-  // stroked like the rest of the set — a print is solid, and stroked toes merge into the pad
-  // below ~24px, which is exactly the size the sidebar and the favicon use. The outer toes
-  // splay outward the way a real print does. Mirrored in public/favicon.svg.
-  paw: '<g fill="currentColor" stroke="none"><ellipse cx="4.4" cy="10.1" rx="2.05" ry="2.5" transform="rotate(-28 4.4 10.1)"/><ellipse cx="9" cy="5.9" rx="2.25" ry="2.65" transform="rotate(-10 9 5.9)"/><ellipse cx="15" cy="5.9" rx="2.25" ry="2.65" transform="rotate(10 15 5.9)"/><ellipse cx="19.6" cy="10.1" rx="2.05" ry="2.5" transform="rotate(28 19.6 10.1)"/><path d="M12 12.4c3.5 0 6.2 2.3 6.2 4.9 0 2.6-2.6 4.5-6.2 4.5s-6.2-1.9-6.2-4.5c0-2.6 2.7-4.9 6.2-4.9z"/></g>',
+  // over the pad, and Lucide's `paw-print` (what this used to be) has three. Stroked like the
+  // rest of the set, and tilted 45 degrees the way the old mark was — a print is left at an
+  // angle, not stamped square on. The toes are a little smaller than a filled version would
+  // want: an outline needs air between the shapes or they read as one blob at 16px.
+  //
+  // The transform reads right to left: pull the paw's own centre (12, 14.2) to the origin,
+  // scale, tilt, then drop it on the middle of the 24 grid. Mirrored in public/favicon.svg.
+  paw: '<g transform="translate(12 12) rotate(45) scale(0.9) translate(-12 -14.2)"><ellipse cx="4.4" cy="10.1" rx="1.8" ry="2.2" transform="rotate(-28 4.4 10.1)"/><ellipse cx="9" cy="5.9" rx="2" ry="2.35" transform="rotate(-10 9 5.9)"/><ellipse cx="15" cy="5.9" rx="2" ry="2.35" transform="rotate(10 15 5.9)"/><ellipse cx="19.6" cy="10.1" rx="1.8" ry="2.2" transform="rotate(28 19.6 10.1)"/><path d="M12 12.4c3.5 0 6.2 2.3 6.2 4.9 0 2.6-2.6 4.5-6.2 4.5s-6.2-1.9-6.2-4.5c0-2.6 2.7-4.9 6.2-4.9z"/></g>',
   sparkle:
     '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>',
   flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
