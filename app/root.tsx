@@ -1,5 +1,15 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
-import { LanguageProvider } from '../src/lib/i18n.jsx';
+import React from 'react';
+import {
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useLocation,
+  type MetaArgs,
+} from 'react-router';
+import { LanguageProvider, useLang } from '../src/lib/i18n.jsx';
+import { titleForPath } from '../src/lib/page-title.js';
 
 import '@fontsource/fredoka/400.css';
 import '@fontsource/fredoka/500.css';
@@ -23,7 +33,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Mochi — School OS</title>
         <Meta />
         <Links />
       </head>
@@ -36,9 +45,39 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * The tab title for whatever page is showing — "Mochi — Feedback" on /feedback.
+ *
+ * Lives on the root route so no page has to remember to set one; a route that wants something
+ * else (routes/home.tsx, which also carries the landing page's og: tags) exports its own `meta`
+ * and replaces this wholesale.
+ *
+ * English here: `meta` runs on the server, where the chosen language — localStorage, read after
+ * mount — is not knowable. <PageTitle/> below re-titles the page in the real language.
+ */
+export function meta({ location }: MetaArgs) {
+  return [{ title: titleForPath(location.pathname) }];
+}
+
+/**
+ * Re-title the page in the active language, and again whenever the toggle flips.
+ *
+ * Runs after the <Meta/> title above lands in the document, so this wins — deliberately: it is
+ * the same string in the language the user actually picked.
+ */
+function PageTitle() {
+  const { pathname } = useLocation();
+  const { lang } = useLang();
+  React.useEffect(() => {
+    document.title = titleForPath(pathname, lang);
+  }, [pathname, lang]);
+  return null;
+}
+
 export default function App() {
   return (
     <LanguageProvider>
+      <PageTitle />
       <Outlet />
     </LanguageProvider>
   );
