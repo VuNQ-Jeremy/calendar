@@ -10,6 +10,7 @@ import type { ClassLite } from '../../server/services/classes.js';
 import type { StudentRow, StaffRow, ParentRow } from '../../server/services/people.js';
 import type { InviteRow } from '../../server/services/invites.js';
 import type { StudentFlashcardStats } from '../../server/services/flashcards.js';
+import type { AppUser } from '../screens-core.jsx';
 
 const {
   Card: MC,
@@ -79,8 +80,13 @@ type ParentDraft = {
 export function StudentsScreen() {
   const { students, staff, parents, invites, classes, flashcardStats } =
     useLoaderData() as PeopleLoaderData;
-  const { user } = useOutletContext<{ user: { user: { id: string; role: string } } }>();
-  const isAdmin = user.user.role === 'Admin';
+  // The _app layout puts its loader's user straight on the context (app/routes/_app.tsx
+  // `AppContext`), so this is the flat user — NOT the server's nested SessionUser. Typing it as
+  // AppUser rather than an inline shape is what makes tsc catch that difference: useOutletContext's
+  // generic is an unchecked assertion, and a hand-written nested one read as undefined at runtime
+  // and 500'd the page on every render.
+  const { user } = useOutletContext<{ user: AppUser }>();
+  const isAdmin = user.role === 'Admin';
   const fetcher = useFetcher();
   const resetLoginFetcher = useFetcher<{ ok?: boolean; code?: string; error?: string }>();
   const [resetLoginResult, setResetLoginResult] = React.useState<NewInvite[] | null>(null);
@@ -348,7 +354,7 @@ export function StudentsScreen() {
                 </MIB>
                 {/* Not for yourself — the action deletes your own account mid-session, and the
                     server refuses it anyway (people.tsx `cannot_reset_self`). */}
-                {isAdmin && u.id !== user.user.id && (
+                {isAdmin && u.id !== user.id && (
                   <MIB
                     label={t('reset_login')}
                     size="sm"

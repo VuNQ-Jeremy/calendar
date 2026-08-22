@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0305 — 2026-08-22
+Fix /people returning 500: the People screen read a nested user off the app layout's outlet context, which supplies a flat user. Typed it as AppUser so tsc catches the shape.
+
 ## v0.0304 — 2026-08-22
 Admins can hide irrelevant release notes from the changelog on /feedback, and bring them back.
 

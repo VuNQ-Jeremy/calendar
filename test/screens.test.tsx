@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
-import { createRoutesStub } from 'react-router';
+import { createRoutesStub, Outlet } from 'react-router';
 import { LanguageProvider } from '../src/lib/i18n.jsx';
 import { DashboardScreen } from '../src/screens-core.jsx';
 import { MaterialsScreen, ProfileScreen } from '../src/screens-extra.jsx';
@@ -39,6 +39,28 @@ function makeStub<P extends object>(
 ) {
   const Wrapper = () => React.createElement(Comp, props);
   return createRoutesStub([{ path: '/', Component: Wrapper, loader: () => loaderData }]);
+}
+
+/**
+ * Like makeStub, but the screen renders UNDER a parent route that supplies an outlet context —
+ * the only way to exercise a screen that calls useOutletContext. makeStub renders the component
+ * as the route itself, where the context is null.
+ */
+function makeContextStub<P extends object>(
+  loaderData: unknown,
+  Comp: React.ComponentType<P>,
+  context: unknown,
+  props: P = {} as P,
+) {
+  const Child = () => React.createElement(Comp, props);
+  const Parent = () => React.createElement(Outlet, { context });
+  return createRoutesStub([
+    {
+      path: '/',
+      Component: Parent,
+      children: [{ index: true, Component: Child, loader: () => loaderData }],
+    },
+  ]);
 }
 
 async function renderStub(Stub: ReturnType<typeof createRoutesStub>) {
@@ -96,13 +118,49 @@ describe('ClassesScreen', () => {
 });
 
 describe('StudentsScreen', () => {
+  const PEOPLE_DATA = {
+    students: [
+      {
+        id: 's1',
+        name: 'Pupil One',
+        grade: null,
+        guardian: null,
+        email: null,
+        color: 'orange',
+        classIds: [],
+      },
+    ],
+    staff: [],
+    parents: [],
+    invites: [],
+    classes: [],
+    flashcardStats: [],
+  };
+
   it('renders People heading', async () => {
-    const Stub = makeStub(
-      { students: [], staff: [], parents: [], invites: [], classes: [] },
-      StudentsScreen,
-    );
+    const Stub = makeContextStub(PEOPLE_DATA, StudentsScreen, { user: TEST_USER });
     await renderStub(Stub);
     expect(screen.getByText('People')).toBeInTheDocument();
+  });
+
+  // Regression: the screen used to assert its outlet context was the server's nested SessionUser
+  // and read `user.user.role`. The _app layout supplies a FLAT user, so that was undefined on
+  // every render — /people answered 500 in production until the shape was corrected. These two
+  // cases pin the gate to the flat shape: a nested read throws before either assertion runs.
+  it('shows the admin-only reset-login action for an Admin', async () => {
+    const Stub = makeContextStub(PEOPLE_DATA, StudentsScreen, {
+      user: { ...TEST_USER, role: 'Admin' },
+    });
+    await renderStub(Stub);
+    expect(screen.getByLabelText('Reset login')).toBeInTheDocument();
+  });
+
+  it('hides the reset-login action from a non-Admin', async () => {
+    const Stub = makeContextStub(PEOPLE_DATA, StudentsScreen, {
+      user: { ...TEST_USER, role: 'Teacher' },
+    });
+    await renderStub(Stub);
+    expect(screen.queryByLabelText('Reset login')).not.toBeInTheDocument();
   });
 });
 
