@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0300 — 2026-08-22
+Favicon is now a round disc instead of a rounded square.
+
 ## v0.0299 — 2026-08-22
 Add the Mochi paw favicon (and an apple-touch icon) — browser tabs showed the default globe because the web app had no icon at all.
 
