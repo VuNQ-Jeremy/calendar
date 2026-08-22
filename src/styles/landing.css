@@ -89,12 +89,6 @@
   gap: 10px;
   text-decoration: none;
 }
-/* the design system's `a:hover { text-decoration: underline }` (src/ds/styles/tokens/
-   base.css) outspecifies a plain class reset, so the wordmark needs its hover state
-   named too - with the `.landing` ancestor, so it wins outright and not by load order */
-.landing .landing-brand:hover {
-  text-decoration: none;
-}
 .landing-brand__mark {
   width: 40px;
   height: 40px;

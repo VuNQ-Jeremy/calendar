@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0310 — 2026-08-22
+Sidebar and landing wordmarks no longer underline on hover — the design system's global a:hover underline no longer outranks class resets. Alt+hover inspector can now resolve Link/NavLink/Form elements.
+
 ## v0.0309 — 2026-08-22
 Landing header wordmark no longer underlines on hover (the design system's global a:hover underline was outranking the .landing-brand reset).
 

@@ -11,6 +11,12 @@ import type { Plugin } from 'vite';
 
 const TAGGABLE_FILE = /\.tsx$/;
 const SKIP_DIR = /node_modules/;
+// Components that spread their unknown props onto the host element they render, so a
+// data-loc put on the component still reaches the DOM. Deliberately an allowlist, not
+// "every capitalised tag": a component that does not forward would swallow the stamp,
+// and the inspector would then be silently unable to resolve anything inside it - which
+// is exactly how the sidebar wordmark (<Link>Mochi</Link>) became uninspectable.
+const FORWARDING_COMPONENTS = new Set(['Link', 'NavLink', 'Form']);
 
 export function dataLocPlugin(): Plugin {
   let root = process.cwd();
@@ -54,9 +60,12 @@ function dataLocBabelPlugin(relPath: string) {
     visitor: {
       JSXOpeningElement(nodePath: NodePath<JSXOpeningElement>) {
         const nameNode = nodePath.node.name;
-        // Only host elements (lowercase tag names like "div"); components like <EventModal>
-        // would receive data-loc as an unhandled prop.
-        if (nameNode.type !== 'JSXIdentifier' || !/^[a-z]/.test(nameNode.name)) return;
+        if (nameNode.type !== 'JSXIdentifier') return;
+        // Host elements (lowercase tag names like "div") plus the prop-forwarding
+        // components above; anything else (<EventModal>) would take data-loc as an
+        // unhandled prop and drop it.
+        const isHostElement = /^[a-z]/.test(nameNode.name);
+        if (!isHostElement && !FORWARDING_COMPONENTS.has(nameNode.name)) return;
 
         const hasDataLoc = nodePath.node.attributes.some(
           (attr): boolean => attr.type === 'JSXAttribute' && attr.name.name === 'data-loc',

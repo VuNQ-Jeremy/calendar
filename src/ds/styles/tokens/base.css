@@ -30,7 +30,10 @@ h1, h2, h3, h4, h5 {
 p { margin: 0 0 1em; text-wrap: pretty; }
 
 a { color: var(--text-link); text-decoration: none; }
-a:hover { text-decoration: underline; }
+/* `:where(:hover)` keeps this at plain-element specificity, so any class that resets
+   `text-decoration` (.sb__brand, .landing-brand, .kcard__issue) stays reset while hovered.
+   A bare `a:hover` outranks a single class and silently underlined every such link. */
+a:where(:hover) { text-decoration: underline; }
 
 button { font-family: inherit; }
 
