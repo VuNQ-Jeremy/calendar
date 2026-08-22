@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0309 — 2026-08-22
+Landing header wordmark no longer underlines on hover (the design system's global a:hover underline was outranking the .landing-brand reset).
+
 ## v0.0308 — 2026-08-22
 Marketing site: /features, /pricing (free beta), /about, /guides pages with shared nav + mobile menu; inert APP_ORIGIN plumbing for the future app./apex domain split
 
