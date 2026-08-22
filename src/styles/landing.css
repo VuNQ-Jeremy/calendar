@@ -244,7 +244,9 @@
   margin-top: 30px;
   flex-wrap: wrap;
 }
-.landing-hero__note {
+/* .landing prefix needed for the margin: the `.landing p { margin: 0 }` reset is
+   class+element specificity and silently beats a lone class selector. */
+.landing .landing-hero__note {
   margin-top: 14px;
   font-size: 0.88rem;
   color: var(--l-ink-soft);
