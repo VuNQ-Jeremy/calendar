@@ -299,6 +299,7 @@ export const SessionPreviewRow = z
     date: z.string(),
     focusText: z.string(),
     vocabTopicId: Nullable(z.string()),
+    homeworkText: z.string(),
     updatedAt: Nullable(z.string()),
   })
   .meta({ id: 'SessionPreviewRow' });

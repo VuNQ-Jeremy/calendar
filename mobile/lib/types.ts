@@ -244,6 +244,7 @@ export interface SessionPreviewRow {
   date: string;
   focusText: string;
   vocabTopicId: string | null;
+  homeworkText: string;
   updatedAt: string | null;
 }
 

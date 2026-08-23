@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   sqliteTable,
   text,
@@ -650,6 +651,8 @@ export const sessionPreviews = sqliteTable(
     vocabTopicId: text('vocab_topic_id').references(() => flashcardTopics.id, {
       onDelete: 'set null',
     }),
+    /** "Bài tập về nhà" for THIS session — the check-in homework square's text. */
+    homeworkText: text('homework_text').notNull().default(''),
     updatedAt: text('updated_at'),
   },
   (t) => [
@@ -1545,6 +1548,8 @@ export const checklistItems = sqliteTable(
     date: text('date').notNull(),
     /** 'checkin' | 'checkout' */
     phase: text('phase').notNull(),
+    /** 'custom' = teacher-authored; 'homework' | 'vocab' = seeded by the /checkin loader. */
+    kind: text('kind').notNull().default('custom'),
     /** Null for free-text checkout lines; check-in cells always pick a managed type. */
     activityTypeId: text('activity_type_id').references(() => checkinActivityTypes.id, {
       onDelete: 'set null',
@@ -1555,7 +1560,13 @@ export const checklistItems = sqliteTable(
     createdBy: text('created_by').references(() => staff.id, { onDelete: 'set null' }),
     createdAt: text('created_at'),
   },
-  (t) => [index('idx_checklist_items_occ').on(t.eventId, t.date, t.phase)],
+  (t) => [
+    index('idx_checklist_items_occ').on(t.eventId, t.date, t.phase),
+    // One special square of each kind per occurrence+phase — the seeding race collapses on this.
+    uniqueIndex('uq_checklist_items_special')
+      .on(t.eventId, t.date, t.phase, t.kind)
+      .where(sql`kind <> 'custom'`),
+  ],
 );
 
 /**
@@ -1579,6 +1590,44 @@ export const checklistChecks = sqliteTable(
     primaryKey({ columns: [t.itemId, t.studentId] }),
     index('idx_checklist_checks_student').on(t.studentId),
   ],
+);
+
+/**
+ * Per-student narrowing of a vocab assignment. ZERO rows = the whole class — the meaning every
+ * assignment written before 0053 keeps. No `tenantId`: reached only through its assignment,
+ * which is scoped (the checklist_checks fence-through-parent pattern).
+ */
+export const vocabAssignmentStudents = sqliteTable(
+  'vocab_assignment_students',
+  {
+    assignmentId: text('assignment_id')
+      .notNull()
+      .references(() => vocabAssignments.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.assignmentId, t.studentId] })],
+);
+
+/**
+ * "The vocab auto-derivation checked this (item, student) once." Written only alongside an
+ * auto-inserted check; presence means the current check state is manual truth. No `tenantId`:
+ * the item is reached through a fenced event, same as checklistChecks.
+ */
+export const checklistCheckSeeds = sqliteTable(
+  'checklist_check_seeds',
+  {
+    itemId: text('item_id')
+      .notNull()
+      .references(() => checklistItems.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    /** UTC ISO. */
+    seededAt: text('seeded_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.itemId, t.studentId] })],
 );
 
 /**

@@ -253,6 +253,8 @@ export const SessionPreviewInput = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   focusText: z.string().max(2000).default(''),
   vocabTopicId: z.string().nullish(),
+  /** "Bài tập về nhà" for this session — becomes the check-in homework square. */
+  homeworkText: z.string().max(2000).default(''),
 });
 export type SessionPreviewInput = z.infer<typeof SessionPreviewInput>;
 
@@ -1324,6 +1326,24 @@ export const VocabAssignmentInput = z.object({
       message: 'Expected batch ranges like 1-10,21-30',
     })
     .transform((v) => (v == null ? null : normalizeRangesCsv(v))),
+  /**
+   * Which students this assignment applies to: a CSV of student ids, or NULL / '' for the whole
+   * class — the meaning every assignment written before 0053 keeps. Stored as join rows in
+   * vocab_assignment_students (zero rows = whole class), same NULL-means-everything shape as
+   * `modes` above.
+   */
+  studentIds: z
+    .string()
+    .max(2000)
+    .nullish()
+    .transform((v) => {
+      if (v == null || v === '') return null;
+      const ids = v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return ids.length ? ids : null;
+    }),
 });
 export type VocabAssignmentInput = z.infer<typeof VocabAssignmentInput>;
 

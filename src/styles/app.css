@@ -3400,6 +3400,24 @@ html .sb::-webkit-scrollbar-thumb:active {
   top: 10px;
   right: 10px;
 }
+/* F-24 special squares: framed so a teacher can tell "system square" from "my checklist row". */
+.kiosk-cell--special {
+  border: 2px solid transparent; /* color set inline from the palette */
+}
+.ck-special-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font-size: var(--text-sm);
+}
+.ck-special-chip__auto {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
 .kiosk-actions {
   display: flex;
   gap: var(--space-4);

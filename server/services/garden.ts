@@ -14,6 +14,7 @@ import {
   staff,
   students,
   vocabAssignments,
+  vocabAssignmentStudents,
 } from '../db/schema';
 import { chunk, SCOPED_MAX_BOUND_PARAMS, type TenantDb } from '../db/index';
 import {
@@ -264,6 +265,8 @@ export type VocabAssignmentRow = {
    */
   batches: string | null;
   createdAt: string;
+  /** Narrowed-to students; empty = the whole class. */
+  studentIds: string[];
 };
 
 export async function listAssignments(
@@ -274,34 +277,37 @@ export async function listAssignments(
     opts.classId ? eq(vocabAssignments.classId, opts.classId) : undefined,
     opts.activeFrom ? gte(vocabAssignments.deadline, opts.activeFrom) : undefined,
   ];
-  return (
-    db.raw
-      .select({
-        id: vocabAssignments.id,
-        classId: vocabAssignments.classId,
-        className: classes.name,
-        classColor: classes.color,
-        topicId: vocabAssignments.topicId,
-        topicName: flashcardTopics.name,
-        topicSlug: flashcardTopics.slug,
-        requiredCount: vocabAssignments.requiredCount,
-        minScorePct: vocabAssignments.minScorePct,
-        questionCount: vocabAssignments.questionCount,
-        deadline: vocabAssignments.deadline,
-        deadlineTime: vocabAssignments.deadlineTime,
-        note: vocabAssignments.note,
-        modes: vocabAssignments.modes,
-        batches: vocabAssignments.batches,
-        createdAt: vocabAssignments.createdAt,
-      })
-      .from(vocabAssignments)
-      .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
-      .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
-      // The assignment is the scoped root, and its class and topic joins ride along on FKs the
-      // school already owns. The topic may be a library one — that is what the pool is for.
-      .where(db.own(vocabAssignments, ...where))
-      .orderBy(asc(vocabAssignments.deadline), asc(flashcardTopics.name))
+  const rows = await db.raw
+    .select({
+      id: vocabAssignments.id,
+      classId: vocabAssignments.classId,
+      className: classes.name,
+      classColor: classes.color,
+      topicId: vocabAssignments.topicId,
+      topicName: flashcardTopics.name,
+      topicSlug: flashcardTopics.slug,
+      requiredCount: vocabAssignments.requiredCount,
+      minScorePct: vocabAssignments.minScorePct,
+      questionCount: vocabAssignments.questionCount,
+      deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
+      note: vocabAssignments.note,
+      modes: vocabAssignments.modes,
+      batches: vocabAssignments.batches,
+      createdAt: vocabAssignments.createdAt,
+    })
+    .from(vocabAssignments)
+    .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
+    .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
+    // The assignment is the scoped root, and its class and topic joins ride along on FKs the
+    // school already owns. The topic may be a library one — that is what the pool is for.
+    .where(db.own(vocabAssignments, ...where))
+    .orderBy(asc(vocabAssignments.deadline), asc(flashcardTopics.name));
+  const narrow = await narrowMap(
+    db,
+    rows.map((r) => r.id),
   );
+  return rows.map((r) => ({ ...r, studentIds: [...(narrow.get(r.id) ?? [])] }));
 }
 
 /** One assignment with its topic and class names, or null. */
@@ -329,7 +335,9 @@ export async function getAssignment(db: TenantDb, id: string): Promise<VocabAssi
     .innerJoin(classes, eq(classes.id, vocabAssignments.classId))
     .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
     .where(db.own(vocabAssignments, eq(vocabAssignments.id, id)));
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  const narrow = await narrowMap(db, [rows[0].id]);
+  return { ...rows[0], studentIds: [...(narrow.get(rows[0].id) ?? [])] };
 }
 
 export async function createAssignment(
@@ -353,6 +361,14 @@ export async function createAssignment(
     batches: input.batches ?? null,
     createdAt: new Date().toISOString(),
   });
+  if (input.studentIds?.length) {
+    // tenant-unscoped: vocab_assignment_students has no tenant_id — fenced by the tenant-scoped
+    // assignment insert above.
+    await db.raw
+      .insert(vocabAssignmentStudents)
+      .values(input.studentIds.map((studentId) => ({ assignmentId: id, studentId })))
+      .onConflictDoNothing();
+  }
   return id;
 }
 
@@ -374,6 +390,19 @@ export async function updateAssignment(
   if (patch.batches !== undefined) set.batches = patch.batches ?? null;
   if (Object.keys(set).length) {
     await db.update(vocabAssignments, set, eq(vocabAssignments.id, id));
+  }
+  if (patch.studentIds !== undefined) {
+    // Replace-set, the event-materials pattern: join rows carry no children of their own.
+    // tenant-unscoped: fenced by the caller's own-scoped assignment update above.
+    await db.raw
+      .delete(vocabAssignmentStudents)
+      .where(eq(vocabAssignmentStudents.assignmentId, id));
+    if (patch.studentIds?.length) {
+      await db.raw
+        .insert(vocabAssignmentStudents)
+        .values(patch.studentIds.map((studentId) => ({ assignmentId: id, studentId })))
+        .onConflictDoNothing();
+    }
   }
 }
 
@@ -463,9 +492,7 @@ export async function deckAssignState(
       ),
   ]);
   const list = counts[topicId] ?? [];
-  const others = covers
-    .filter((c) => c.id !== opts.excludeAssignmentId)
-    .map((c) => c.batches);
+  const others = covers.filter((c) => c.id !== opts.excludeAssignmentId).map((c) => c.batches);
   const batches = deckBatches(list, others);
   const totalWords = list.reduce((a, c) => a + c, 0);
   const assignedWords = batches.filter((b) => b.assigned).reduce((a, b) => a + b.wordCount, 0);
@@ -487,7 +514,10 @@ export async function deckLearntFor(
   db: TenantDb,
   blocks: readonly LearntBlock[],
 ): Promise<Record<string, DeckLearnt>> {
-  const counts = await deckBatchCounts(db, blocks.map((b) => b.topicId));
+  const counts = await deckBatchCounts(
+    db,
+    blocks.map((b) => b.topicId),
+  );
   return foldDeckLearnt(blocks, counts);
 }
 
@@ -502,6 +532,33 @@ function deadlineEndUtc(deadline: string, deadlineTime: string | null = null): s
   return deadlineTime
     ? composeUtcFromIct(deadline, deadlineTime)
     : composeUtcFromIct(addDaysVn(deadline, 1), '00:00');
+}
+
+/**
+ * assignmentId -> the students it is narrowed to. An absent key means the whole class — the
+ * meaning of zero join rows. Filtered in JS on purpose: a class has a handful of assignments
+ * and this avoids a correlated subquery in the several readers that need it.
+ */
+async function narrowMap(db: TenantDb, assignmentIds: string[]): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  if (!assignmentIds.length) return out;
+  // tenant-unscoped: vocab_assignment_students has no tenant_id — every id here comes from an
+  // already own-scoped vocab_assignments read.
+  const rows = await db.raw
+    .select()
+    .from(vocabAssignmentStudents)
+    .where(inArray(vocabAssignmentStudents.assignmentId, assignmentIds));
+  for (const r of rows) {
+    let s = out.get(r.assignmentId);
+    if (!s) out.set(r.assignmentId, (s = new Set()));
+    s.add(r.studentId);
+  }
+  return out;
+}
+
+/** Does this assignment apply to this student, given its narrow set (absent = whole class)? */
+function appliesTo(narrow: Set<string> | undefined, studentId: string): boolean {
+  return !narrow || narrow.has(studentId);
 }
 
 /**
@@ -533,10 +590,13 @@ export async function assignmentProgress(
     .where(db.own(classStudents, eq(classStudents.classId, assignment.classId)))
     .orderBy(asc(students.name));
 
+  const narrow = (await narrowMap(db, [assignment.id])).get(assignment.id);
+  const scoped = members.filter((m) => appliesTo(narrow, m.id));
+
   const counts = await countQualifying(
     db,
     assignment.topicId,
-    members.map((m) => m.id),
+    scoped.map((m) => m.id),
     assignment.minScorePct,
     assignment.createdAt,
     deadlineEndUtc(assignment.deadline, assignment.deadlineTime),
@@ -545,7 +605,7 @@ export async function assignmentProgress(
 
   return {
     assignment,
-    rows: members.map((m) => ({
+    rows: scoped.map((m) => ({
       studentId: m.id,
       name: m.name,
       color: m.color,
@@ -593,6 +653,33 @@ async function countQualifying(
 }
 
 /**
+ * Qualifying-round counts for one assignment over its own window — the checkin service's way
+ * into `countQualifying` without re-deriving the created_at..deadlineEndUtc window rules.
+ */
+export async function qualifyingCounts(
+  db: TenantDb,
+  a: {
+    topicId: string;
+    minScorePct: number;
+    createdAt: string;
+    deadline: string;
+    deadlineTime: string | null;
+    modes: string | null;
+  },
+  studentIds: string[],
+): Promise<Map<string, number>> {
+  return countQualifying(
+    db,
+    a.topicId,
+    studentIds,
+    a.minScorePct,
+    a.createdAt,
+    deadlineEndUtc(a.deadline, a.deadlineTime),
+    parseModes(a.modes),
+  );
+}
+
+/**
  * Assignments covering `topicId` for the classes this student is in, still inside their deadline.
  *
  * The SQL gate is the deadline DAY (that is what the index covers); the exact instant is applied
@@ -633,7 +720,12 @@ export async function activeAssignmentsFor(
         gte(vocabAssignments.deadline, ictDateOf(nowIso)),
       ),
     );
-  return rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
+  const open = rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
+  const narrow = await narrowMap(
+    db,
+    open.map((a) => a.id),
+  );
+  return open.filter((a) => appliesTo(narrow.get(a.id), studentId));
 }
 
 /**
@@ -695,7 +787,12 @@ export async function studentAssignments(
     )
     .orderBy(asc(vocabAssignments.deadline));
 
-  const open = rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
+  const openAll = rows.filter((a) => nowIso < deadlineEndUtc(a.deadline, a.deadlineTime));
+  const narrow = await narrowMap(
+    db,
+    openAll.map((a) => a.id),
+  );
+  const open = openAll.filter((a) => appliesTo(narrow.get(a.id), studentId));
 
   const out = [];
   for (const a of open) {
@@ -765,8 +862,14 @@ export async function studentAssignmentsInMonth(
     )
     .orderBy(asc(vocabAssignments.deadline));
 
+  const narrow = await narrowMap(
+    db,
+    list.map((a) => a.id),
+  );
+  const scoped = list.filter((a) => appliesTo(narrow.get(a.id), studentId));
+
   const out: StudentMonthAssignment[] = [];
-  for (const a of list) {
+  for (const a of scoped) {
     const counts = await countQualifying(
       db,
       a.topicId,
@@ -1529,6 +1632,10 @@ async function sweepCore(db: TenantDb, nowIso: string, persist: boolean): Promis
       .where(db.own(classStudents, eq(classStudents.classId, a.classId)));
     if (!members.length) continue;
 
+    // Narrowed assignments must only penalize the students they were actually assigned to —
+    // without this an assignment scoped to 3 kids would drop the whole class's plants.
+    const narrow = (await narrowMap(db, [a.id])).get(a.id);
+
     const charged = await db.raw
       .select({ studentId: gardenEvents.studentId })
       .from(gardenEvents)
@@ -1548,6 +1655,7 @@ async function sweepCore(db: TenantDb, nowIso: string, persist: boolean): Promis
     );
 
     for (const m of members) {
+      if (!appliesTo(narrow, m.studentId)) continue;
       if (done.has(m.studentId)) continue;
       if ((counts.get(m.studentId) ?? 0) >= a.requiredCount) continue;
       const plant = await getPlant(db, m.studentId);

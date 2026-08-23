@@ -5,8 +5,10 @@ import { classStudents, events } from '../../server/db/schema';
 import { cloudflareCtx } from '../../app/load-context';
 import { requireStaff } from '../../server/services/auth';
 import * as checkinSvc from '../../server/services/checkin';
+import * as gardenSvc from '../../server/services/garden';
 import { CheckInput, ChecklistItemInput, parsePatch } from '../../shared/schemas';
 import { monthOfVn } from '../../shared/logic/garden';
+import { ictDateOf } from '../../shared/logic/tests';
 import { withLiveAction } from '../../server/live';
 
 /**
@@ -45,19 +47,28 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const eventId = url.searchParams.get('eventId');
   const date = url.searchParams.get('date');
   if (!eventId || !date) return Response.json({ error: 'missing params' }, { status: 400 });
-  const [occ, roster] = await Promise.all([
-    checkinSvc.getOccurrence(db, eventId, date),
-    rosterOf(db, eventId),
-  ]);
+
+  const now = new Date().toISOString();
+  // Seed/refresh the special squares BEFORE reading the occurrence, so the payload includes them.
+  await checkinSvc.ensureSpecialItems(db, eventId, date, now);
+  const roster = await rosterOf(db, eventId);
+  const kiosk = url.searchParams.get('kiosk') === '1';
+  if (kiosk) {
+    // Kiosk loads only: the derivation is per-student work the authoring tab has no use for.
+    await checkinSvc.seedVocabChecks(db, eventId, date, roster.studentIds, now);
+  }
+  const occ = await checkinSvc.getOccurrence(db, eventId, date);
   const flags = await checkinSvc.occurrenceFlags(db, eventId, date, roster.studentIds);
-  // Only the kiosk asks for bag counts — its name grid badges each kid's month so far. The
-  // authoring tab shares this route and opens far more often, and has no use for a whole-class
-  // month aggregate, so it does not pay for one.
-  if (url.searchParams.get('kiosk') !== '1' || !roster.classId) return { ...occ, flags };
+  // The authoring tab's "Giao từ vựng" section lists what is currently open for this class.
+  const openAssignments = roster.classId
+    ? await gardenSvc.listAssignments(db, { classId: roster.classId, activeFrom: ictDateOf(now) })
+    : [];
+  if (!kiosk || !roster.classId) return { ...occ, flags, openAssignments };
   const tallies = await checkinSvc.classMonthTallies(db, roster.classId, monthOfVn(date));
   return {
     ...occ,
     flags,
+    openAssignments,
     bagsByStudent: Object.fromEntries(
       roster.studentIds.map((sid) => [sid, tallies.get(sid)?.bags ?? 0]),
     ),

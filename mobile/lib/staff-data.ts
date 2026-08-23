@@ -205,7 +205,7 @@ export function useSaveAttendance(eventId: string, date: string) {
 export function useSavePreview(eventId: string, date: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { focusText: string; vocabTopicId: string | null }) =>
+    mutationFn: (input: { focusText: string; vocabTopicId: string | null; homeworkText: string }) =>
       api.eventPreviews.save({ eventId, date, ...input }),
     onSuccess: (row) => {
       qc.setQueryData(qk.eventPreview(eventId, date), (old: SessionPreviewPayload | undefined) => ({

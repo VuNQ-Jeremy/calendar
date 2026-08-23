@@ -35,6 +35,7 @@ export type SessionPreviewRow = {
   date: string;
   focusText: string;
   vocabTopicId: string | null;
+  homeworkText: string;
   updatedAt: string | null;
 };
 
@@ -44,6 +45,7 @@ function map(r: typeof sessionPreviews.$inferSelect): SessionPreviewRow {
     date: r.date,
     focusText: r.focusText,
     vocabTopicId: r.vocabTopicId,
+    homeworkText: r.homeworkText,
     updatedAt: r.updatedAt,
   };
 }
@@ -68,6 +70,7 @@ export async function save(db: TenantDb, input: SessionPreviewInput): Promise<Se
     date: input.date,
     focusText: input.focusText,
     vocabTopicId: input.vocabTopicId || null,
+    homeworkText: input.homeworkText,
     updatedAt: new Date().toISOString(),
   };
   await db
@@ -78,6 +81,7 @@ export async function save(db: TenantDb, input: SessionPreviewInput): Promise<Se
       set: {
         focusText: values.focusText,
         vocabTopicId: values.vocabTopicId,
+        homeworkText: values.homeworkText,
         updatedAt: values.updatedAt,
       },
     });

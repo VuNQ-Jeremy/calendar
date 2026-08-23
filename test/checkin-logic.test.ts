@@ -3,11 +3,14 @@ import {
   DEFAULT_CHECKIN_SETTINGS,
   bagRefId,
   checkinComponent,
+  deadlineInVocabWindow,
   evaluateEarn,
   nextOccurrenceDate,
   phaseComplete,
+  prevOccurrenceDate,
   qualifiedTier,
   tallyTuiMuMonth,
+  vocabSquareMet,
   type BagKind,
   type SessionOutcome,
 } from '../shared/logic/checkin.js';
@@ -154,5 +157,52 @@ describe('nextOccurrenceDate', () => {
     expect(nextOccurrenceDate('daily', '2026-08-31')).toBe('2026-09-01');
     expect(nextOccurrenceDate('none', '2026-08-28')).toBeNull();
     expect(nextOccurrenceDate(null, '2026-08-28')).toBeNull();
+  });
+});
+
+describe('prevOccurrenceDate', () => {
+  it('weekly steps back 7 ICT days, daily 1, one-off null', () => {
+    expect(prevOccurrenceDate('weekly', '2026-08-23')).toBe('2026-08-16');
+    expect(prevOccurrenceDate('daily', '2026-08-23')).toBe('2026-08-22');
+    expect(prevOccurrenceDate('none', '2026-08-23')).toBeNull();
+    expect(prevOccurrenceDate(null, '2026-08-23')).toBeNull();
+  });
+  it('crosses month boundaries', () => {
+    expect(prevOccurrenceDate('weekly', '2026-09-03')).toBe('2026-08-27');
+  });
+});
+
+describe('deadlineInVocabWindow', () => {
+  it('is (prev, date] — exclusive at the previous session, inclusive today', () => {
+    expect(deadlineInVocabWindow('2026-08-16', '2026-08-16', '2026-08-23')).toBe(false);
+    expect(deadlineInVocabWindow('2026-08-17', '2026-08-16', '2026-08-23')).toBe(true);
+    expect(deadlineInVocabWindow('2026-08-23', '2026-08-16', '2026-08-23')).toBe(true);
+    expect(deadlineInVocabWindow('2026-08-24', '2026-08-16', '2026-08-23')).toBe(false);
+  });
+  it('null prev (one-off event) degrades to deadline === date, never open-ended', () => {
+    expect(deadlineInVocabWindow('2026-08-23', null, '2026-08-23')).toBe(true);
+    expect(deadlineInVocabWindow('2026-08-22', null, '2026-08-23')).toBe(false);
+  });
+});
+
+describe('vocabSquareMet', () => {
+  it('all assignments met', () => {
+    expect(
+      vocabSquareMet([
+        { done: 3, requiredCount: 3 },
+        { done: 5, requiredCount: 2 },
+      ]),
+    ).toBe(true);
+  });
+  it('one short → not met', () => {
+    expect(
+      vocabSquareMet([
+        { done: 3, requiredCount: 3 },
+        { done: 1, requiredCount: 2 },
+      ]),
+    ).toBe(false);
+  });
+  it('zero applicable assignments is vacuously met (fully narrowed-away student)', () => {
+    expect(vocabSquareMet([])).toBe(true);
   });
 });

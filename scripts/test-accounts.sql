@@ -65,6 +65,7 @@ DELETE FROM questions;
 -- next run's "empty pot" assertions fail. Sweep all five explicitly.
 DELETE FROM garden_events;
 DELETE FROM garden_snapshots;
+DELETE FROM vocab_assignment_students;
 DELETE FROM vocab_assignments;
 DELETE FROM class_trees;
 DELETE FROM garden_plants;
@@ -130,6 +131,7 @@ DELETE FROM email_verifications;
 -- Check-in kiosk + túi mù. Checks/items cascade off events, but activity types, the bag
 -- ledger and gift redemptions are keyed to students that seed.sql keeps — a leaked bag would
 -- shift the next run's tally assertions. Also drop the settings row so earn mode is default.
+DELETE FROM checklist_check_seeds;
 DELETE FROM checklist_checks;
 DELETE FROM checklist_items;
 DELETE FROM tui_mu_events;

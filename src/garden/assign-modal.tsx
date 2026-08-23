@@ -38,21 +38,33 @@ const DEFAULT_QUESTION_COUNT = 10;
 
 export function AssignModal({
   topic,
+  topics,
   classes,
   existing,
   today,
   onClose,
   onSubmit,
+  rosterStudents,
 }: {
-  topic: { id: string; name: string };
+  /** Fixed by the caller (the /vocabulary surface). Omit to show the picker built from `topics`. */
+  topic?: { id: string; name: string } | null;
+  /** Offered by the topic picker when `topic` is not fixed — the check-in "Giao từ vựng" surfaces. */
+  topics?: { id: string; name: string }[];
   classes: { id: string; name: string }[];
   existing?: VocabAssignmentRow | null;
   today: string;
   onClose: () => void;
   onSubmit: (fd: FormData) => void;
+  /**
+   * The class roster, offered only by surfaces with a scope picker (check-in's assign section
+   * and the kiosk checkout shortcut). Absent on the /vocabulary surface, which has no scope
+   * picker — `submit` then echoes back whatever scope the assignment already had, unchanged.
+   */
+  rosterStudents?: { id: string; name: string }[];
 }) {
   const { t } = useLang();
   const [classId, setClassId] = React.useState(existing?.classId ?? classes[0]?.id ?? '');
+  const [topicId, setTopicId] = React.useState(existing?.topicId ?? topic?.id ?? '');
   const [deadline, setDeadline] = React.useState(
     existing?.deadline ?? addDaysVn(today, DEFAULT_DAYS_AHEAD),
   );
@@ -74,8 +86,16 @@ export function AssignModal({
   const [modes, setModes] = React.useState<Set<GameMode>>(
     () => new Set(parseModes(existing?.modes) ?? []),
   );
+  // Whole class is the default AND the meaning of zero join rows; editing preloads the stored
+  // narrow set so a save from a surface without the picker cannot silently widen the scope.
+  const [scopeAll, setScopeAll] = React.useState(!(existing?.studentIds?.length ?? 0));
+  const [picked, setPicked] = React.useState<Set<string>>(
+    () => new Set(existing?.studentIds ?? []),
+  );
 
-  const valid = Boolean(classId && deadline);
+  const valid = Boolean(
+    classId && deadline && (topic?.id || topicId) && (scopeAll || picked.size > 0),
+  );
 
   const toggleMode = (id: GameMode, on: boolean) =>
     setModes((prev) => {
@@ -91,7 +111,7 @@ export function AssignModal({
     fd.set('intent', existing ? 'assign-update' : 'assign-create');
     if (existing) fd.set('id', existing.id);
     fd.set('classId', classId);
-    fd.set('topicId', topic.id);
+    fd.set('topicId', topic?.id ?? topicId);
     fd.set('deadline', deadline);
     // '' reaches the row as NULL ("end of the deadline day") through the schema's transform.
     fd.set('deadlineTime', deadlineTime);
@@ -106,6 +126,17 @@ export function AssignModal({
     fd.set('note', note.trim());
     // '' reaches the row as NULL ("any mode") through the schema's transform.
     fd.set('modes', normalizeModesCsv([...modes]) ?? '');
+    // '' reaches the row as NULL ("whole class") through the schema's transform. Surfaces with no
+    // scope picker (no `rosterStudents`) echo the assignment's existing scope back unchanged —
+    // this dialog cannot widen a scope it has no way to show the teacher.
+    fd.set(
+      'studentIds',
+      rosterStudents
+        ? scopeAll
+          ? ''
+          : [...picked].join(',')
+        : (existing?.studentIds ?? []).join(','),
+    );
     onSubmit(fd);
   };
 
@@ -114,7 +145,7 @@ export function AssignModal({
       open={true}
       onClose={onClose}
       title={existing ? t('garden_assign_edit') : t('garden_assign_title')}
-      subtitle={topic.name}
+      subtitle={topic?.name ?? topics?.find((x) => x.id === topicId)?.name ?? ''}
       width={480}
       footer={
         <>
@@ -127,6 +158,14 @@ export function AssignModal({
         </>
       }
     >
+      {!topic && (
+        <MSelect
+          label={t('garden_assign_topic')}
+          value={topicId}
+          onChange={setTopicId}
+          options={(topics ?? []).map((x) => ({ value: x.id, label: x.name }))}
+        />
+      )}
       <MSelect
         label={t('class')}
         value={classId}
@@ -230,6 +269,42 @@ export function AssignModal({
         </div>
         {modes.size === 0 && <span className="mochi-field__hint">{t('garden_modes_any')}</span>}
       </div>
+      {rosterStudents && (
+        <div className="mochi-field">
+          <label className="mochi-field__label">{t('garden_scope_label')}</label>
+          <div className="m-row" style={{ gap: 14, flexWrap: 'wrap' }}>
+            <Checkbox
+              label={t('garden_scope_all')}
+              checked={scopeAll}
+              onChange={() => setScopeAll(true)}
+            />
+            <Checkbox
+              label={t('garden_scope_selected')}
+              checked={!scopeAll}
+              onChange={() => setScopeAll(false)}
+            />
+          </div>
+          {!scopeAll && (
+            <div className="m-row" style={{ gap: '4px 14px', flexWrap: 'wrap', marginTop: 6 }}>
+              {rosterStudents.map((s) => (
+                <Checkbox
+                  key={s.id}
+                  label={s.name}
+                  checked={picked.has(s.id)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setPicked((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(s.id);
+                      else next.delete(s.id);
+                      return next;
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="mochi-field">
         <label className="mochi-field__label">{t('garden_water_note')}</label>
         <textarea

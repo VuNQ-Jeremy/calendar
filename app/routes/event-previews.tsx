@@ -46,6 +46,7 @@ async function actionImpl({ request, context }: ActionFunctionArgs) {
     focusText: formData.get('focusText') ?? '',
     // An empty select means "no topic", which the column stores as NULL.
     vocabTopicId: (formData.get('vocabTopicId') as string) || null,
+    homeworkText: formData.get('homeworkText') ?? '',
   });
   if (!parsed.success) return Response.json({ errors: parsed.error.flatten() }, { status: 400 });
 

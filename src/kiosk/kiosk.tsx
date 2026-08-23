@@ -13,6 +13,7 @@ import type { ChecklistItemRow, CheckRow } from '../../server/services/checkin.j
 import type { ActivityTypeRow } from '../../server/services/checkin-activity-types.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
+import { AssignModal } from '../garden/assign-modal.jsx';
 
 const { Button, IconButton } = DS;
 
@@ -32,6 +33,48 @@ interface KioskModalProps {
   students: StudentRow[];
   initialPhase: CheckPhase;
   onClose: () => void;
+}
+
+/**
+ * "Giao từ vựng" from the kiosk's checkout screen — same dialog as the event modal's section.
+ * Its own top-level component (never inline) so the /event-previews load (for the topic
+ * picker) mounts only on demand — kids tapping through checkout never pay for it, and a fresh
+ * component identity on every render would otherwise unmount/remount the whole kiosk subtree.
+ */
+function KioskAssign({
+  eventId,
+  date,
+  classId,
+  classes,
+  roster,
+  onClose,
+}: {
+  eventId: string;
+  date: string;
+  classId: string;
+  classes: ClassRow[];
+  roster: StudentRow[];
+  onClose: () => void;
+}) {
+  const { data } = useCachedLoad<{ topics: { id: string; name: string }[] }>(
+    `prev:${eventId}:${date}`,
+    `/event-previews?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
+  );
+  const fetcher = useFetcher<{ ok: boolean }>();
+  React.useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data?.ok) onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.data, fetcher.state]);
+  return (
+    <AssignModal
+      topics={data?.topics ?? []}
+      classes={classes.filter((c) => c.id === classId)}
+      today={date}
+      onClose={onClose}
+      onSubmit={(fd) => fetcher.submit(fd, { action: '/vocabulary', method: 'post' })}
+      rosterStudents={roster.map((s) => ({ id: s.id, name: s.name }))}
+    />
+  );
 }
 
 /**
@@ -58,6 +101,7 @@ export function KioskModal({
   const [selected, setSelected] = React.useState<string | null>(null);
   const [localChecks, setLocalChecks] = React.useState<Set<string>>(() => new Set());
   const [celebrate, setCelebrate] = React.useState(false);
+  const [assigning, setAssigning] = React.useState(false);
   const fetcher = useFetcher<{ ok: boolean; checks: CheckRow[]; awarded: string[] }>();
 
   const kioskKey = `ck:kiosk:${eventId}:${date}`;
@@ -155,6 +199,11 @@ export function KioskModal({
           </button>
         ))}
       </div>
+      {phase === 'checkout' && (
+        <Button variant="secondary" onClick={() => setAssigning(true)}>
+          {t('ck_assign_vocab')}
+        </Button>
+      )}
       <IconButton label={t('ck_kiosk_close')} onClick={onClose}>
         <MIcon name="x" size={20} />
       </IconButton>
@@ -218,24 +267,49 @@ export function KioskModal({
             <div className="kiosk-board">
               <div className="kiosk-cells">
                 {items.map((item) => {
-                  const type = data?.activityTypes.find((a) => a.id === item.activityTypeId);
-                  const c = colorOf(type?.color ?? 'orange');
+                  const special = item.kind !== 'custom';
+                  const type = special
+                    ? null
+                    : data?.activityTypes.find((a) => a.id === item.activityTypeId);
+                  const c = colorOf(
+                    special
+                      ? item.kind === 'homework'
+                        ? 'blue'
+                        : 'green'
+                      : (type?.color ?? 'orange'),
+                  );
                   const checked = localChecks.has(item.id);
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      className="kiosk-cell"
+                      className={`kiosk-cell${special ? ' kiosk-cell--special' : ''}`}
                       style={{
                         background: checked ? c.base : c.soft,
                         color: checked ? '#fff' : c.ink,
+                        borderColor: special ? c.base : 'transparent',
                       }}
                       onClick={() => toggle(item.id)}
                     >
-                      <MIcon name={(type?.icon as IconName) ?? 'star'} size={40} />
+                      <MIcon
+                        name={
+                          special
+                            ? item.kind === 'homework'
+                              ? 'book'
+                              : 'star'
+                            : ((type?.icon as IconName) ?? 'star')
+                        }
+                        size={40}
+                      />
                       {/* Both halves, not one or the other: the type says what kind of homework
                           this was, the label says which — "Vocabulary" over "10 words: Animals". */}
-                      {type && <span className="kiosk-cell-type">{type.name}</span>}
+                      {special ? (
+                        <span className="kiosk-cell-type">
+                          {t(item.kind === 'homework' ? 'ck_sq_homework' : 'ck_sq_vocab')}
+                        </span>
+                      ) : (
+                        type && <span className="kiosk-cell-type">{type.name}</span>
+                      )}
                       {item.label && <span className="kiosk-cell-label">{item.label}</span>}
                       {checked && (
                         <span className="kiosk-cell-check" aria-hidden="true">
@@ -267,6 +341,17 @@ export function KioskModal({
             </div>
             <div className="kiosk-bag-msg">{t('ck_bag_earned')}</div>
           </div>
+        )}
+
+        {assigning && (
+          <KioskAssign
+            eventId={eventId}
+            date={date}
+            classId={classId}
+            classes={classes}
+            roster={roster}
+            onClose={() => setAssigning(false)}
+          />
         )}
       </div>
     </div>,

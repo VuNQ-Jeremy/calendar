@@ -178,6 +178,45 @@ export function nextOccurrenceDate(
   return null;
 }
 
+/** What kind of checklist cell a row is. Non-custom rows are seeded by the /checkin loader. */
+export type ChecklistKind = 'custom' | 'homework' | 'vocab';
+
+/**
+ * Mirror of nextOccurrenceDate: the occurrence BEFORE this one. Weekly → −7 ICT days,
+ * daily → −1; one-off events have no previous occurrence.
+ */
+export function prevOccurrenceDate(
+  recurrence: string | null | undefined,
+  date: string,
+): string | null {
+  if (recurrence === 'weekly') return addDaysIct(date, -7);
+  if (recurrence === 'daily') return addDaysIct(date, -1);
+  return null;
+}
+
+/**
+ * Does an assignment deadline fall in this occurrence's vocab window (prevDate, date]?
+ * A null prevDate (one-off event) degrades to deadline === date — never an open-ended lower
+ * bound, so ancient assignments cannot leak into a new event's first check-in.
+ */
+export function deadlineInVocabWindow(
+  deadline: string,
+  prevDate: string | null,
+  date: string,
+): boolean {
+  if (prevDate == null) return deadline === date;
+  return deadline > prevDate && deadline <= date;
+}
+
+/**
+ * Is the vocab square "met" for one student? Every applicable assignment satisfied; an empty
+ * list is vacuously met — a student narrowed out of every windowed assignment was never asked
+ * for anything, and must not lose the day's bag over it.
+ */
+export function vocabSquareMet(perAssignment: { done: number; requiredCount: number }[]): boolean {
+  return perAssignment.every((a) => a.done >= a.requiredCount);
+}
+
 // Local ICT day arithmetic (garden.ts has identical helpers, but importing garden's would
 // couple two unrelated features for three lines of epoch maths).
 function addDaysIct(day: string, n: number): string {

@@ -2,31 +2,42 @@ import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
 import {
   attendanceRecords,
   checkinActivityTypes,
+  checklistCheckSeeds,
   checklistChecks,
   checklistItems,
   classStudents,
   events,
+  flashcardTopics,
   giftRedemptions,
+  sessionPreviews,
   settings,
   tuiMuEvents,
+  vocabAssignments,
+  vocabAssignmentStudents,
 } from '../db/schema';
 import type { TenantDb } from '../db/index';
 import type { CheckInput, ChecklistItemInput, GiftRedeemInput } from '../../shared/schemas';
 import {
   DEFAULT_CHECKIN_SETTINGS,
   bagRefId,
+  deadlineInVocabWindow,
   evaluateEarn,
   phaseComplete,
+  prevOccurrenceDate,
   tallyTuiMuMonth,
+  vocabSquareMet,
   type BagKind,
+  type ChecklistKind,
   type CheckPhase,
   type CheckinSettings,
   type SessionOutcome,
   type TuiMuMonthTally,
 } from '../../shared/logic/checkin';
+import { ictDateOf } from '../../shared/logic/tests';
 import { record, recordCreate, recordDelete } from './audit';
 import { markPresentIfUnmarked } from './attendance';
 import { list as listActivityTypes, type ActivityTypeRow } from './checkin-activity-types';
+import { qualifyingCounts } from './garden';
 
 const SETTINGS_KEY = 'checkin-settings';
 
@@ -42,9 +53,9 @@ const SETTINGS_KEY = 'checkin-settings';
 async function ownedEvent(
   db: TenantDb,
   eventId: string,
-): Promise<{ classId: string | null } | null> {
+): Promise<{ classId: string | null; recurrence: string } | null> {
   const rows = await db.raw
-    .select({ classId: events.classId })
+    .select({ classId: events.classId, recurrence: events.recurrence })
     .from(events)
     .where(db.own(events, eq(events.id, eventId)));
   return rows[0] ?? null;
@@ -127,6 +138,8 @@ export type ChecklistItemRow = {
   eventId: string;
   date: string;
   phase: CheckPhase;
+  /** 'custom' = teacher-authored; 'homework' | 'vocab' = seeded by the /checkin loader. */
+  kind: ChecklistKind;
   activityTypeId: string | null;
   label: string;
   sortOrder: number;
@@ -140,6 +153,7 @@ function mapItem(r: typeof checklistItems.$inferSelect): ChecklistItemRow {
     eventId: r.eventId,
     date: r.date,
     phase: r.phase as CheckPhase,
+    kind: r.kind as ChecklistKind,
     activityTypeId: r.activityTypeId,
     label: r.label,
     sortOrder: r.sortOrder,
@@ -218,6 +232,7 @@ export async function createItem(
     eventId: input.eventId,
     date: input.date,
     phase: input.phase,
+    kind: 'custom',
     activityTypeId: input.activityTypeId ?? null,
     label: input.label,
     sortOrder,
@@ -236,7 +251,8 @@ export async function updateItem(
   patch: { activityTypeId?: string | null; label?: string },
 ): Promise<ChecklistItemRow | null> {
   const before = await ownedItem(db, id);
-  if (!before) return null;
+  // Special rows belong to the seeder (ensureSpecialItems) — the editor cannot edit them.
+  if (!before || before.kind !== 'custom') return null;
   const set: Partial<typeof checklistItems.$inferInsert> = {};
   if (patch.activityTypeId !== undefined) set.activityTypeId = patch.activityTypeId;
   if (patch.label !== undefined) set.label = patch.label;
@@ -254,7 +270,9 @@ export async function updateItem(
 
 /** Checks cascade with the item — a removed cell takes its taps with it, and tallies self-correct. */
 export async function deleteItem(db: TenantDb, id: string): Promise<void> {
-  if (!(await ownedItem(db, id))) return;
+  const item = await ownedItem(db, id);
+  // Special rows belong to the seeder (ensureSpecialItems) — the editor cannot delete them.
+  if (!item || item.kind !== 'custom') return;
   // `checklist_items` carries no tenant_id, so `recordDelete`'s own fence degrades to a plain
   // id match here — `ownedItem` above is what makes that safe.
   await recordDelete(db, 'checklist_item', checklistItems, id);
@@ -263,13 +281,14 @@ export async function deleteItem(db: TenantDb, id: string): Promise<void> {
 
 export async function reorderItems(db: TenantDb, ids: string[]): Promise<void> {
   // One join instead of N ownership reads: whatever survives it is ours, and a foreign id simply
-  // falls out of the list rather than renumbering a stranger's checklist.
+  // falls out of the list rather than renumbering a stranger's checklist. Special rows fall out
+  // the same way a foreign id does — their position belongs to the seeder, not the teacher.
   const ownedRows = ids.length
     ? await db.raw
         .select({ id: checklistItems.id })
         .from(checklistItems)
         .innerJoin(events, eq(events.id, checklistItems.eventId))
-        .where(db.own(events, inArray(checklistItems.id, ids)))
+        .where(db.own(events, inArray(checklistItems.id, ids), eq(checklistItems.kind, 'custom')))
     : [];
   const owned = new Set(ownedRows.map((r) => r.id));
   for (let i = 0; i < ids.length; i++) {
@@ -282,6 +301,253 @@ export async function reorderItems(db: TenantDb, ids: string[]): Promise<void> {
       .where(eq(checklistItems.id, ids[i]));
   }
   record({ action: 'update', entityType: 'checklist_item', meta: { reordered: ids } });
+}
+
+// ---- Special squares (F-24) ----
+//
+// The homework and vocab squares are ordinary checklist_items rows with kind 'homework' /
+// 'vocab', seeded here so taps, bags, misses and month tallies reuse the existing machinery
+// unchanged. Their lifecycle belongs to this seeder alone — the item CRUD above refuses them.
+
+/** The class's assignments whose deadline falls in this occurrence's (prev, date] window. */
+async function windowedAssignments(
+  db: TenantDb,
+  classId: string,
+  recurrence: string,
+  date: string,
+): Promise<
+  {
+    id: string;
+    topicId: string;
+    topicName: string;
+    requiredCount: number;
+    minScorePct: number;
+    deadline: string;
+    deadlineTime: string | null;
+    modes: string | null;
+    createdAt: string;
+  }[]
+> {
+  const prev = prevOccurrenceDate(recurrence, date);
+  const rows = await db.raw
+    .select({
+      id: vocabAssignments.id,
+      topicId: vocabAssignments.topicId,
+      topicName: flashcardTopics.name,
+      requiredCount: vocabAssignments.requiredCount,
+      minScorePct: vocabAssignments.minScorePct,
+      deadline: vocabAssignments.deadline,
+      deadlineTime: vocabAssignments.deadlineTime,
+      modes: vocabAssignments.modes,
+      createdAt: vocabAssignments.createdAt,
+    })
+    .from(vocabAssignments)
+    .innerJoin(flashcardTopics, eq(flashcardTopics.id, vocabAssignments.topicId))
+    .where(db.own(vocabAssignments, eq(vocabAssignments.classId, classId)))
+    .orderBy(asc(vocabAssignments.deadline));
+  // Window applied in JS: `prev` may be null (one-off event), and a class has a handful of
+  // assignments — not worth a two-branch SQL condition.
+  return rows.filter((a) => deadlineInVocabWindow(a.deadline, prev, date));
+}
+
+/**
+ * Get-or-create / relabel / delete ONE special square so it mirrors `label` (null = no square).
+ * Id-stable: an existing row only ever has its label rewritten, so kids' taps survive edits.
+ * The partial unique index uq_checklist_items_special turns a two-tab seeding race into
+ * ON CONFLICT DO NOTHING plus a re-read.
+ */
+async function syncSpecialItem(
+  db: TenantDb,
+  eventId: string,
+  date: string,
+  kind: ChecklistKind,
+  label: string | null,
+  sortOrder: number,
+  nowUtcIso: string,
+): Promise<void> {
+  // tenant-unscoped: checklist_items has no tenant_id; the caller fenced eventId.
+  const findWhere = and(
+    eq(checklistItems.eventId, eventId),
+    eq(checklistItems.date, date),
+    eq(checklistItems.phase, 'checkin'),
+    eq(checklistItems.kind, kind),
+  );
+  const existing = await db.raw.select().from(checklistItems).where(findWhere);
+  const row = existing[0];
+
+  if (label == null) {
+    if (row) {
+      // Checks cascade with the row and tallies self-correct — deleteItem's documented contract.
+      await db.raw.delete(checklistItems).where(eq(checklistItems.id, row.id));
+      record({ action: 'delete', entityType: 'checklist_item', entityId: row.id, meta: { kind } });
+    }
+    return;
+  }
+
+  if (!row) {
+    await db.raw
+      .insert(checklistItems)
+      .values({
+        id: crypto.randomUUID(),
+        eventId,
+        date,
+        phase: 'checkin',
+        kind,
+        activityTypeId: null,
+        label,
+        sortOrder,
+        createdBy: null,
+        createdAt: nowUtcIso,
+      })
+      .onConflictDoNothing();
+    const re = await db.raw.select().from(checklistItems).where(findWhere);
+    if (re[0]) {
+      record({
+        action: 'create',
+        entityType: 'checklist_item',
+        entityId: re[0].id,
+        meta: { kind },
+      });
+    }
+    return;
+  }
+
+  if (row.label !== label) {
+    await db.raw.update(checklistItems).set({ label }).where(eq(checklistItems.id, row.id));
+  }
+}
+
+/**
+ * Make the occurrence's special squares mirror their backing data. Runs on every /checkin
+ * loader hit, so it is idempotent and bounded (≤4 small queries per kind).
+ *
+ * The today-guard is LOAD-BEARING: without it, a teacher browsing a past occurrence would mint
+ * a vocab square into a closed month and create retroactive misses in rankings.
+ */
+export async function ensureSpecialItems(
+  db: TenantDb,
+  eventId: string,
+  date: string,
+  nowUtcIso: string,
+): Promise<void> {
+  if (date < ictDateOf(nowUtcIso)) return;
+  const ev = await ownedEvent(db, eventId);
+  if (!ev) return;
+
+  // Homework: this occurrence's OWN preview row carries the text (authored last session).
+  const prevRows = await db.raw
+    .select({ homeworkText: sessionPreviews.homeworkText })
+    .from(sessionPreviews)
+    .where(
+      db.own(sessionPreviews, eq(sessionPreviews.eventId, eventId), eq(sessionPreviews.date, date)),
+    );
+  const hw = (prevRows[0]?.homeworkText ?? '').trim();
+  await syncSpecialItem(db, eventId, date, 'homework', hw ? hw.slice(0, 300) : null, -2, nowUtcIso);
+
+  // Vocab: any assignment for the class due since the previous session.
+  let vocabLabel: string | null = null;
+  if (ev.classId) {
+    const windowed = await windowedAssignments(db, ev.classId, ev.recurrence, date);
+    if (windowed.length) {
+      vocabLabel = windowed
+        .map((a) => a.topicName)
+        .join(', ')
+        .slice(0, 300);
+    }
+  }
+  await syncSpecialItem(db, eventId, date, 'vocab', vocabLabel, -1, nowUtcIso);
+}
+
+/**
+ * Auto-derivation for the vocab square: pre-check students who met every applicable windowed
+ * assignment. A seed row is written ONLY alongside an auto-inserted check — its presence means
+ * the current state is manual truth (a teacher's uncheck must never be resurrected). Unmet
+ * students get no seed row, so meeting the bar later still auto-checks them; derivation never
+ * deletes a check, so a teacher's manual check on an unmet student is never disturbed either.
+ */
+export async function seedVocabChecks(
+  db: TenantDb,
+  eventId: string,
+  date: string,
+  rosterIds: string[],
+  nowUtcIso: string,
+): Promise<void> {
+  if (date < ictDateOf(nowUtcIso) || !rosterIds.length) return;
+  const ev = await ownedEvent(db, eventId);
+  if (!ev?.classId) return;
+
+  // tenant-unscoped: checklist_items has no tenant_id; eventId fenced by ownedEvent above.
+  const items = await db.raw
+    .select()
+    .from(checklistItems)
+    .where(
+      and(
+        eq(checklistItems.eventId, eventId),
+        eq(checklistItems.date, date),
+        eq(checklistItems.phase, 'checkin'),
+        eq(checklistItems.kind, 'vocab'),
+      ),
+    );
+  const item = items[0];
+  if (!item) return;
+
+  const windowed = await windowedAssignments(db, ev.classId, ev.recurrence, date);
+  if (!windowed.length) return;
+
+  // tenant-unscoped: vocab_assignment_students has no tenant_id; ids from the fenced read above.
+  const narrowRows = await db.raw
+    .select()
+    .from(vocabAssignmentStudents)
+    .where(
+      inArray(
+        vocabAssignmentStudents.assignmentId,
+        windowed.map((a) => a.id),
+      ),
+    );
+  const narrow = new Map<string, Set<string>>();
+  for (const r of narrowRows) {
+    let s = narrow.get(r.assignmentId);
+    if (!s) narrow.set(r.assignmentId, (s = new Set()));
+    s.add(r.studentId);
+  }
+
+  // tenant-unscoped: checklist_check_seeds has no tenant_id; item fenced above.
+  const seeded = await db.raw
+    .select()
+    .from(checklistCheckSeeds)
+    .where(eq(checklistCheckSeeds.itemId, item.id));
+  const done = new Set(seeded.map((r) => r.studentId));
+  const fresh = rosterIds.filter((sid) => !done.has(sid));
+  if (!fresh.length) return;
+
+  const counts = new Map<string, Map<string, number>>();
+  for (const a of windowed) {
+    counts.set(a.id, await qualifyingCounts(db, a, fresh));
+  }
+
+  for (const sid of fresh) {
+    const applicable = windowed.filter((a) => {
+      const set = narrow.get(a.id);
+      return !set || set.has(sid);
+    });
+    const met = vocabSquareMet(
+      applicable.map((a) => ({
+        done: counts.get(a.id)?.get(sid) ?? 0,
+        requiredCount: a.requiredCount,
+      })),
+    );
+    if (!met) continue;
+    // tenant-unscoped (both): fenced by the item read above. Seed first, check second — a crash
+    // between the two re-runs harmlessly (both inserts are ON CONFLICT DO NOTHING).
+    await db.raw
+      .insert(checklistCheckSeeds)
+      .values({ itemId: item.id, studentId: sid, seededAt: nowUtcIso })
+      .onConflictDoNothing();
+    await db.raw
+      .insert(checklistChecks)
+      .values({ itemId: item.id, studentId: sid, checkedAt: nowUtcIso })
+      .onConflictDoNothing();
+  }
 }
 
 // ---- The kiosk write ----

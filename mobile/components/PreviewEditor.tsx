@@ -25,6 +25,7 @@ export function PreviewEditor({ eventId, date }: { eventId: string; date: string
 
   const [focusText, setFocusText] = React.useState('');
   const [vocabTopicId, setVocabTopicId] = React.useState('');
+  const [homeworkText, setHomeworkText] = React.useState('');
 
   /**
    * Seed from the server ONCE per (event, date) — the same guard the register uses. A refetch
@@ -39,6 +40,7 @@ export function PreviewEditor({ eventId, date }: { eventId: string; date: string
     seededFor.current = key;
     setFocusText(data.preview?.focusText ?? '');
     setVocabTopicId(data.preview?.vocabTopicId ?? '');
+    setHomeworkText(data.preview?.homeworkText ?? '');
   }, [data, eventId, date]);
 
   if (isLoading && !data) {
@@ -62,6 +64,13 @@ export function PreviewEditor({ eventId, date }: { eventId: string; date: string
         style={{ height: 120, textAlignVertical: 'top', paddingTop: th.spacing[3] }}
       />
 
+      <Input
+        label={t('prev_homework_label')}
+        placeholder={t('prev_homework_ph')}
+        value={homeworkText}
+        onChangeText={setHomeworkText}
+      />
+
       <ChipSelect
         label={t('prev_vocab_label')}
         value={vocabTopicId}
@@ -78,7 +87,7 @@ export function PreviewEditor({ eventId, date }: { eventId: string; date: string
         variant="primary"
         block
         loading={save.isPending}
-        onPress={() => save.mutate({ focusText, vocabTopicId: vocabTopicId || null })}
+        onPress={() => save.mutate({ focusText, vocabTopicId: vocabTopicId || null, homeworkText })}
       >
         {t('save')}
       </Button>

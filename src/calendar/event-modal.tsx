@@ -23,6 +23,8 @@ import type { SessionPreviewRow } from '../../server/services/session-preview.js
 import type { MaterialRow } from '../../server/services/materials.js';
 import type { ChecklistItemRow, CheckRow, OccurrenceFlags } from '../../server/services/checkin.js';
 import type { ActivityTypeRow } from '../../server/services/checkin-activity-types.js';
+import type { VocabAssignmentRow } from '../../server/services/garden.js';
+import { AssignModal } from '../garden/assign-modal.jsx';
 
 const { Button: CBtn, Tabs: CTabs, IconButton: CIBtn } = DS;
 
@@ -188,11 +190,13 @@ function PreviewTab({ eventId, date }: { eventId: string; date: string }) {
   const saveFetcher = useFetcher<{ ok: boolean; preview: SessionPreviewRow }>();
   const [focusText, setFocusText] = React.useState('');
   const [vocabTopicId, setVocabTopicId] = React.useState('');
+  const [homeworkText, setHomeworkText] = React.useState('');
 
   React.useEffect(() => {
     if (!data) return;
     setFocusText(data.preview?.focusText ?? '');
     setVocabTopicId(data.preview?.vocabTopicId ?? '');
+    setHomeworkText(data.preview?.homeworkText ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
@@ -212,6 +216,7 @@ function PreviewTab({ eventId, date }: { eventId: string; date: string }) {
     fd.set('date', date);
     fd.set('focusText', focusText);
     fd.set('vocabTopicId', vocabTopicId);
+    fd.set('homeworkText', homeworkText);
     saveFetcher.submit(fd, { action: '/event-previews', method: 'post' });
   };
 
@@ -230,6 +235,17 @@ function PreviewTab({ eventId, date }: { eventId: string; date: string }) {
           value={focusText}
           onChange={(e) => setFocusText(e.target.value)}
           style={{ resize: 'vertical', minHeight: 110 }}
+        />
+      </div>
+      <div className="mochi-field">
+        <label className="mochi-field__label">{t('prev_homework_label')}</label>
+        <textarea
+          className="mochi-input"
+          rows={2}
+          placeholder={t('prev_homework_ph')}
+          value={homeworkText}
+          onChange={(e) => setHomeworkText(e.target.value)}
+          style={{ resize: 'vertical', minHeight: 56 }}
         />
       </div>
       <MSelect
@@ -430,6 +446,7 @@ type CheckinPayload = {
   checks: CheckRow[];
   activityTypes: ActivityTypeRow[];
   flags: OccurrenceFlags;
+  openAssignments?: VocabAssignmentRow[];
 };
 
 /**
@@ -462,7 +479,9 @@ function ChecklistItemsEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.data, fetcher.state]);
 
-  const rows = items.filter((i) => i.phase === phase).sort((a, b) => a.sortOrder - b.sortOrder);
+  const rows = items
+    .filter((i) => i.phase === phase && i.kind === 'custom')
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   const typeOpts = [
     { value: '', label: t('ck_activity_none') },
     ...activityTypes.map((a) => ({ value: a.id, label: a.name })),
@@ -505,6 +524,17 @@ function ChecklistItemsEditor({
 
   return (
     <div className="m-stack" style={{ gap: 8 }}>
+      {phase === 'checkin' &&
+        items
+          .filter((i) => i.phase === 'checkin' && i.kind !== 'custom')
+          .map((i) => (
+            <div key={i.id} className="ck-special-chip" data-kind={i.kind}>
+              <MIcon name={i.kind === 'homework' ? 'book' : 'star'} size={16} />
+              <b>{t(i.kind === 'homework' ? 'ck_sq_homework' : 'ck_sq_vocab')}</b>
+              <span>{i.label}</span>
+              <span className="ck-special-chip__auto">{t('ck_special_hint')}</span>
+            </div>
+          ))}
       {rows.map((row) => (
         <div key={row.id} className="ck-item-row">
           {phase === 'checkin' ? (
@@ -616,6 +646,23 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
     .map((sid) => students.find((s) => s.id === sid))
     .filter((s): s is StudentRow => !!s);
 
+  // "Giao từ vựng" — the check-in surface's own assign dialog. Topics ride on the SAME cached
+  // payload the Preview tab already loads for this occurrence, so opening this needs no new
+  // endpoint.
+  const [assignOpen, setAssignOpen] = React.useState(false);
+  const { data: prevData } = useCachedLoad<{ topics: { id: string; name: string }[] }>(
+    `prev:${eventId}:${date}`,
+    `/event-previews?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
+  );
+  const assignFetcher = useFetcher<{ ok: boolean }>();
+  React.useEffect(() => {
+    if (assignFetcher.state === 'idle' && assignFetcher.data?.ok) {
+      setAssignOpen(false);
+      onMutated(); // refresh openAssignments in the ck: payload
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignFetcher.data, assignFetcher.state]);
+
   if (!roster.length) {
     return <Empty icon="users" title={t('att_empty_roster')} />;
   }
@@ -674,6 +721,44 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
             onMutated={onMutated}
           />
         ) : null}
+      </div>
+
+      <div className="ck-section ck-section--assign">
+        <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h4 style={{ margin: 0 }}>{t('ck_assign_vocab')}</h4>
+          <CBtn variant="secondary" size="sm" onClick={() => setAssignOpen(true)}>
+            {t('ck_assign_vocab')}
+          </CBtn>
+        </div>
+        <div className="m-stack" style={{ gap: 6 }}>
+          {(data?.openAssignments ?? []).length === 0 ? (
+            <p className="m-muted" style={{ fontSize: 'var(--text-sm)', margin: 0 }}>
+              {t('ck_assign_none')}
+            </p>
+          ) : (
+            (data?.openAssignments ?? []).map((a) => (
+              <div key={a.id} className="lrow">
+                <span style={{ flex: 1 }} className="lrow__title">
+                  {a.topicName}
+                </span>
+                <span className="m-muted">{a.deadline}</span>
+                <span className="mchip">
+                  {a.studentIds.length === 0 ? t('garden_scope_all') : `${a.studentIds.length} HS`}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+        {assignOpen && (
+          <AssignModal
+            topics={prevData?.topics ?? []}
+            classes={classes.filter((c) => c.id === classId)}
+            today={date}
+            onClose={() => setAssignOpen(false)}
+            onSubmit={(fd) => assignFetcher.submit(fd, { action: '/vocabulary', method: 'post' })}
+            rosterStudents={roster.map((s) => ({ id: s.id, name: s.name }))}
+          />
+        )}
       </div>
 
       <div className="ck-section ck-section--flags">

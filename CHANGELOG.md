@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0312 — 2026-08-23
+feat(checkin): homework + vocab special squares on the kiosk board (F-24); per-student vocab assignment scope
+
 ## v0.0311 — 2026-08-23
 docs: F-24 check-in special squares — design spec, Sonnet 5 execution plan, Opus 5 clarifier brief
 
