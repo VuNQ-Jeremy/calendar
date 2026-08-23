@@ -592,6 +592,45 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
     markStale(nextKey);
   };
 
+  // Physical homework for the NEXT session, authored at the end of THIS one — the same
+  // different-date pattern as the checklist above. It lives on next session's preview row
+  // (session_previews.homework_text), so the save must echo that row's focusText/vocabTopicId
+  // back unchanged: the action parses the full SessionPreviewInput, where an omitted field
+  // silently becomes '' — the exact wipe the mobile editor also guards against.
+  const prevNextKey = `prev:${eventId}:${nextDate}`;
+  const { data: prevData } = useCachedLoad<PreviewPayload>(
+    prevNextKey,
+    `/event-previews?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(nextDate)}`,
+  );
+  const hwFetcher = useFetcher<{ ok: boolean; preview: SessionPreviewRow }>();
+  const [homeworkText, setHomeworkText] = React.useState('');
+  React.useEffect(() => {
+    if (!prevData) return;
+    setHomeworkText(prevData.preview?.homeworkText ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prevData]);
+  React.useEffect(() => {
+    if (hwFetcher.data?.ok && hwFetcher.data.preview) {
+      cacheSet(prevNextKey, { preview: hwFetcher.data.preview, topics: prevData?.topics ?? [] });
+      noteLocalMutation('previews');
+      // Refetching next session's checklist is what makes the seeded homework chip appear
+      // right here, the moment the save lands — the loader's ensureSpecialItems does the rest.
+      markStale(nextKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hwFetcher.data]);
+  const saveHomework = () => {
+    const fd = new FormData();
+    fd.set('intent', 'save');
+    fd.set('eventId', eventId);
+    fd.set('date', nextDate);
+    fd.set('focusText', prevData?.preview?.focusText ?? '');
+    fd.set('vocabTopicId', prevData?.preview?.vocabTopicId ?? '');
+    fd.set('homeworkText', homeworkText);
+    hwFetcher.submit(fd, { action: '/event-previews', method: 'post' });
+  };
+  const hwDirty = homeworkText !== (prevData?.preview?.homeworkText ?? '');
+
   return (
     <div className="ck-section ck-section--next">
       <h4 style={{ margin: '0 0 8px' }}>{t('ck_items_next')}</h4>
@@ -605,6 +644,27 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
           onMutated={onMutated}
         />
       ) : null}
+      <div className="mochi-field" style={{ marginTop: 10 }}>
+        <label className="mochi-field__label">{t('prev_homework_label')}</label>
+        <div className="m-row" style={{ gap: 8, alignItems: 'flex-start' }}>
+          <textarea
+            className="mochi-input"
+            rows={2}
+            placeholder={t('prev_homework_ph')}
+            value={homeworkText}
+            onChange={(e) => setHomeworkText(e.target.value)}
+            style={{ resize: 'vertical', minHeight: 56, flex: 1 }}
+          />
+          <CBtn
+            variant="secondary"
+            size="sm"
+            onClick={saveHomework}
+            disabled={!hwDirty || hwFetcher.state !== 'idle' || !prevData}
+          >
+            {t('save')}
+          </CBtn>
+        </div>
+      </div>
     </div>
   );
 }

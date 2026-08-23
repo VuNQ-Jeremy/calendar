@@ -110,4 +110,47 @@ test.describe('CRUD: check-in special squares', () => {
     await k.dlg.locator('.m-dialog__foot .mochi-btn.is-danger').click();
     await post;
   });
+
+  test("next session's homework is authored from THIS session's Check-in tab", async ({ page }) => {
+    const k = ui(page);
+    const title = `E2E hw next ${Date.now()}`;
+
+    // Weekly, so the "Check-in for next session" section (and its homework field) renders.
+    await signInStaff(page);
+    await page.goto('/calendar');
+    await page.getByRole('button', { name: 'New event' }).click();
+    await eventTitleInput(k.dlg).fill(title);
+    await k.pickSel('Class', 'Biology 9A');
+    await k.pickSel('Repeat', 'Every week');
+    let post = k.posted('/calendar');
+    await k.submit().click();
+    await post;
+
+    await page.getByRole('tab', { name: 'Agenda' }).click();
+    await page.locator('.aev', { hasText: title }).first().click();
+    await k.dlg.getByRole('tab', { name: 'Check-in/out' }).click();
+
+    // The homework field lives in the next-session section and writes NEXT week's preview row.
+    const nextSection = k.dlg.locator('.ck-section--next');
+    await nextSection.locator('textarea.mochi-input').fill('Workbook p.40');
+    post = k.posted('/event-previews');
+    await nextSection.getByRole('button', { name: 'Save', exact: true }).click();
+    await post;
+
+    // The save marks next week's checklist stale, the refetch seeds the square, and the chip
+    // appears right in this section — the teacher sees the result without leaving the dialog.
+    // (Next week's date is in the future, so the seeder's no-retroactive-squares guard allows it.)
+    const chip = nextSection.locator('.ck-special-chip[data-kind="homework"]');
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText('Workbook p.40');
+
+    // Cleanup: weekly events raise the scope chooser on delete (crud-checkin-author pattern).
+    await k.dlg.getByRole('tab', { name: 'Details' }).click();
+    post = k.posted('/calendar');
+    const chooser = k.dlgOf('Delete recurring event');
+    await k.dlg.first().locator('.m-dialog__foot .mochi-btn.is-danger').click();
+    await chooser.getByRole('radio', { name: 'All events' }).check();
+    await chooser.locator('.m-dialog__foot .mochi-btn.is-danger').click();
+    await post;
+  });
 });
