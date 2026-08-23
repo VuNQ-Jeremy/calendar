@@ -70,7 +70,7 @@ test.describe('CRUD: vocab assignment scope', () => {
     // occurrence's `ck:` cache stale itself — this section does not rely on the live broadcast).
     const row = k.dlg.locator('.ck-section--assign .lrow', { hasText: topic });
     await expect(row).toBeVisible();
-    await expect(row.locator('.mchip')).toHaveText('1 HS');
+    await expect(row.locator('.mchip')).toHaveText('1 selected');
 
     // ---- The kiosk's FIRST fetch for this occurrence happens only now, after the assignment
     // exists, so its vocab-window read sees it straight away. ----

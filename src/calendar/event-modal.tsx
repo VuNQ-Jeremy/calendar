@@ -743,7 +743,9 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
                 </span>
                 <span className="m-muted">{a.deadline}</span>
                 <span className="mchip">
-                  {a.studentIds.length === 0 ? t('garden_scope_all') : `${a.studentIds.length} HS`}
+                  {a.studentIds.length === 0
+                    ? t('garden_scope_all')
+                    : t('garden_scope_count', { n: a.studentIds.length })}
                 </span>
               </div>
             ))
