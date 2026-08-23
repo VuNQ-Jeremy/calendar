@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0311 — 2026-08-23
+docs: F-24 check-in special squares — design spec, Sonnet 5 execution plan, Opus 5 clarifier brief
+
 ## v0.0310 — 2026-08-22
 Sidebar and landing wordmarks no longer underline on hover — the design system's global a:hover underline no longer outranks class resets. Alt+hover inspector can now resolve Link/NavLink/Form elements.
 
