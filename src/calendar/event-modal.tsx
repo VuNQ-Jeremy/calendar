@@ -603,23 +603,14 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
     `/event-previews?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(nextDate)}`,
   );
   const hwFetcher = useFetcher<{ ok: boolean; preview: SessionPreviewRow }>();
-  const [homeworkText, setHomeworkText] = React.useState('');
   /**
-   * `touched` is what keeps the Save button honest across the box being emptied twice over.
-   * Emptying it BY HAND and saving is the remove-homework path, so "empty" cannot itself mean
-   * "nothing to do" — only "empty and untouched since the last load or save" can.
+   * An ADD box, never an edit box: what is already set is shown by the chip above, and each save
+   * appends one line to the single `homework_text` field rather than replacing it. So the box is
+   * deliberately never seeded from the server — prefilling it would append a duplicate of what is
+   * already there the moment the teacher pressed Add.
    */
-  const [touched, setTouched] = React.useState(false);
-  // Seed ONCE per occurrence so an edit starts from what is already set. A re-seed on every
-  // payload change would undo the clear below the instant the save's own reply lands.
-  const seededFor = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    if (!prevData || seededFor.current === prevNextKey) return;
-    seededFor.current = prevNextKey;
-    setHomeworkText(prevData.preview?.homeworkText ?? '');
-    setTouched(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prevData, prevNextKey]);
+  const [homeworkText, setHomeworkText] = React.useState('');
+  const existingHw = prevData?.preview?.homeworkText ?? '';
   React.useEffect(() => {
     if (hwFetcher.data?.ok && hwFetcher.data.preview) {
       cacheSet(prevNextKey, { preview: hwFetcher.data.preview, topics: prevData?.topics ?? [] });
@@ -627,24 +618,27 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
       // Refetching next session's checklist is what makes the seeded homework chip appear
       // right here, the moment the save lands — the loader's ensureSpecialItems does the rest.
       markStale(nextKey);
-      // The chip below now shows what was saved, so the box goes back to being an empty input
-      // rather than a second copy of it.
       setHomeworkText('');
-      setTouched(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hwFetcher.data]);
-  const saveHomework = () => {
+  const writeHomework = (value: string) => {
     const fd = new FormData();
     fd.set('intent', 'save');
     fd.set('eventId', eventId);
     fd.set('date', nextDate);
     fd.set('focusText', prevData?.preview?.focusText ?? '');
     fd.set('vocabTopicId', prevData?.preview?.vocabTopicId ?? '');
-    fd.set('homeworkText', homeworkText);
+    fd.set('homeworkText', value);
     hwFetcher.submit(fd, { action: '/event-previews', method: 'post' });
   };
-  const hwDirty = touched && homeworkText !== (prevData?.preview?.homeworkText ?? '');
+  /** One line per entry — `\n` is what the chip and the kiosk cell render as separate lines. */
+  const addHomework = () => {
+    const line = homeworkText.trim();
+    if (!line) return;
+    writeHomework(existingHw ? `${existingHw}\n${line}` : line);
+  };
+  const hwBusy = hwFetcher.state !== 'idle' || !prevData;
 
   return (
     <div className="ck-section ck-section--next">
@@ -667,21 +661,26 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
             rows={2}
             placeholder={t('prev_homework_ph')}
             value={homeworkText}
-            onChange={(e) => {
-              setHomeworkText(e.target.value);
-              setTouched(true);
-            }}
+            onChange={(e) => setHomeworkText(e.target.value)}
             style={{ resize: 'vertical', minHeight: 56, flex: 1 }}
           />
-          <CBtn
-            variant="secondary"
-            size="sm"
-            onClick={saveHomework}
-            disabled={!hwDirty || hwFetcher.state !== 'idle' || !prevData}
-          >
-            {t('save')}
-          </CBtn>
+          <div className="m-stack" style={{ gap: 6 }}>
+            <CBtn
+              variant="secondary"
+              size="sm"
+              onClick={addHomework}
+              disabled={!homeworkText.trim() || hwBusy}
+            >
+              {t('add')}
+            </CBtn>
+            {existingHw ? (
+              <CBtn variant="ghost" size="sm" onClick={() => writeHomework('')} disabled={hwBusy}>
+                {t('ck_hw_clear')}
+              </CBtn>
+            ) : null}
+          </div>
         </div>
+        <span className="mochi-field__hint">{t('ck_hw_hint')}</span>
       </div>
     </div>
   );

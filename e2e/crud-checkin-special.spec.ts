@@ -132,9 +132,11 @@ test.describe('CRUD: check-in special squares', () => {
 
     // The homework field lives in the next-session section and writes NEXT week's preview row.
     const nextSection = k.dlg.locator('.ck-section--next');
-    await nextSection.locator('textarea.mochi-input').fill('Workbook p.40');
+    const hwBox = nextSection.locator('textarea.mochi-input');
+    const addBtn = nextSection.getByRole('button', { name: 'Add', exact: true });
+    await hwBox.fill('Workbook p.40');
     post = k.posted('/event-previews');
-    await nextSection.getByRole('button', { name: 'Save', exact: true }).click();
+    await addBtn.click();
     await post;
 
     // The save marks next week's checklist stale, the refetch seeds the square, and the chip
@@ -143,10 +145,23 @@ test.describe('CRUD: check-in special squares', () => {
     const chip = nextSection.locator('.ck-special-chip[data-kind="homework"]');
     await expect(chip).toBeVisible();
     await expect(chip).toContainText('Workbook p.40');
-    // The box goes back to being an empty input once the chip carries the value — and Save
-    // re-disables, so a reflex second click cannot blank the homework that was just set.
-    await expect(nextSection.locator('textarea.mochi-input')).toHaveValue('');
-    await expect(nextSection.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    // The box empties and Add re-disables: it is an add-a-line input, not a copy of the value.
+    await expect(hwBox).toHaveValue('');
+    await expect(addBtn).toBeDisabled();
+
+    // A second save APPENDS rather than replacing — one field, one line per entry.
+    await hwBox.fill('Read chapter 4');
+    post = k.posted('/event-previews');
+    await addBtn.click();
+    await post;
+    await expect(chip).toContainText('Workbook p.40');
+    await expect(chip).toContainText('Read chapter 4');
+
+    // Clear is the one path that removes what accumulated; the square goes with it.
+    post = k.posted('/event-previews');
+    await nextSection.getByRole('button', { name: 'Clear homework' }).click();
+    await post;
+    await expect(nextSection.locator('.ck-special-chip[data-kind="homework"]')).toHaveCount(0);
 
     // Cleanup: weekly events raise the scope chooser on delete (crud-checkin-author pattern).
     await k.dlg.getByRole('tab', { name: 'Details' }).click();

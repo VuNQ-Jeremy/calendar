@@ -3394,6 +3394,9 @@ html .sb::-webkit-scrollbar-thumb:active {
 }
 .kiosk-cell-label {
   line-height: 1.2;
+  /* Homework accrues one line per save, joined with 
+ — render those as real breaks. */
+  white-space: pre-line;
 }
 .kiosk-cell-check {
   position: absolute;
@@ -3406,15 +3409,19 @@ html .sb::-webkit-scrollbar-thumb:active {
 }
 .ck-special-chip {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
   font-size: var(--text-sm);
 }
+.ck-special-chip > span:not(.ck-special-chip__auto) {
+  white-space: pre-line;
+}
 .ck-special-chip__auto {
   margin-left: auto;
+  flex: none;
   color: var(--text-muted);
   font-size: var(--text-xs);
 }

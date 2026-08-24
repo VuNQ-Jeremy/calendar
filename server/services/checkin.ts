@@ -442,7 +442,8 @@ export async function ensureSpecialItems(
       db.own(sessionPreviews, eq(sessionPreviews.eventId, eventId), eq(sessionPreviews.date, date)),
     );
   const hw = (prevRows[0]?.homeworkText ?? '').trim();
-  await syncSpecialItem(db, eventId, date, 'homework', hw ? hw.slice(0, 300) : null, -2, nowUtcIso);
+  // Homework accrues a line per save, so the mirror needs more room than a single-line label.
+  await syncSpecialItem(db, eventId, date, 'homework', hw ? hw.slice(0, 800) : null, -2, nowUtcIso);
 
   // Vocab: any assignment for the class due since the previous session.
   let vocabLabel: string | null = null;
