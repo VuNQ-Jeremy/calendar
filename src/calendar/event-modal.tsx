@@ -782,25 +782,6 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
 
       {nextDate && <NextCheckinEditor eventId={eventId} nextDate={nextDate} />}
 
-      <div className="ck-section ck-section--checkout">
-        <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
-          <h4 style={{ margin: 0 }}>{t('ck_checkout_title')}</h4>
-          <CBtn variant="secondary" size="sm" onClick={() => setKiosk('checkout')}>
-            {t('ck_open_kiosk_out')}
-          </CBtn>
-        </div>
-        {data ? (
-          <ChecklistItemsEditor
-            eventId={eventId}
-            date={date}
-            phase="checkout"
-            items={data.items}
-            activityTypes={activityTypes}
-            onMutated={onMutated}
-          />
-        ) : null}
-      </div>
-
       <div className="ck-section ck-section--assign">
         <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
           <h4 style={{ margin: 0 }}>{t('ck_assign_vocab')}</h4>
@@ -840,6 +821,25 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
             rosterOf={() => roster.map((s) => ({ id: s.id, name: s.name }))}
           />
         )}
+      </div>
+
+      <div className="ck-section ck-section--checkout">
+        <div className="m-row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+          <h4 style={{ margin: 0 }}>{t('ck_checkout_title')}</h4>
+          <CBtn variant="secondary" size="sm" onClick={() => setKiosk('checkout')}>
+            {t('ck_open_kiosk_out')}
+          </CBtn>
+        </div>
+        {data ? (
+          <ChecklistItemsEditor
+            eventId={eventId}
+            date={date}
+            phase="checkout"
+            items={data.items}
+            activityTypes={activityTypes}
+            onMutated={onMutated}
+          />
+        ) : null}
       </div>
 
       <div className="ck-section ck-section--flags">

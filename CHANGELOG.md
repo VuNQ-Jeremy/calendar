@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0316 — 2026-08-24
+refactor(checkin): group the vocab-assign section with next session, above check-out
+
 ## v0.0315 — 2026-08-24
 feat(vocab): per-student assign on /vocabulary, wider assign dialog, hide the class picker when the event fixes it, clear the homework box on save
 
