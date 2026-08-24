@@ -80,10 +80,17 @@ test.describe('CRUD: vocab assignment scope', () => {
       .getByRole('button', { name: 'Open check-in kiosk' })
       .click();
     await kiosk.locator('.kiosk-card', { hasText: 'Leo Park' }).click();
-    const cell = kiosk.locator('.kiosk-cell--special');
+    // The two data-backed squares live in their own row, under the checklist.
+    const cell = kiosk.locator('.kiosk-cells--special .kiosk-cell--special');
     await expect(cell).toHaveCount(1);
     await expect(cell.locator('.kiosk-cell-type')).toHaveText('Vocabulary');
     // Leo Park has played zero rounds of a topic created seconds ago — unmet, not pre-checked.
+    await expect(cell.locator('.kiosk-cell-check')).toHaveCount(0);
+    // And there is nothing to tap: the square is a plain div whose state comes only from the
+    // student's own vocabulary work, so it is not a button and a click changes nothing.
+    await expect(cell).toHaveClass(/kiosk-cell--readonly/);
+    await expect(kiosk.locator('button.kiosk-cell--special')).toHaveCount(0);
+    await cell.click();
     await expect(cell.locator('.kiosk-cell-check')).toHaveCount(0);
     await kiosk.getByRole('button', { name: 'Close kiosk' }).click();
 

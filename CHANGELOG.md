@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0319 — 2026-08-24
+feat(kiosk): special squares get their own row; the vocab square is derived-only and no longer tappable
+
 ## v0.0318 — 2026-08-24
 refactor(checkin): render the seeded chips below the checklist rows, next to the homework input
 

@@ -55,7 +55,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const kiosk = url.searchParams.get('kiosk') === '1';
   if (kiosk) {
     // Kiosk loads only: the derivation is per-student work the authoring tab has no use for.
-    await checkinSvc.seedVocabChecks(db, eventId, date, roster.studentIds, now);
+    await checkinSvc.syncVocabChecks(db, eventId, date, roster.studentIds, now);
   }
   const occ = await checkinSvc.getOccurrence(db, eventId, date);
   const flags = await checkinSvc.occurrenceFlags(db, eventId, date, roster.studentIds);

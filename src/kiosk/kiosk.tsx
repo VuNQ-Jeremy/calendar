@@ -13,7 +13,6 @@ import type { ChecklistItemRow, CheckRow } from '../../server/services/checkin.j
 import type { ActivityTypeRow } from '../../server/services/checkin-activity-types.js';
 import type { ClassRow } from '../../server/services/classes.js';
 import type { StudentRow } from '../../server/services/people.js';
-import { AssignModal } from '../garden/assign-modal.jsx';
 
 const { Button, IconButton } = DS;
 
@@ -36,45 +35,82 @@ interface KioskModalProps {
 }
 
 /**
- * "Giao từ vựng" from the kiosk's checkout screen — same dialog as the event modal's section.
- * Its own top-level component (never inline) so the /event-previews load (for the topic
- * picker) mounts only on demand — kids tapping through checkout never pay for it, and a fresh
- * component identity on every render would otherwise unmount/remount the whole kiosk subtree.
+ * One cell of a student's board.
+ *
+ * `onToggle` is what makes a cell interactive, and the vocab square deliberately has none: its
+ * state is decided entirely by the student's own vocabulary work, so it renders as a plain div —
+ * no button, no cursor, nothing to tap. Homework is the manual counterpart, confirmed by whoever
+ * is holding the tablet.
  */
-function KioskAssign({
-  eventId,
-  date,
-  classId,
-  classes,
-  roster,
-  onClose,
+function KioskCell({
+  item,
+  activityTypes,
+  checked,
+  onToggle,
 }: {
-  eventId: string;
-  date: string;
-  classId: string;
-  classes: ClassRow[];
-  roster: StudentRow[];
-  onClose: () => void;
+  item: ChecklistItemRow;
+  activityTypes: ActivityTypeRow[];
+  checked: boolean;
+  onToggle?: () => void;
 }) {
-  const { data } = useCachedLoad<{ topics: { id: string; name: string }[] }>(
-    `prev:${eventId}:${date}`,
-    `/event-previews?eventId=${encodeURIComponent(eventId)}&date=${encodeURIComponent(date)}`,
+  const { t } = useLang();
+  const special = item.kind !== 'custom';
+  const type = special ? null : activityTypes.find((a) => a.id === item.activityTypeId);
+  const c = colorOf(
+    special ? (item.kind === 'homework' ? 'blue' : 'green') : (type?.color ?? 'orange'),
   );
-  const fetcher = useFetcher<{ ok: boolean }>();
-  React.useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data?.ok) onClose();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetcher.data, fetcher.state]);
+  const className =
+    `kiosk-cell${special ? ' kiosk-cell--special' : ''}` +
+    (onToggle ? '' : ' kiosk-cell--readonly');
+  const style: React.CSSProperties = {
+    background: checked ? c.base : c.soft,
+    color: checked ? '#fff' : c.ink,
+    borderColor: special ? c.base : 'transparent',
+  };
+  const body = (
+    <>
+      <MIcon
+        name={
+          special
+            ? item.kind === 'homework'
+              ? 'book'
+              : 'star'
+            : ((type?.icon as IconName) ?? 'star')
+        }
+        size={40}
+      />
+      {/* Both halves, not one or the other: the type says what kind of homework this was, the
+          label says which — "Vocabulary" over "10 words: Animals". */}
+      {special ? (
+        <span className="kiosk-cell-type">
+          {t(item.kind === 'homework' ? 'ck_sq_homework' : 'ck_sq_vocab')}
+        </span>
+      ) : (
+        type && <span className="kiosk-cell-type">{type.name}</span>
+      )}
+      {item.label && <span className="kiosk-cell-label">{item.label}</span>}
+      {special && (
+        <span className="kiosk-cell-how">{t(onToggle ? 'ck_sq_manual' : 'ck_special_hint')}</span>
+      )}
+      {checked && (
+        <span className="kiosk-cell-check" aria-hidden="true">
+          <MIcon name="check" size={22} />
+        </span>
+      )}
+    </>
+  );
+
+  if (!onToggle) {
+    return (
+      <div className={className} style={style}>
+        {body}
+      </div>
+    );
+  }
   return (
-    <AssignModal
-      topics={data?.topics ?? []}
-      classes={classes.filter((c) => c.id === classId)}
-      today={date}
-      onClose={onClose}
-      onSubmit={(fd) => fetcher.submit(fd, { action: '/vocabulary', method: 'post' })}
-      hideClass
-      rosterOf={() => roster.map((s) => ({ id: s.id, name: s.name }))}
-    />
+    <button type="button" className={className} style={style} onClick={onToggle}>
+      {body}
+    </button>
   );
 }
 
@@ -102,7 +138,6 @@ export function KioskModal({
   const [selected, setSelected] = React.useState<string | null>(null);
   const [localChecks, setLocalChecks] = React.useState<Set<string>>(() => new Set());
   const [celebrate, setCelebrate] = React.useState(false);
-  const [assigning, setAssigning] = React.useState(false);
   const fetcher = useFetcher<{ ok: boolean; checks: CheckRow[]; awarded: string[] }>();
 
   const kioskKey = `ck:kiosk:${eventId}:${date}`;
@@ -123,6 +158,10 @@ export function KioskModal({
     () => (data?.items ?? []).filter((i) => i.phase === phase),
     [data, phase],
   );
+  // The two data-backed squares get their own row under the checklist: they are not activities
+  // the class chose, they are the two standing asks every session carries.
+  const customItems = React.useMemo(() => items.filter((i) => i.kind === 'custom'), [items]);
+  const specialItems = React.useMemo(() => items.filter((i) => i.kind !== 'custom'), [items]);
   const checks = data?.checks ?? [];
   const bags = data?.bagsByStudent ?? {};
 
@@ -200,11 +239,6 @@ export function KioskModal({
           </button>
         ))}
       </div>
-      {phase === 'checkout' && (
-        <Button variant="secondary" onClick={() => setAssigning(true)}>
-          {t('ck_assign_vocab')}
-        </Button>
-      )}
       <IconButton label={t('ck_kiosk_close')} onClick={onClose}>
         <MIcon name="x" size={20} />
       </IconButton>
@@ -267,60 +301,31 @@ export function KioskModal({
             <h1 className="kiosk-title">{t('ck_kiosk_hello', { name: student.name })}</h1>
             <div className="kiosk-board">
               <div className="kiosk-cells">
-                {items.map((item) => {
-                  const special = item.kind !== 'custom';
-                  const type = special
-                    ? null
-                    : data?.activityTypes.find((a) => a.id === item.activityTypeId);
-                  const c = colorOf(
-                    special
-                      ? item.kind === 'homework'
-                        ? 'blue'
-                        : 'green'
-                      : (type?.color ?? 'orange'),
-                  );
-                  const checked = localChecks.has(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`kiosk-cell${special ? ' kiosk-cell--special' : ''}`}
-                      style={{
-                        background: checked ? c.base : c.soft,
-                        color: checked ? '#fff' : c.ink,
-                        borderColor: special ? c.base : 'transparent',
-                      }}
-                      onClick={() => toggle(item.id)}
-                    >
-                      <MIcon
-                        name={
-                          special
-                            ? item.kind === 'homework'
-                              ? 'book'
-                              : 'star'
-                            : ((type?.icon as IconName) ?? 'star')
-                        }
-                        size={40}
-                      />
-                      {/* Both halves, not one or the other: the type says what kind of homework
-                          this was, the label says which — "Vocabulary" over "10 words: Animals". */}
-                      {special ? (
-                        <span className="kiosk-cell-type">
-                          {t(item.kind === 'homework' ? 'ck_sq_homework' : 'ck_sq_vocab')}
-                        </span>
-                      ) : (
-                        type && <span className="kiosk-cell-type">{type.name}</span>
-                      )}
-                      {item.label && <span className="kiosk-cell-label">{item.label}</span>}
-                      {checked && (
-                        <span className="kiosk-cell-check" aria-hidden="true">
-                          <MIcon name="check" size={22} />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                {customItems.map((item) => (
+                  <KioskCell
+                    key={item.id}
+                    item={item}
+                    activityTypes={data?.activityTypes ?? []}
+                    checked={localChecks.has(item.id)}
+                    onToggle={() => toggle(item.id)}
+                  />
+                ))}
               </div>
+              {specialItems.length > 0 && (
+                <div className="kiosk-cells kiosk-cells--special">
+                  {specialItems.map((item) => (
+                    <KioskCell
+                      key={item.id}
+                      item={item}
+                      activityTypes={data?.activityTypes ?? []}
+                      checked={localChecks.has(item.id)}
+                      // Vocabulary is decided by the student's own work — nothing to tap. Homework
+                      // is the manual one: whoever holds the tablet confirms it.
+                      onToggle={item.kind === 'homework' ? () => toggle(item.id) : undefined}
+                    />
+                  ))}
+                </div>
+              )}
               <div className="kiosk-actions">
                 <Button variant="secondary" size="lg" onClick={() => setSelected(null)}>
                   {t('ck_kiosk_not_you')}
@@ -342,17 +347,6 @@ export function KioskModal({
             </div>
             <div className="kiosk-bag-msg">{t('ck_bag_earned')}</div>
           </div>
-        )}
-
-        {assigning && (
-          <KioskAssign
-            eventId={eventId}
-            date={date}
-            classId={classId}
-            classes={classes}
-            roster={roster}
-            onClose={() => setAssigning(false)}
-          />
         )}
       </div>
     </div>,

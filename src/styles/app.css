@@ -3407,6 +3407,27 @@ html .sb::-webkit-scrollbar-thumb:active {
 .kiosk-cell--special {
   border: 2px solid transparent; /* color set inline from the palette */
 }
+/* Their own row under the checklist — the two standing asks, not activities the class picked.
+   Capped at two columns so they read as a pair however wide the board gets. */
+.kiosk-cells--special {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 320px));
+  justify-content: center;
+}
+/* The vocabulary square is decided by the student's own work: it is a div, not a button, so it
+   must not offer any of a button's affordances either. */
+.kiosk-cell--readonly {
+  cursor: default;
+}
+.kiosk-cell--readonly:active {
+  transform: none;
+}
+.kiosk-cell-how {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
 .ck-special-chip {
   display: flex;
   align-items: flex-start;

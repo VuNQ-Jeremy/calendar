@@ -1611,26 +1611,6 @@ export const vocabAssignmentStudents = sqliteTable(
 );
 
 /**
- * "The vocab auto-derivation checked this (item, student) once." Written only alongside an
- * auto-inserted check; presence means the current check state is manual truth. No `tenantId`:
- * the item is reached through a fenced event, same as checklistChecks.
- */
-export const checklistCheckSeeds = sqliteTable(
-  'checklist_check_seeds',
-  {
-    itemId: text('item_id')
-      .notNull()
-      .references(() => checklistItems.id, { onDelete: 'cascade' }),
-    studentId: text('student_id')
-      .notNull()
-      .references(() => students.id, { onDelete: 'cascade' }),
-    /** UTC ISO. */
-    seededAt: text('seeded_at').notNull(),
-  },
-  (t) => [primaryKey({ columns: [t.itemId, t.studentId] })],
-);
-
-/**
  * Túi mù (mystery bag) ledger — append-only, the gardenEvents pattern. A bag is a
  * moment the kid already celebrated on the kiosk, so it is STORED (config flips or
  * later checklist edits never revoke it) while misses are derived at read time and

@@ -57,7 +57,8 @@ test.describe('CRUD: check-in special squares', () => {
       .getByRole('button', { name: 'Open check-in kiosk' })
       .click();
     await kiosk.locator('.kiosk-card', { hasText: 'Leo Park' }).click();
-    const cell = kiosk.locator('.kiosk-cell--special');
+    // Homework sits in the specials row and stays tappable — it is the manual one.
+    const cell = kiosk.locator('.kiosk-cells--special .kiosk-cell--special');
     await expect(cell).toHaveCount(1);
     await expect(cell.locator('.kiosk-cell-type')).toHaveText('Homework');
     await expect(cell.locator('.kiosk-cell-label')).toHaveText('Workbook p.32');

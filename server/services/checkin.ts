@@ -2,7 +2,6 @@ import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
 import {
   attendanceRecords,
   checkinActivityTypes,
-  checklistCheckSeeds,
   checklistChecks,
   checklistItems,
   classStudents,
@@ -460,13 +459,15 @@ export async function ensureSpecialItems(
 }
 
 /**
- * Auto-derivation for the vocab square: pre-check students who met every applicable windowed
- * assignment. A seed row is written ONLY alongside an auto-inserted check — its presence means
- * the current state is manual truth (a teacher's uncheck must never be resurrected). Unmet
- * students get no seed row, so meeting the bar later still auto-checks them; derivation never
- * deletes a check, so a teacher's manual check on an unmet student is never disturbed either.
+ * Mirror the vocab square's checks onto what the students' own vocabulary work says.
+ *
+ * The square is not tappable — its result is the derivation and nothing else — so this syncs in
+ * BOTH directions on every kiosk load: a student who has since met the bar gets a check, one who
+ * no longer meets it (the teacher raised `requiredCount`, or added a second assignment to the
+ * window) has theirs removed. That is safe against the bag ledger, which is append-only: an
+ * already-earned bag keeps the day full via `checkinFull` even if a check disappears later.
  */
-export async function seedVocabChecks(
+export async function syncVocabChecks(
   db: TenantDb,
   eventId: string,
   date: string,
@@ -493,6 +494,8 @@ export async function seedVocabChecks(
   if (!item) return;
 
   const windowed = await windowedAssignments(db, ev.classId, ev.recurrence, date);
+  // No windowed assignment means no square either (ensureSpecialItems just deleted it), so there
+  // is nothing to mirror — and emphatically nothing to un-check on the way past.
   if (!windowed.length) return;
 
   // tenant-unscoped: vocab_assignment_students has no tenant_id; ids from the fenced read above.
@@ -512,21 +515,19 @@ export async function seedVocabChecks(
     s.add(r.studentId);
   }
 
-  // tenant-unscoped: checklist_check_seeds has no tenant_id; item fenced above.
-  const seeded = await db.raw
-    .select()
-    .from(checklistCheckSeeds)
-    .where(eq(checklistCheckSeeds.itemId, item.id));
-  const done = new Set(seeded.map((r) => r.studentId));
-  const fresh = rosterIds.filter((sid) => !done.has(sid));
-  if (!fresh.length) return;
-
   const counts = new Map<string, Map<string, number>>();
   for (const a of windowed) {
-    counts.set(a.id, await qualifyingCounts(db, a, fresh));
+    counts.set(a.id, await qualifyingCounts(db, a, rosterIds));
   }
 
-  for (const sid of fresh) {
+  // tenant-unscoped: checklist_checks has no tenant_id; fenced by the item read above.
+  const existing = await db.raw
+    .select()
+    .from(checklistChecks)
+    .where(eq(checklistChecks.itemId, item.id));
+  const hasCheck = new Set(existing.map((r) => r.studentId));
+
+  for (const sid of rosterIds) {
     const applicable = windowed.filter((a) => {
       const set = narrow.get(a.id);
       return !set || set.has(sid);
@@ -537,17 +538,18 @@ export async function seedVocabChecks(
         requiredCount: a.requiredCount,
       })),
     );
-    if (!met) continue;
-    // tenant-unscoped (both): fenced by the item read above. Seed first, check second — a crash
-    // between the two re-runs harmlessly (both inserts are ON CONFLICT DO NOTHING).
-    await db.raw
-      .insert(checklistCheckSeeds)
-      .values({ itemId: item.id, studentId: sid, seededAt: nowUtcIso })
-      .onConflictDoNothing();
-    await db.raw
-      .insert(checklistChecks)
-      .values({ itemId: item.id, studentId: sid, checkedAt: nowUtcIso })
-      .onConflictDoNothing();
+    if (met === hasCheck.has(sid)) continue;
+    // tenant-unscoped (both): fenced by the item read above.
+    if (met) {
+      await db.raw
+        .insert(checklistChecks)
+        .values({ itemId: item.id, studentId: sid, checkedAt: nowUtcIso })
+        .onConflictDoNothing();
+    } else {
+      await db.raw
+        .delete(checklistChecks)
+        .where(and(eq(checklistChecks.itemId, item.id), eq(checklistChecks.studentId, sid)));
+    }
   }
 }
 
@@ -576,6 +578,10 @@ export async function setCheck(
   // the attendance mark and the bag all belong to this school.
   const item = await ownedItem(db, input.itemId);
   if (!item) return null;
+  // The vocabulary square is derived, not tapped. The kiosk renders it as a plain div, but this
+  // is the mutation surface, so refusing here is what actually makes it read-only — a stale tab
+  // or a hand-made request must not be able to hand a student a check they did not earn.
+  if (item.kind === 'vocab') return null;
 
   // tenant-unscoped: checklist_checks has no tenant_id; fenced by `ownedItem` above.
   if (input.checked) {
