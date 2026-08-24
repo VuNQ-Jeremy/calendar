@@ -72,7 +72,8 @@ function KioskAssign({
       today={date}
       onClose={onClose}
       onSubmit={(fd) => fetcher.submit(fd, { action: '/vocabulary', method: 'post' })}
-      rosterStudents={roster.map((s) => ({ id: s.id, name: s.name }))}
+      hideClass
+      rosterOf={() => roster.map((s) => ({ id: s.id, name: s.name }))}
     />
   );
 }

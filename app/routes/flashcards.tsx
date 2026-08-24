@@ -81,9 +81,10 @@ async function loadGarden(
       };
     }
 
-    const [rows, classList] = await Promise.all([
+    const [rows, classList, roster] = await Promise.all([
       gardenSvc.listAssignments(db, {}),
       classesSvc.listLite(db),
+      classesSvc.listRosterNames(db),
     ]);
     // One progress read per assignment. The tracking modal opens on a row that is already loaded
     // (no second round trip), and a school runs a handful of assignments at a time, not hundreds.
@@ -97,7 +98,7 @@ async function loadGarden(
     );
     return {
       garden: null,
-      gardenStaff: { today, assignments: blocks, classes: classList },
+      gardenStaff: { today, assignments: blocks, classes: classList, roster },
     };
   } catch (err) {
     console.error('garden unavailable on /vocabulary', err);

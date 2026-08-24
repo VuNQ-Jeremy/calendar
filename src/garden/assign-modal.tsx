@@ -44,7 +44,8 @@ export function AssignModal({
   today,
   onClose,
   onSubmit,
-  rosterStudents,
+  rosterOf,
+  hideClass,
 }: {
   /** Fixed by the caller (the /vocabulary surface). Omit to show the picker built from `topics`. */
   topic?: { id: string; name: string } | null;
@@ -56,11 +57,14 @@ export function AssignModal({
   onClose: () => void;
   onSubmit: (fd: FormData) => void;
   /**
-   * The class roster, offered only by surfaces with a scope picker (check-in's assign section
-   * and the kiosk checkout shortcut). Absent on the /vocabulary surface, which has no scope
-   * picker — `submit` then echoes back whatever scope the assignment already had, unchanged.
+   * The chosen class's roster, as a function so the picker follows the class select — on
+   * /vocabulary the teacher can change the class inside this dialog, and last class's students
+   * must not stay tickable. Omit it entirely to hide the scope picker; `submit` then echoes back
+   * whatever scope the assignment already had, so a surface without the picker cannot widen one.
    */
-  rosterStudents?: { id: string; name: string }[];
+  rosterOf?: (classId: string) => { id: string; name: string }[];
+  /** The caller already fixed the class (the event dialog / kiosk) — don't offer to change it. */
+  hideClass?: boolean;
 }) {
   const { t } = useLang();
   const [classId, setClassId] = React.useState(existing?.classId ?? classes[0]?.id ?? '');
@@ -92,6 +96,21 @@ export function AssignModal({
   const [picked, setPicked] = React.useState<Set<string>>(
     () => new Set(existing?.studentIds ?? []),
   );
+
+  const rosterStudents = rosterOf?.(classId);
+  // A class with nobody in it gets no picker — an empty list cannot be narrowed to, and
+  // "Selected students" would be unsavable. It still posts '' (whole class) on save.
+  const showScope = !!rosterStudents && rosterStudents.length > 0;
+
+  // Switching class makes an individual selection meaningless — those students are not in the new
+  // roster. Reset to whole-class rather than silently posting ids the class does not contain.
+  // Skipped on the first render, so editing a narrowed assignment keeps the scope it was saved with.
+  const openedWithClass = React.useRef(classId);
+  React.useEffect(() => {
+    if (classId === openedWithClass.current) return;
+    setScopeAll(true);
+    setPicked(new Set());
+  }, [classId]);
 
   const valid = Boolean(
     classId && deadline && (topic?.id || topicId) && (scopeAll || picked.size > 0),
@@ -127,14 +146,18 @@ export function AssignModal({
     // '' reaches the row as NULL ("any mode") through the schema's transform.
     fd.set('modes', normalizeModesCsv([...modes]) ?? '');
     // '' reaches the row as NULL ("whole class") through the schema's transform. Surfaces with no
-    // scope picker (no `rosterStudents`) echo the assignment's existing scope back unchanged —
-    // this dialog cannot widen a scope it has no way to show the teacher.
+    // scope picker (no `rosterOf`) echo the assignment's existing scope back unchanged — this
+    // dialog cannot widen a scope it has no way to show the teacher. Picks are filtered to the
+    // roster actually on screen, so a stale id can never survive a class switch.
     fd.set(
       'studentIds',
       rosterStudents
         ? scopeAll
           ? ''
-          : [...picked].join(',')
+          : rosterStudents
+              .filter((s) => picked.has(s.id))
+              .map((s) => s.id)
+              .join(',')
         : (existing?.studentIds ?? []).join(','),
     );
     onSubmit(fd);
@@ -146,7 +169,10 @@ export function AssignModal({
       onClose={onClose}
       title={existing ? t('garden_assign_edit') : t('garden_assign_title')}
       subtitle={topic?.name ?? topics?.find((x) => x.id === topicId)?.name ?? ''}
-      width={480}
+      // Wider once the student picker is in play: the checkbox list wraps into far fewer rows,
+      // which is what keeps the whole dialog on screen without scrolling. `width` is a max-width,
+      // so a phone still gets the full viewport.
+      width={showScope ? 660 : 480}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -166,12 +192,14 @@ export function AssignModal({
           options={(topics ?? []).map((x) => ({ value: x.id, label: x.name }))}
         />
       )}
-      <MSelect
-        label={t('class')}
-        value={classId}
-        onChange={setClassId}
-        options={classes.map((c) => ({ value: c.id, label: c.name }))}
-      />
+      {!hideClass && (
+        <MSelect
+          label={t('class')}
+          value={classId}
+          onChange={setClassId}
+          options={classes.map((c) => ({ value: c.id, label: c.name }))}
+        />
+      )}
       <div className="m-grid cols-2" style={{ gap: 14 }}>
         <MDatePicker
           label={t('garden_deadline')}
@@ -269,7 +297,7 @@ export function AssignModal({
         </div>
         {modes.size === 0 && <span className="mochi-field__hint">{t('garden_modes_any')}</span>}
       </div>
-      {rosterStudents && (
+      {showScope && (
         <div className="mochi-field">
           <label className="mochi-field__label">{t('garden_scope_label')}</label>
           <div className="m-row" style={{ gap: 14, flexWrap: 'wrap' }}>

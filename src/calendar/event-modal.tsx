@@ -604,11 +604,22 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
   );
   const hwFetcher = useFetcher<{ ok: boolean; preview: SessionPreviewRow }>();
   const [homeworkText, setHomeworkText] = React.useState('');
+  /**
+   * `touched` is what keeps the Save button honest across the box being emptied twice over.
+   * Emptying it BY HAND and saving is the remove-homework path, so "empty" cannot itself mean
+   * "nothing to do" — only "empty and untouched since the last load or save" can.
+   */
+  const [touched, setTouched] = React.useState(false);
+  // Seed ONCE per occurrence so an edit starts from what is already set. A re-seed on every
+  // payload change would undo the clear below the instant the save's own reply lands.
+  const seededFor = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (!prevData) return;
+    if (!prevData || seededFor.current === prevNextKey) return;
+    seededFor.current = prevNextKey;
     setHomeworkText(prevData.preview?.homeworkText ?? '');
+    setTouched(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prevData]);
+  }, [prevData, prevNextKey]);
   React.useEffect(() => {
     if (hwFetcher.data?.ok && hwFetcher.data.preview) {
       cacheSet(prevNextKey, { preview: hwFetcher.data.preview, topics: prevData?.topics ?? [] });
@@ -616,6 +627,10 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
       // Refetching next session's checklist is what makes the seeded homework chip appear
       // right here, the moment the save lands — the loader's ensureSpecialItems does the rest.
       markStale(nextKey);
+      // The chip below now shows what was saved, so the box goes back to being an empty input
+      // rather than a second copy of it.
+      setHomeworkText('');
+      setTouched(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hwFetcher.data]);
@@ -629,7 +644,7 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
     fd.set('homeworkText', homeworkText);
     hwFetcher.submit(fd, { action: '/event-previews', method: 'post' });
   };
-  const hwDirty = homeworkText !== (prevData?.preview?.homeworkText ?? '');
+  const hwDirty = touched && homeworkText !== (prevData?.preview?.homeworkText ?? '');
 
   return (
     <div className="ck-section ck-section--next">
@@ -652,7 +667,10 @@ function NextCheckinEditor({ eventId, nextDate }: { eventId: string; nextDate: s
             rows={2}
             placeholder={t('prev_homework_ph')}
             value={homeworkText}
-            onChange={(e) => setHomeworkText(e.target.value)}
+            onChange={(e) => {
+              setHomeworkText(e.target.value);
+              setTouched(true);
+            }}
             style={{ resize: 'vertical', minHeight: 56, flex: 1 }}
           />
           <CBtn
@@ -818,7 +836,8 @@ function CheckinTab({ eventId, date, classId, recurrence, classes, students }: C
             today={date}
             onClose={() => setAssignOpen(false)}
             onSubmit={(fd) => assignFetcher.submit(fd, { action: '/vocabulary', method: 'post' })}
-            rosterStudents={roster.map((s) => ({ id: s.id, name: s.name }))}
+            hideClass
+            rosterOf={() => roster.map((s) => ({ id: s.id, name: s.name }))}
           />
         )}
       </div>

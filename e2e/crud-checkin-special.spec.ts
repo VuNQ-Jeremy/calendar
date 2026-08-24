@@ -143,6 +143,10 @@ test.describe('CRUD: check-in special squares', () => {
     const chip = nextSection.locator('.ck-special-chip[data-kind="homework"]');
     await expect(chip).toBeVisible();
     await expect(chip).toContainText('Workbook p.40');
+    // The box goes back to being an empty input once the chip carries the value — and Save
+    // re-disables, so a reflex second click cannot blank the homework that was just set.
+    await expect(nextSection.locator('textarea.mochi-input')).toHaveValue('');
+    await expect(nextSection.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
 
     // Cleanup: weekly events raise the scope chooser on delete (crud-checkin-author pattern).
     await k.dlg.getByRole('tab', { name: 'Details' }).click();

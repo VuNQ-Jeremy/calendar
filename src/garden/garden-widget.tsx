@@ -81,6 +81,8 @@ export type StaffGardenData = {
   today: string;
   assignments: AssignmentBlock[];
   classes: { id: string; name: string }[];
+  /** Every enrolment, so the assign dialog's student picker can follow the class select. */
+  roster: { classId: string; id: string; name: string }[];
 };
 
 /** The round outcome the record-result action returns. Re-exported so the games need one import. */
@@ -464,7 +466,11 @@ function SpeciesPicker({
               type="button"
               disabled={locked || !canChange}
               onClick={() => onChange(s.id)}
-              title={locked ? `${name} — ${t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}` : name}
+              title={
+                locked
+                  ? `${name} — ${t('garden_species_locked', { n: s.unlockAt - fruitsTotal })}`
+                  : name
+              }
               aria-label={name}
               aria-pressed={selected}
               style={{

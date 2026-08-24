@@ -1,6 +1,6 @@
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
-import { classes, classStudents, events } from '../db/schema';
+import { classes, classStudents, events, students } from '../db/schema';
 import * as subjectsSvc from './subjects';
 import { chunk, rowsPerStatement, type TenantDb } from '../db';
 import type { ClassInput } from '../../shared/schemas';
@@ -97,6 +97,22 @@ export async function listLite(db: TenantDb): Promise<ClassLite[]> {
     })
     .from(classes)
     .where(db.own(classes));
+}
+
+/**
+ * Every enrolment as (classId, studentId, name) — what a per-class student picker needs and
+ * nothing more. Deliberately not `list()` + `listStudents()`: those hand back every column of
+ * both tables, and the assign dialog only ever renders a name beside a checkbox.
+ */
+export async function listRosterNames(
+  db: TenantDb,
+): Promise<{ classId: string; id: string; name: string }[]> {
+  return db.raw
+    .select({ classId: classStudents.classId, id: students.id, name: students.name })
+    .from(classStudents)
+    .innerJoin(students, eq(students.id, classStudents.studentId))
+    .where(db.own(classStudents))
+    .orderBy(asc(students.name));
 }
 
 export async function get(db: TenantDb, id: string): Promise<ClassRow | null> {

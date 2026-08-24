@@ -508,6 +508,13 @@ export function FlashcardTopicsScreen() {
           today={gardenStaff.today}
           onClose={() => setAssigning(null)}
           onSubmit={submitAssign}
+          // The class is chosen inside this dialog, so the picker is recomputed per class rather
+          // than handed a fixed roster.
+          rosterOf={(cid) =>
+            gardenStaff.roster
+              .filter((r) => r.classId === cid)
+              .map((r) => ({ id: r.id, name: r.name }))
+          }
         />
       )}
       {tracking && gardenStaff && (

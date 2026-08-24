@@ -100,4 +100,54 @@ test.describe('CRUD: vocab assignment scope', () => {
     await post;
     await expect(page.locator('.mochi-card', { hasText: topic })).toHaveCount(0);
   });
+
+  test('/vocabulary offers the same per-student scope, and it round-trips', async ({ page }) => {
+    const k = ui(page);
+    const topic = `E2E scope vocab ${Date.now()}`;
+
+    await signInStaff(page);
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: 'New topic' }).click();
+    await page.getByLabel('Topic name').fill(topic);
+    let post = k.posted('/vocabulary');
+    await k.submit().click();
+    await post;
+    const card = page.locator('.mochi-card.is-interactive', { hasText: topic });
+    await expect(card).toBeVisible();
+
+    // Assign narrowed to one student. Unlike the check-in surface, the class picker IS shown
+    // here (the class is not implied by an event), and the roster follows whatever it is set to.
+    await card.getByRole('button', { name: 'Assign' }).click();
+    const dlg = k.dlgOf('Assign vocabulary');
+    await k.on(dlg).pickSel('Class', 'Biology 9A');
+    await dlg.locator('.mochi-check', { hasText: 'Selected students' }).click();
+    await dlg.locator('.mochi-check', { hasText: 'Leo Park' }).click();
+    post = k.posted('/vocabulary');
+    await dlg.locator('.m-dialog__foot .mochi-btn.is-primary').click();
+    await post;
+
+    // Reopening the edit dialog proves the narrow set survived the join table, not just the form.
+    const openAssignments = page.getByRole('button', { name: 'Assigned vocabulary' });
+    await expect(openAssignments.locator('.mochi-badge')).toBeVisible({ timeout: 15_000 });
+    await openAssignments.click();
+    const listOf = () => k.dlgOf('Assigned vocabulary');
+    const row = listOf().locator('.lrow', { hasText: topic });
+    await row.getByRole('button', { name: 'Edit' }).click();
+    const edit = k.dlgOf('Edit assignment');
+    await expect(edit.getByRole('checkbox', { name: 'Selected students' })).toBeChecked();
+    await expect(edit.getByRole('checkbox', { name: 'Leo Park' })).toBeChecked();
+    await edit.getByRole('button', { name: 'Cancel' }).click();
+
+    // Cleanup: assignment, then topic.
+    await row.getByRole('button', { name: 'Delete' }).click();
+    post = k.posted('/vocabulary');
+    await k.dlgOf('Delete assignment').locator('.mochi-btn.is-danger').click();
+    await post;
+    await listOf().locator('.m-dialog__foot').getByRole('button', { name: 'Close' }).click();
+    await card.getByRole('button', { name: 'Delete' }).click();
+    post = k.posted('/vocabulary');
+    await k.dlgOf('Delete topic').locator('.mochi-btn.is-danger').click();
+    await post;
+    await expect(page.locator('.mochi-card', { hasText: topic })).toHaveCount(0);
+  });
 });
