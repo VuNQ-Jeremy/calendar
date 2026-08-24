@@ -524,17 +524,6 @@ function ChecklistItemsEditor({
 
   return (
     <div className="m-stack" style={{ gap: 8 }}>
-      {phase === 'checkin' &&
-        items
-          .filter((i) => i.phase === 'checkin' && i.kind !== 'custom')
-          .map((i) => (
-            <div key={i.id} className="ck-special-chip" data-kind={i.kind}>
-              <MIcon name={i.kind === 'homework' ? 'book' : 'star'} size={16} />
-              <b>{t(i.kind === 'homework' ? 'ck_sq_homework' : 'ck_sq_vocab')}</b>
-              <span>{i.label}</span>
-              <span className="ck-special-chip__auto">{t('ck_special_hint')}</span>
-            </div>
-          ))}
       {rows.map((row) => (
         <div key={row.id} className="ck-item-row">
           {phase === 'checkin' ? (
@@ -571,6 +560,17 @@ function ChecklistItemsEditor({
           {t('ck_add_item')}
         </CBtn>
       </div>
+      {phase === 'checkin' &&
+        items
+          .filter((i) => i.phase === 'checkin' && i.kind !== 'custom')
+          .map((i) => (
+            <div key={i.id} className="ck-special-chip" data-kind={i.kind}>
+              <MIcon name={i.kind === 'homework' ? 'book' : 'star'} size={16} />
+              <b>{t(i.kind === 'homework' ? 'ck_sq_homework' : 'ck_sq_vocab')}</b>
+              <span>{i.label}</span>
+              <span className="ck-special-chip__auto">{t('ck_special_hint')}</span>
+            </div>
+          ))}
     </div>
   );
 }
