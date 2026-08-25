@@ -8,8 +8,21 @@
  *   npx tsx scripts/backfill-vocab.mts --curriculum 5fde15f6-… --text
  *
  * Flags: `--text` fills definitionEn / exampleEn / exampleAnswer via the app's enrich path;
- * `--images` attaches an Openverse picture per word; `--dry-run` reports without writing;
+ * `--images` attaches a picture per word; `--dry-run` reports without writing;
  * `--limit N` caps the words touched (use it for a first pass).
+ *
+ * `--replace` is the one flag that breaks the never-overwrite rule, and only for pictures. It
+ * widens the selection to EVERY word — all topics, curriculum or not, with or without an existing
+ * image — and overwrites the picture a teacher chose. Added for the one-off re-run after
+ * PIXABAY_API_KEY was finally set in prod, when the whole library had been picked from Openverse's
+ * CC0 slice and was uniformly poor. The old R2 objects become unreferenced and `pruneImages`
+ * collects them 24h later, so there is a one-day window to change your mind and no longer.
+ *
+ * Because of that, `--replace` REFUSES TO RUN ON OPENVERSE. `/vocab-image-search` names the
+ * provider it used, and Pixabay's bot check is swallowed silently upstream (see
+ * server/services/vocab-images.ts) — so a rate-limited run would quietly replace hundreds of
+ * pictures with the very source it was meant to escape. The first non-Pixabay answer aborts the
+ * whole run, keeping the damage to nothing.
  *
  * WHY IT GOES THROUGH THE APP, not straight to D1. Enrichment must run inside the TranslateProxy
  * Durable Object: Cloudflare serves this Worker from Hong Kong for Vietnam traffic and Anthropic
@@ -41,7 +54,16 @@ const value = (name: string) => {
 
 const doText = flag('text');
 const doImages = flag('images');
+const doReplace = flag('replace');
 const dryRun = flag('dry-run');
+
+/**
+ * Pixabay allows about 100 requests a minute per key, and one word costs two of them: the search,
+ * then the commit's `resolveImageUrl` lookup. 1.3s between words keeps a 400-word run at roughly
+ * 92/min — under the ceiling with room for a retry, and about nine minutes end to end.
+ */
+const PIXABAY_PACE_MS = 1300;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const limit = Number(value('limit') ?? '0') || Infinity;
 const curriculumId = value('curriculum');
 
@@ -104,9 +126,14 @@ function candidates(): {
   hasExample: boolean;
   hasImage: boolean;
 }[] {
+  // An explicit --curriculum always wins. Otherwise the default scope is curriculum-linked topics
+  // (the imported books this script was written for), except under --replace, which is a
+  // whole-library sweep and must reach the standalone topics too.
   const where = curriculumId
     ? `t.curriculum_id = '${curriculumId}'`
-    : 't.curriculum_id IS NOT NULL';
+    : doReplace
+      ? '1 = 1'
+      : 't.curriculum_id IS NOT NULL';
   const sql =
     `SELECT w.id, t.slug, w.word, w.meaning_vi AS meaningVi, ` +
     `COALESCE(w.part_of_speech, '') AS partOfSpeech, ` +
@@ -224,19 +251,30 @@ if (doText) {
 }
 
 if (doImages) {
-  const missing = all.filter((w) => !w.hasImage);
+  // --replace sweeps every word; the default only fills the blanks.
+  const inScope = doReplace ? all : all.filter((w) => !w.hasImage);
   // `--all-pos` turns the noun filter off, for a caller who would rather review a wrong picture than
   // have none. Default is nouns only — see `depictable` for why.
-  const eligible = flag('all-pos') ? missing : missing.filter((w) => depictable(w.partOfSpeech));
+  const eligible = flag('all-pos') ? inScope : inScope.filter((w) => depictable(w.partOfSpeech));
   const todo = eligible.slice(0, limit);
+  const overwrites = todo.filter((w) => w.hasImage).length;
   console.log(
-    `\nimages: ${missing.length} with no picture, ${eligible.length} depictable` +
+    `\nimages: ${inScope.length} in scope, ${eligible.length} depictable` +
       `${flag('all-pos') ? ' (--all-pos: filter off)' : ''}, doing ${todo.length}`,
   );
+  if (doReplace && !dryRun) {
+    console.log(
+      `  --replace: ${overwrites} existing picture(s) will be OVERWRITTEN. The old R2 objects stay ` +
+        `recoverable until pruneImages sweeps them ~24h from now.`,
+    );
+  }
 
   let attached = 0;
   let none = 0;
-  for (const w of todo) {
+  for (const [i, w] of todo.entries()) {
+    // Pace at the TOP of the loop, not on the success path: every `continue` below has already
+    // spent a search request, and those are exactly the words a rate limit produces.
+    if (i > 0) await sleep(PIXABAY_PACE_MS);
     // `/vocab-image-search` returns candidates (Openverse needs no API key, so this path costs
     // nothing); `/vocab-image-commit` is what copies one into R2 and mints the key — the client
     // never gets to choose a URL, only a provider + that provider's own id.
@@ -253,8 +291,20 @@ if (doImages) {
       continue;
     }
     const found = (await search.json()) as {
-      data?: { candidates?: { provider: string; id: string }[] };
+      data?: { candidates?: { provider: string; id: string }[]; provider?: string };
     };
+    // The guard the whole --replace mode rests on. Falling back to Openverse is normal and fine
+    // when filling a blank, but under --replace it means we are about to trade a teacher's pick for
+    // a CC0 museum scan — and the cause (Pixabay's bot check or its rate limit) is silent upstream,
+    // so nothing else would ever report it. Stop the run instead.
+    if (doReplace && found.data?.provider !== 'pixabay') {
+      console.error(
+        `\nABORTED at "${w.word}" (${attached} replaced so far): search fell back to ` +
+          `${found.data?.provider ?? 'nothing'} instead of pixabay. Either the key is wrong or the ` +
+          `rate limit tripped — wait a few minutes and re-run, no rows were harmed.`,
+      );
+      process.exit(1);
+    }
     const first = found.data?.candidates?.[0];
     if (!first) {
       none++;

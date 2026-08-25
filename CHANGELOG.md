@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0322 — 2026-08-25
+Add --replace mode to the vocab backfill script: re-picks every flashcard picture through Pixabay now that the key is set in prod. Aborts the run if search falls back to Openverse, and paces requests under Pixabay's rate limit.
+
 ## v0.0321 — 2026-08-25
 Publish the /discuss skill to the repo (.claude/skills/discuss) so read-only discussion mode works on every machine that checks the project out.
 
