@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0325 — 2026-08-25
+docs: vocab PvP design spec + single-commit implementation plan + Opus verify checklist (F33/F34)
+
 ## v0.0324 — 2026-08-25
 Log why each word got no picture in the vocab backfill instead of only counting them.
 
