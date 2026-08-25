@@ -299,6 +299,17 @@ if (doImages) {
   let none = 0;
   /** Words Pixabay simply has no photo of — kept separate from `none` so the tail is legible. */
   let skippedNoStock = 0;
+  /**
+   * Why each word got nothing. The first full run reported a bare count — "23 with no usable
+   * result" — which was worth almost nothing: those 23 could equally have been a rate limit, a
+   * content type the bucket refuses, or Pixabay having no photo of "Give up". A retry is only
+   * worth running if it can tell you which.
+   */
+  const failures: string[] = [];
+  const fail = (word: string, why: string) => {
+    none++;
+    failures.push(`${word} — ${why}`);
+  };
   for (const [i, w] of todo.entries()) {
     // Pace at the TOP of the loop, not on the success path: every `continue` below has already
     // spent a search request, and those are exactly the words a rate limit produces.
@@ -315,7 +326,7 @@ if (doImages) {
       body: JSON.stringify({ query: w.word, page: 1 }),
     });
     if (!search.ok) {
-      none++;
+      fail(w.word, `search HTTP ${search.status}`);
       continue;
     }
     const found = (await search.json()) as {
@@ -342,7 +353,7 @@ if (doImages) {
     }
     const first = found.data?.candidates?.[0];
     if (!first) {
-      none++;
+      fail(w.word, `no candidates from ${found.data?.provider ?? 'unknown provider'}`);
       continue;
     }
     if (dryRun) {
@@ -356,12 +367,12 @@ if (doImages) {
       body: JSON.stringify({ provider: first.provider, id: first.id }),
     });
     if (!commit.ok) {
-      none++;
+      fail(w.word, `commit HTTP ${commit.status} (${first.provider} id ${first.id})`);
       continue;
     }
     const { data } = (await commit.json()) as { data?: { imageKey?: string } };
     if (!data?.imageKey) {
-      none++;
+      fail(w.word, `commit returned no imageKey (${first.provider} id ${first.id})`);
       continue;
     }
     await post(`/vocabulary/${w.slug}`, {
@@ -376,4 +387,8 @@ if (doImages) {
     `images: ${attached} attached, ${none} with no usable result` +
       `, ${skippedNoStock} left as-is (no Pixabay photo exists)`,
   );
+  if (failures.length) {
+    console.log('\nno usable result:');
+    for (const line of failures) console.log(`  ${line}`);
+  }
 }
