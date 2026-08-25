@@ -62,10 +62,12 @@ Staff may play but never rank.
 ### Chosen: tabletop 1v1 face-off on the teacher's tablet (same-device, no network)
 
 The literal *1 2 3 4 Player Games* model, realized: two students duel on ONE tablet lying
-flat between them. The screen splits in half; the divider strip in the middle carries the
-two players' progress bars; the far half is rotated 180° (CSS `transform: rotate(180deg)`)
-so each player reads their own half right-side up — player 1 sees player 2's text upside
-down, by design. Both halves show the SAME question simultaneously; the first correct tap
+flat between them, each holding a SHORT edge. The screen splits left/right along the long
+axis; each half is rotated 90° toward its player (left half `rotate(-90deg)`, right half
+`rotate(90deg)`) so each reads their own half upright while the opponent's text runs
+sideways, by design. A slim vertical divider in the middle carries both progress bars
+back-to-back — almost touching — each filling toward the win line, with the question
+counter and scores. Both halves show the SAME question simultaneously; the first correct tap
 takes the point, a wrong tap locks that player out until the next question (anti-spam),
 and both-locked advances with no point. First to 5 points wins
 (`FACEOFF_TARGET`), out of at most 13 questions (`FACEOFF_MAX_QUESTIONS`); exhausting the

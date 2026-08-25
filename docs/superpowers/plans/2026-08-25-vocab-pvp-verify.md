@@ -60,9 +60,12 @@ ranked by severity; touch code only if the user then asks.
 - [ ] **Reset sweep**: `scripts/test-accounts.sql` deletes both new tables, child first.
 - [ ] **No paid paths touched**; pronounce absent from every PvP surface.
 - [ ] **i18n**: every new user-visible string has en + vi keys on its platform.
-- [ ] **Face-off mode** (`/faceoff/:slug`, `src/flashcards/faceoff.tsx`): the far half is
-  wrapped in a single `rotate(180deg)` transform (word, options AND its progress bar all
-  rotate together); play is fully client-side (no fetches between Start and Finish);
+- [ ] **Face-off mode** (`/faceoff/:slug`, `src/flashcards/faceoff.tsx`): left/right
+  split with each player's ENTIRE board (word, options, feedback, lock overlay) inside
+  one swapped-dimensions box rotated `-90deg` (left) / `90deg` (right) toward its
+  player's short edge; both progress bars live back-to-back in the central divider
+  (nothing in the divider rotates — numerals only); play is fully client-side (no
+  fetches between Start and Finish);
   questions built once via `buildQuizQuestions`; reducer logic lives in
   `shared/logic/pvp.ts` (`newFaceoff`/`faceoffAnswer`), not in the component.
 - [ ] **Face-off recording**: the `faceoff-result` intent is STAFF-gated (a student

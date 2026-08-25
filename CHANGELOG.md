@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0327 — 2026-08-25
+docs(pvp): face-off layout rotated 90deg — left/right halves toward the short edges, progress bars paired in the center divider
+
 ## v0.0326 — 2026-08-25
 docs: add tabletop 1v1 face-off mode (split screen, rotated halves) to the vocab PvP spec + plan
 
