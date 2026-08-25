@@ -1250,6 +1250,7 @@ const en_strings = {
     'Each player runs their own questions against the clock. A wrong tap only costs you.',
   pvp_race_duration: 'Time limit',
   pvp_race_cooldown: 'Wrong — try again in a moment…',
+  pvp_faceoff_not_recorded: 'Not recorded — this match will not appear on the ladder.',
 
   // ---- Mobile app (m_*) ----
   // Added by docs/mobile/phase-2-expo-shell.md. The rule is: no hardcoded strings in any
@@ -3207,6 +3208,7 @@ export const STRINGS = {
       'Mỗi người tự chạy câu của mình theo đồng hồ. Trả lời sai chỉ mình bạn mất lượt.',
     pvp_race_duration: 'Thời gian',
     pvp_race_cooldown: 'Sai rồi — thử lại ngay…',
+    pvp_faceoff_not_recorded: 'Chưa ghi nhận được — trận này sẽ không lên bảng xếp hạng.',
 
     // ---- Mobile app (m_*) ----
     m_more: 'Thêm',

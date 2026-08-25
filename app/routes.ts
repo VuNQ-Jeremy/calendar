@@ -120,6 +120,7 @@ export default [
   // the cookie-authed twin the web battle/face-off screens use.
   route('api/game-rooms', 'routes/api.game-rooms.tsx'),
   route('api/pvp/ladder', 'routes/api.pvp.ladder.tsx'),
+  route('api/pvp/faceoff', 'routes/api.pvp.faceoff.tsx'),
   // Garden. `progress` is NOT under `assignments/`: that route's `:id?` would swallow the
   // literal segment, the same trap as `api/flashcards/generate-topic` above.
   route('api/garden/plant', 'routes/api.garden.plant.tsx'),

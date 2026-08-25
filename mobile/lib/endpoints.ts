@@ -8,6 +8,7 @@ import type {
   ClassInput,
   EventInput,
   EventMaterialsSaveInput,
+  FaceoffResultInput,
   FeedbackInput,
   FlashcardImportInput,
   FlashcardResultBatch,
@@ -367,6 +368,9 @@ export const pvp = {
     apiFetch<{ code: string }>('/api/game-rooms', { method: 'POST', body: input }),
   /** This month's ladder — points, wins, matches played. Staff play but never rank. */
   ladder: () => apiFetch<LadderRow[]>('/api/pvp/ladder'),
+  /** Record a finished 1v1 face-off. STAFF only; a draw or an anonymous game posts nothing. */
+  recordFaceoff: (input: FaceoffResultInput) =>
+    apiFetch<{ ok: true }>('/api/pvp/faceoff', { method: 'POST', body: input }),
 };
 
 /**

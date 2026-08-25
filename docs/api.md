@@ -220,6 +220,7 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/checkin/summary` | **user** | One student's túi mù month: `{ tally, tier }`. Students get their own; only staff may pass `?studentId=`. Replies `{ disabled: true }` — and nothing else — when an admin has switched the student view off, so check that flag first |
 | POST | `/api/game-rooms` | **user** | PvP vocab battles (F33/F34). `PvpRoomInput` (`slug`, `roundSize?`, `secondsPerQuestion?`) builds a quiz round and initializes a `GameRoom` Durable Object; replies `{ code }`. Both staff and students may host — a teacher-hosted classroom battle and a student duel are the same room. `/game-rooms` (cookie-authed) is the web twin. 404 `not_found` for a missing topic, 422 `too_few_words` under 4 words |
 | GET | `/api/pvp/ladder` | **user** | This month's PvP ladder — `?month=YYYY-MM`, defaults to the current ICT month. One row per student (staff play but never rank), sorted by points descending |
+| POST | `/api/pvp/faceoff` | staff | Records one finished 1v1 face-off from the app — `FaceoffResultInput` (`mode`, `topicId`, winner/loser student ids and scores, `total`). The bearer twin of `/game-rooms`'s `faceoff-result` intent, which a phone cannot reach. 422 `same_player` when winner and loser match; draws are never posted |
 
 `GET /game-ws?code=<code>` (bearer OR session cookie — the one exception to the bearer-only rule
 above, because the web battle screen has a cookie, not a token) upgrades to the room's WebSocket.

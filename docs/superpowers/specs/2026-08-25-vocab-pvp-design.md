@@ -59,7 +59,7 @@ ladder resets monthly, matching the school's existing rankings rhythm so nobody 
 permanently bottom. Elo-style ratings are deferred until real play shows they're needed.
 Staff may play but never rank.
 
-### Chosen: tabletop 1v1 face-off on the teacher's tablet (same-device, no network)
+### Chosen: tabletop 1v1 face-off, same-device, no network (web tablet and mobile)
 
 The literal *1 2 3 4 Player Games* model, realized: two students face off on ONE tablet
 lying flat between them, each holding a SHORT edge. The screen splits left/right along the
@@ -68,8 +68,22 @@ long axis; each half is rotated 90° so its letter tops point away from its play
 opponent's text runs sideways, by design. No GameRoom, no WebSocket, no server round-trip
 during play — questions are built client-side from the same shared builders, because there
 is only one client. It lives on the web app (the teacher's tablet), route `/faceoff/:slug`,
-launched from the same Battle dialog as room battles. The teacher picks one of two games on
-the setup step; both survive a rematch.
+launched from the same Battle dialog as room battles — and, as of 2026-08, on mobile too (see
+the "Mobile (2026-08)" note just below for the layout difference). The teacher picks one of
+two games on the setup step; both survive a rematch.
+
+**Mobile (2026-08):** the same screen exists on the phone at `play/faceoff/[slug].tsx`,
+sharing `shared/logic/pvp.ts`'s reducer with web — no rules are duplicated. The layout
+differs on purpose: web splits left/right with each half rotated ±90°, which only reads
+right on a landscape tablet lying on a table. Mobile stacks the two players top/bottom and
+rotates the top half 180° instead, for a portrait phone lying flat with a player at each
+short edge — a 180° rotation preserves the bounding box, so mobile needs none of web's
+swapped-dimensions trick. This is not a placeholder for the "real" ±90° layout: portrait is
+the permanent choice, because `mobile/app.config.ts` pins `orientation: 'portrait'` and
+`expo-screen-orientation` is not a dependency. Matching web's landscape rotation would need
+that native module, a hand-bumped `runtimeVersion`, and a freshly built APK installed on
+every phone — no OTA can carry it, and until every device is reinstalled the update reaches
+nobody. Anyone tempted to "fix" mobile to match web's ±90° should read this paragraph first.
 
 **Duel** (`mode: 'quiz-faceoff'`) — one shared question at a time. A slim vertical divider
 in the middle carries both progress bars back-to-back — almost touching — each filling
@@ -121,10 +135,11 @@ condition.
 5. **Ladder.** The vocabulary page shows this month's PvP ladder — points, wins, matches.
    It resets on the 1st (ICT).
 
-Alternative flow — **tabletop face-off**: teacher opens a topic on the tablet → Battle →
-"1v1 on this device" → optionally picks the two students → the tablet goes on the table
-between them → race to 5 → the winner's match lands on the ladder. No code, no joining,
-no internet needed during play.
+Alternative flow — **tabletop face-off**: teacher opens a topic on the tablet or phone →
+Battle → "1v1 on this device" → optionally picks the two students → the device goes on the
+table between them → race to 5 → the winner's match lands on the ladder. No code, no joining,
+no internet needed during play. (Web and mobile share the same reducer but lay the two
+players out differently — see the "Mobile (2026-08)" note above.)
 
 ## Protocol
 
@@ -191,8 +206,6 @@ CREATE INDEX idx_pvp_match_players_student ON pvp_match_players(student_id);
 - Matchmaking, invites, push notifications.
 - Elo ratings — points-with-daily-cap first.
 - Pronounce mode — never (paid Azure Speech per assessment; PvP multiplies call volume).
-- Face-off on the mobile app — v1 face-off is web-only (the teacher's tablet runs the web
-  app); an Expo tablet build can port the same shared reducer later.
 - 3–4 player same-device splits — the 1v1 layout generalizes, but not in v1.
 
 **Cost note:** nothing in this design touches a paid API. Rooms run on Durable Objects

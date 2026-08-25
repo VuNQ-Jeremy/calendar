@@ -26,7 +26,7 @@ omission is built.
 | `/garden/:classId/album/:month` | `(app)/vocabulary/garden/[classId]/album/[month].tsx` | Added 2026-08 |
 | `/flashcards/:slug` | `(app)/vocabulary/[slug]/` | Phase 3, plus offline study and the games. All seven game modes have mobile twins in `mobile/games/` (flip, quiz, match, scramble, fill, type, picture — 2026-08) |
 | `/battle/:code` | `play/battle/[code].tsx` | F33/F34, 2026-08. Join-by-code PvP quiz race — same `GameRoom` protocol as web, shares the `shared/logic/pvp.ts` reducer |
-| `/faceoff/:slug` | **Not built, web-only by design** | The tabletop 1v1 face-off (F33/F34) runs on the teacher's tablet, which is the web app. The shared reducer (`faceoffAnswer`) is ready if an Expo tablet port is ever wanted |
+| `/faceoff/:slug` | `play/faceoff/[slug].tsx` | 2026-08. Same shared reducer (`faceoffAnswer`) as web, but a different layout: web splits left/right ±90° for a landscape tablet on the table between two players; mobile stacks top/bottom at 180° for a portrait phone. Portrait is deliberate — `expo-screen-orientation` isn't a dependency, so matching web's rotation would need a native module, a `runtimeVersion` bump, and a fresh APK on every phone; 180° needs none of that and ships as a plain OTA update |
 | `/config` | `(app)/config.tsx` | Phase 5. Scrollbar pref dropped — see below |
 | `/feedback` | `(app)/feedback.tsx` | Phase 5. Inbox and submit in one screen |
 | `/profile` | `(app)/profile.tsx` | Phase 2 |

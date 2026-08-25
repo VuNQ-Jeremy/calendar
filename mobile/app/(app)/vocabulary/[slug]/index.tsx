@@ -97,8 +97,8 @@ export default function TopicScreen() {
     },
   });
 
-  // PvP battle (F33/F34). Face-off (the tabletop 1v1) is web-only in v1 — the teacher's tablet
-  // runs the web app; see docs/mobile-parity.md.
+  // PvP battle (F33/F34): a join-by-code room. The tabletop 1v1 face-off is a separate route,
+  // `/play/faceoff/[slug]`, with no server room of its own.
   const createBattle = useMutation({
     mutationFn: () => api.pvp.createRoom({ slug, roundSize: DEFAULT_ROUND_SIZE }),
     onSuccess: ({ code }) => router.push(`/play/battle/${code}`),
@@ -197,14 +197,28 @@ export default function TopicScreen() {
         </View>
 
         {words.length >= MIN_WORDS.quiz ? (
-          <Button
-            variant="soft"
-            iconLeft={<Swords size={16} color={th.color.brandSoftInk} />}
-            loading={createBattle.isPending}
-            onPress={() => createBattle.mutate()}
-          >
-            {t('pvp_battle_btn')}
-          </Button>
+          // Stacked, not side by side: at 360dp two `flex: 1` buttons get ~160dp each, and both
+          // labels need more (~122dp and ~130dp) than that leaves once the 1.5px border and the
+          // Button's own `numberOfLines={1}` are accounted for, so they truncated. Full-width
+          // rows give each label the Card's whole inner width instead.
+          <View style={{ gap: th.spacing[2] }}>
+            <Button
+              variant="soft"
+              block
+              iconLeft={<Swords size={16} color={th.color.brandSoftInk} />}
+              loading={createBattle.isPending}
+              onPress={() => createBattle.mutate()}
+            >
+              {t('pvp_mode_room')}
+            </Button>
+            <Button
+              variant="soft"
+              block
+              onPress={() => router.push(`/play/faceoff/${encodeURIComponent(slug)}`)}
+            >
+              {t('pvp_mode_faceoff')}
+            </Button>
+          </View>
         ) : null}
 
         <Tabs

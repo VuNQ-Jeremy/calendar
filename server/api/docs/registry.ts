@@ -10,6 +10,7 @@ import {
   ClassMaterialsSaveInput,
   EventInput,
   EventMaterialsSaveInput,
+  FaceoffResultInput,
   FeedbackInput,
   FlashcardImportInput,
   FlashcardResultBatch,
@@ -1090,6 +1091,28 @@ const vocabulary: PathDoc[] = [
             ),
             'Sorted by points descending.',
           ),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/pvp/faceoff',
+    routePattern: 'api/pvp/faceoff',
+    tag: 'Vocabulary',
+    operations: [
+      {
+        method: 'post',
+        auth: 'staff',
+        summary: 'Record a finished 1v1 face-off',
+        description:
+          'The bearer twin of the `faceoff-result` intent on `/game-rooms`, for the mobile app. ' +
+          'Staff only — a student device may not write a match, and an anonymous quick-play game ' +
+          'posts nothing. Draws are never posted. `mode` is `quiz-faceoff` for a duel or ' +
+          '`quiz-race` for a race.',
+        request: { schema: FaceoffResultInput },
+        responses: {
+          200: ok(z.object({ ok: z.literal(true) }), 'Recorded.'),
+          422: err('same_player', 'winner and loser are the same student.'),
         },
       },
     ],

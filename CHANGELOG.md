@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0334 — 2026-08-25
+1v1 face-off on mobile: portrait top/bottom split with the top half rotated 180 degrees, plus a bearer route for recording a finished match
+
 ## v0.0333 — 2026-08-25
 docs: rewrite the mobile face-off plan as one linear sequence with a single commit and an end verification pass
 
