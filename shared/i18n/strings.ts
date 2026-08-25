@@ -1239,6 +1239,9 @@ const en_strings = {
   pvp_rematch: 'Rematch',
   pvp_faceoff_quit: 'Quit match',
   pvp_faceoff_quit_msg: 'Leave this match? Neither player gets the win.',
+  pvp_leave_battle: 'Leave battle',
+  pvp_leave_battle_msg:
+    'Leave this battle? You can rejoin on the same code while it is still running.',
   pvp_faceoff_mode_duel: 'Duel — first to 5',
   pvp_faceoff_mode_duel_sub:
     'Both players get the same question. A wrong tap sits out the rest of it.',
@@ -3195,6 +3198,8 @@ export const STRINGS = {
     pvp_rematch: 'Đấu lại',
     pvp_faceoff_quit: 'Thoát trận',
     pvp_faceoff_quit_msg: 'Thoát trận này? Sẽ không ai được tính thắng.',
+    pvp_leave_battle: 'Thoát trận đấu',
+    pvp_leave_battle_msg: 'Thoát trận này? Bạn có thể vào lại bằng mã cũ khi trận chưa kết thúc.',
     pvp_faceoff_mode_duel: 'Đấu tay đôi — đến 5 điểm',
     pvp_faceoff_mode_duel_sub: 'Cả hai cùng một câu. Trả lời sai thì bỏ qua câu đó.',
     pvp_faceoff_mode_race: 'Đua nước rút — ai xong trước',

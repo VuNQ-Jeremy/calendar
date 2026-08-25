@@ -2,6 +2,7 @@ import React from 'react';
 import { useFetcher, useLoaderData, useNavigate } from 'react-router';
 import { DS } from '../ds/index.js';
 import { MIcon } from '../icons.jsx';
+import { useConfirm } from '../ui.jsx';
 import { useLang } from '../lib/i18n.jsx';
 import { useGameSocket } from '../lib/game-socket.js';
 import { playWord } from './audio.js';
@@ -91,6 +92,54 @@ export function BattleScreen() {
 
   const isProjector = myKind === 'staff';
 
+  /**
+   * Leaving mid-battle. The `finish` and `error` phases carry their own way out, but without this
+   * the lobby, the questions and the reveals had none at all — and this screen is a full-bleed
+   * fixed overlay outside the app shell, so on a classroom tablet with no browser chrome there was
+   * no way off it but to play to the end.
+   *
+   * Only a battle IN PROGRESS asks for confirmation: the DO keeps a player in `players` after a
+   * disconnect, so leaving costs the current question and nothing more — you rejoin on the same
+   * code. Leaving a lobby costs nothing, so it just goes.
+   */
+  const [confirm, confirmNode] = useConfirm();
+  const confirmPending = React.useRef(false);
+  const inProgress = view.phase === 'question' || view.phase === 'reveal';
+  const leave = React.useCallback(async () => {
+    if (confirmPending.current) return; // Escape must not re-enter its own confirm
+    if (!inProgress) {
+      navigate('/vocabulary');
+      return;
+    }
+    confirmPending.current = true;
+    try {
+      const ok = await confirm({
+        title: t('pvp_leave_battle'),
+        message: t('pvp_leave_battle_msg'),
+        confirmLabel: t('fc_exit'),
+        danger: true,
+      });
+      if (ok) navigate('/vocabulary');
+    } finally {
+      confirmPending.current = false;
+    }
+  }, [confirm, inProgress, navigate, t]);
+
+  const showLeave =
+    view.phase === 'connecting' ||
+    view.phase === 'lobby' ||
+    view.phase === 'question' ||
+    view.phase === 'reveal';
+
+  React.useEffect(() => {
+    if (!showLeave) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') void leave();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showLeave, leave]);
+
   return (
     <div
       style={{
@@ -106,6 +155,18 @@ export function BattleScreen() {
         fontFamily: 'var(--font-body)',
       }}
     >
+      {showLeave && (
+        <div style={{ position: 'absolute', top: 16, right: 16 }}>
+          <FBtn
+            variant="secondary"
+            iconLeft={<MIcon name="x" size={16} />}
+            onClick={() => void leave()}
+          >
+            {t('fc_exit')}
+          </FBtn>
+        </div>
+      )}
+
       {view.phase === 'connecting' && <div>{t('pvp_connecting')}</div>}
 
       {view.phase === 'error' && (
@@ -139,6 +200,8 @@ export function BattleScreen() {
       {view.phase === 'finish' && (
         <FinishPhase view={view} myId={myId} onExit={() => navigate('/vocabulary')} />
       )}
+
+      {confirmNode}
     </div>
   );
 }

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0331 — 2026-08-25
+Battle screen gains a way out mid-game (lobby, question and reveal had no exit control)
+
 ## v0.0330 — 2026-08-25
 PvP fixes (face-off rotation, mid-game joins, late answers, podium after close) plus a new face-off Race mode (F33/F34)
 
