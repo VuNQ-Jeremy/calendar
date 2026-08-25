@@ -60,6 +60,16 @@ ranked by severity; touch code only if the user then asks.
 - [ ] **Reset sweep**: `scripts/test-accounts.sql` deletes both new tables, child first.
 - [ ] **No paid paths touched**; pronounce absent from every PvP surface.
 - [ ] **i18n**: every new user-visible string has en + vi keys on its platform.
+- [ ] **Face-off mode** (`/faceoff/:slug`, `src/flashcards/faceoff.tsx`): the far half is
+  wrapped in a single `rotate(180deg)` transform (word, options AND its progress bar all
+  rotate together); play is fully client-side (no fetches between Start and Finish);
+  questions built once via `buildQuizQuestions`; reducer logic lives in
+  `shared/logic/pvp.ts` (`newFaceoff`/`faceoffAnswer`), not in the component.
+- [ ] **Face-off recording**: the `faceoff-result` intent is STAFF-gated (a student
+  session gets 403); winner ≠ loser validated; draws are never posted; the inserted
+  match uses `mode: 'quiz-faceoff'`, `code: '1V1'`, ranks 1/2 — and NO mastery/garden
+  write happens anywhere in the face-off path (the session is the teacher's, not the
+  players').
 
 ### C. Adversarial reads (where this design can actually break)
 
@@ -81,6 +91,12 @@ ranked by severity; touch code only if the user then asks.
   'image' (shouldn't occur per builder, but a null crash on phones is worth a look).
 - [ ] Mobile: the battle route sits OUTSIDE `(app)` (no tab bar), and the Android back
   button behaves per the app's back rules (detail screens retrace silently).
+- [ ] Face-off spam/lockout: a wrong tap locks only that side; taps from a locked side
+  and taps after `finished` are no-ops; both-wrong advances the question with no point
+  (check the reducer tests assert all three).
+- [ ] Face-off question exhaustion: reaching FACEOFF_MAX_QUESTIONS with a tie yields a
+  draw (winner null) and the UI offers rematch without posting; higher-score finish
+  posts normally.
 
 ### D. Deployment state (read-only)
 

@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0326 — 2026-08-25
+docs: add tabletop 1v1 face-off mode (split screen, rotated halves) to the vocab PvP spec + plan
+
 ## v0.0325 — 2026-08-25
 docs: vocab PvP design spec + single-commit implementation plan + Opus verify checklist (F33/F34)
 

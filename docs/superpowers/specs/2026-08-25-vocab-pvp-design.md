@@ -59,6 +59,31 @@ ladder resets monthly, matching the school's existing rankings rhythm so nobody 
 permanently bottom. Elo-style ratings are deferred until real play shows they're needed.
 Staff may play but never rank.
 
+### Chosen: tabletop 1v1 face-off on the teacher's tablet (same-device, no network)
+
+The literal *1 2 3 4 Player Games* model, realized: two students duel on ONE tablet lying
+flat between them. The screen splits in half; the divider strip in the middle carries the
+two players' progress bars; the far half is rotated 180° (CSS `transform: rotate(180deg)`)
+so each player reads their own half right-side up — player 1 sees player 2's text upside
+down, by design. Both halves show the SAME question simultaneously; the first correct tap
+takes the point, a wrong tap locks that player out until the next question (anti-spam),
+and both-locked advances with no point. First to 5 points wins
+(`FACEOFF_TARGET`), out of at most 13 questions (`FACEOFF_MAX_QUESTIONS`); exhausting the
+questions ends the duel on the higher score, and a tie is a draw.
+
+No GameRoom, no WebSocket, no server round-trip during play — questions are built
+client-side from the same shared builders, because there is only one client. It lives on
+the web app (the teacher's tablet), route `/faceoff/:slug`, launched from the same Battle
+dialog as room battles.
+
+Recording: when the teacher picked the two students before starting (optional roster
+pickers, staff only), the finished duel posts one `pvp_matches` row (`mode:
+'quiz-faceoff'`, `code: '1V1'`, winner rank 1 / loser rank 2) so the ladder counts it —
+3/1 points like any match. Draws are not recorded. Face-off writes NO mastery/garden
+results: the session belongs to the teacher, not the players, and shared-device speed
+tapping is not the student's own practice. Anonymous quick-play (no students picked)
+records nothing and is what signed-in students get on their own devices.
+
 ### Chosen: v1 game menu is quiz race only
 
 The room protocol carries a `mode` field so the other racers (picture, match, cloze…)
@@ -81,6 +106,11 @@ condition.
    plants grow and assignments tick exactly as if they'd studied solo.
 5. **Ladder.** The vocabulary page shows this month's PvP ladder — points, wins, matches.
    It resets on the 1st (ICT).
+
+Alternative flow — **tabletop face-off**: teacher opens a topic on the tablet → Battle →
+"1v1 on this device" → optionally picks the two students → the tablet goes on the table
+between them → race to 5 → the winner's match lands on the ladder. No code, no joining,
+no internet needed during play.
 
 ## Protocol
 
@@ -147,6 +177,9 @@ CREATE INDEX idx_pvp_match_players_student ON pvp_match_players(student_id);
 - Matchmaking, invites, push notifications.
 - Elo ratings — points-with-daily-cap first.
 - Pronounce mode — never (paid Azure Speech per assessment; PvP multiplies call volume).
+- Face-off on the mobile app — v1 face-off is web-only (the teacher's tablet runs the web
+  app); an Expo tablet build can port the same shared reducer later.
+- 3–4 player same-device splits — the 1v1 layout generalizes, but not in v1.
 
 **Cost note:** nothing in this design touches a paid API. Rooms run on Durable Objects
 with hibernating sockets (idle connections accrue no duration charges — the same property
