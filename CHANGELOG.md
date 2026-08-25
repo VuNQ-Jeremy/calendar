@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0332 — 2026-08-25
+docs: plan for 1v1 face-off on mobile (portrait top/bottom split)
+
 ## v0.0331 — 2026-08-25
 Battle screen gains a way out mid-game (lobby, question and reveal had no exit control)
 
