@@ -6,6 +6,10 @@ import {
   ladderFromMatches,
   myResultFromReveals,
   newFaceoff,
+  newRace,
+  raceAnswer,
+  RACE_WRONG_PENALTY_MS,
+  raceTimeUp,
   speedPoints,
   toWireQuiz,
   type PvpView,
@@ -253,5 +257,56 @@ describe('faceoffAnswer', () => {
     const finished = s;
     s = faceoffAnswer(s, 2, true, 13);
     expect(s).toBe(finished);
+  });
+});
+
+describe('raceAnswer', () => {
+  it('advances only the side that answered correctly', () => {
+    const s = raceAnswer(newRace(10), 1, true, 1000);
+    expect(s.progress).toEqual({ 1: 1, 2: 0 });
+    expect(s.finished).toBe(false);
+  });
+
+  it('starts a self-only cooldown on a wrong tap and leaves the opponent free', () => {
+    const s = raceAnswer(newRace(10), 1, false, 1000);
+    expect(s.progress).toEqual({ 1: 0, 2: 0 });
+    expect(s.blockedUntil[1]).toBe(1000 + RACE_WRONG_PENALTY_MS);
+    expect(s.blockedUntil[2]).toBe(0);
+    // The opponent can still score while side 1 is cooling down — the whole point of the mode.
+    expect(raceAnswer(s, 2, true, 1100).progress).toEqual({ 1: 0, 2: 1 });
+  });
+
+  it('ignores a tap from a cooling-down side, and accepts it after the penalty', () => {
+    const s = raceAnswer(newRace(10), 1, false, 1000);
+    expect(raceAnswer(s, 1, true, 1000 + RACE_WRONG_PENALTY_MS - 1)).toBe(s);
+    expect(raceAnswer(s, 1, true, 1000 + RACE_WRONG_PENALTY_MS).progress[1]).toBe(1);
+  });
+
+  it('finishes with that side as winner on the last question', () => {
+    let s = newRace(3);
+    for (let i = 0; i < 3; i++) s = raceAnswer(s, 2, true, 1000 + i);
+    expect(s).toMatchObject({ finished: true, winner: 2 });
+    expect(s.progress[2]).toBe(3);
+  });
+
+  it('is a no-op once finished', () => {
+    const s = raceAnswer(newRace(1), 1, true, 1000);
+    expect(raceAnswer(s, 2, true, 2000)).toBe(s);
+  });
+});
+
+describe('raceTimeUp', () => {
+  it('gives the win to whoever got further', () => {
+    const s = raceTimeUp(raceAnswer(newRace(10), 1, true, 1000));
+    expect(s).toMatchObject({ finished: true, winner: 1 });
+  });
+
+  it('calls equal progress a draw', () => {
+    expect(raceTimeUp(newRace(10))).toMatchObject({ finished: true, winner: null });
+  });
+
+  it('leaves an already-finished race alone', () => {
+    const s = raceAnswer(newRace(1), 1, true, 1000);
+    expect(raceTimeUp(s)).toBe(s);
   });
 });

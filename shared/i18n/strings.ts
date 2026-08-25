@@ -1237,6 +1237,16 @@ const en_strings = {
   pvp_draw: "It's a draw!",
   pvp_winner: '{name} wins!',
   pvp_rematch: 'Rematch',
+  pvp_faceoff_quit: 'Quit match',
+  pvp_faceoff_quit_msg: 'Leave this match? Neither player gets the win.',
+  pvp_faceoff_mode_duel: 'Duel — first to 5',
+  pvp_faceoff_mode_duel_sub:
+    'Both players get the same question. A wrong tap sits out the rest of it.',
+  pvp_faceoff_mode_race: 'Race — first to finish',
+  pvp_faceoff_mode_race_sub:
+    'Each player runs their own questions against the clock. A wrong tap only costs you.',
+  pvp_race_duration: 'Time limit',
+  pvp_race_cooldown: 'Wrong — try again in a moment…',
 
   // ---- Mobile app (m_*) ----
   // Added by docs/mobile/phase-2-expo-shell.md. The rule is: no hardcoded strings in any
@@ -3183,6 +3193,15 @@ export const STRINGS = {
     pvp_draw: 'Hòa!',
     pvp_winner: '{name} thắng!',
     pvp_rematch: 'Đấu lại',
+    pvp_faceoff_quit: 'Thoát trận',
+    pvp_faceoff_quit_msg: 'Thoát trận này? Sẽ không ai được tính thắng.',
+    pvp_faceoff_mode_duel: 'Đấu tay đôi — đến 5 điểm',
+    pvp_faceoff_mode_duel_sub: 'Cả hai cùng một câu. Trả lời sai thì bỏ qua câu đó.',
+    pvp_faceoff_mode_race: 'Đua nước rút — ai xong trước',
+    pvp_faceoff_mode_race_sub:
+      'Mỗi người tự chạy câu của mình theo đồng hồ. Trả lời sai chỉ mình bạn mất lượt.',
+    pvp_race_duration: 'Thời gian',
+    pvp_race_cooldown: 'Sai rồi — thử lại ngay…',
 
     // ---- Mobile app (m_*) ----
     m_more: 'Thêm',

@@ -39,7 +39,7 @@ export default function BattleScreen() {
     const socket = connectGameSocket(code, {
       getToken,
       onMsg: (msg) => setView((v) => applyServerMsg(v, msg)),
-      onClose: () => setView({ phase: 'error', code: 'connection_lost' }),
+      onClose: (errorCode) => setView({ phase: 'error', code: errorCode }),
     });
     socketRef.current = socket;
     return () => socket.close();
@@ -59,7 +59,15 @@ export default function BattleScreen() {
   }
 
   React.useEffect(() => {
-    if (view.phase !== 'finish' || posted.current || user?.kind !== 'student') return;
+    // A fresh mount onto an already-finished room has no answers of its own; posting
+    // total: 0 is rejected by the server as 422, which discards the whole outbox batch.
+    if (
+      view.phase !== 'finish' ||
+      posted.current ||
+      user?.kind !== 'student' ||
+      myReveals.current.length === 0
+    )
+      return;
     posted.current = true;
     const result = myResultFromReveals(
       myReveals.current,

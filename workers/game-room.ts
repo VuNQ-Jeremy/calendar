@@ -137,15 +137,15 @@ export class GameRoom extends DurableObject<Env> {
     const name = decodeURIComponent(nameHeader);
 
     const room = await this.ctx.storage.get<RoomState>('room');
-    if (!room) return new Response('not found', { status: 404 });
+    if (!room) return this.refuse('not_found');
 
     const players = (await this.ctx.storage.get<Record<string, StoredPlayer>>('players')) ?? {};
     const known = Boolean(players[userId]);
 
     if (!known) {
-      if (room.phase !== 'lobby') return new Response('already started', { status: 409 });
+      if (room.phase !== 'lobby') return this.refuse('already_started');
       if (Object.keys(players).length >= PVP_MAX_PLAYERS) {
-        return new Response('full', { status: 403 });
+        return this.refuse('full');
       }
       players[userId] = { name, kind, score: 0, correct: 0, joinedAt: new Date().toISOString() };
       await this.ctx.storage.put('players', players);
@@ -157,7 +157,17 @@ export class GameRoom extends DurableObject<Env> {
 
     if (room.phase === 'lobby') {
       await this.broadcastLobby(room, players);
-    } else if (room.phase === 'question') {
+    } else {
+      // A socket joining mid-game may be a FRESH client (page refresh, app relaunch) whose view
+      // starts at {phase:'connecting'}. `applyServerMsg` carries `config` forward from the
+      // previous view, so without a `lobby` first it lands on `{} as RoomConfig` — silently
+      // undefined `secondsPerQuestion`/`topicId`/`slug`, which breaks the countdown bar, the
+      // "question N of M" header and, worst, the post-match GameResult that records mastery and
+      // the garden. Always send `lobby` before the phase message; order matters.
+      this.sendTo(server, this.lobbyMsg(room, players));
+    }
+
+    if (room.phase === 'question') {
       const questions =
         (await this.ctx.storage.get<{ wire: WireQuizQuestion; answer: string }[]>('questions')) ??
         [];
@@ -190,6 +200,11 @@ export class GameRoom extends DurableObject<Env> {
           standings: this.standingsOf(players),
         });
       }
+    } else if (room.phase === 'done') {
+      // Without this the connect still returns 101 and the client sits on "Connecting…" forever.
+      // It is reliably reachable: the finish+60s alarm closes every socket and both clients treat
+      // a close they did not initiate as reconnectable.
+      this.sendTo(server, { type: 'finish', standings: this.standingsOf(players) });
     }
 
     return new Response(null, { status: 101, webSocket: client });
@@ -224,6 +239,21 @@ export class GameRoom extends DurableObject<Env> {
 
     if (msg.type === 'answer') {
       if (room.phase !== 'question' || msg.index !== room.qIndex) return;
+      // `phase` stays 'question' until the alarm actually FIRES, and Cloudflare alarms are
+      // eventual (a hibernated object must be woken first). Without this check an answer landing
+      // in that window is scored with a negative msLeft, which speedPoints clamps to a zero
+      // bonus — but it still banks the full 500 base points, while a classmate who honestly ran
+      // out of time gets nothing.
+      if (Date.now() > room.deadline) return;
+      const questions =
+        (await this.ctx.storage.get<{ wire: WireQuizQuestion; answer: string }[]>('questions')) ??
+        [];
+      const q = questions[room.qIndex];
+      if (!q) return;
+      // `msg.option` came off the wire: unvalidated it goes straight to storage, so an
+      // authenticated student could post a 200 KB string, blow the 128 KiB per-value limit and
+      // throw out of webSocketMessage.
+      if (typeof msg.option !== 'string' || !q.wire.options.includes(msg.option)) return;
       const key = `answers:${room.qIndex}`;
       const answers = (await this.ctx.storage.get<Record<string, StoredAnswer>>(key)) ?? {};
       if (answers[tag.userId]) return;
@@ -232,7 +262,11 @@ export class GameRoom extends DurableObject<Env> {
 
       const players = (await this.ctx.storage.get<Record<string, StoredPlayer>>('players')) ?? {};
       if (Object.keys(answers).length >= Object.keys(players).length) {
-        await this.ctx.storage.deleteAlarm();
+        // No deleteAlarm() here: a DO has at most one alarm, and revealStep's setAlarm replaces
+        // the question deadline anyway. Dropping the delete also means that if revealStep throws
+        // half-way, the already-scheduled question alarm still fires and recovers the game
+        // instead of leaving it stalled with no alarm at all. The double-award race that
+        // deleteAlarm was meant to prevent is handled by revealStep's phase guard.
         await this.revealStep(room);
       }
     }
@@ -258,6 +292,19 @@ export class GameRoom extends DurableObject<Env> {
     const room = await this.ctx.storage.get<RoomState>('room');
     if (!room) return;
 
+    // Self-healing: an alarm that arrives EARLY re-arms itself instead of advancing the game.
+    // `deleteAlarm()` cannot cancel an alarm that has already fired, so without this a queued
+    // alarm() can land milliseconds after an early-advance, read `phase === 'reveal'` and jump
+    // straight to the next question — players never see the answer. The 50 ms slack absorbs
+    // ordinary timer imprecision (an on-time alarm can report a `Date.now()` a hair below its own
+    // deadline); any larger and a real deadline could be skipped, any smaller and an honest
+    // alarm would bounce off the guard and re-arm for one extra round trip. `deadline` is 0 in
+    // the lobby and already in the past when done, so those branches are unaffected.
+    if (Date.now() < room.deadline - 50) {
+      await this.ctx.storage.setAlarm(room.deadline);
+      return;
+    }
+
     if (room.phase === 'question') {
       await this.revealStep(room);
       return;
@@ -274,6 +321,11 @@ export class GameRoom extends DurableObject<Env> {
           // Already closed.
         }
       }
+      // Without this every played match leaves `room`, `questions`, `players` and `answers:0…N`
+      // in its DO forever — the 2h expiry branch below is unreachable for a done room. Safe only
+      // because /connect now answers a `done`-phase reconnect (a client that comes back inside
+      // the 60s window gets its standings; after that it gets a clean 404, not a spinner).
+      await this.ctx.storage.deleteAll();
       return;
     }
     // Abandoned lobby: free the code rather than let it squat forever.
@@ -313,6 +365,10 @@ export class GameRoom extends DurableObject<Env> {
   }
 
   private async revealStep(room: RoomState): Promise<void> {
+    // Idempotence guard: the scoring loop below does `player.score += …` unconditionally, so a
+    // second run for the same qIndex would double-award. `deleteAlarm()` cannot cancel an alarm
+    // that has already fired, so a queued alarm() can land right after an early-advance.
+    if (room.phase !== 'question') return;
     const questions =
       (await this.ctx.storage.get<{ wire: WireQuizQuestion; answer: string }[]>('questions')) ?? [];
     const q = questions[room.qIndex];
@@ -335,9 +391,11 @@ export class GameRoom extends DurableObject<Env> {
       }
     }
     await this.ctx.storage.put('players', players);
-    const next: RoomState = { ...room, phase: 'reveal' };
-    await this.ctx.storage.put('room', next);
+    // The reveal's own end becomes the room's deadline, so alarm()'s early-arrival guard knows
+    // when this phase is genuinely allowed to advance.
     const revealDeadline = Date.now() + PVP_REVEAL_MS;
+    const next: RoomState = { ...room, phase: 'reveal', deadline: revealDeadline };
+    await this.ctx.storage.put('room', next);
     await this.ctx.storage.setAlarm(revealDeadline);
     this.broadcast({
       type: 'reveal',
@@ -419,17 +477,68 @@ export class GameRoom extends DurableObject<Env> {
       .sort((a, b) => b.score - a.score || b.correct - a.correct || a.name.localeCompare(b.name));
   }
 
-  private async broadcastLobby(
-    room: RoomState,
-    players: Record<string, StoredPlayer>,
-  ): Promise<void> {
-    this.broadcast({
+  /** The `lobby` message — it is what carries `config` to a client, at any phase. */
+  private lobbyMsg(room: RoomState, players: Record<string, StoredPlayer>): ServerMsg {
+    return {
       type: 'lobby',
       code: room.code,
       config: room.config,
       players: Object.entries(players).map(([id, p]) => ({ id, kind: p.kind, name: p.name })),
       hostId: room.hostId,
-    });
+    };
+  }
+
+  private async broadcastLobby(
+    room: RoomState,
+    players: Record<string, StoredPlayer>,
+  ): Promise<void> {
+    this.broadcast(this.lobbyMsg(room, players));
+  }
+
+  /**
+   * Refuse a join: accept the socket, say why over the wire, then hang up.
+   *
+   * The three refusals that reach here (`not_found`, `already_started`, `full`) used to be a
+   * bare HTTP status on the failed-upgrade response, which no client can read — it only sees
+   * close code 1006, so a mistyped code burned all three reconnect attempts before reporting
+   * "connection lost". Accepting the socket and sending `room-error` first makes the existing
+   * protocol and both clients' existing copy for these codes reachable.
+   *
+   * We deliberately do NOT close synchronously here: closing before the 101 response has left
+   * the Worker can race the `send` against the still-completing upgrade. The ordering guarantee
+   * instead comes from `setTimeout(resolve, 0)` deferring the close past this tick, the same fact
+   * the two sends already above rely on for a successful join (`sendTo` at :167/:207 happens
+   * before the 101 at :210 is returned, and the client still receives them in order) — frames
+   * queued on a socket before its 101 response is returned are still delivered to the client in
+   * the order they were queued. `ctx.waitUntil` itself buys none of that ordering; it exists only
+   * to keep this Durable Object alive long enough for the deferred close to actually run (and to
+   * satisfy the no-floating-promises rule), the same role it plays in
+   * `workers/translate-proxy.ts`. We still close from our side rather than leaving the socket open
+   * indefinitely: it was never registered as a player, but `ctx.getWebSockets()` (which
+   * `broadcast()` sends to unconditionally, with no player check) does not know that — for the
+   * `already_started`/`full` cases the room is genuinely live, so an open-and-forgotten socket
+   * would keep receiving `question`/`reveal`/`finish` traffic, and `applyServerMsg` switches on
+   * every message type unconditionally, so that traffic would silently knock the client off the
+   * error screen it just landed on. (Belt-and-braces only: both clients also close the socket
+   * themselves the moment they see a terminal `room-error`, so this close does not have to land
+   * for the client to be correct — see `roomErrorReceived` in `mobile/lib/game-socket.ts` and
+   * `src/lib/game-socket.ts`.)
+   */
+  private refuse(code: 'not_found' | 'already_started' | 'full'): Response {
+    const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
+    this.ctx.acceptWebSocket(server);
+    this.sendTo(server, { type: 'room-error', code });
+    this.ctx.waitUntil(
+      (async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        try {
+          server.close(1000, 'refused');
+        } catch {
+          // The client already closed it first.
+        }
+      })(),
+    );
+    return new Response(null, { status: 101, webSocket: client });
   }
 
   private sendTo(ws: WebSocket, msg: ServerMsg): void {

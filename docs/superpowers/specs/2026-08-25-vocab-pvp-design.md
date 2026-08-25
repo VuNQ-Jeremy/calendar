@@ -61,30 +61,42 @@ Staff may play but never rank.
 
 ### Chosen: tabletop 1v1 face-off on the teacher's tablet (same-device, no network)
 
-The literal *1 2 3 4 Player Games* model, realized: two students duel on ONE tablet lying
-flat between them, each holding a SHORT edge. The screen splits left/right along the long
-axis; each half is rotated 90° toward its player (left half `rotate(-90deg)`, right half
-`rotate(90deg)`) so each reads their own half upright while the opponent's text runs
-sideways, by design. A slim vertical divider in the middle carries both progress bars
-back-to-back — almost touching — each filling toward the win line, with the question
-counter and scores. Both halves show the SAME question simultaneously; the first correct tap
-takes the point, a wrong tap locks that player out until the next question (anti-spam),
-and both-locked advances with no point. First to 5 points wins
-(`FACEOFF_TARGET`), out of at most 13 questions (`FACEOFF_MAX_QUESTIONS`); exhausting the
-questions ends the duel on the higher score, and a tie is a draw.
+The literal *1 2 3 4 Player Games* model, realized: two students face off on ONE tablet
+lying flat between them, each holding a SHORT edge. The screen splits left/right along the
+long axis; each half is rotated 90° so its letter tops point away from its player (left half
+`rotate(90deg)`, right half `rotate(-90deg)`) so each reads their own half upright while the
+opponent's text runs sideways, by design. No GameRoom, no WebSocket, no server round-trip
+during play — questions are built client-side from the same shared builders, because there
+is only one client. It lives on the web app (the teacher's tablet), route `/faceoff/:slug`,
+launched from the same Battle dialog as room battles. The teacher picks one of two games on
+the setup step; both survive a rematch.
 
-No GameRoom, no WebSocket, no server round-trip during play — questions are built
-client-side from the same shared builders, because there is only one client. It lives on
-the web app (the teacher's tablet), route `/faceoff/:slug`, launched from the same Battle
-dialog as room battles.
+**Duel** (`mode: 'quiz-faceoff'`) — one shared question at a time. A slim vertical divider
+in the middle carries both progress bars back-to-back — almost touching — each filling
+toward the win line, with the question counter and scores. Both halves show the SAME
+question simultaneously; the first correct tap takes the point, a wrong tap locks that
+player out until the next question (anti-spam), and both-locked advances with no point.
+First to 5 points wins (`FACEOFF_TARGET`), out of at most 13 questions
+(`FACEOFF_MAX_QUESTIONS`); exhausting the questions ends the duel on the higher score, and a
+tie is a draw.
+
+**Race** (`mode: 'quiz-race'`) — each side runs the SAME preset-count question list
+(`RACE_QUESTION_COUNTS`, default `RACE_DEFAULT_QUESTIONS`) at its own position, against one
+shared countdown (`RACE_SECONDS_CHOICES`, default `RACE_DEFAULT_SECONDS`) started when the
+match starts. Progress is independent per side — a fast player is not blocked by the other's
+pace — and a wrong tap costs only the tapper (a self-only cooldown), never the opponent.
+Winner is whoever finishes their list first; if the clock runs out first, whoever has cleared
+more questions wins. A tie (same progress at time-up, or both unfinished at equal counts) is
+a draw and, like Duel, is not recorded.
 
 Recording: when the teacher picked the two students before starting (optional roster
-pickers, staff only), the finished duel posts one `pvp_matches` row (`mode:
-'quiz-faceoff'`, `code: '1V1'`, winner rank 1 / loser rank 2) so the ladder counts it —
-3/1 points like any match. Draws are not recorded. Face-off writes NO mastery/garden
-results: the session belongs to the teacher, not the players, and shared-device speed
-tapping is not the student's own practice. Anonymous quick-play (no students picked)
-records nothing and is what signed-in students get on their own devices.
+pickers, staff only), the finished match posts one `pvp_matches` row (`mode: 'quiz-faceoff'`
+for Duel or `'quiz-race'` for Race, `code: '1V1'` for both — no room ever existed either
+way — winner rank 1 / loser rank 2) so the ladder counts it — 3/1 points like any match.
+Draws are not recorded for either game. Face-off writes NO mastery/garden results for either
+game: the session belongs to the teacher, not the players, and shared-device speed tapping
+is not the student's own practice. Anonymous quick-play (no students picked) records nothing
+and is what signed-in students get on their own devices.
 
 ### Chosen: v1 game menu is quiz race only
 

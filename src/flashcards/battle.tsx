@@ -64,7 +64,15 @@ export function BattleScreen() {
   }
 
   React.useEffect(() => {
-    if (view.phase !== 'finish' || posted.current || myKind !== 'student') return;
+    // A fresh mount onto an already-finished room has no answers of its own; posting
+    // total: 0 is rejected by the server as 422.
+    if (
+      view.phase !== 'finish' ||
+      posted.current ||
+      myKind !== 'student' ||
+      myReveals.current.length === 0
+    )
+      return;
     posted.current = true;
     const result = myResultFromReveals(
       myReveals.current,

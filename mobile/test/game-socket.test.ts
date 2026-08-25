@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { backoffDelay, gameSocketUrl } from '../lib/game-socket';
+import { backoffDelay, closeOutcome, gameSocketUrl } from '../lib/game-socket';
 
 /**
  * `lib/game-socket.ts` — the mobile PvP battle room client (F33/F34).
@@ -38,5 +38,20 @@ describe('backoffDelay', () => {
 
   it('gives up after 3 attempts', () => {
     expect(backoffDelay(3)).toBeNull();
+  });
+});
+
+describe('closeOutcome', () => {
+  it('reports not_found for a socket refused on the very first attempt', () => {
+    // Never opened (a 401/426 refuses before the handshake completes) and no attempt yet made —
+    // the best available guess is a mistyped room code, not a generic "connection lost".
+    expect(closeOutcome(false, 0)).toEqual({ errorCode: 'not_found' });
+  });
+
+  it('follows the 1s/2s/4s backoff once a socket has opened, then gives up as connection_lost', () => {
+    expect(closeOutcome(true, 0)).toEqual({ retryInMs: 1000 });
+    expect(closeOutcome(true, 1)).toEqual({ retryInMs: 2000 });
+    expect(closeOutcome(true, 2)).toEqual({ retryInMs: 4000 });
+    expect(closeOutcome(true, 3)).toEqual({ errorCode: 'connection_lost' });
   });
 });

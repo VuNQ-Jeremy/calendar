@@ -1,4 +1,4 @@
-import { and, eq, gte, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, lt } from 'drizzle-orm';
 import { pvpMatches, pvpMatchPlayers, students } from '../db/schema';
 import type { TenantDb } from '../db';
 import { fail } from '../api/handler';
@@ -69,17 +69,17 @@ export async function createRoom(
   throw fail('room_conflict', 503);
 }
 
-/** One finished tabletop duel -> one ladder-visible match. Draws are never posted. */
+/** One finished tabletop duel or race -> one ladder-visible match. Draws are never posted. */
 export async function recordFaceoffMatch(db: TenantDb, input: FaceoffResultInput): Promise<void> {
   if (input.winnerStudentId === input.loserStudentId) throw fail('same_player', 422);
   const matchId = crypto.randomUUID();
   await db.insert(pvpMatches).values({
     id: matchId,
-    // No room ever existed for a same-device duel; the column is NOT NULL and this marks the
-    // match's origin for anyone reading the raw table.
+    // No room ever existed for a same-device duel or race; the column is NOT NULL and this marks
+    // the match's origin for anyone reading the raw table.
     code: '1V1',
     topicId: input.topicId,
-    mode: 'quiz-faceoff',
+    mode: input.mode,
     playedAt: new Date().toISOString(),
   });
   await db.raw.insert(pvpMatchPlayers).values([
@@ -130,7 +130,8 @@ export async function monthLadder(db: TenantDb, month: string): Promise<LadderRo
         pvpMatches,
         and(gte(pvpMatches.playedAt, rangeStart), lt(pvpMatches.playedAt, rangeEnd)),
       ),
-    );
+    )
+    .orderBy(asc(pvpMatches.playedAt));
 
   const inMonth = rows
     .map((r) => ({ ...r, playedAtIct: ictDateOf(r.playedAt) }))

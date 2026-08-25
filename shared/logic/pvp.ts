@@ -182,6 +182,13 @@ export function applyServerMsg(view: PvpView, msg: ServerMsg): PvpView {
       return { phase: 'finish', standings: msg.standings, config };
     }
     case 'room-error':
+      // `not_host` is non-terminal to both transports (they deliberately do not close the socket
+      // for it — the game continues) but was terminal here, so the host would get thrown off a
+      // live lobby onto an error screen while their socket stayed open. Leave the view unchanged:
+      // the Start button is host-only, so a legitimate client can never provoke `not_host` in the
+      // first place, and ignoring a message a real client cannot cause is strictly better than
+      // ejecting someone from a running lobby. Every other room-error code stays terminal.
+      if (msg.code === 'not_host') return view;
       return { phase: 'error', code: msg.code };
     default:
       return view;
@@ -328,4 +335,76 @@ export function faceoffAnswer(
     return { ...s, qIndex, locked: { 1: false, 2: false }, finished: true, winner };
   }
   return { ...s, qIndex, locked: { 1: false, 2: false } };
+}
+
+// ---- Race mode ----
+
+/** Race mode: a preset question count, a shared countdown, independent progress. */
+export const RACE_QUESTION_COUNTS = [10, 15, 20] as const;
+export const RACE_DEFAULT_QUESTIONS = 10;
+export const RACE_SECONDS_CHOICES = [60, 90, 120] as const;
+export const RACE_DEFAULT_SECONDS = 90;
+/**
+ * A wrong tap costs the tapper this long, and nobody else. Without a cost, four-way
+ * spam-tapping finishes a race instantly and the mode measures thumb speed, not vocabulary;
+ * with a SHARED lockout it would stall the opponent, which is exactly what this mode exists
+ * to avoid. A self-only cooldown is the one option that satisfies both.
+ */
+export const RACE_WRONG_PENALTY_MS = 1500;
+
+export type RaceState = {
+  /** Each side's own index into the SHARED question list — both face the same questions in the
+   *  same order (fairness), each at their own position. */
+  progress: { 1: number; 2: number };
+  /** Epoch ms until which that side's taps are ignored. Self-only; see RACE_WRONG_PENALTY_MS. */
+  blockedUntil: { 1: number; 2: number };
+  totalQuestions: number;
+  finished: boolean;
+  /** Set when finished; null while running AND on a finished draw. */
+  winner: FaceoffSide | null;
+};
+
+export function newRace(totalQuestions: number): RaceState {
+  return {
+    progress: { 1: 0, 2: 0 },
+    blockedUntil: { 1: 0, 2: 0 },
+    totalQuestions,
+    finished: false,
+    winner: null,
+  };
+}
+
+/**
+ * Pure reducer for one tap. Ignores input when finished or when that side is still cooling down
+ * from an earlier wrong tap (own-side only — see RACE_WRONG_PENALTY_MS). A correct tap advances
+ * only that side's progress; reaching totalQuestions finishes the race with that side as winner.
+ * A wrong tap starts that side's cooldown and touches nothing else — no shared lock, no effect
+ * on the opponent's progress or timing.
+ */
+export function raceAnswer(
+  s: RaceState,
+  side: FaceoffSide,
+  correct: boolean,
+  now: number,
+): RaceState {
+  if (s.finished || now < s.blockedUntil[side]) return s;
+
+  if (!correct) {
+    const blockedUntil = { ...s.blockedUntil, [side]: now + RACE_WRONG_PENALTY_MS };
+    return { ...s, blockedUntil };
+  }
+
+  const progressed = s.progress[side] + 1;
+  const progress = { ...s.progress, [side]: progressed };
+  if (progressed >= s.totalQuestions) {
+    return { ...s, progress, finished: true, winner: side };
+  }
+  return { ...s, progress };
+}
+
+/** The countdown expired: whoever got further wins, equal progress is a draw (winner null). */
+export function raceTimeUp(s: RaceState): RaceState {
+  if (s.finished) return s;
+  const winner = s.progress[1] === s.progress[2] ? null : s.progress[1] > s.progress[2] ? 1 : 2;
+  return { ...s, finished: true, winner };
 }

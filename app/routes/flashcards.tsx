@@ -27,6 +27,7 @@ import {
 import { plantView, monthOfVn } from '../../shared/logic/garden';
 import { ictDateOf } from '../../shared/logic/tests';
 import { currentIctMonth, monthLadder } from '../../server/services/pvp';
+import type { LadderRow } from '../../shared/logic/pvp';
 import type { StaffGardenData, StudentGardenData } from '../../src/garden/garden-widget.jsx';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -144,6 +145,17 @@ async function loadTuiMu(db: TenantDb, su: SessionUser) {
   }
 }
 
+/** Same posture as loadGarden: this page is the topics list first, and a ladder is not worth a
+ *  500 while a migration is still catching up with a deploy. */
+async function loadLadder(db: TenantDb): Promise<LadderRow[]> {
+  try {
+    return await monthLadder(db, currentIctMonth());
+  } catch (err) {
+    console.error('pvp ladder unavailable on /vocabulary', err);
+    return [];
+  }
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = context.get(cloudflareCtx).env;
   const su = await requireLearner(request, env);
@@ -170,7 +182,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     // `db.raw`: khối is global since 0049, so the service takes a plain Db and there is no fence.
     gradeLevelsSvc.list(db.raw),
     // The PvP ladder (F33/F34). This IS the cookie-authed web twin of GET /api/pvp/ladder.
-    monthLadder(db, currentIctMonth()),
+    loadLadder(db),
   ]);
   // Gates the AI generator in the UI — same flag the topic page passes down.
   return {

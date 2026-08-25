@@ -345,8 +345,13 @@ export const PvpRoomInput = z.object({
 });
 export type PvpRoomInput = z.infer<typeof PvpRoomInput>;
 
-/** A finished tabletop face-off duel, posted once by staff to record it on the ladder. */
+/** A finished tabletop face-off duel or race, posted once by staff to record it on the ladder. */
 export const FaceoffResultInput = z.object({
+  // Defaulted, not required: a tablet still running the pre-deploy bundle posts no `mode` at
+  // all. Without a default the route 400s, the screen never inspects the result (it has already
+  // set `posted.current = true`), and the finished match vanishes with no signal. Defaulting to
+  // the duel mode records it as what an old client's result always was.
+  mode: z.enum(['quiz-faceoff', 'quiz-race']).default('quiz-faceoff'),
   topicId: z.string().min(1),
   winnerStudentId: z.string().min(1),
   loserStudentId: z.string().min(1),

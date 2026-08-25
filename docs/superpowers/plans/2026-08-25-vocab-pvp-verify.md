@@ -62,8 +62,8 @@ ranked by severity; touch code only if the user then asks.
 - [ ] **i18n**: every new user-visible string has en + vi keys on its platform.
 - [ ] **Face-off mode** (`/faceoff/:slug`, `src/flashcards/faceoff.tsx`): left/right
   split with each player's ENTIRE board (word, options, feedback, lock overlay) inside
-  one swapped-dimensions box rotated `-90deg` (left) / `90deg` (right) toward its
-  player's short edge; both progress bars live back-to-back in the central divider
+  one swapped-dimensions box rotated `90deg` (left) / `-90deg` (right) so its letter tops
+  point away from its player's short edge; both progress bars live back-to-back in the central divider
   (nothing in the divider rotates — numerals only); play is fully client-side (no
   fetches between Start and Finish);
   questions built once via `buildQuizQuestions`; reducer logic lives in

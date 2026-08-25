@@ -22,6 +22,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const su = await requireStaff(request, env);
     const db = tenantDbFor(env, su);
     const parsed = FaceoffResultInput.safeParse({
+      mode: formData.get('mode'),
       topicId: formData.get('topicId'),
       winnerStudentId: formData.get('winnerStudentId'),
       loserStudentId: formData.get('loserStudentId'),
