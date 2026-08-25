@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0323 — 2026-08-25
+Fix the vocab backfill's Pixabay guard: an Openverse fallback also happens when Pixabay simply has no photo of a word, so a phrasal verb aborted the whole run. It now probes with a known-good query to tell an outage from a no-result, and skips undepictable words instead.
+
 ## v0.0322 — 2026-08-25
 Add --replace mode to the vocab backfill script: re-picks every flashcard picture through Pixabay now that the key is set in prod. Aborts the run if search falls back to Openverse, and paces requests under Pixabay's rate limit.
 

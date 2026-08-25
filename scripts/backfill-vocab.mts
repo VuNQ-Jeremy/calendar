@@ -18,11 +18,17 @@
  * CC0 slice and was uniformly poor. The old R2 objects become unreferenced and `pruneImages`
  * collects them 24h later, so there is a one-day window to change your mind and no longer.
  *
- * Because of that, `--replace` REFUSES TO RUN ON OPENVERSE. `/vocab-image-search` names the
+ * Because of that, `--replace` NEVER WRITES AN OPENVERSE PICTURE. `/vocab-image-search` names the
  * provider it used, and Pixabay's bot check is swallowed silently upstream (see
- * server/services/vocab-images.ts) — so a rate-limited run would quietly replace hundreds of
- * pictures with the very source it was meant to escape. The first non-Pixabay answer aborts the
- * whole run, keeping the damage to nothing.
+ * server/services/vocab-images.ts) — so a rate-limited run would otherwise quietly replace hundreds
+ * of pictures with the very source it was meant to escape.
+ *
+ * A fallback to Openverse is AMBIGUOUS, which is the subtlety here: `searchImages` returns
+ * `provider: 'openverse'` both when Pixabay threw and when Pixabay simply had no photo of the word.
+ * Phrasal verbs ("get on (well) with") hit the second case constantly under `--all-pos`. So a
+ * fallback triggers a probe for a word Pixabay certainly has: probe fine → that word has no stock
+ * photo, skip it and keep whatever picture it already had; probe also falls back → Pixabay has
+ * stopped answering, abort the run.
  *
  * WHY IT GOES THROUGH THE APP, not straight to D1. Enrichment must run inside the TranslateProxy
  * Durable Object: Cloudflare serves this Worker from Hong Kong for Vietnam traffic and Anthropic
@@ -59,10 +65,12 @@ const dryRun = flag('dry-run');
 
 /**
  * Pixabay allows about 100 requests a minute per key, and one word costs two of them: the search,
- * then the commit's `resolveImageUrl` lookup. 1.3s between words keeps a 400-word run at roughly
- * 92/min — under the ceiling with room for a retry, and about nine minutes end to end.
+ * then the commit's `resolveImageUrl` lookup. 1.5s between words keeps a 400-word run at roughly
+ * 80/min, leaving headroom for the health probes an undepictable word triggers — 1.3s put the
+ * baseline at 92/min, close enough to the ceiling that a run of phrasal verbs could push it over.
+ * About ten minutes end to end for the full library.
  */
-const PIXABAY_PACE_MS = 1300;
+const PIXABAY_PACE_MS = 1500;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const limit = Number(value('limit') ?? '0') || Infinity;
 const curriculumId = value('curriculum');
@@ -250,6 +258,24 @@ if (doText) {
   console.log(`text: ${filled} filled, ${skipped} skipped`);
 }
 
+/**
+ * Is Pixabay still answering, or has it stopped?
+ *
+ * Asked only when a search has already fallen back, to disambiguate the two causes `searchImages`
+ * reports identically. "dog" is the control: a word Pixabay has thousands of photos of, so a
+ * fallback on THIS query cannot mean "no results" and must mean the key or the rate limit.
+ */
+async function pixabayHealthy(): Promise<boolean> {
+  const res = await fetch(`${base}/vocab-image-search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    body: JSON.stringify({ query: 'dog', page: 1 }),
+  });
+  if (!res.ok) return false;
+  const json = (await res.json()) as { data?: { provider?: string } };
+  return json.data?.provider === 'pixabay';
+}
+
 if (doImages) {
   // --replace sweeps every word; the default only fills the blanks.
   const inScope = doReplace ? all : all.filter((w) => !w.hasImage);
@@ -271,6 +297,8 @@ if (doImages) {
 
   let attached = 0;
   let none = 0;
+  /** Words Pixabay simply has no photo of — kept separate from `none` so the tail is legible. */
+  let skippedNoStock = 0;
   for (const [i, w] of todo.entries()) {
     // Pace at the TOP of the loop, not on the success path: every `continue` below has already
     // spent a search request, and those are exactly the words a rate limit produces.
@@ -298,10 +326,17 @@ if (doImages) {
     // a CC0 museum scan — and the cause (Pixabay's bot check or its rate limit) is silent upstream,
     // so nothing else would ever report it. Stop the run instead.
     if (doReplace && found.data?.provider !== 'pixabay') {
+      // Ambiguous on its own — probe with a word Pixabay certainly has to find out which it is.
+      if (await pixabayHealthy()) {
+        // Pixabay is fine; it just has no photo of this word (phrasal verbs, abstract phrases).
+        // Skip it: under --replace, leaving the existing picture beats writing a CC0 scan over it.
+        skippedNoStock++;
+        continue;
+      }
       console.error(
-        `\nABORTED at "${w.word}" (${attached} replaced so far): search fell back to ` +
-          `${found.data?.provider ?? 'nothing'} instead of pixabay. Either the key is wrong or the ` +
-          `rate limit tripped — wait a few minutes and re-run, no rows were harmed.`,
+        `\nABORTED at "${w.word}" (${attached} replaced so far): Pixabay has stopped answering — a ` +
+          `probe for a word it certainly has fell back to Openverse too. Bot check or rate limit. ` +
+          `Wait a few minutes and re-run; words already written are fine and the rest are untouched.`,
       );
       process.exit(1);
     }
@@ -337,5 +372,8 @@ if (doImages) {
     attached++;
     if (attached % 25 === 0) console.log(`  ${attached}/${todo.length} attached`);
   }
-  console.log(`images: ${attached} attached, ${none} with no usable result`);
+  console.log(
+    `images: ${attached} attached, ${none} with no usable result` +
+      `, ${skippedNoStock} left as-is (no Pixabay photo exists)`,
+  );
 }
