@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0328 — 2026-08-25
+PvP vocab battles: join-by-code quiz races on web + mobile, tabletop 1v1 face-off, GameRoom DO, monthly ladder (F33/F34)
+
 ## v0.0327 — 2026-08-25
 docs(pvp): face-off layout rotated 90deg — left/right halves toward the short edges, progress bars paired in the center divider
 

@@ -33,6 +33,7 @@ import {
   PlantPatchInput,
   ProfileInput,
   PushRegisterInput,
+  PvpRoomInput,
   RedeemInviteInput,
   RemarkCriteriaReorder,
   RemarkCriterionInput,
@@ -1035,6 +1036,59 @@ const vocabulary: PathDoc[] = [
           200: ok(
             z.union([z.array(c.FlashcardResultRow), z.array(c.StudentFlashcardStats)]),
             'Rounds, or per-student totals — see the description.',
+          ),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/game-rooms',
+    routePattern: 'api/game-rooms',
+    tag: 'Vocabulary',
+    operations: [
+      {
+        method: 'post',
+        auth: 'user',
+        summary: 'Create a PvP battle room',
+        description:
+          'Builds a quiz round from the topic and initializes its `GameRoom` Durable Object. ' +
+          'Both staff and students may host — a teacher-hosted classroom battle and a student ' +
+          'duel are the same room. Join over `wss://<host>/game-ws?code=<code>` with the same ' +
+          'bearer token; the room protocol itself is not HTTP.',
+        request: { schema: PvpRoomInput },
+        responses: {
+          200: ok(z.object({ code: z.string() }), 'The 4-letter code players join with.'),
+          404: err('not_found', 'The topic does not exist.'),
+          422: err('too_few_words', 'The deck has fewer than 4 words.'),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/pvp/ladder',
+    routePattern: 'api/pvp/ladder',
+    tag: 'Vocabulary',
+    operations: [
+      {
+        method: 'get',
+        auth: 'user',
+        summary: 'This month’s PvP ladder',
+        description:
+          'Points, wins and matches played, one row per student (staff play but never rank). ' +
+          'Defaults to the current ICT month; pass `?month=YYYY-MM` for another one.',
+        params: [{ name: 'month', in: 'query' }],
+        responses: {
+          200: ok(
+            z.array(
+              z.object({
+                studentId: z.string(),
+                name: z.string(),
+                points: z.number(),
+                wins: z.number(),
+                played: z.number(),
+              }),
+            ),
+            'Sorted by points descending.',
           ),
         },
       },

@@ -21,6 +21,7 @@ import {
   Upload,
   Volume2,
   Zap,
+  Swords,
 } from 'lucide-react-native';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -94,6 +95,13 @@ export default function TopicScreen() {
       await invalidate();
       refetch();
     },
+  });
+
+  // PvP battle (F33/F34). Face-off (the tabletop 1v1) is web-only in v1 — the teacher's tablet
+  // runs the web app; see docs/mobile-parity.md.
+  const createBattle = useMutation({
+    mutationFn: () => api.pvp.createRoom({ slug, roundSize: DEFAULT_ROUND_SIZE }),
+    onSuccess: ({ code }) => router.push(`/play/battle/${code}`),
   });
 
   // A topic that was never downloaded, opened with no connection. This is a dead end, so it says
@@ -187,6 +195,17 @@ export default function TopicScreen() {
             );
           })}
         </View>
+
+        {words.length >= MIN_WORDS.quiz ? (
+          <Button
+            variant="soft"
+            iconLeft={<Swords size={16} color={th.color.brandSoftInk} />}
+            loading={createBattle.isPending}
+            onPress={() => createBattle.mutate()}
+          >
+            {t('pvp_battle_btn')}
+          </Button>
+        ) : null}
 
         <Tabs
           value={tab}

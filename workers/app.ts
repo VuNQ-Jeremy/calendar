@@ -20,7 +20,12 @@ export { ZaloPoller } from './zalo-poller';
 // (see workers/rate-limiter.ts). Same registration requirement.
 export { RateLimiter } from './rate-limiter';
 
+// Durable Object hosting PvP vocab battle rooms, one instance per room
+// (see workers/game-room.ts). Same registration requirement. F33/F34.
+export { GameRoom } from './game-room';
+
 import { handleLiveUpgrade } from './live-hub';
+import { handleGameUpgrade } from './game-room';
 import { secure } from './security-headers';
 import { pollerStub } from './zalo-poller';
 import { runScheduled } from '../server/services/notify';
@@ -51,6 +56,20 @@ export default {
         return await handleLiveUpgrade(request, env);
       } catch (err) {
         console.error('[ws] upgrade failed', {
+          name: err instanceof Error ? err.name : typeof err,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return new Response('upgrade failed', { status: 500 });
+      }
+    }
+
+    // Same reasoning as /ws above: a 101 response carrying a live WebSocket must reach the
+    // runtime unmodified.
+    if (url.pathname === '/game-ws') {
+      try {
+        return await handleGameUpgrade(request, env);
+      } catch (err) {
+        console.error('[game-ws] upgrade failed', {
           name: err instanceof Error ? err.name : typeof err,
           message: err instanceof Error ? err.message : String(err),
         });

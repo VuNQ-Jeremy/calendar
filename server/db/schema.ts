@@ -841,6 +841,50 @@ export const flashcardResults = sqliteTable(
 );
 
 /**
+ * PvP vocabulary battles (F33/F34, see docs/superpowers/specs/2026-08-25-vocab-pvp-design.md).
+ * One row per finished match — a join-by-code GameRoom battle or a tabletop face-off duel.
+ * `code` is '1V1' for a face-off, since no room ever existed for it.
+ */
+export const pvpMatches = sqliteTable(
+  'pvp_matches',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    code: text('code').notNull(),
+    topicId: text('topic_id')
+      .notNull()
+      .references(() => flashcardTopics.id, { onDelete: 'cascade' }),
+    mode: text('mode').notNull(),
+    playedAt: text('played_at').notNull(),
+  },
+  (t) => [index('idx_pvp_matches_tenant_played').on(t.tenantId, t.playedAt)],
+);
+
+/**
+ * No `tenantId`: a player row is reachable only through its match, which is already fenced.
+ * `rank` is the finishing order within the match (1 = winner), and is the primary key's second
+ * half — a match cannot record two players at the same rank.
+ */
+export const pvpMatchPlayers = sqliteTable(
+  'pvp_match_players',
+  {
+    matchId: text('match_id')
+      .notNull()
+      .references(() => pvpMatches.id, { onDelete: 'cascade' }),
+    studentId: text('student_id').references(() => students.id, { onDelete: 'cascade' }),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'cascade' }),
+    rank: integer('rank').notNull(),
+    score: integer('score').notNull(),
+    correct: integer('correct').notNull(),
+    total: integer('total').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.matchId, t.rank] }),
+    index('idx_pvp_match_players_student').on(t.studentId),
+  ],
+);
+
+/**
  * One row per installed mobile device. No `tenantId`: rows are only ever reached through their
  * account, and `expoToken` is physically global — one device, one token, whatever school it
  * happens to be signed into.

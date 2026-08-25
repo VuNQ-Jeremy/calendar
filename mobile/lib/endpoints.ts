@@ -39,8 +39,10 @@ import type {
   VocabEnrichItem,
   VocabGenerateInput,
   PronounceAssessment,
+  PvpRoomInput,
 } from '@mochi/shared/schemas';
 import type { GardenOutcome } from '@mochi/shared/logic/garden';
+import type { LadderRow } from '@mochi/shared/logic/pvp';
 import type {
   AssessmentTypeRow,
   SubjectRow,
@@ -355,6 +357,16 @@ export const flashcards = {
    * Azure tier is busy with another student — retryable; 503 means scoring is not configured.
    */
   assessPronunciation: (form: FormData) => apiUpload<PronounceAssessment>('/speech-assess', form),
+};
+
+// ---- PvP vocab battles (F33/F34) ----
+
+export const pvp = {
+  /** Build a room from a topic and return its 4-letter join code. `user` level — both roles host. */
+  createRoom: (input: PvpRoomInput) =>
+    apiFetch<{ code: string }>('/api/game-rooms', { method: 'POST', body: input }),
+  /** This month's ladder — points, wins, matches played. Staff play but never rank. */
+  ladder: () => apiFetch<LadderRow[]>('/api/pvp/ladder'),
 };
 
 /**

@@ -336,6 +336,26 @@ export const FlashcardWordInput = z.object({
 });
 export type FlashcardWordInput = z.infer<typeof FlashcardWordInput>;
 
+// ---- PvP vocab battles (F33/F34) ----
+
+export const PvpRoomInput = z.object({
+  slug: z.string().min(1),
+  roundSize: z.number().int().min(4).max(20).optional(),
+  secondsPerQuestion: z.number().int().min(5).max(60).optional(),
+});
+export type PvpRoomInput = z.infer<typeof PvpRoomInput>;
+
+/** A finished tabletop face-off duel, posted once by staff to record it on the ladder. */
+export const FaceoffResultInput = z.object({
+  topicId: z.string().min(1),
+  winnerStudentId: z.string().min(1),
+  loserStudentId: z.string().min(1),
+  winnerScore: z.number().int().min(0),
+  loserScore: z.number().int().min(0),
+  total: z.number().int().min(1),
+});
+export type FaceoffResultInput = z.infer<typeof FaceoffResultInput>;
+
 export const FlashcardImportInput = z.object({
   words: z.array(FlashcardWordInput).min(1).max(200),
 });

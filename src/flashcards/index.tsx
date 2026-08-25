@@ -32,6 +32,7 @@ import {
 } from './curriculum.jsx';
 import type { VocabAssignmentRow } from '../../server/services/garden.js';
 import type { TuiMuMonthTally } from '../../shared/logic/checkin.js';
+import type { LadderRow } from '../../shared/logic/pvp';
 
 const { Card: FC, Button: FBtn, IconButton: FIB, Input: FInput, Checkbox: FCheck, Badge, Tag } = DS;
 
@@ -56,6 +57,9 @@ type LoaderData = {
   review: ReviewData | null;
   /** Student only, null while the `showStudentView` toggle is off — see the route's loadTuiMu. */
   tuiMu: TuiMuMonthTally | null;
+  /** This month's PvP ladder (F33/F34) — points, wins, matches played. */
+  ladder: LadderRow[];
+  ladderMonth: string;
 };
 
 /** Today's review backlog, grouped by topic. `total` is the sum, and what the sidebar badge shows. */
@@ -121,6 +125,67 @@ function ReviewCard({ review }: { review: ReviewData }) {
   );
 }
 
+/**
+ * The PvP entry point + monthly ladder (F33/F34). Joining is client-side only: a valid-looking
+ * code just navigates to /battle/:code, which opens the WebSocket and shows `pvp_error_not_found`
+ * if the code turns out to be stale — there is nothing to validate server-side ahead of that.
+ */
+function PvpBattleCard({
+  joinCode,
+  setJoinCode,
+  navigate,
+  ladder,
+  ladderMonth,
+}: {
+  joinCode: string;
+  setJoinCode: (v: string) => void;
+  navigate: ReturnType<typeof useNavigate>;
+  ladder: LadderRow[];
+  ladderMonth: string;
+}) {
+  const { t } = useLang();
+  const join = () => {
+    if (/^[A-Z0-9]{4}$/.test(joinCode)) navigate(`/battle/${joinCode}`);
+  };
+  return (
+    <FC style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 16 }}>
+      <div className="m-row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: 'var(--text-lg)', flex: 1, minWidth: 160 }}>
+          {t('pvp_join_battle')}
+        </strong>
+        <FInput
+          value={joinCode}
+          onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
+          placeholder={t('pvp_code_placeholder')}
+          style={{ width: 120, textAlign: 'center', fontFamily: 'var(--font-mono, monospace)' }}
+        />
+        <FBtn variant="primary" disabled={joinCode.length !== 4} onClick={join}>
+          {t('pvp_join')}
+        </FBtn>
+      </div>
+      {ladder.length > 0 && (
+        <div className="m-stack" style={{ gap: 6 }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+            {t('pvp_ladder_title', { month: ladderMonth })}
+          </div>
+          {ladder.slice(0, 5).map((row, i) => (
+            <div key={row.studentId} className="m-row" style={{ gap: 10, alignItems: 'center' }}>
+              <span style={{ width: 20, fontWeight: 800, color: 'var(--text-muted)' }}>
+                {i + 1}
+              </span>
+              <span style={{ flex: 1, fontWeight: 600 }}>{row.name}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+                {t('pvp_ladder_played', { n: row.played })}
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono, monospace)' }}>{row.points}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </FC>
+  );
+}
+
 interface TopicDraft {
   id?: string;
   name: string;
@@ -142,10 +207,13 @@ export function FlashcardTopicsScreen() {
     gardenStaff,
     review,
     tuiMu,
+    ladder,
+    ladderMonth,
   } = useLoaderData() as LoaderData;
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const { t } = useLang();
+  const [joinCode, setJoinCode] = React.useState('');
   const [modal, setModal] = React.useState<TopicDraft | null>(null);
   const [generating, setGenerating] = React.useState(false);
   const [rail, setRail] = React.useState<RailValue>({ kind: 'all' });
@@ -298,6 +366,13 @@ export function FlashcardTopicsScreen() {
         onNew={() => setCurriculumModal(emptyCurriculum())}
         onEdit={(c) => setCurriculumModal(draftOf(c))}
         onImport={() => setImporting(true)}
+      />
+      <PvpBattleCard
+        joinCode={joinCode}
+        setJoinCode={setJoinCode}
+        navigate={navigate}
+        ladder={ladder}
+        ladderMonth={ladderMonth}
       />
       {!isStaff && <GardenWidget data={garden} />}
       {!isStaff && tuiMu && (tuiMu.bags > 0 || tuiMu.misses > 0) && (

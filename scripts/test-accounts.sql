@@ -71,6 +71,10 @@ DELETE FROM class_trees;
 DELETE FROM garden_plants;
 DELETE FROM flashcard_mastery;
 DELETE FROM flashcard_results;
+-- PvP battles (F33/F34, migration 0055). Child first: pvp_match_players carries no tenant_id
+-- and is fenced only by its match.
+DELETE FROM pvp_match_players;
+DELETE FROM pvp_matches WHERE tenant_id <> 'tnt_mochi_0001';
 -- Word tags (migration 0046). `vocab_topics` itself is NOT swept: it is global reference data that
 -- only a migration writes, so a failed run cannot dirty it, and re-inserting its 24 catalog rows on
 -- every reset would be pure cost. The junction is a different matter — a spec that tags a word leaks

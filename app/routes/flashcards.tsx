@@ -26,6 +26,7 @@ import {
 } from '../../shared/schemas';
 import { plantView, monthOfVn } from '../../shared/logic/garden';
 import { ictDateOf } from '../../shared/logic/tests';
+import { currentIctMonth, monthLadder } from '../../server/services/pvp';
 import type { StaffGardenData, StudentGardenData } from '../../src/garden/garden-widget.jsx';
 import { K, swrLoad, invalidateAfterMutation } from '../../src/lib/route-cache.js';
 import { withLiveAction } from '../../server/live';
@@ -148,19 +149,29 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const su = await requireLearner(request, env);
   const db = tenantDbFor(env, su);
   const topics = await flashcardsSvc.listTopics(db);
-  const [{ garden, gardenStaff }, review, tuiMu, curricula, units, vocabTopics, gradeLevels] =
-    await Promise.all([
-      loadGarden(db, su),
-      loadReview(db, su),
-      loadTuiMu(db, su),
-      // Not wrapped in a degrade-to-null like the garden: the curriculum rail is part of the topics
-      // list, and the tables have shipped, so a failure here is a real fault worth seeing.
-      curriculaSvc.list(db),
-      curriculaSvc.unitsByTopic(db),
-      flashcardsSvc.listVocabTopics(db),
-      // `db.raw`: khối is global since 0049, so the service takes a plain Db and there is no fence.
-      gradeLevelsSvc.list(db.raw),
-    ]);
+  const [
+    { garden, gardenStaff },
+    review,
+    tuiMu,
+    curricula,
+    units,
+    vocabTopics,
+    gradeLevels,
+    ladder,
+  ] = await Promise.all([
+    loadGarden(db, su),
+    loadReview(db, su),
+    loadTuiMu(db, su),
+    // Not wrapped in a degrade-to-null like the garden: the curriculum rail is part of the topics
+    // list, and the tables have shipped, so a failure here is a real fault worth seeing.
+    curriculaSvc.list(db),
+    curriculaSvc.unitsByTopic(db),
+    flashcardsSvc.listVocabTopics(db),
+    // `db.raw`: khối is global since 0049, so the service takes a plain Db and there is no fence.
+    gradeLevelsSvc.list(db.raw),
+    // The PvP ladder (F33/F34). This IS the cookie-authed web twin of GET /api/pvp/ladder.
+    monthLadder(db, currentIctMonth()),
+  ]);
   // Gates the AI generator in the UI — same flag the topic page passes down.
   return {
     topics,
@@ -179,6 +190,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     gradeLevels,
     /** Only a platform admin may write the shared library tier. */
     isPlatformAdmin: su.isPlatformAdmin,
+    /** This month's PvP ladder — points, wins, matches played. Staff play but never rank. */
+    ladder,
+    ladderMonth: currentIctMonth(),
   };
 }
 

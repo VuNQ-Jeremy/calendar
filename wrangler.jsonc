@@ -46,6 +46,8 @@
   //   TRANSLATE_DO — region-pinned Anthropic egress (workers/translate-proxy.ts)
   //   LIVE_HUB     — WebSocket fan-out for live cache invalidation
   //                  (workers/live-hub.ts, one instance per school: idFromName('t:<tenantId>'))
+  //   GAME_ROOM    — PvP vocab battle rooms (workers/game-room.ts, one instance per room:
+  //                  idFromName('t:<tenantId>:<code>')) — see F33/F34.
   "durable_objects": {
     "bindings": [
       { "name": "TRANSLATE_DO", "class_name": "TranslateProxy" },
@@ -55,6 +57,7 @@
       // `ratelimits` binding, which was bound and invoked but never refused a request — see
       // that file and docs/security.md.
       { "name": "RATE_LIMITER", "class_name": "RateLimiter" },
+      { "name": "GAME_ROOM", "class_name": "GameRoom" },
     ],
   },
   "migrations": [
@@ -62,6 +65,7 @@
     { "tag": "v2", "new_sqlite_classes": ["LiveHub"] },
     { "tag": "v3", "new_sqlite_classes": ["ZaloPoller"] },
     { "tag": "v4", "new_sqlite_classes": ["RateLimiter"] },
+    { "tag": "v5", "new_sqlite_classes": ["GameRoom"] },
   ],
   // Phase 6 push notifications — handled by `scheduled()` in workers/app.ts, which branches on
   // event.cron. Cron Triggers are available on the free Workers plan.
@@ -124,6 +128,7 @@
           // test worker holds the DEV bot's token. A poller running here would consume the same
           // update stream `scripts/zalo-poll.mjs` uses and steal messages from local development.
           { "name": "ZALO_POLLER", "class_name": "ZaloPoller" },
+          { "name": "GAME_ROOM", "class_name": "GameRoom" },
         ],
       },
       // The notification crons must never fire from the test worker.

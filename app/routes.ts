@@ -25,6 +25,11 @@ export default [
   route('materials/:id/view', 'routes/materials.$id.view.tsx'),
   route('attendance', 'routes/attendance.tsx'),
   route('checkin', 'routes/checkin.tsx'),
+  // PvP vocab battles (F33/F34): full-bleed screens outside the app shell, like checkin above —
+  // a classroom projector or a shared tablet has no business showing the sidebar.
+  route('game-rooms', 'routes/game-rooms.tsx'),
+  route('battle/:code', 'routes/battle.$code.tsx'),
+  route('faceoff/:slug', 'routes/faceoff.$slug.tsx'),
   route('event-materials', 'routes/event-materials.tsx'),
   route('class-materials', 'routes/class-materials.tsx'),
   route('event-previews', 'routes/event-previews.tsx'),
@@ -111,6 +116,10 @@ export default [
   route('api/flashcards/generate-topic', 'routes/api.flashcards.generate-topic.tsx'),
   route('api/flashcards/results', 'routes/api.flashcards.results.tsx'),
   route('api/flashcards/stats', 'routes/api.flashcards.stats.tsx'),
+  // PvP vocab battles (F33/F34). /api/* is bearer-only for the mobile app; game-rooms.tsx is
+  // the cookie-authed twin the web battle/face-off screens use.
+  route('api/game-rooms', 'routes/api.game-rooms.tsx'),
+  route('api/pvp/ladder', 'routes/api.pvp.ladder.tsx'),
   // Garden. `progress` is NOT under `assignments/`: that route's `:id?` would swallow the
   // literal segment, the same trap as `api/flashcards/generate-topic` above.
   route('api/garden/plant', 'routes/api.garden.plant.tsx'),

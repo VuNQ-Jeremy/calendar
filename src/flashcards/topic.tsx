@@ -21,6 +21,7 @@ import {
   ROUND_SIZES,
   DEFAULT_ROUND_SIZE,
 } from '../../shared/logic/flashcards';
+import { PVP_DEFAULT_SECONDS } from '../../shared/logic/pvp';
 import { ImageStrip, emptyChoice, loadChoice, resolvePickedImageKey } from './image-strip.js';
 import type { ImageChoice } from './image-strip.js';
 import { isDue } from '../../shared/logic/review';
@@ -119,6 +120,7 @@ export function FlashcardTopicScreen() {
   const [gardenPending, setGardenPending] = React.useState(false);
   const [tab, setTab] = React.useState('words');
   const [playing, setPlaying] = React.useState<GameMode | null>(null);
+  const [battleOpen, setBattleOpen] = React.useState(false);
   const isStaff = kind === 'staff';
 
   // Round size: an open assignment for this topic pins it (and hides the picker); otherwise the
@@ -385,6 +387,20 @@ export function FlashcardTopicScreen() {
         })}
       </div>
 
+      {words.length >= MIN_WORDS.quiz && (
+        <div className="m-row" style={{ marginBottom: 8 }}>
+          <FBtn
+            variant="soft"
+            iconLeft={<MIcon name="zap" size={18} />}
+            onClick={() => setBattleOpen(true)}
+          >
+            {t('pvp_battle_btn')}
+          </FBtn>
+        </div>
+      )}
+
+      {battleOpen && <BattleModal slug={slug ?? topic.id} onClose={() => setBattleOpen(false)} />}
+
       <DS.Tabs
         value={tab}
         onChange={setTab}
@@ -443,6 +459,78 @@ function GameOverlay({
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex' }}>{children}</div>
     </div>
+  );
+}
+
+/**
+ * The Battle launcher (F33/F34): pick a room battle (join-by-code, up to 40 players) or a
+ * tabletop face-off (same device, no networking). Room creation posts to /game-rooms and
+ * navigates to the resulting code's screen; face-off just navigates — it builds its own
+ * questions client-side.
+ */
+function BattleModal({ slug, onClose }: { slug: string; onClose: () => void }) {
+  const { t } = useLang();
+  const navigate = useNavigate();
+  const fetcher = useFetcher<{ code?: string }>();
+  const [mode, setMode] = React.useState<'room' | null>(null);
+  const [roundSize, setRoundSize] = React.useState<number>(DEFAULT_ROUND_SIZE);
+  const [seconds, setSeconds] = React.useState<number>(PVP_DEFAULT_SECONDS);
+
+  React.useEffect(() => {
+    if (fetcher.data?.code) navigate(`/battle/${fetcher.data.code}`);
+  }, [fetcher.data, navigate]);
+
+  const createRoom = () => {
+    const fd = new FormData();
+    fd.set('slug', slug);
+    fd.set('roundSize', String(roundSize));
+    fd.set('secondsPerQuestion', String(seconds));
+    fetcher.submit(fd, { method: 'post', action: '/game-rooms' });
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title={t('pvp_battle_btn')} width={480}>
+      {mode === null ? (
+        <div className="m-stack" style={{ gap: 10 }}>
+          <FBtn variant="soft" block={true} onClick={() => setMode('room')}>
+            {t('pvp_mode_room')}
+          </FBtn>
+          <FBtn variant="soft" block={true} onClick={() => navigate(`/faceoff/${slug}`)}>
+            {t('pvp_mode_faceoff')}
+          </FBtn>
+        </div>
+      ) : (
+        <div className="m-stack" style={{ gap: 14 }}>
+          <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)' }}>{t('fc_round_size')}:</span>
+            {ROUND_SIZES.map((n) => (
+              <FBtn
+                key={n}
+                variant={roundSize === n ? 'primary' : 'soft'}
+                onClick={() => setRoundSize(n)}
+              >
+                {n}
+              </FBtn>
+            ))}
+          </div>
+          <div className="m-row" style={{ gap: 8, alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-muted)' }}>{t('pvp_seconds_per_q')}:</span>
+            {[10, 20, 30].map((n) => (
+              <FBtn
+                key={n}
+                variant={seconds === n ? 'primary' : 'soft'}
+                onClick={() => setSeconds(n)}
+              >
+                {n}s
+              </FBtn>
+            ))}
+          </div>
+          <FBtn variant="primary" disabled={fetcher.state !== 'idle'} onClick={createRoom}>
+            {t('pvp_create_room')}
+          </FBtn>
+        </div>
+      )}
+    </Modal>
   );
 }
 

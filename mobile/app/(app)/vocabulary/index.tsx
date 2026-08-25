@@ -16,10 +16,11 @@ import {
   useTopics,
 } from '~/lib/use-topics';
 import { useTheme } from '~/theme';
-import { Body, Button, Card, Heading, IconButton, Mono, Muted, Screen, Title } from '~/ui';
+import { Body, Button, Card, Heading, IconButton, Input, Mono, Muted, Screen, Title } from '~/ui';
 import { OfflineBanner } from '~/ui/OfflineBanner';
 import type { ColorIdKey } from '@mochi/shared/tokens';
 import type { FlashcardTopicRow } from '~/lib/types';
+import type { LadderRow } from '@mochi/shared/logic/pvp';
 
 /**
  * Port of `src/flashcards/index.tsx` — the topic grid, one card per topic.
@@ -47,6 +48,20 @@ export default function FlashcardTopics() {
   const open = (topic: FlashcardTopicRow) =>
     router.push(`/vocabulary/${encodeURIComponent(topic.slug ?? topic.id)}`);
 
+  // PvP battles (F33/F34). Joining is client-side only: a well-formed code just pushes the
+  // battle route, which opens the socket and shows its own not-found state for a stale one.
+  const [joinCode, setJoinCode] = React.useState('');
+  const [ladder, setLadder] = React.useState<LadderRow[] | null>(null);
+  React.useEffect(() => {
+    api.pvp
+      .ladder()
+      .then(setLadder)
+      .catch(() => setLadder([]));
+  }, []);
+  const joinBattle = () => {
+    if (/^[A-Z0-9]{4}$/.test(joinCode)) router.push(`/play/battle/${joinCode}`);
+  };
+
   return (
     <Screen edges={{ top: true }}>
       <OfflineBanner pending={pending} />
@@ -65,6 +80,37 @@ export default function FlashcardTopics() {
           <Title>{t('fc_title')}</Title>
           <Muted>{t('fc_subtitle')}</Muted>
         </View>
+
+        <Card style={{ gap: th.spacing[3] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}>
+            <Body style={{ flex: 1, fontFamily: th.font.bodyBold }}>{t('pvp_join_battle')}</Body>
+            <Input
+              value={joinCode}
+              onChangeText={(v) => setJoinCode(v.toUpperCase().slice(0, 4))}
+              placeholder={t('pvp_code_placeholder')}
+              autoCapitalize="characters"
+              maxLength={4}
+              style={{ width: 100, textAlign: 'center' }}
+            />
+            <Button disabled={joinCode.length !== 4} onPress={joinBattle}>
+              {t('pvp_join')}
+            </Button>
+          </View>
+          {ladder && ladder.length > 0 ? (
+            <View style={{ gap: th.spacing[1] }}>
+              {ladder.slice(0, 5).map((row, i) => (
+                <View
+                  key={row.studentId}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: th.spacing[2] }}
+                >
+                  <Muted style={{ width: 20 }}>{i + 1}</Muted>
+                  <Body style={{ flex: 1 }}>{row.name}</Body>
+                  <Mono>{row.points}</Mono>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </Card>
 
         {/* The student's plant, where the web puts it: above the topics, because it is the reason
             to open one. Staff have no plant — they tend the garden from the web. */}

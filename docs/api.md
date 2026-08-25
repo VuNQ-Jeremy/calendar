@@ -218,6 +218,14 @@ mentioned (e.g. toggling `favorite` resetting `type`). See `shared/schemas.ts:3-
 | GET | `/api/garden/month/:id` | staff | One student's garden month for the report card — `?month=YYYY-MM` required. Never 404s: a student with no activity gets the zeroed tally. `/garden-month` is the cookie-authed twin the web report uses |
 | GET PUT | `/api/settings/garden` | admin | `GardenSettingsInput` — school-wide, and it re-times every plant |
 | GET | `/api/checkin/summary` | **user** | One student's túi mù month: `{ tally, tier }`. Students get their own; only staff may pass `?studentId=`. Replies `{ disabled: true }` — and nothing else — when an admin has switched the student view off, so check that flag first |
+| POST | `/api/game-rooms` | **user** | PvP vocab battles (F33/F34). `PvpRoomInput` (`slug`, `roundSize?`, `secondsPerQuestion?`) builds a quiz round and initializes a `GameRoom` Durable Object; replies `{ code }`. Both staff and students may host — a teacher-hosted classroom battle and a student duel are the same room. `/game-rooms` (cookie-authed) is the web twin. 404 `not_found` for a missing topic, 422 `too_few_words` under 4 words |
+| GET | `/api/pvp/ladder` | **user** | This month's PvP ladder — `?month=YYYY-MM`, defaults to the current ICT month. One row per student (staff play but never rank), sorted by points descending |
+
+`GET /game-ws?code=<code>` (bearer OR session cookie — the one exception to the bearer-only rule
+above, because the web battle screen has a cookie, not a token) upgrades to the room's WebSocket.
+Not JSON: the protocol is `{ type: 'start' }` / `{ type: 'answer', index, option }` out,
+`lobby`/`question`/`reveal`/`finish`/`room-error` in — see `shared/logic/pvp.ts`. Answers never
+ride the wire ahead of the reveal.
 
 ### Tuition
 
