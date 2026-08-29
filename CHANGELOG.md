@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0337 — 2026-08-29
+Fix /logo-library page padding: the screen used utility class names that do not exist in this codebase, so it rendered with no page padding at all.
+
 ## v0.0336 — 2026-08-29
 Add /logo-library, an admin-only catalogue of the mascot logo set with category chips, subject search and URL-driven paging, plus an R2-backed image route.
 

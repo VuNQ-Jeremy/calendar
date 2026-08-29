@@ -99,7 +99,7 @@ export function LogoLibraryScreen() {
   const notSeeded = libraryTotal === 0;
 
   return (
-    <div className="stack-lg">
+    <div className="content">
       <PageHeader
         title={t('nav_logo_library')}
         subtitle={
@@ -112,17 +112,17 @@ export function LogoLibraryScreen() {
       />
 
       {notSeeded ? (
-        <Card className="pad-lg muted">{t('logo_library_empty')}</Card>
+        <Card className="m-muted">{t('logo_library_empty')}</Card>
       ) : (
         <>
-          <div className="stack-sm">
+          <div className="m-stack">
             <Input
               value={draft}
               placeholder={t('logo_library_search')}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
               aria-label={t('logo_library_search')}
             />
-            <div className="row wrap gap-xs">
+            <div className="m-row" style={{ gap: 6, flexWrap: 'wrap' }}>
               <Tag
                 role="button"
                 tabIndex={0}
@@ -150,10 +150,10 @@ export function LogoLibraryScreen() {
           </div>
 
           {data.total === 0 ? (
-            <Card className="pad-lg muted">{t('logo_library_none')}</Card>
+            <Card className="m-muted">{t('logo_library_none')}</Card>
           ) : (
             <>
-              <p className="muted small">
+              <p className="m-muted">
                 {t('logo_library_showing', { from, to, total: data.total })}
               </p>
 
@@ -175,14 +175,14 @@ export function LogoLibraryScreen() {
                     </div>
                     <figcaption title={row.slug}>
                       <b>{row.subject}</b>
-                      <span className="muted"> · {row.slug}</span>
+                      <span className="m-muted"> · {row.slug}</span>
                     </figcaption>
                   </figure>
                 ))}
               </div>
 
               {lastPage > 1 && (
-                <div className="row gap-sm center">
+                <div className="m-row" style={{ gap: 8, justifyContent: 'center' }}>
                   <DS.Button
                     variant="ghost"
                     disabled={data.page <= 1}
@@ -190,7 +190,7 @@ export function LogoLibraryScreen() {
                   >
                     {t('logo_library_prev')}
                   </DS.Button>
-                  <span className="muted small">
+                  <span className="m-muted">
                     {data.page} / {lastPage}
                   </span>
                   <DS.Button
