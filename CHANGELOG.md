@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0336 — 2026-08-29
+Add /logo-library, an admin-only catalogue of the mascot logo set with category chips, subject search and URL-driven paging, plus an R2-backed image route.
+
 ## v0.0335 — 2026-08-29
 Add the ipaslogo mascot logo library: 3,448 512px webp logos classified into 12 level-1 buckets and 943 level-2 subjects, with a logo_library table, a deterministic hand-authored taxonomy, and import/upload scripts.
 

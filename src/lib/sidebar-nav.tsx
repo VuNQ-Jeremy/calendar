@@ -168,6 +168,16 @@ export const NAV: NavSection[] = [
         adminOnly: true,
         staffOnly: true,
       },
+      // The mascot logo catalogue. Admin rather than staff only for the same reason as
+      // garden-species above: it is a catalogue of shared reference art, not a class view.
+      {
+        id: 'logo-library',
+        path: '/logo-library',
+        tk: 'nav_logo_library',
+        icon: 'paw',
+        adminOnly: true,
+        staffOnly: true,
+      },
       // Diagnostics, not a report: it reads every student's rows at once, so admin only. The
       // route enforces it with requireAdmin — this flag only hides the link.
       { id: 'logs', path: '/logs', tk: 'nav_logs', icon: 'list', adminOnly: true, staffOnly: true },

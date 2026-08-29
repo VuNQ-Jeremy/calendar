@@ -1711,3 +1711,34 @@ export const giftRedemptions = sqliteTable(
     index('idx_gift_redemptions_tenant_month').on(t.tenantId, t.month),
   ],
 );
+
+/**
+ * Mascot logo catalogue (migration 0056). Deliberately has NO `tenant_id`: this is shared
+ * reference art, identical for every school and never edited from the app, so it is read with
+ * the raw handle rather than through TenantDb. See migrations/0056_logo_library.sql.
+ */
+export const logoLibrary = sqliteTable(
+  'logo_library',
+  {
+    /** The 16-hex content hash from the source filename; collision-free across the corpus. */
+    id: text('id').primaryKey(),
+    /** R2 key under FILES, e.g. 'logos/a746787047a05c50-quokka-2.webp'. */
+    storageKey: text('storage_key').notNull().unique(),
+    /** Full descriptive slug, e.g. 'deer-alert-round-eyes-left'. */
+    slug: text('slug').notNull(),
+    /** Level 1 — one of the 12 buckets in scripts/logo-taxonomy.mjs. */
+    category: text('category').notNull(),
+    /** Level 2 — the subject head noun, e.g. 'cat', 'whale', 'moka-pot'. */
+    subject: text('subject').notNull(),
+    /** Nth drawing of the same subject; 1 when the filename carries no trailing number. */
+    variant: integer('variant').notNull().default(1),
+    /** Flat backdrop the art was composed on — renders as a placeholder before the image loads. */
+    backgroundColor: text('background_color').notNull(),
+    sourceWidth: integer('source_width').notNull(),
+    sourceHeight: integer('source_height').notNull(),
+  },
+  (t) => [
+    index('idx_logo_library_category_subject').on(t.category, t.subject),
+    index('idx_logo_library_subject').on(t.subject),
+  ],
+);

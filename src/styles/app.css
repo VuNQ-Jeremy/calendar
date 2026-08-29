@@ -3837,3 +3837,38 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
 .vcmock--tint .vcmock__name {
   background: var(--cat-violet-ink);
 }
+
+/* ---- /logo-library: the mascot artwork catalogue -------------------------------------------
+   Namespaced `logo-` on purpose. This stylesheet is global and reaches standalone document
+   routes too, so a generic name like `.grid` or `.tile` here would quietly restyle them. */
+.logo-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+}
+.logo-tile {
+  margin: 0;
+  min-width: 0;
+}
+.logo-tile__art {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.1));
+}
+/* The tile keeps the artwork's own backdrop while the image loads, so the grid never flashes
+   empty boxes on a slow connection. */
+.logo-tile__art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.logo-tile figcaption {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

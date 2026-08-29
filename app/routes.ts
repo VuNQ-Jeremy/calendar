@@ -165,6 +165,9 @@ export default [
   // students render these from the mobile app, which has no cookie to send. Same capability-URL
   // trust model as zalo-media above.
   route('flashcard-images/:key', 'routes/flashcard-images.$key.tsx'),
+  // Mascot logos. NOT a capability URL like the two above — the catalogue page lists every key,
+  // so this one is gated on requireAdmin instead. See the route file.
+  route('logo-images/:key', 'routes/logo-images.$key.tsx'),
 
   // The vocabulary pages used to live at /flashcards. Keep the old URLs working — bookmarks,
   // and push notifications sent before the rename that still carry `url: '/flashcards'`.
@@ -194,6 +197,10 @@ export default [
     // ancestors active by prefix, so the sidebar would light up the class garden and expand the
     // wrong section. Admin-only, enforced in the route with requireAdmin.
     route('garden-species', 'routes/garden-species.tsx'),
+    // The mascot logo catalogue (logo_library). Admin-only, enforced in the route with
+    // requireAdmin. Filtering and paging live in the URL, so a filtered view is linkable and
+    // the loader never ships all 3,448 rows at once.
+    route('logo-library', 'routes/logo-library.tsx'),
     // Class id (and the album's month) in the PATH for the same cache reason as tuition below.
     route('garden/:classId?', 'routes/garden.tsx'),
     route('garden/:classId/album/:month', 'routes/garden.$classId.album.$month.tsx'),
