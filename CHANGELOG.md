@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0338 — 2026-08-30
+feat(landing): alternate claymorphism marketing site (v2) — landing, features, pricing, guides, about at /v2
+
 ## v0.0337 — 2026-08-29
 Fix /logo-library page padding: the screen used utility class names that do not exist in this codebase, so it rendered with no page padding at all.
 
