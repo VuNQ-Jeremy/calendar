@@ -1,7 +1,9 @@
+import { MIcon } from '../../src/icons.jsx';
 import { useLang } from '../../src/lib/i18n.jsx';
+import { AppLink, useLandingLinks } from './landing.jsx';
 
 export function meta() {
-  const description = 'Short Vietnamese videos, recorded from the real Mochi app.';
+  const description = 'Video hướng dẫn ngắn bằng tiếng Việt, quay từ app thật.';
   return [
     { title: 'Mochi — Hướng dẫn' },
     { name: 'description', content: description },
@@ -12,16 +14,17 @@ export function meta() {
 }
 
 const GUIDES = [
-  { thumb: '📅', t: 'landing_gd1' },
-  { thumb: '✅', t: 'landing_gd2' },
-  { thumb: '🧾', t: 'landing_gd3' },
-  { thumb: '📝', t: 'landing_gd4' },
-  { thumb: '🌱', t: 'landing_gd5' },
-  { thumb: '💬', t: 'landing_gd6' },
-];
+  { icon: 'calendar', tone: 'brand', t: 'landing_gd1', b: 'landing_gd1_b' },
+  { icon: 'check', tone: 'sage', t: 'landing_gd2', b: 'landing_gd2_b' },
+  { icon: 'banknote', tone: 'violet', t: 'landing_gd3', b: 'landing_gd3_b' },
+  { icon: 'clipboard', tone: 'rose', t: 'landing_gd4', b: 'landing_gd4_b' },
+  { icon: 'sprout', tone: 'sky', t: 'landing_gd5', b: 'landing_gd5_b' },
+  { icon: 'message', tone: 'cocoa', t: 'landing_gd6', b: 'landing_gd6_b' },
+] as const;
 
 export default function Guides() {
   const { t } = useLang();
+  const { signupHref } = useLandingLinks();
   return (
     <section className="landing-section">
       <div className="landing-wrap">
@@ -32,13 +35,23 @@ export default function Guides() {
         <div className="landing-guides">
           {GUIDES.map((g) => (
             <div key={g.t} className="landing-guide">
-              <span className="landing-guide__thumb" aria-hidden="true">
-                {g.thumb}
-              </span>
-              <h2>{t(g.t)}</h2>
-              <span className="landing-guide__soon">{t('landing_gd_soon')}</span>
+              <div className={`landing-feature__icon landing-i--${g.tone}`}>
+                <MIcon name={g.icon} size={22} />
+              </div>
+              <div className="landing-guide__body">
+                <h2>{t(g.t)}</h2>
+                <p>{t(g.b)}</p>
+                <span className="landing-guide__soon">{t('landing_gd_soon')}</span>
+              </div>
             </div>
           ))}
+        </div>
+        <div className="landing-panel-cta">
+          <h2>{t('landing_gd_cta_h')}</h2>
+          <p>{t('landing_gd_cta_p')}</p>
+          <AppLink className="landing-btn landing-btn--brand" href={signupHref}>
+            {t('landing_signup')}
+          </AppLink>
         </div>
       </div>
     </section>

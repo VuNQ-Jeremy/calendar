@@ -469,23 +469,32 @@
   color: var(--l-ink-soft);
   font-size: 0.95rem;
 }
+/* Each tone also sets `color`, so an SVG icon (stroke: currentColor) inside the
+   tinted box reads in its accent — darker than the chip-border accents because
+   a 2px stroke on a 10% tint needs more contrast than a filled bar. */
 .landing-i--brand {
   background: #fdeedd;
+  color: var(--l-brand-deep);
 }
 .landing-i--violet {
   background: #efe8fc;
+  color: #7a58cf;
 }
 .landing-i--sage {
   background: #e7f4e9;
+  color: #4a9257;
 }
 .landing-i--sky {
   background: #e5f2fa;
+  color: #35789f;
 }
 .landing-i--rose {
   background: #fbe9e4;
+  color: #c8543c;
 }
 .landing-i--cocoa {
   background: #f3e7dc;
+  color: var(--l-cocoa);
 }
 
 /* ============================ steps ============================ */
@@ -668,8 +677,12 @@
   }
   .landing-features,
   .landing-steps,
-  .landing-roles {
+  .landing-roles,
+  .landing-facts {
     grid-template-columns: 1fr 1fr;
+  }
+  .landing-values {
+    grid-template-columns: 1fr;
   }
   .landing-nav__links {
     display: none;
@@ -778,7 +791,8 @@
   }
   .landing-features,
   .landing-steps,
-  .landing-roles {
+  .landing-roles,
+  .landing-facts {
     grid-template-columns: 1fr;
   }
   .landing-steps {
@@ -918,8 +932,10 @@
 /* ============================ guides ============================ */
 .landing-guides {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 18px;
+  max-width: 860px;
+  margin: 0 auto;
 }
 .landing-guide {
   background: var(--l-milk);
@@ -928,17 +944,27 @@
   padding: 24px 22px;
   box-shadow: var(--l-shadow-soft);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
 }
-.landing-guide__thumb {
-  font-size: 1.6rem;
+.landing-guide .landing-feature__icon {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.landing-guide__body {
+  flex: 1;
 }
 .landing-guide h2 {
   font-size: 1.02rem;
-  flex: 1;
+}
+.landing .landing-guide__body p {
+  color: var(--l-ink-soft);
+  font-size: 0.9rem;
+  margin-top: 4px;
 }
 .landing-guide__soon {
+  display: inline-block;
+  margin-top: 10px;
   font-family: var(--l-mono);
   font-size: 0.66rem;
   letter-spacing: 0.08em;
@@ -948,6 +974,127 @@
   border-radius: 999px;
   padding: 4px 10px;
   white-space: nowrap;
+}
+
+/* ============================ facts band (honest proof) ============================ */
+.landing-facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+.landing-fact {
+  background: #fff;
+  border: 1px solid var(--l-sand);
+  border-radius: var(--l-radius);
+  padding: 22px 20px;
+  box-shadow: var(--l-shadow-soft);
+}
+.landing-fact svg {
+  color: var(--l-brand-deep);
+}
+.landing-fact h3 {
+  font-size: 1rem;
+  margin: 10px 0 6px;
+}
+.landing-fact p {
+  color: var(--l-ink-soft);
+  font-size: 0.9rem;
+}
+
+/* ============================ CTA footnote ============================ */
+.landing-cta-card .landing-cta-note {
+  display: block;
+  margin: -16px auto 24px;
+  font-size: 0.86rem;
+  color: #ffe3c4;
+}
+
+/* ============================ module tag (features page) ============================ */
+.landing-ftrow__tag {
+  display: inline-block;
+  font-family: var(--l-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--l-sand-soft);
+  color: var(--l-cocoa);
+  border-radius: 999px;
+  padding: 4px 12px;
+  margin-top: 14px;
+}
+.landing-ftrow .landing-ftrow__tag + h2 {
+  margin-top: 10px;
+}
+
+/* ============================ bottom cross-CTA panel (features, guides) ============================ */
+.landing-panel-cta {
+  margin-top: 18px;
+  background: var(--l-milk);
+  border: 1px solid var(--l-sand);
+  border-radius: var(--l-radius);
+  box-shadow: var(--l-shadow-soft);
+  padding: 32px 26px;
+  text-align: center;
+}
+.landing-panel-cta h2 {
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+}
+.landing .landing-panel-cta > p {
+  color: var(--l-ink-soft);
+  margin-bottom: 20px;
+}
+
+/* ============================ pricing FAQ ============================ */
+.landing-faq {
+  max-width: 640px;
+  margin: 40px auto 0;
+  display: grid;
+  gap: 14px;
+}
+.landing-faq h2 {
+  font-size: 1.3rem;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.landing-faq__row {
+  background: #fff;
+  border: 1px solid var(--l-sand);
+  border-radius: var(--l-radius);
+  box-shadow: var(--l-shadow-soft);
+  padding: 20px 24px;
+}
+.landing-faq__row h3 {
+  font-size: 1rem;
+  margin-bottom: 6px;
+}
+.landing .landing-faq__row p {
+  color: var(--l-ink-soft);
+  font-size: 0.94rem;
+}
+
+/* ============================ about values ============================ */
+.landing-values {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.landing-value {
+  background: var(--l-milk);
+  border: 1px solid var(--l-sand);
+  border-radius: var(--l-radius);
+  padding: 24px 22px;
+  box-shadow: var(--l-shadow-soft);
+}
+.landing-value h3 {
+  font-size: 1.05rem;
+  margin: 12px 0 8px;
+}
+.landing .landing-value p {
+  color: var(--l-ink-soft);
+  font-size: 0.94rem;
 }
 
 /* ============================ mobile menu ============================ */

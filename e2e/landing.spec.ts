@@ -28,9 +28,14 @@ test.describe('landing page', () => {
     await page.goto('/');
     const h1 = page.locator('.landing-hero h1');
     // First visit defaults to Vietnamese (a post-mount effect, so wait for it).
-    await expect(h1).toContainText('ngôi trường');
+    await expect(h1).toContainText('cuốn lịch');
     await page.locator('.landing-lang-btn').click();
-    await expect(h1).toContainText('whole school');
+    await expect(h1).toContainText('playful calendar');
+  });
+
+  test('the facts band renders four verifiable-fact cards', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.landing-facts .landing-fact')).toHaveCount(4);
   });
 
   test('no horizontal overflow at phone width', async ({ page }) => {
@@ -94,5 +99,15 @@ test.describe('marketing pages', () => {
   test('pricing shows the signup CTA', async ({ page }) => {
     await page.goto('/pricing');
     await expect(page.locator('.landing-price-card a[href*="/signup"]')).toBeVisible();
+  });
+
+  test('pricing shows the FAQ', async ({ page }) => {
+    await page.goto('/pricing');
+    await expect(page.locator('.landing-faq .landing-faq__row')).toHaveCount(3);
+  });
+
+  test('about shows the values cards', async ({ page }) => {
+    await page.goto('/about');
+    await expect(page.locator('.landing-values .landing-value')).toHaveCount(3);
   });
 });

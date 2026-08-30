@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0339 — 2026-08-30
+feat(landing): merge v2's structure and fresh copy into the main marketing site (facts band, pricing FAQ, about values, guide blurbs, SVG icons) in the original warm aesthetic; retire /v2
+
 ## v0.0338 — 2026-08-30
 feat(landing): alternate claymorphism marketing site (v2) — landing, features, pricing, guides, about at /v2
 

@@ -2,8 +2,7 @@ import { useLang } from '../../src/lib/i18n.jsx';
 import { AppLink, useLandingLinks } from './landing.jsx';
 
 export function meta() {
-  const description =
-    'Mochi đang trong giai đoạn beta và miễn phí hoàn toàn — đủ mọi tính năng, không giới hạn học sinh, không cần thẻ.';
+  const description = 'Miễn phí trong thời gian beta. Đủ mọi phân hệ cho cả trường.';
   return [
     { title: 'Mochi — Bảng giá' },
     { name: 'description', content: description },
@@ -19,6 +18,13 @@ const INCLUDED = [
   'landing_pr_i3',
   'landing_pr_i4',
   'landing_pr_i5',
+  'landing_pr_i6',
+];
+
+const FAQ = [
+  { q: 'landing_pr_faq1_q', a: 'landing_pr_faq1_a' },
+  { q: 'landing_pr_faq2_q', a: 'landing_pr_faq2_a' },
+  { q: 'landing_pr_faq3_q', a: 'landing_pr_faq3_a' },
 ];
 
 export default function Pricing() {
@@ -29,6 +35,7 @@ export default function Pricing() {
       <div className="landing-wrap">
         <div className="landing-page-head">
           <h1>{t('landing_pr_h1')}</h1>
+          <p>{t('landing_pr_sub')}</p>
         </div>
         <div className="landing-price-card">
           <h2>{t('landing_pr_h2')}</h2>
@@ -44,6 +51,16 @@ export default function Pricing() {
             {t('landing_signup')}
           </AppLink>
           <p className="landing-price-note">{t('landing_pr_note')}</p>
+        </div>
+
+        <div className="landing-faq">
+          <h2>{t('landing_pr_faq_h')}</h2>
+          {FAQ.map((row) => (
+            <div key={row.q} className="landing-faq__row">
+              <h3>{t(row.q)}</h3>
+              <p>{t(row.a)}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

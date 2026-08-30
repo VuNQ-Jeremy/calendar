@@ -12,15 +12,6 @@ export default [
     route('about', 'routes/landing.about.tsx'),
     route('guides', 'routes/landing.guides.tsx'),
   ]),
-  // Alternate marketing site preview ("v2", claymorphism). Same outside-_app
-  // reasoning as the block above; nothing links here yet — typed-URL only.
-  route('v2', 'routes/landing-v2.tsx', [
-    index('routes/landing-v2.home.tsx'),
-    route('features', 'routes/landing-v2.features.tsx'),
-    route('pricing', 'routes/landing-v2.pricing.tsx'),
-    route('about', 'routes/landing-v2.about.tsx'),
-    route('guides', 'routes/landing-v2.guides.tsx'),
-  ]),
   route('login', 'routes/login.tsx'),
   route('verify-email', 'routes/verify-email.tsx'),
   // Sign in with Google (web only). Both outside `_app`, like /login — no session yet on the

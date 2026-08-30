@@ -34,11 +34,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export function meta() {
   const description =
-    'Mochi gom lịch học, điểm danh, học phí, phiếu nhận xét và kho từ vựng của trường bạn vào một nơi — cho giáo viên, học sinh và phụ huynh.';
+    'Mochi gom lịch học, điểm danh, học phí, sổ liên lạc và vườn từ vựng của trường bạn vào một nơi — cho giáo viên, học sinh và phụ huynh.';
   return [
-    { title: 'Mochi — School OS' },
+    { title: 'Mochi — Cả trường trong một cuốn lịch' },
     { name: 'description', content: description },
-    { property: 'og:title', content: 'Mochi — School OS' },
+    { property: 'og:title', content: 'Mochi — Cả trường trong một cuốn lịch' },
     { property: 'og:description', content: description },
     { property: 'og:type', content: 'website' },
   ];
@@ -78,20 +78,31 @@ const WEEK: { day: number; chips: { name: string; time: string; tone: string }[]
   },
 ];
 
+// SVG icons, not emoji — an emoji renders as whatever the visitor's OS ships,
+// while MIcon strokes take the card's accent tone.
 const FEATURES = [
-  { t: 'landing_f1_t', b: 'landing_f1_b', tone: 'brand', emoji: '📅' },
-  { t: 'landing_f2_t', b: 'landing_f2_b', tone: 'sage', emoji: '🧾' },
-  { t: 'landing_f3_t', b: 'landing_f3_b', tone: 'violet', emoji: '📝' },
-  { t: 'landing_f4_t', b: 'landing_f4_b', tone: 'rose', emoji: '🌱' },
-  { t: 'landing_f5_t', b: 'landing_f5_b', tone: 'sky', emoji: '💬' },
-  { t: 'landing_f6_t', b: 'landing_f6_b', tone: 'cocoa', emoji: '📱' },
-];
+  { t: 'landing_f1_t', b: 'landing_f1_b', tone: 'brand', icon: 'calendar' },
+  { t: 'landing_f2_t', b: 'landing_f2_b', tone: 'sage', icon: 'banknote' },
+  { t: 'landing_f3_t', b: 'landing_f3_b', tone: 'violet', icon: 'clipboard' },
+  { t: 'landing_f4_t', b: 'landing_f4_b', tone: 'rose', icon: 'sprout' },
+  { t: 'landing_f5_t', b: 'landing_f5_b', tone: 'sky', icon: 'message' },
+  { t: 'landing_f6_t', b: 'landing_f6_b', tone: 'cocoa', icon: 'grad' },
+] as const;
 
 const STEPS = [
   { t: 'landing_s1_t', b: 'landing_s1_b' },
   { t: 'landing_s2_t', b: 'landing_s2_b' },
   { t: 'landing_s3_t', b: 'landing_s3_b' },
 ];
+
+// Honest social proof: verifiable product facts, not testimonials or invented
+// numbers — there are none of either to show yet.
+const FACTS = [
+  { t: 'landing_fact1_t', b: 'landing_fact1_b', icon: 'message' },
+  { t: 'landing_fact2_t', b: 'landing_fact2_b', icon: 'banknote' },
+  { t: 'landing_fact3_t', b: 'landing_fact3_b', icon: 'gift' },
+  { t: 'landing_fact4_t', b: 'landing_fact4_b', icon: 'zap' },
+] as const;
 
 const ROLES = [
   {
@@ -144,12 +155,10 @@ export default function Landing() {
                 {t('landing_signup')}
               </AppLink>
               <AppLink className="landing-btn landing-btn--ghost" href={loginHref}>
-                {t('landing_login')}
+                {t('landing_hero_cta2')}
               </AppLink>
             </div>
-            <p className="landing-hero__note">
-              {t('landing_note_1')} <code>XXX-XXX</code> {t('landing_note_2')}
-            </p>
+            <p className="landing-hero__note">{t('landing_hero_note')}</p>
           </div>
 
           <div className="landing-stage" aria-hidden="true">
@@ -209,7 +218,9 @@ export default function Landing() {
           <div className="landing-features">
             {FEATURES.map((f) => (
               <div key={f.t} className="landing-feature">
-                <div className={`landing-feature__icon landing-i--${f.tone}`}>{f.emoji}</div>
+                <div className={`landing-feature__icon landing-i--${f.tone}`}>
+                  <MIcon name={f.icon} size={24} />
+                </div>
                 <h3>{t(f.t)}</h3>
                 <p>{t(f.b)}</p>
               </div>
@@ -257,6 +268,24 @@ export default function Landing() {
         </div>
       </section>
 
+      <section id="facts" className="landing-section">
+        <div className="landing-wrap">
+          <div className="landing-sec-head">
+            <h2>{t('landing_facts_h2')}</h2>
+            <p>{t('landing_facts_p')}</p>
+          </div>
+          <div className="landing-facts">
+            {FACTS.map((f) => (
+              <div key={f.t} className="landing-fact">
+                <MIcon name={f.icon} size={22} />
+                <h3>{t(f.t)}</h3>
+                <p>{t(f.b)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="landing-section">
         <div className="landing-wrap">
           <div className="landing-cta-card">
@@ -268,6 +297,7 @@ export default function Landing() {
             </span>
             <h2>{t('landing_cta_h2')}</h2>
             <p>{t('landing_cta_sub')}</p>
+            <span className="landing-cta-note">{t('landing_cta_note')}</span>
             <AppLink className="landing-btn landing-btn--light" href={signupHref}>
               {t('landing_signup')}
             </AppLink>
