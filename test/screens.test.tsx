@@ -257,6 +257,7 @@ describe('FeedbackScreen board', () => {
     row('f2', 'Looked at it', 'reviewed'),
     row('f3', 'Shipped it', 'done'),
     row('f4', 'Second idea', 'new'),
+    row('f5', 'Parked for later', 'backlog'),
   ];
 
   /** Board + a real `/feedback` action, so the fetcher submit has somewhere to land. */
@@ -286,8 +287,22 @@ describe('FeedbackScreen board', () => {
     expect(column('New')).toContainElement(screen.getByText('Second idea'));
     expect(column('Reviewed')).toContainElement(screen.getByText('Looked at it'));
     expect(column('Resolved')).toContainElement(screen.getByText('Shipped it'));
+    expect(column('Backlog')).toContainElement(screen.getByText('Parked for later'));
     expect(column('New').querySelector('.m-board__count')).toHaveTextContent('2');
     expect(column('Resolved').querySelector('.m-board__count')).toHaveTextContent('1');
+    expect(column('Backlog').querySelector('.m-board__count')).toHaveTextContent('1');
+  });
+
+  it('card actions are copy and delete only — status moves by drag or the editor', async () => {
+    const Stub = boardStub([]);
+    await act(async () => {
+      render(withLang(React.createElement(Stub, { initialEntries: ['/feedback'] })));
+    });
+    const card = screen.getByText('Fresh idea').closest('.kcard') as HTMLElement;
+    const labels = Array.from(card.querySelectorAll('.lrow__actions button')).map((b) =>
+      b.getAttribute('aria-label'),
+    );
+    expect(labels).toEqual(['Copy feedback id', 'Delete']);
   });
 
   it('dropping a card on another column submits that status', async () => {

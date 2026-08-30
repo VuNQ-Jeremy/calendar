@@ -15,7 +15,7 @@ test.describe('CRUD: feedback and profile', () => {
     await signInStaff(page);
   });
 
-  test('feedback: create, resolve, edit, delete', async ({ page }) => {
+  test('feedback: create, triage to backlog, resolve, edit, delete', async ({ page }) => {
     const k = ui(page);
     const msg = `E2E feedback ${Date.now()}`;
     await page.goto('/feedback');
@@ -46,23 +46,35 @@ test.describe('CRUD: feedback and profile', () => {
       await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
     ).toBe(true);
 
-    // Status toggle moves the card to the Resolved column.
-    post = k.posted('/feedback');
-    await card(msg).getByRole('button', { name: 'Mark resolved' }).click();
-    await post;
-    await expect(column('Resolved').locator('.kcard', { hasText: msg })).toBeVisible();
+    // All four triage columns render, Backlog included.
+    for (const title of ['New', 'Reviewed', 'Resolved', 'Backlog']) {
+      await expect(column(title)).toBeVisible();
+    }
 
-    // The whole card opens the editor — there is no edit button any more. The action buttons
-    // beside it must NOT open it, which is why each stops its own click.
+    // The card carries exactly two action buttons — copy and delete. Status moves by drag or
+    // through the editor's Status select; there is no resolve button any more.
     await expect(card(msg).getByRole('button', { name: 'Copy feedback id' })).toBeVisible();
-    // Aim at the message rather than the card's centre: the centre can land on the meta row,
-    // where the issue link would swallow the click (and open a tab) on a report that has one.
+    await expect(card(msg).getByRole('button', { name: 'Mark resolved' })).toHaveCount(0);
+    expect(await card(msg).locator('.lrow__actions button').count()).toBe(2);
+
+    // The whole card opens the editor — there is no edit button. Aim at the message rather
+    // than the card's centre: the centre can land on the meta row, where the issue link would
+    // swallow the click (and open a tab) on a report that has one. Park it in the backlog.
     await card(msg).locator('.kcard__msg').click();
-    await k.textIn('Your feedback').fill(`${msg} v2`);
+    await k.pickSel('Status', 'Backlog');
     post = k.posted('/feedback');
     await k.submit().click(); // "Save"
     await post;
-    await expect(card(`${msg} v2`)).toBeVisible();
+    await expect(column('Backlog').locator('.kcard', { hasText: msg })).toBeVisible();
+
+    // Pull it back out of the backlog to Resolved, editing the message in the same save.
+    await card(msg).locator('.kcard__msg').click();
+    await k.textIn('Your feedback').fill(`${msg} v2`);
+    await k.pickSel('Status', 'Resolved');
+    post = k.posted('/feedback');
+    await k.submit().click(); // "Save"
+    await post;
+    await expect(column('Resolved').locator('.kcard', { hasText: `${msg} v2` })).toBeVisible();
 
     // Feedback delete has NO confirmation dialog.
     post = k.posted('/feedback');

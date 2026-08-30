@@ -891,6 +891,7 @@ const en_strings = {
   fb_tab_new: 'New · {n}',
   fb_tab_reviewed: 'Reviewed · {n}',
   fb_tab_done: 'Resolved · {n}',
+  fb_tab_backlog: 'Backlog · {n}',
   fb_changelog: 'Changelog',
   fb_changelog_sub: 'What shipped in each release, newest first',
   fb_cl_hide: 'Hide this entry',
@@ -921,6 +922,7 @@ const en_strings = {
   st_new: 'New',
   st_reviewed: 'Reviewed',
   st_done: 'Resolved',
+  st_backlog: 'Backlog',
   auth_tagline:
     'A calm home for classes, calendars, and coursework — for your whole school family.',
   chip_classes: 'Classes',
@@ -2928,6 +2930,7 @@ export const STRINGS = {
     fb_tab_new: 'Mới · {n}',
     fb_tab_reviewed: 'Đã xem · {n}',
     fb_tab_done: 'Đã xử lý · {n}',
+    fb_tab_backlog: 'Để sau · {n}',
     fb_changelog: 'Nhật ký thay đổi',
     fb_changelog_sub: 'Những gì đã thay đổi ở mỗi bản phát hành, mới nhất trước',
     fb_cl_hide: 'Ẩn mục này',
@@ -2958,6 +2961,7 @@ export const STRINGS = {
     st_new: 'Mới',
     st_reviewed: 'Đã xem',
     st_done: 'Đã xử lý',
+    st_backlog: 'Để sau',
     auth_tagline:
       'Một không gian gọn gàng cho lớp học, lịch và bài tập — cho cả gia đình trường bạn.',
     chip_classes: 'Lớp học',

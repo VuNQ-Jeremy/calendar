@@ -1,4 +1,4 @@
-import { eq, ne, desc, max } from 'drizzle-orm';
+import { eq, inArray, desc, max } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import type { TenantDb } from '../db/index';
 import type { FeedbackInput } from '../../shared/schemas';
@@ -137,15 +137,17 @@ export async function remove(db: TenantDb, id: string): Promise<void> {
 }
 
 /**
- * Feedback still awaiting action — anything not resolved, i.e. 'new' or 'reviewed'.
+ * Feedback still awaiting action — 'new' or 'reviewed'.
  *
- * Counting `!== 'done'` rather than `=== 'new'` is what makes the sidebar badge agree with
- * the resolve button: marking a reviewed item resolved has to move the number too.
+ * Counting both rather than `=== 'new'` is what makes the sidebar badge agree with the board:
+ * resolving a reviewed item has to move the number too. 'backlog' is deliberately OUT — it means
+ * "seen, parked on purpose", and a badge that keeps nagging about parked items would train
+ * everyone to ignore it.
  */
 export async function countUnresolved(db: TenantDb): Promise<number> {
   const rows = await db.raw
     .select({ id: feedback.id })
     .from(feedback)
-    .where(db.own(feedback, ne(feedback.status, 'done')));
+    .where(db.own(feedback, inArray(feedback.status, ['new', 'reviewed'])));
   return rows.length;
 }

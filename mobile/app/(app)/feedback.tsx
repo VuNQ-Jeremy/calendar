@@ -42,7 +42,9 @@ import {
  */
 
 const CATEGORIES = ['idea', 'bug', 'praise', 'other'] as const;
-const STATUSES = ['new', 'reviewed', 'done'] as const;
+// 'done' is the stored value for Resolved — renaming it would strand rows written by older
+// builds. 'backlog' means "seen, deliberately deferred", so it sits outside the resolve flow.
+const STATUSES = ['new', 'reviewed', 'done', 'backlog'] as const;
 
 const CAT_COLOR: Record<string, string> = {
   idea: 'blue',
@@ -50,7 +52,12 @@ const CAT_COLOR: Record<string, string> = {
   praise: 'green',
   other: 'cocoa',
 };
-const STATUS_BADGE: Record<string, string> = { new: 'brand', reviewed: 'blue', done: 'success' };
+const STATUS_BADGE: Record<string, string> = {
+  new: 'brand',
+  reviewed: 'blue',
+  done: 'success',
+  backlog: 'violet',
+};
 
 export default function Feedback() {
   const th = useTheme();
@@ -66,6 +73,7 @@ export default function Feedback() {
   const [message, setMessage] = React.useState('');
   const [category, setCategory] = React.useState<string>('idea');
   const [author, setAuthor] = React.useState(user?.name ?? '');
+  const [status, setStatusField] = React.useState<string>('new');
   const [editing, setEditing] = React.useState<FeedbackRow | null>(null);
 
   const rows = list ?? [];
@@ -78,6 +86,7 @@ export default function Feedback() {
     setMessage('');
     setCategory('idea');
     setAuthor(user?.name ?? '');
+    setStatusField('new');
   };
 
   const submit = useMutation({
@@ -88,7 +97,10 @@ export default function Feedback() {
         author: author.trim() || null,
       };
       return editing
-        ? api.feedback.update(editing.id, base)
+        ? api.feedback.update(editing.id, {
+            ...base,
+            status: status as (typeof STATUSES)[number],
+          })
         : api.feedback.create({
             ...base,
             // No createdAt: the server stamps it, with a time of day the inbox can show.
@@ -154,6 +166,16 @@ export default function Feedback() {
               onChangeText={setAuthor}
               placeholder={t('auth_your_name')}
             />
+            {/* Status is triage, not something a reporter picks — shown only when editing,
+                exactly like the web modal. */}
+            {editing ? (
+              <ChipSelect
+                label={t('fb_status')}
+                value={status}
+                onChange={setStatusField}
+                options={STATUSES.map((s) => ({ value: s, label: t(`st_${s}`) }))}
+              />
+            ) : null}
 
             {/* Shown, not hidden: the reporter should be able to read out the build they are on. */}
             <View style={{ gap: th.spacing[1] }}>
@@ -193,6 +215,7 @@ export default function Feedback() {
             { id: 'new', label: t('fb_tab_new', { n: count('new') }) },
             { id: 'reviewed', label: t('fb_tab_reviewed', { n: count('reviewed') }) },
             { id: 'done', label: t('fb_tab_done', { n: count('done') }) },
+            { id: 'backlog', label: t('fb_tab_backlog', { n: count('backlog') }) },
           ]}
         />
 
@@ -248,6 +271,7 @@ export default function Feedback() {
                   setMessage(f.message);
                   setCategory(f.category);
                   setAuthor(f.author ?? '');
+                  setStatusField(f.status);
                   setOpen(true);
                 }}
               >

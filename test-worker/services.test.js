@@ -159,6 +159,24 @@ describe('feedback service', () => {
     await feedbackSvc.update(db(), third.id, { status: 'done' });
     expect(await feedbackSvc.countUnresolved(db())).toBe(before + 2);
   });
+
+  // Backlog means "seen, parked on purpose" — the badge must stop nagging about it.
+  it('does not count backlog as unresolved', async () => {
+    const before = await feedbackSvc.countUnresolved(db());
+    const row = await feedbackSvc.create(db(), {
+      message: 'later',
+      category: 'idea',
+      status: 'new',
+    });
+    expect(await feedbackSvc.countUnresolved(db())).toBe(before + 1);
+
+    await feedbackSvc.update(db(), row.id, { status: 'backlog' });
+    expect(await feedbackSvc.countUnresolved(db())).toBe(before);
+
+    // …and pulling it back out of the backlog counts again.
+    await feedbackSvc.update(db(), row.id, { status: 'reviewed' });
+    expect(await feedbackSvc.countUnresolved(db())).toBe(before + 1);
+  });
 });
 
 // ---- Auth integration tests ----

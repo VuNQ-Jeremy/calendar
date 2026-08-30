@@ -28,10 +28,16 @@ const STATUS: Record<string, { tk: string; color: string }> = {
   new: { tk: 'st_new', color: 'orange' },
   reviewed: { tk: 'st_reviewed', color: 'blue' },
   done: { tk: 'st_done', color: 'green' },
+  backlog: { tk: 'st_backlog', color: 'violet' },
 };
 
-/** Board columns, left to right — the order a report travels through. */
-const COLUMNS = ['new', 'reviewed', 'done'];
+/**
+ * Board columns, left to right — the order a report travels through. Backlog sits after
+ * Resolved rather than in the flow: it is the parking lot ("seen, deliberately deferred"),
+ * not a stage every report passes. Note the stored value for Resolved is 'done' — renaming
+ * it would strand rows written by mobile builds that predate the OTA.
+ */
+const COLUMNS = ['new', 'reviewed', 'done', 'backlog'];
 
 /** Where a report's issue lives — the repo `server/services/github.ts` opens issues on. */
 const GH_REPO_URL = 'https://github.com/VuNQ-Jeremy/calendar';
@@ -396,8 +402,6 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
     fetcher.submit(fd, { action: '/feedback', method: 'post' });
   };
 
-  const toggleDone = (f: FeedbackRow) => setStatus(f.id, statusOf(f) === 'done' ? 'new' : 'done');
-
   const dropOn = (col: string) => {
     const id = dragId;
     setDragId(null);
@@ -471,7 +475,6 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                 <div className="m-board__body">
                   {cards.map((f) => {
                     const cat = FEEDBACK_CATEGORIES[f.category] ?? FEEDBACK_CATEGORIES.other;
-                    const done = statusOf(f) === 'done';
                     return (
                       <div
                         key={f.id}
@@ -556,8 +559,9 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                           {/* Each button stops its own click. NOT the container: a
                               stopPropagation on `.lrow__actions` makes a dead zone over the
                               card's own click target, which is a bug this codebase has had
-                              before. Editing lives on the card itself, so there is no edit
-                              button here — only the three things a click on the card can't do. */}
+                              before. Editing lives on the card itself and status changes on
+                              drag (or the editor's Status select), so only copy and delete
+                              live here — the two things a click on the card can't do. */}
                           <div className="lrow__actions">
                             <FIB
                               label={copied === f.id ? t('copied') : t('fb_copy_id')}
@@ -568,16 +572,6 @@ export function FeedbackScreen({ user }: FeedbackScreenProps) {
                               }}
                             >
                               <MIcon name={copied === f.id ? 'check' : 'copy'} size={16} />
-                            </FIB>
-                            <FIB
-                              label={done ? t('fb_reopen') : t('fb_resolve')}
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleDone(f);
-                              }}
-                            >
-                              <MIcon name="check" size={16} />
                             </FIB>
                             <FIB
                               label={t('delete')}

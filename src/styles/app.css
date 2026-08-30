@@ -2158,18 +2158,24 @@ body {
    targets) out of view. Requires `.content--fill` on the page. */
 .m-board {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
   align-items: stretch;
   flex: 1;
   min-height: 0;
 }
+@media (max-width: 1280px) {
+  .m-board {
+    /* four columns don't fit: wrap to a 2×2, and since two rows can't share one
+       viewport height, let the board scroll as a whole and each column keep its
+       natural height (same regime as the stacked phone layout below) */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-y: auto;
+  }
+}
 @media (max-width: 920px) {
   .m-board {
     grid-template-columns: 1fr;
-    /* stacked, three columns can't share one viewport height: let the board
-       scroll as a whole and each column keep its natural height */
-    overflow-y: auto;
   }
 }
 .m-board__col {
@@ -2207,8 +2213,10 @@ body {
   /* the card hover/drag shadows would otherwise be clipped by the scroll box */
   padding: 2px 4px;
 }
-@media (max-width: 920px) {
+@media (max-width: 1280px) {
   .m-board__body {
+    /* the board scrolls as a whole here (see .m-board above), so the per-column
+       scroll box must let go or every column collapses to nothing */
     overflow-y: visible;
   }
 }

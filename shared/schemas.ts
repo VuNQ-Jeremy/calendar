@@ -179,7 +179,7 @@ export const FeedbackInput = z.object({
   message: z.string().trim().min(1).max(5000),
   category: z.enum(['idea', 'bug', 'praise', 'other']).default('idea'),
   author: z.string().max(200).nullish(),
-  status: z.enum(['new', 'reviewed', 'done']).default('new'),
+  status: z.enum(['new', 'reviewed', 'done', 'backlog']).default('new'),
   /**
    * Server-assigned, and ignored on write — `services/feedback.create` always stamps its own
    * ISO timestamp. It stays on the input schema because the API *returns* it and mobile derives
