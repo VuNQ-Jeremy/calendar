@@ -27,17 +27,19 @@ export const FEEDBACK_CATEGORIES: Record<string, FeedbackCategory> = {
 const STATUS: Record<string, { tk: string; color: string }> = {
   new: { tk: 'st_new', color: 'orange' },
   reviewed: { tk: 'st_reviewed', color: 'blue' },
-  done: { tk: 'st_done', color: 'green' },
+  on_hold: { tk: 'st_on_hold', color: 'cocoa' },
   backlog: { tk: 'st_backlog', color: 'violet' },
+  done: { tk: 'st_done', color: 'green' },
 };
 
 /**
- * Board columns, left to right — the order a report travels through. Backlog sits after
- * Resolved rather than in the flow: it is the parking lot ("seen, deliberately deferred"),
- * not a stage every report passes. Note the stored value for Resolved is 'done' — renaming
- * it would strand rows written by mobile builds that predate the OTA.
+ * Board columns, left to right — the order a report travels through, with the two parked
+ * states between the active ones and Resolved: 'on_hold' is work that STARTED and paused
+ * midway, 'backlog' was seen and deliberately deferred before starting. Note the stored
+ * value for Resolved is 'done' — renaming it would strand rows written by mobile builds
+ * that predate the OTA.
  */
-const COLUMNS = ['new', 'reviewed', 'done', 'backlog'];
+const COLUMNS = ['new', 'reviewed', 'on_hold', 'backlog', 'done'];
 
 /** Where a report's issue lives — the repo `server/services/github.ts` opens issues on. */
 const GH_REPO_URL = 'https://github.com/VuNQ-Jeremy/calendar';

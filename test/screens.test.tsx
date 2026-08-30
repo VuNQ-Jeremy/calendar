@@ -258,6 +258,7 @@ describe('FeedbackScreen board', () => {
     row('f3', 'Shipped it', 'done'),
     row('f4', 'Second idea', 'new'),
     row('f5', 'Parked for later', 'backlog'),
+    row('f6', 'Half built, paused', 'on_hold'),
   ];
 
   /** Board + a real `/feedback` action, so the fetcher submit has somewhere to land. */
@@ -288,9 +289,16 @@ describe('FeedbackScreen board', () => {
     expect(column('Reviewed')).toContainElement(screen.getByText('Looked at it'));
     expect(column('Resolved')).toContainElement(screen.getByText('Shipped it'));
     expect(column('Backlog')).toContainElement(screen.getByText('Parked for later'));
+    expect(column('On hold')).toContainElement(screen.getByText('Half built, paused'));
     expect(column('New').querySelector('.m-board__count')).toHaveTextContent('2');
     expect(column('Resolved').querySelector('.m-board__count')).toHaveTextContent('1');
     expect(column('Backlog').querySelector('.m-board__count')).toHaveTextContent('1');
+    expect(column('On hold').querySelector('.m-board__count')).toHaveTextContent('1');
+    // The travel order, left to right.
+    const titles = Array.from(document.querySelectorAll('.m-board__title')).map(
+      (el) => el.textContent,
+    );
+    expect(titles).toEqual(['New', 'Reviewed', 'On hold', 'Backlog', 'Resolved']);
   });
 
   it('card actions are copy and delete only — status moves by drag or the editor', async () => {

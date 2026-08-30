@@ -46,8 +46,8 @@ test.describe('CRUD: feedback and profile', () => {
       await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
     ).toBe(true);
 
-    // All four triage columns render, Backlog included.
-    for (const title of ['New', 'Reviewed', 'Resolved', 'Backlog']) {
+    // All five triage columns render, in travel order.
+    for (const title of ['New', 'Reviewed', 'On hold', 'Backlog', 'Resolved']) {
       await expect(column(title)).toBeVisible();
     }
 
@@ -59,7 +59,15 @@ test.describe('CRUD: feedback and profile', () => {
 
     // The whole card opens the editor — there is no edit button. Aim at the message rather
     // than the card's centre: the centre can land on the meta row, where the issue link would
-    // swallow the click (and open a tab) on a report that has one. Park it in the backlog.
+    // swallow the click (and open a tab) on a report that has one. Pause it mid-work…
+    await card(msg).locator('.kcard__msg').click();
+    await k.pickSel('Status', 'On hold');
+    post = k.posted('/feedback');
+    await k.submit().click(); // "Save"
+    await post;
+    await expect(column('On hold').locator('.kcard', { hasText: msg })).toBeVisible();
+
+    // …then park it in the backlog.
     await card(msg).locator('.kcard__msg').click();
     await k.pickSel('Status', 'Backlog');
     post = k.posted('/feedback');

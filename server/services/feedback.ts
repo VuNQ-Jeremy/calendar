@@ -140,9 +140,9 @@ export async function remove(db: TenantDb, id: string): Promise<void> {
  * Feedback still awaiting action — 'new' or 'reviewed'.
  *
  * Counting both rather than `=== 'new'` is what makes the sidebar badge agree with the board:
- * resolving a reviewed item has to move the number too. 'backlog' is deliberately OUT — it means
- * "seen, parked on purpose", and a badge that keeps nagging about parked items would train
- * everyone to ignore it.
+ * resolving a reviewed item has to move the number too. 'backlog' and 'on_hold' are deliberately
+ * OUT — both mean "parked on purpose" (deferred before starting / paused midway), and a badge
+ * that keeps nagging about parked items would train everyone to ignore it.
  */
 export async function countUnresolved(db: TenantDb): Promise<number> {
   const rows = await db.raw

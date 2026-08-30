@@ -43,8 +43,9 @@ import {
 
 const CATEGORIES = ['idea', 'bug', 'praise', 'other'] as const;
 // 'done' is the stored value for Resolved — renaming it would strand rows written by older
-// builds. 'backlog' means "seen, deliberately deferred", so it sits outside the resolve flow.
-const STATUSES = ['new', 'reviewed', 'done', 'backlog'] as const;
+// builds. The two parked states sit between the active ones and Resolved: 'on_hold' is work
+// started and paused midway, 'backlog' was deliberately deferred before starting.
+const STATUSES = ['new', 'reviewed', 'on_hold', 'backlog', 'done'] as const;
 
 const CAT_COLOR: Record<string, string> = {
   idea: 'blue',
@@ -55,8 +56,9 @@ const CAT_COLOR: Record<string, string> = {
 const STATUS_BADGE: Record<string, string> = {
   new: 'brand',
   reviewed: 'blue',
-  done: 'success',
+  on_hold: 'warning',
   backlog: 'violet',
+  done: 'success',
 };
 
 export default function Feedback() {
@@ -214,8 +216,9 @@ export default function Feedback() {
             { id: 'all', label: t('fb_tab_all', { n: rows.length }) },
             { id: 'new', label: t('fb_tab_new', { n: count('new') }) },
             { id: 'reviewed', label: t('fb_tab_reviewed', { n: count('reviewed') }) },
-            { id: 'done', label: t('fb_tab_done', { n: count('done') }) },
+            { id: 'on_hold', label: t('fb_tab_on_hold', { n: count('on_hold') }) },
             { id: 'backlog', label: t('fb_tab_backlog', { n: count('backlog') }) },
+            { id: 'done', label: t('fb_tab_done', { n: count('done') }) },
           ]}
         />
 
