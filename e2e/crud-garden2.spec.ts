@@ -53,7 +53,10 @@ test.describe('CRUD: the garden plant lifecycle', () => {
     const sk = ui(sp);
     await signInStudent(sp);
     await sp.goto('/vocabulary');
-    const widget = sp.locator('.mochi-card').first();
+    // `.first()` alone used to be enough, but PvpBattleCard now renders unconditionally
+    // ahead of GardenWidget on /vocabulary for every student (src/flashcards/index.tsx) —
+    // exclude it explicitly rather than depend on DOM order between two independent widgets.
+    const widget = sp.locator('.mochi-card', { hasNotText: 'Join a battle' }).first();
     // Only on the first attempt: this spec plants a seed, so a retry starts from a garden that
     // already has one and the empty-pot copy would (correctly) be gone.
     if (test.info().retry === 0) await expect(widget).toContainText('Nothing planted yet');

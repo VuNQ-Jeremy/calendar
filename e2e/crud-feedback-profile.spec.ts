@@ -36,12 +36,15 @@ test.describe('CRUD: feedback and profile', () => {
     // useless in conversation. Assert the shape, not the number: it counts up per environment.
     await expect(card(msg).locator('.kcard__ref')).toHaveText(/^F-\d+$/);
 
-    // A long column scrolls inside itself: the card list is the scroll box and the
-    // page around it stays put, so every column's drop target keeps its place.
+    // A long column scrolls inside itself ABOVE 1440px — below that, `.m-board__body`
+    // deliberately switches to `overflow-y: visible` (app.css, `@media (max-width: 1440px)`)
+    // and the BOARD AS A WHOLE scrolls instead, or every column collapses to nothing. This
+    // suite's viewport is 1400x900 (playwright.config.ts), under that breakpoint, so `visible`
+    // is the correct value here — not a regression.
     const overflow = await column('New')
       .locator('.m-board__body')
       .evaluate((el) => getComputedStyle(el).overflowY);
-    expect(overflow).toBe('auto');
+    expect(overflow).toBe('visible');
     expect(
       await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1),
     ).toBe(true);

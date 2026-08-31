@@ -26,11 +26,25 @@ export function crudGuard() {
   test.skip(!EMAIL || !PASSWORD, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 }
 
+/**
+ * Navigate to /login and switch to the Email tab.
+ *
+ * /login lands on the Zalo (phone + code) tab by default (app/routes/login.tsx:346-347 — a
+ * deliberate product choice, this app's audience is Zalo-native), so the Email/password form
+ * isn't mounted until that tab is selected. Every spec that reaches /login directly (not just
+ * signInStaff/signInStudent below) needs this — it broke ~10 call sites silently the moment the
+ * tabbed login card shipped, since nothing had re-run the suite since.
+ */
+export async function gotoEmailLogin(page: Page) {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
+}
+
 async function signIn(page: Page, email: string, password: string) {
   // The app renders English by default (language only changes via a post-mount
   // localStorage read); pin it anyway so a stray toggle can't break selectors.
   await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-  await page.goto('/login');
+  await gotoEmailLogin(page);
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
   await page.click('form[action="/login"] button[type="submit"]');

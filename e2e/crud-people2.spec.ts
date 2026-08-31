@@ -27,7 +27,13 @@ test.describe('CRUD: people (teachers, parents, invites)', () => {
     await page.getByRole('tab', { name: /^Teachers · / }).click();
     await page.getByRole('button', { name: 'Add teacher' }).click();
     await k.textIn('Full name').fill(name);
-    await k.textIn('Phone').fill('0900000001');
+    // A throwaway number, deliberately NOT the seeded '0900000001' — that phone is an
+    // exclusive two-account fixture for crud-login-otp.spec.ts's OTP picker (Leo Park +
+    // Mina Park), and if deleting a teacher ever leaves their invite-minted account behind
+    // (accounts can outlive the staff/person row that created them — see the note on
+    // e2e-created accounts having 'no UI delete path' in scripts/test-accounts.sql), reusing
+    // that number here silently inflates that picker's candidate count on every run.
+    await k.textIn('Phone').fill('0900000099');
     await k.pickSel('Role', 'Assistant');
     let post = k.posted('/people');
     await k.submit().click(); // "Save"

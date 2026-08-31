@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, gotoEmailLogin, signInStaff, ui } from './crud-helpers';
 
 /**
  * Full invite lifecycle across three browser contexts: staff adds a student with a parent,
@@ -55,7 +55,7 @@ test.describe('CRUD: invite redemption', () => {
       const ctx = await browser.newContext();
       const visitor = await ctx.newPage();
       await visitor.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-      await visitor.goto('/login');
+      await gotoEmailLogin(visitor);
       await visitor.getByRole('button', { name: 'I have an invite code' }).click();
       await visitor.locator('input.auth-code').fill(code);
       await visitor.getByRole('button', { name: 'Continue' }).click();
@@ -103,6 +103,9 @@ test.describe('CRUD: invite redemption', () => {
     page,
     browser,
   }) => {
+    // Missing here previously: `page` is a fresh, unauthenticated fixture per test — without
+    // this, /people redirects to /login and "Add student" never appears, timing out.
+    await signInStaff(page);
     const k = ui(page);
     const stamp = Date.now();
 
@@ -136,7 +139,7 @@ test.describe('CRUD: invite redemption', () => {
       const ctx = await browser.newContext();
       const visitor = await ctx.newPage();
       await visitor.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-      await visitor.goto('/login');
+      await gotoEmailLogin(visitor);
       await visitor.getByRole('button', { name: 'I have an invite code' }).click();
       await visitor.locator('input.auth-code').fill(code);
       await visitor.getByRole('button', { name: 'Continue' }).click();
@@ -148,6 +151,11 @@ test.describe('CRUD: invite redemption', () => {
       );
       await visitor.locator('form[action="/login"] button[type="submit"]').click();
       const res = await post;
+      // The success path client-navigates (React Router's single-fetch redirect) rather than
+      // reloading the document — reading visitor.url() right after the response resolves can
+      // still catch the pre-navigation URL (/login). Wait for it to actually land, the same
+      // guard the password-based redeem above already uses.
+      if (res.ok()) await visitor.waitForURL(/\/(dashboard|vocabulary|profile)/, { timeout: 10_000 });
       const landed = res.ok() ? new URL(visitor.url()).pathname : null;
       await ctx.close();
       return { ok: res.ok(), landed };

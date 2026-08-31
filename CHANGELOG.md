@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0343 — 2026-08-31
+e2e overnight fix loop: 4 laps, 10 bugs fixed (all spec-side — login-tab default, turbo-stream response parsing, UTC/local month boundary, unscoped selectors, a stale positional selector, a cross-file phone collision, a navigation race)
+
 ## v0.0342 — 2026-08-31
 Admin walkthrough at /walkthrough: 27 user stories as a runnable checklist, with a tour driver that opens each story in a second window, spotlights the next control and pre-fills WALKTHROUGH placeholder values. Progress in localStorage; the human performs every real click.
 

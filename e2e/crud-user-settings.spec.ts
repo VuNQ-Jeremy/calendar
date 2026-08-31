@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, gotoEmailLogin, signInStaff, ui } from './crud-helpers';
 
 /**
  * Feedback F-19 / issue #17: calendar customization must be per-user, not global.
@@ -88,7 +88,7 @@ test.describe('CRUD: per-account calendar theme', () => {
     const ctx = await browser.newContext();
     const other = await ctx.newPage();
     await other.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-    await other.goto('/login');
+    await gotoEmailLogin(other);
     await other.getByRole('button', { name: 'I have an invite code' }).click();
     await other.locator('input.auth-code').fill(inviteCode);
     await other.getByRole('button', { name: 'Continue' }).click();

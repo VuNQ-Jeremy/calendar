@@ -140,7 +140,14 @@ test.describe('CRUD: assessments', () => {
         );
       });
 
-    const thisMonth = new Date().toISOString().slice(0, 7);
+    // Local-time month, not toISOString().slice(0,7) (always UTC) — the app's own "current
+    // month" default is local-time by design (shared/logic/dates.ts's iso()), and near a
+    // UTC/local day-boundary crossing (this app's audience is ICT, UTC+7) toISOString() can
+    // name the WRONG month, exactly the class of bug already fixed once for the dashboard's
+    // "today" (see the dashboard-today-is-utc fix). Match the style already used for this in
+    // crud-calendar-drag.spec.ts / crud-core.spec.ts rather than reaching for shared/.
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     // The screen opens on the first seeded student, so the first fetch must be Leo's.
     let load = monthLoad('s1');

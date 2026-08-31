@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { gotoEmailLogin } from './crud-helpers';
 
 /**
  * The generated-topic review list finds pictures for every word on its own, and offers each row a
@@ -23,7 +24,7 @@ test.describe('vocabulary: generated topics arrive with pictures', () => {
 
   test('review list auto-attaches a candidate picture per word', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-    await page.goto('/login');
+    await gotoEmailLogin(page);
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
     await page.click('form[action="/login"] button[type="submit"]');

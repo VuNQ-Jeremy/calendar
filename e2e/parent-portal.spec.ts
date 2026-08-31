@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { crudGuard, openConfigEntry, signInStaff, ui } from './crud-helpers';
+import { crudGuard, gotoEmailLogin, openConfigEntry, signInStaff, ui } from './crud-helpers';
 
 /**
  * The parent portal, end to end: a real parent account, the admin toggle, and the gate between.
@@ -72,7 +72,7 @@ test.describe('Parent portal', () => {
     const ctx = await browser.newContext();
     const parent = await ctx.newPage();
     await parent.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-    await parent.goto('/login');
+    await gotoEmailLogin(parent);
     await parent.getByRole('button', { name: 'I have an invite code' }).click();
     await parent.locator('input.auth-code').fill(parentCode);
     await parent.getByRole('button', { name: 'Continue' }).click();

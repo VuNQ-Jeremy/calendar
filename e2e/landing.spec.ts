@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { gotoEmailLogin } from './crud-helpers';
 
 /**
  * The public landing page at `/` (routes/home.tsx).
@@ -51,7 +52,7 @@ test.describe('landing page', () => {
   test('a signed-in visit to / still lands in the app', async ({ page }) => {
     test.skip(!EMAIL || !PASSWORD, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run this');
     await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-    await page.goto('/login');
+    await gotoEmailLogin(page);
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
     await page.click('form[action="/login"] button[type="submit"]');

@@ -10,6 +10,14 @@ import { crudGuard } from './crud-helpers';
  * The plaintext code only ever appears because calendar-test carries AUTH_DEV_CODES=1
  * (wrangler.jsonc env.test) — see server/services/login-otp.ts. Never set that flag anywhere
  * but a test environment.
+ *
+ * Read the dev code from the rendered `[data-testid="otp-dev-code"]` hint (app/routes/login.tsx),
+ * NOT by parsing the `/login.data` POST response body: React Router's single-fetch responses are
+ * turbo-stream-encoded (`Content-Type: text/x-script`), not plain JSON. A turbo-stream payload for
+ * a flat object happens to still be valid JSON SYNTAX — `.json()` parses without throwing — but it
+ * decodes to a flat ARRAY (`["intent","otp-request","challengeId","...","devCode","123456"]`), so
+ * `body.devCode` silently reads back `undefined` on every call. The UI hint is what a real user
+ * (in dev mode) actually sees, so asserting on it is both the fix and the more honest check.
  */
 
 test.describe('CRUD: Zalo OTP login', () => {
@@ -24,15 +32,14 @@ test.describe('CRUD: Zalo OTP login', () => {
     // The Zalo tab is the default landing screen — no tab click needed.
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     await page.locator('input[placeholder="0901 234 567"]').fill('0900000001');
-    const requestRes = page.waitForResponse(
-      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/login.data',
-    );
     await page.getByRole('button', { name: 'Send code' }).click();
-    const body = (await (await requestRes).json()) as { devCode?: string | null };
-    expect(body.devCode).toBeTruthy();
-
     await expect(page.getByRole('heading', { name: 'Enter the 6-digit code' })).toBeVisible();
-    await page.locator('input[placeholder="000000"]').fill(body.devCode!);
+    const devCode = ((await page.getByTestId('otp-dev-code').textContent()) ?? '').replace(
+      /\D/g,
+      '',
+    );
+    expect(devCode).toBeTruthy();
+    await page.locator('input[placeholder="000000"]').fill(devCode);
     await page.getByRole('button', { name: 'Verify' }).click();
 
     // Two accounts share this phone — the code alone is not enough to sign in yet.
@@ -53,11 +60,13 @@ test.describe('CRUD: Zalo OTP login', () => {
     await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
     await page.goto('/login');
     await page.locator('input[placeholder="0901 234 567"]').fill('0900000001');
-    const requestRes = page.waitForResponse(
-      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/login.data',
-    );
     await page.getByRole('button', { name: 'Send code' }).click();
-    const { devCode } = (await (await requestRes).json()) as { devCode: string };
+    await expect(page.getByRole('heading', { name: 'Enter the 6-digit code' })).toBeVisible();
+    const devCode = ((await page.getByTestId('otp-dev-code').textContent()) ?? '').replace(
+      /\D/g,
+      '',
+    );
+    expect(devCode).toBeTruthy();
 
     for (let i = 0; i < 5; i++) {
       await page.locator('input[placeholder="000000"]').fill('000000');
@@ -76,17 +85,15 @@ test.describe('CRUD: Zalo OTP login', () => {
     await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
     await page.goto('/login');
     await page.locator('input[placeholder="0901 234 567"]').fill('0999999999');
-    const requestRes = page.waitForResponse(
-      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/login.data',
-    );
     await page.getByRole('button', { name: 'Send code' }).click();
-    const body = (await (await requestRes).json()) as { challengeId?: string; devCode?: string };
 
-    // Same shape as a real request: a challengeId, and — the enumeration-safety property —
-    // no code, because there is nothing real to disclose.
-    expect(body.challengeId).toBeTruthy();
-    expect(body.devCode).toBeFalsy();
+    // Same shape as a real request, and — the enumeration-safety property — nothing real to
+    // disclose: the generic screen and message are identical, and the [dev] hint box (which
+    // would only ever render given a real devCode) never appears.
     await expect(page.getByRole('heading', { name: 'Enter the 6-digit code' })).toBeVisible();
-    await expect(page.getByText('If this number is registered, a code has been sent via Zalo.')).toBeVisible();
+    await expect(
+      page.getByText('If this number is registered, a code has been sent via Zalo.'),
+    ).toBeVisible();
+    await expect(page.getByTestId('otp-dev-code')).toHaveCount(0);
   });
 });

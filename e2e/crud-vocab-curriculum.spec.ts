@@ -68,7 +68,10 @@ test.describe('CRUD: vocabulary curriculum', () => {
       .locator('span.m-row', { hasText: renamed })
       .getByRole('button', { name: 'Edit' })
       .click();
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    // Scoped to the open edit dialog (k.dlg): unscoped, this also matches the per-row "Delete"
+    // icon buttons still on the rail behind it (3 of them, in the failure this fixes), and
+    // Playwright refuses a strict-mode-ambiguous click rather than guessing which one.
+    await k.dlg.getByRole('button', { name: 'Delete', exact: true }).click();
     post = k.posted('/vocabulary');
     await k.confirmDanger('Delete this curriculum?').click();
     await post;

@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Request } from '@playwright/test';
-import { expandAllNavSections, openConfigEntry } from './crud-helpers';
+import { expandAllNavSections, gotoEmailLogin, openConfigEntry } from './crud-helpers';
 
 /**
  * The idempotent /config write these tests use to stale the cache: re-pick the scrollbar preset
@@ -84,7 +84,7 @@ test.describe('navigation latency', () => {
   test.skip(!HAVE_CREDS, 'Set MOCHI_EMAIL and MOCHI_PASSWORD to run these');
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
+    await gotoEmailLogin(page);
     await page.fill('input[name="email"]', EMAIL!);
     await page.fill('input[name="password"]', PASSWORD!);
     await page.click('form[action="/login"] button[type="submit"]');

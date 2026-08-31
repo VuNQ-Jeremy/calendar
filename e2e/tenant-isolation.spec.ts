@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { crudGuard, signInStaff, ui } from './crud-helpers';
+import { crudGuard, gotoEmailLogin, signInStaff, ui } from './crud-helpers';
 
 /**
  * The acceptance test for multi-tenancy.
@@ -133,7 +133,7 @@ test.describe('tenant isolation', () => {
     // The student account stands in for "anyone who is not a platform admin"; the route must
     // refuse rather than render, whatever their role inside their own school.
     await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
-    await page.goto('/login');
+    await gotoEmailLogin(page);
     await page.fill('input[name="email"]', 'vunq@mochi.edu');
     await page.fill('input[name="password"]', 'mochi123');
     await page.click('form[action="/login"] button[type="submit"]');

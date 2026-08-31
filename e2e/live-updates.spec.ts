@@ -5,7 +5,7 @@ import {
   type Page,
   type APIRequestContext,
 } from '@playwright/test';
-import { expandAllNavSections } from './crud-helpers';
+import { expandAllNavSections, gotoEmailLogin } from './crud-helpers';
 
 /**
  * Live updates (workers/live-hub.ts) against a real deployment.
@@ -28,7 +28,7 @@ const STUDENT_PASSWORD = process.env.MOCHI_STUDENT_PASSWORD ?? PASSWORD;
 const HAVE_CREDS = Boolean(EMAIL && PASSWORD);
 
 async function signIn(page: Page, email: string, password: string) {
-  await page.goto('/login');
+  await gotoEmailLogin(page);
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
   await page.click('form[action="/login"] button[type="submit"]');
