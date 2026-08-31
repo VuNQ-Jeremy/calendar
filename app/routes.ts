@@ -201,6 +201,15 @@ export default [
     // requireAdmin. Filtering and paging live in the URL, so a filtered view is linkable and
     // the loader never ships all 3,448 rows at once.
     route('logo-library', 'routes/logo-library.tsx'),
+    // The admin-only product walkthrough: every user story as a checklist, with a Run that opens
+    // the story's screen in a second window for the tour driver to spotlight. Admin-only,
+    // enforced in the route with requireAdmin.
+    //
+    // TOP-LEVEL, not `/platform/walkthrough`, and for the reason spelled out above garden-species:
+    // NavLink marks ancestors active by prefix, so nesting it under /platform would leave the
+    // Platform row lit — and the walkthrough is not a platform-admin surface anyway, it is every
+    // school admin's map of the product.
+    route('walkthrough', 'routes/walkthrough.tsx'),
     // Class id (and the album's month) in the PATH for the same cache reason as tuition below.
     route('garden/:classId?', 'routes/garden.tsx'),
     route('garden/:classId/album/:month', 'routes/garden.$classId.album.$month.tsx'),

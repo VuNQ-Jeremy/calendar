@@ -178,6 +178,20 @@ export const NAV: NavSection[] = [
         adminOnly: true,
         staffOnly: true,
       },
+      // The product walkthrough: every user story as a checklist, run by hand against a live
+      // deployment. Admin rather than staff for the same reason as the two catalogues above — it
+      // is a map of the whole product, and its `caution` stories point at live attendance, grades
+      // and money. `mapPin` because the screen is a route through the app, and because it is free:
+      // the section's own icon is `key` and no other admin row uses it (test/sidebar-sections.test.tsx
+      // requires a section icon to differ from every item icon inside it).
+      {
+        id: 'walkthrough',
+        path: '/walkthrough',
+        tk: 'nav_walkthrough',
+        icon: 'mapPin',
+        adminOnly: true,
+        staffOnly: true,
+      },
       // Diagnostics, not a report: it reads every student's rows at once, so admin only. The
       // route enforces it with requireAdmin — this flag only hides the link.
       { id: 'logs', path: '/logs', tk: 'nav_logs', icon: 'list', adminOnly: true, staffOnly: true },

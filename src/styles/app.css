@@ -3885,3 +3885,562 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ============================================================ WALKTHROUGH ============================================================ */
+
+/* The admin-only product walkthrough. Two surfaces share this section:
+   `.tourd-*` — the tour driver overlay (src/walkthrough/tour-driver.tsx), which mounts in the
+   SECOND window and spotlights the control the current step points at.
+   `.wt-*`    — the checklist screen at /walkthrough, which drives it.
+
+   Z-INDEX. The driver sits at 10000 because it has to be visible over everything it might be
+   pointing INTO: `.m-overlay` (the modal scrim) is 1000 and `.dev-inspector` is 9999.
+
+   POINTER EVENTS. The driver must never come between the user and a control — the human performs
+   every real click in a walkthrough, the driver only highlights and types. So the container, the
+   scrim panels and the ring are all `pointer-events: none`, and only the coach bubble takes input. */
+
+.tourd {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+/* One of the four panels drawn AROUND the target rather than a single full-screen scrim, which
+   would dim the very thing it is pointing at. Deliberately light: this dims for emphasis, it does
+   not black the screen out, and the user still has to read the page around the target. */
+.tourd-scrim {
+  position: absolute;
+  background: rgba(26, 22, 18, 0.34);
+}
+
+.tourd-ring {
+  position: absolute;
+  border-radius: var(--radius-md, 14px);
+  outline: 3px solid var(--brand, #f79a4e);
+  outline-offset: 0;
+  box-shadow:
+    0 0 0 6px var(--brand-soft, rgba(247, 154, 78, 0.25)),
+    var(--shadow-lg, 0 14px 34px rgba(110, 71, 44, 0.12));
+  animation: tourd-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tourd-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 4px var(--brand-soft, rgba(247, 154, 78, 0.25)),
+      var(--shadow-lg, 0 14px 34px rgba(110, 71, 44, 0.12));
+  }
+  50% {
+    box-shadow:
+      0 0 0 10px var(--brand-soft, rgba(247, 154, 78, 0.25)),
+      var(--shadow-lg, 0 14px 34px rgba(110, 71, 44, 0.12));
+  }
+}
+
+/* The ring is the only thing on screen telling the user where to look, so it keeps a static halo
+   when motion is unwelcome rather than disappearing along with the animation. */
+@media (prefers-reduced-motion: reduce) {
+  .tourd-ring {
+    animation: none;
+    box-shadow:
+      0 0 0 7px var(--brand-soft, rgba(247, 154, 78, 0.25)),
+      var(--shadow-lg, 0 14px 34px rgba(110, 71, 44, 0.12));
+  }
+}
+
+.tourd-coach {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  pointer-events: auto;
+  background: var(--surface-card, #fff);
+  color: var(--text-strong, #1a1a1a);
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-top: 3px solid var(--brand, #f79a4e);
+  border-radius: var(--radius-lg, 20px);
+  box-shadow: var(--shadow-lg, 0 14px 34px rgba(110, 71, 44, 0.12));
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+  /* A long step text plus a values list would otherwise run off the top or bottom of the viewport.
+     The cap is on the bubble, but the SCROLLING is on the text and warning blocks below, so the
+     header and the Back/Next/Stop row are never the part that scrolls out of reach. */
+  max-height: calc(100vh - 36px);
+}
+/* The bubble is the one part of the overlay that swallows clicks, so it moves out of the way when
+   the spotlighted control is down in the bottom band (see `coachAtTop` in tour-driver.tsx). */
+.tourd-coach--bottom {
+  bottom: 18px;
+}
+.tourd-coach--top {
+  top: 18px;
+}
+
+.tourd-coach__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted, #8a7a6b);
+}
+.tourd-coach__step {
+  font-weight: 700;
+  color: var(--brand, #f79a4e);
+  white-space: nowrap;
+}
+.tourd-coach__story {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tourd-coach__text {
+  font-size: 14px;
+  line-height: 1.45;
+  max-height: 30vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tourd-coach__warn {
+  font-size: 12.5px;
+  line-height: 1.45;
+  max-height: 30vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--danger-soft, rgba(220, 106, 82, 0.12));
+  color: var(--danger-ink, #a8442f);
+  border-radius: var(--radius-md, 14px);
+  padding: 8px 10px;
+}
+.tourd-coach__values {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+.tourd-coach__values li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tourd-coach__values code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 12px/1.4 var(--font-mono, monospace);
+  background: var(--surface-card, #fff);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.tourd-coach__value-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tourd-coach__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.tourd-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-md, 14px);
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+  background: transparent;
+  color: var(--text-strong, #1a1a1a);
+  cursor: pointer;
+}
+.tourd-btn:hover:not(:disabled) {
+  background: var(--brand-soft, rgba(247, 154, 78, 0.2));
+}
+.tourd-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tourd-btn--primary {
+  background: var(--brand, #f79a4e);
+  border-color: var(--brand, #f79a4e);
+  color: #fff;
+}
+.tourd-btn--primary:hover:not(:disabled) {
+  filter: brightness(0.95);
+  background: var(--brand, #f79a4e);
+}
+.tourd-btn--tiny {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------------------------------
+   THE CHECKLIST SCREEN (/walkthrough, src/walkthrough/walkthrough-screen.tsx)
+
+   This is a Mochi page, not a debug console: it sits on `.content`, uses `PageHeader`, and every
+   card is a `.mochi-card`. So the rules below only add what the design system has no component
+   for — the tag/account/kind chips and the step rows — and lean on tokens for all of it.
+
+   THE TAG PILL carries the only real colour decision here. `read` is the calm one (green), `write`
+   warns that the story creates rows, and `caution` has to read as the most serious thing on the
+   screen: those stories touch live attendance, grades and money, and the person walking them is
+   doing it against a real deployment. So caution takes the danger family AND a heavier weight,
+   rather than being a third pastel among three pastels.
+   ------------------------------------------------------------------------------------------ */
+
+/* The overall meter lives in the page header's actions slot, beside Reset. */
+.wt-head-meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 220px;
+}
+.wt-head-meter__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+}
+.wt-head-meter__count {
+  color: var(--text-body);
+  font-variant-numeric: tabular-nums;
+}
+.wt-head-meter .mochi-btn {
+  align-self: flex-end;
+}
+
+/* Standing warnings: the wrong language, or a blocked pop-up. Both are things the user can fix
+   in one action, so they read as advice rather than as an error state. */
+.wt-notice {
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.wt-notice--warn {
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+.wt-notice--danger {
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+/* ---------- Role band ---------- */
+
+.wt-role {
+  margin-bottom: var(--space-8);
+}
+.wt-role__title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---------- Journey ---------- */
+
+.wt-journey {
+  margin-bottom: var(--space-6);
+}
+.wt-journey__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.wt-journey__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+}
+.wt-journey__desc {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.wt-journey__meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 180px;
+}
+.wt-journey__count {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wt-stories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ---------- Story card ---------- */
+
+.wt-story {
+  padding: var(--space-4) var(--space-5);
+}
+/* The verdict tints the card's left edge rather than its whole surface: a screen of 27 cards, a
+   third of them washed green, stops being readable as a list. */
+.wt-story.is-pass {
+  border-left: 3px solid var(--success);
+}
+.wt-story.is-fail {
+  border-left: 3px solid var(--danger);
+}
+.wt-story.is-running {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.wt-story__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* The expander is the title itself, so the whole label is the hit area — but only the label: a
+   card-wide click target would swallow the Run button sitting inside it. */
+.wt-story__toggle {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  color: var(--text-strong);
+}
+.wt-story__chev {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--dur-base) var(--ease-soft);
+}
+.wt-story.is-open .wt-story__chev {
+  transform: rotate(90deg);
+}
+.wt-story__title {
+  min-width: 0;
+}
+.wt-story__count {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Chips ---------- */
+
+.wt-tag,
+.wt-acct,
+.wt-kind,
+.wt-spec {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.wt-tag {
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wt-tag--read {
+  background: var(--green-100);
+  color: var(--green-700);
+}
+.wt-tag--write {
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+.wt-tag--caution {
+  background: var(--danger);
+  color: var(--text-on-brand);
+}
+
+/* Which login to be holding when you press Run. Quiet on purpose — it is a fact about the run,
+   not a warning about it. */
+.wt-acct {
+  background: var(--surface-sunken);
+  color: var(--text-body);
+  font-weight: var(--fw-medium);
+}
+
+/* ---------- Body ---------- */
+
+.wt-story__body {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* A live run, named in the card that owns it. */
+.wt-story__live {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--brand-soft-ink);
+}
+.wt-story__live-wait {
+  color: var(--text-muted);
+}
+.wt-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--brand);
+}
+
+.wt-specs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.wt-specs__label {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-muted);
+}
+.wt-spec {
+  background: var(--surface-sunken);
+  color: var(--text-body);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+/* A deliberate coverage signal, not an error: this story has no e2e spec watching it, so it is
+   the one to walk slowly. Dashed rather than red — nothing is broken, something is merely
+   unwatched. */
+.wt-spec--none {
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ---------- Steps ---------- */
+
+.wt-steps {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.wt-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
+  border-radius: var(--radius-md);
+}
+/* The step the tour is standing on right now. It moves as the driver reports ticks, so it is the
+   line to look at when you glance back at this window. */
+.wt-step.is-current {
+  background: var(--brand-soft);
+  padding-left: var(--space-2);
+}
+.wt-step__n {
+  flex: none;
+  width: 22px;
+  padding-top: 1px;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-bold);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wt-step.is-done .wt-step__n {
+  color: var(--success);
+}
+/* `.mochi-check` centres its box against its label; with step text that wraps to three lines
+   that puts the box halfway down the paragraph. Top-align it instead. */
+.wt-step__check {
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.wt-step__check .mochi-check__box {
+  margin-top: 1px;
+}
+/* Muted rather than struck through: a done step is still the reference for what you just did, and
+   a line through 200 characters of instruction makes it unreadable. */
+.wt-step.is-done .wt-step__check {
+  color: var(--text-muted);
+}
+
+/* What the driver will do with this step, in one word. `check` is the honest one: nothing is
+   automated, the tour is only telling you what to look at. */
+.wt-kind {
+  margin-top: 2px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-weight: var(--fw-semibold);
+  padding: 1px 8px;
+  min-width: 46px;
+  justify-content: center;
+}
+.wt-kind--submit {
+  background: var(--warning-soft);
+  color: var(--warning-ink);
+}
+.wt-kind--check {
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+}
+
+.wt-verdict {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  /* The head's chips and button wrap onto their own line rather than squeezing the title to
+     nothing; the meters stop reserving width they cannot have. */
+  .wt-head-meter,
+  .wt-journey__meter {
+    min-width: 0;
+    width: 100%;
+  }
+  .wt-story__toggle {
+    flex-basis: 100%;
+  }
+}

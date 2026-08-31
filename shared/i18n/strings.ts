@@ -1716,6 +1716,30 @@ const en_strings = {
     'Days between reviews of one word. Answer it right when it is due and it moves up a step, so the gaps grow; get it wrong and it drops back a step and returns sooner. Add or remove steps to make the schedule as long as you want — the last step repeats forever, so a word never leaves the cycle.',
   nav_logs: 'Logs',
   nav_api_docs: 'API reference',
+
+  /* Tham quan sản phẩm — the admin-only walkthrough checklist at /walkthrough. Only the screen's
+     chrome is translated: the story titles and step text come from shared/walkthrough.ts and stay
+     English on purpose, because those same strings are the selectors the tour driver looks for. */
+  nav_walkthrough: 'Walkthrough',
+  wt_subtitle:
+    'Every user story in the product, as a checklist. Run opens a story in a second window and the tour spotlights each control there; you tick the steps off here.',
+  wt_run: 'Run',
+  wt_stop: 'Stop',
+  wt_running: 'Running',
+  wt_pass: 'Pass',
+  wt_fail: 'Fail',
+  wt_reset: 'Reset',
+  wt_reset_q: 'Reset the walkthrough?',
+  wt_reset_confirm: 'Clear every tick and every verdict on this screen?',
+  wt_no_spec: 'no spec',
+  wt_progress: '{done} of {total}',
+  wt_overall: 'Overall',
+  wt_specs: 'Specs',
+  wt_english_only:
+    'The tour only works with the app in English — the controls it looks for are the English labels. Switch the language before pressing Run.',
+  wt_popup_blocked:
+    'The browser blocked the second window. Allow pop-ups for this site, then press Run again.',
+
   logs_title: 'Logs',
   logs_subtitle: 'What the database actually says. Admin only, read-only.',
   logs_scheduled_title: 'Scheduled words',
@@ -1937,7 +1961,8 @@ const en_strings = {
   landing_garden_line: '+3 new words today',
   landing_features_kicker: 'Features',
   landing_features_h2: 'Six jobs, one app',
-  landing_features_sub: 'Mochi replaces the paper stack, the spreadsheet and the three chat groups.',
+  landing_features_sub:
+    'Mochi replaces the paper stack, the spreadsheet and the three chat groups.',
   landing_f1_t: 'Calendar & attendance',
   landing_f1_b:
     "Plan the week once. Teachers take attendance in one tap, and everyone sees today's rooms and times.",
@@ -3738,6 +3763,28 @@ export const STRINGS = {
       'Số ngày giữa hai lần ôn một từ. Đến hạn mà trả lời đúng thì từ lên một bậc, khoảng cách giãn dần ra; trả lời sai thì tụt một bậc và quay lại sớm hơn. Thêm hoặc bớt bậc để lịch ôn dài ngắn tuỳ ý — bậc cuối lặp mãi, một từ không bao giờ rời khỏi vòng ôn.',
     nav_logs: 'Nhật ký',
     nav_api_docs: 'Tài liệu API',
+
+    /* Tham quan sản phẩm */
+    nav_walkthrough: 'Tham quan sản phẩm',
+    wt_subtitle:
+      'Toàn bộ luồng người dùng của sản phẩm, dưới dạng danh sách kiểm. Bấm Chạy để mở luồng đó ở một cửa sổ thứ hai, bên đó tour sẽ tô sáng từng nút; còn bạn tick từng bước ở đây.',
+    wt_run: 'Chạy',
+    wt_stop: 'Dừng',
+    wt_running: 'Đang chạy',
+    wt_pass: 'Đạt',
+    wt_fail: 'Không đạt',
+    wt_reset: 'Đặt lại',
+    wt_reset_q: 'Đặt lại phần tham quan?',
+    wt_reset_confirm: 'Xoá hết dấu tick và kết quả trên màn hình này?',
+    wt_no_spec: 'chưa có spec',
+    wt_progress: '{done} / {total}',
+    wt_overall: 'Tổng thể',
+    wt_specs: 'Spec',
+    wt_english_only:
+      'Tour chỉ chạy khi app đang ở tiếng Anh — những nút mà nó tìm chính là nhãn tiếng Anh. Hãy đổi ngôn ngữ trước khi bấm Chạy.',
+    wt_popup_blocked:
+      'Trình duyệt đã chặn cửa sổ thứ hai. Hãy cho phép pop-up cho trang này rồi bấm Chạy lại.',
+
     logs_title: 'Nhật ký',
     logs_subtitle: 'Dữ liệu thật trong cơ sở dữ liệu. Chỉ quản trị, chỉ xem.',
     logs_scheduled_title: 'Từ đã lên lịch ôn',

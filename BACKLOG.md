@@ -38,7 +38,29 @@ endpoint, no logic to reimplement.
 
 **~2–3 hours.**
 
-## 3. Smaller, unranked
+## 3. Walkthrough follow-through: mobile journeys and an automated prod tour
+
+The admin walkthrough that shipped covers only the web app's 27 stories, and it has never been run
+by a human yet. Two follow-ups are deliberately deferred until it survives at least one real manual
+pass — running it once is what will show whether the story catalogue is even accurate, and building
+more on top of an unverified catalogue would just multiply the rework.
+
+- **Mobile walkthrough journeys** — the phone app's own stories (flashcards and the offline queue,
+  the garden, PvP) aren't covered by this release. Automating them means Maestro
+  (`cd mobile && npm run test:device`), not Playwright — a different toolchain, not more of the
+  same e2e spec pattern.
+- **An automated prod tour** — a future `e2e/tour-*.spec.ts` family that walks the same catalogue
+  unattended against production, read-mostly and self-cleaning, standing in for the human-driven
+  checklist once the catalogue is trusted.
+- **Trim the layout chunk** — the tour driver and the 27-story catalogue are statically imported by
+  `app/routes/_app.tsx`, so roughly 8KB gzipped rides on the shell every authenticated user loads,
+  students and parents included, for whom it is dead weight. Gate the mount on `?tour=` being present
+  and `React.lazy` the driver once the catalogue has settled from its first manual pass.
+
+**~1 day for the Maestro pass, ~half a day for a first automated-tour spec** — both blocked on the
+manual pass landing, not on effort.
+
+## 4. Smaller, unranked
 
 Ordered by how much they annoy, not by value.
 

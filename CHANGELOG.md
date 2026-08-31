@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0342 — 2026-08-31
+Admin walkthrough at /walkthrough: 27 user stories as a runnable checklist, with a tour driver that opens each story in a second window, spotlights the next control and pre-fills WALKTHROUGH placeholder values. Progress in localStorage; the human performs every real click.
+
 ## v0.0341 — 2026-08-30
 Feedback: new On hold status; board reordered to New, Reviewed, On hold, Backlog, Resolved (web + mobile).
 

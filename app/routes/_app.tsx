@@ -27,6 +27,7 @@ import {
 } from '../../src/lib/sidebar-nav.jsx';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { DevInspector } from '../../src/dev-inspector.jsx';
+import { TourDriver } from '../../src/walkthrough/tour-driver.jsx';
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { VersionStamp } from '../../src/components/version-stamp.jsx';
 import { BUILD_ID } from '../../src/lib/build-id.js';
@@ -484,6 +485,10 @@ export default function AppLayout() {
         />
       )}
       {user.email === DEV_ACCOUNT_EMAIL && <DevInspector />}
+      {/* The tour driver overlay for the admin walkthrough. This visibility gate is cosmetic — the
+          real permission is `requireAdmin` on the /walkthrough route, which is the only place a tour
+          can be started from; a hidden overlay is not a permission (app/routes/logo-library.tsx). */}
+      {user.kind === 'staff' && <TourDriver />}
     </div>
   );
 }
