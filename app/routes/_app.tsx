@@ -27,7 +27,13 @@ import {
 } from '../../src/lib/sidebar-nav.jsx';
 import { FeedbackModal, newFeedbackDraft } from '../../src/feedback.jsx';
 import { DevInspector } from '../../src/dev-inspector.jsx';
-import { TourDriver } from '../../src/walkthrough/tour-driver.jsx';
+// Lazy on purpose: the driver plus the 27-story catalogue it imports are ~8KB gzipped
+// (tour-channel-*.js in the build), and a window can only ever BE a tour window when it was
+// opened with `?tour=<token>` (see src/walkthrough/walkthrough-screen.tsx's Run). Everyone
+// else — every student, every parent, every ordinary staff tab — should not download it at all.
+const TourDriver = React.lazy(() =>
+  import('../../src/walkthrough/tour-driver.jsx').then((m) => ({ default: m.TourDriver })),
+);
 import { useLang, LanguageToggle } from '../../src/lib/i18n.jsx';
 import { VersionStamp } from '../../src/components/version-stamp.jsx';
 import { BUILD_ID } from '../../src/lib/build-id.js';
@@ -417,6 +423,15 @@ export default function AppLayout() {
   const [feedbackDraft, setFeedbackDraft] = React.useState<ReturnType<
     typeof newFeedbackDraft
   > | null>(null);
+  // True only in a window that was OPENED as a tour window. Read once, post-hydration — SSR has
+  // no `window` and the server must render the same nothing the client's first paint renders
+  // (the same hydration reasoning as the localStorage-in-an-effect pattern, src/lib/i18n.tsx).
+  // The token is in the opening URL; client-side navigation during a tour keeps this component
+  // mounted, and a hard reload dropping the param ends the tour by design (tour-driver.tsx).
+  const [isTourWindow, setIsTourWindow] = React.useState(false);
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('tour')) setIsTourWindow(true);
+  }, []);
 
   React.useEffect(() => {
     document.documentElement.dataset.scrollbar = uiPrefs.scrollbar;
@@ -488,7 +503,11 @@ export default function AppLayout() {
       {/* The tour driver overlay for the admin walkthrough. This visibility gate is cosmetic — the
           real permission is `requireAdmin` on the /walkthrough route, which is the only place a tour
           can be started from; a hidden overlay is not a permission (app/routes/logo-library.tsx). */}
-      {user.kind === 'staff' && <TourDriver />}
+      {user.kind === 'staff' && isTourWindow && (
+        <React.Suspense fallback={null}>
+          <TourDriver />
+        </React.Suspense>
+      )}
     </div>
   );
 }

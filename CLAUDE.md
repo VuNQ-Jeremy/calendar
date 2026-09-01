@@ -97,6 +97,13 @@
   UI-driven lifecycle test — create → edit/variants → delete, through the real
   dialogs. The suite's contract is that every write path is exercised end to end;
   don't let it rot back to partial coverage.
+- **A user-visible feature also updates the walkthrough catalogue in the same
+  commit.** New screen, new dialog, renamed button — if a person would meet it on
+  a manual pass of `/walkthrough`, the story in `shared/walkthrough.ts` that
+  covers it changes too (or a new story is added: goto-first, fill values
+  prefixed `WALKTHROUGH`, cleanup last — `test/walkthrough.test.ts` enforces the
+  shape). The tour targets literal English UI strings, so a copy change silently
+  breaks a spotlight.
 - **Run against the isolated test env, never production.** `npm run
   test:e2e:staging` resets the `calendar-test` D1 to seed data and runs the whole
   suite (~4 min). CRUD specs are guarded in `e2e/crud-helpers.ts` and skip unless

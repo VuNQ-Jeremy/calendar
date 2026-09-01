@@ -52,11 +52,6 @@ more on top of an unverified catalogue would just multiply the rework.
 - **An automated prod tour** — a future `e2e/tour-*.spec.ts` family that walks the same catalogue
   unattended against production, read-mostly and self-cleaning, standing in for the human-driven
   checklist once the catalogue is trusted.
-- **Trim the layout chunk** — the tour driver and the 27-story catalogue are statically imported by
-  `app/routes/_app.tsx`, so roughly 8KB gzipped rides on the shell every authenticated user loads,
-  students and parents included, for whom it is dead weight. Gate the mount on `?tour=` being present
-  and `React.lazy` the driver once the catalogue has settled from its first manual pass.
-
 **~1 day for the Maestro pass, ~half a day for a first automated-tour spec** — both blocked on the
 manual pass landing, not on effort.
 
