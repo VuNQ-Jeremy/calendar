@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0347 — 2026-09-01
+docs: continuation plan file-map row updated for the lazy mount
+
 ## v0.0346 — 2026-09-01
 docs: mark walkthrough continuation tasks 1-2 executed (3917872)
 
