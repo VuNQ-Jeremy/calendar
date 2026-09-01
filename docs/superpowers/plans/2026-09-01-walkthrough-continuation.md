@@ -1,6 +1,6 @@
 # Walkthrough Feature — Continuation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Tasks 1–2 are executable now; everything under "Gated work" waits on the user's first manual pass.
+> **For agentic workers:** Tasks 1–2 were EXECUTED and shipped as `3917872` (2026-09-01) — their checkboxes below are the record, not open work. Everything under "Gated work" waits on the user's first manual pass.
 
 **Goal:** Everything a zero-context session needs to keep working on the `/walkthrough` feature: what shipped, where it lives, which behaviours are deliberate, and the concrete next tasks.
 
@@ -16,6 +16,7 @@
 
 - **Shipped** as `f9c4c1e` (feature, one commit) and `7976464` (overnight e2e fix loop, one commit). Both on `main`, deployed to prod by Workers Builds.
 - **Verified in a real browser**: `e2e/crud-walkthrough.spec.ts` ran for the first time during the overnight loop and passed all 4 tests — role gating, catalogue render, localStorage persistence, and the full popup tour round-trip (the popup's `Class name` input held `WALKTHROUGH 7A` before submit, proving the native-setter prefill reaches React state; the submit step auto-ticked on the real save).
+- Tasks 1–2 below shipped as `3917872`: the driver + catalogue are lazy-loaded behind the `?tour=` param (measured ~11.9KB gz off every authed page — _app chunk 8,052→4,436 B gz and the 8,250 B gz tour chunk out of the eager graph), and CLAUDE.md now carries the catalogue maintenance rule.
 - **NOT yet done: the user's own manual pass on prod.** This is the stated gate for the mobile-journey and automated-tour backlog items — running it is what validates whether the 27-story catalogue matches how the product is actually used.
 
 ## Where everything lives
@@ -68,7 +69,7 @@ The driver + the 27-story catalogue are statically imported by `app/routes/_app.
 - Consumes: `TourDriver` (named export, `src/walkthrough/tour-driver.tsx:352`). `React.lazy` needs a default, so map it: `.then((m) => ({ default: m.TourDriver }))`.
 - Produces: nothing new — the mount just becomes conditional + lazy.
 
-- [ ] **Step 1: Replace the static import with a lazy one** at `app/routes/_app.tsx:30`:
+- [x] **Step 1: Replace the static import with a lazy one** at `app/routes/_app.tsx:30`:
 
 ```tsx
 // Lazy on purpose: the driver plus the 27-story catalogue it imports are ~8KB gzipped, and a
@@ -80,7 +81,7 @@ const TourDriver = React.lazy(() =>
 );
 ```
 
-- [ ] **Step 2: Gate the mount on the initial URL, post-hydration.** SSR has no `window` and the server must render the same nothing the client's first paint renders (the house localStorage-in-an-effect pattern, e.g. `src/lib/i18n.tsx:33-40`, exists for exactly this hydration reason). Inside `AppLayout`, near its other state:
+- [x] **Step 2: Gate the mount on the initial URL, post-hydration.** SSR has no `window` and the server must render the same nothing the client's first paint renders (the house localStorage-in-an-effect pattern, e.g. `src/lib/i18n.tsx:33-40`, exists for exactly this hydration reason). Inside `AppLayout`, near its other state:
 
 ```tsx
 // True only in a window that was OPENED as a tour window. Read once, post-hydration: the token
@@ -92,7 +93,7 @@ React.useEffect(() => {
 }, []);
 ```
 
-- [ ] **Step 3: Update the mount** at `app/routes/_app.tsx:491`:
+- [x] **Step 3: Update the mount** at `app/routes/_app.tsx:491`:
 
 ```tsx
 {user.kind === 'staff' && isTourWindow && (
@@ -104,9 +105,9 @@ React.useEffect(() => {
 
 Keep the existing one-line comment about the route guard being the real permission.
 
-- [ ] **Step 4: Verify** — `npm run typecheck && npm run lint`, both clean. Then state in the report (do not run): `npm run test:e2e:staging` exercises the popup round-trip; test 4 of `crud-walkthrough.spec.ts` fails loudly if the lazy driver never mounts.
-- [ ] **Step 5: Optional but cheap proof of the win:** `CLOUDFLARE_ENV=test npm run build` before and after, diff the `_app`/layout chunk sizes in `build/client/assets/`, put the numbers in the commit body.
-- [ ] **Step 6: Commit + push** — `node scripts/changelog.mjs "walkthrough: tour driver + catalogue lazy-load out of the shell chunk"`, stage `app/routes/_app.tsx` + `CHANGELOG.md` explicitly, commit (`Co-Authored-By:` line per CLAUDE.md), push. Then delete the matching bullet from `BACKLOG.md` item 3 in the same commit (BACKLOG rule: shipped items are deleted).
+- [x] **Step 4: Verify** — `npm run typecheck && npm run lint`, both clean. Then state in the report (do not run): `npm run test:e2e:staging` exercises the popup round-trip; test 4 of `crud-walkthrough.spec.ts` fails loudly if the lazy driver never mounts.
+- [x] **Step 5: Optional but cheap proof of the win:** `CLOUDFLARE_ENV=test npm run build` before and after, diff the `_app`/layout chunk sizes in `build/client/assets/`, put the numbers in the commit body.
+- [x] **Step 6: Commit + push** — `node scripts/changelog.mjs "walkthrough: tour driver + catalogue lazy-load out of the shell chunk"`, stage `app/routes/_app.tsx` + `CHANGELOG.md` explicitly, commit (`Co-Authored-By:` line per CLAUDE.md), push. Then delete the matching bullet from `BACKLOG.md` item 3 in the same commit (BACKLOG rule: shipped items are deleted).
 
 ### Task 2: The maintenance contract — CLAUDE.md line + BACKLOG cleanup
 
@@ -115,7 +116,7 @@ The catalogue is only worth having while it reflects the product; the user appro
 **Files:**
 - Modify: `CLAUDE.md` (End-to-end tests section) and, if Task 1 didn't already, `BACKLOG.md` item 3.
 
-- [ ] **Step 1: Add one bullet** to CLAUDE.md's "End-to-end tests" section, matching its voice:
+- [x] **Step 1: Add one bullet** to CLAUDE.md's "End-to-end tests" section, matching its voice:
 
 ```markdown
 - **A user-visible feature also updates the walkthrough catalogue in the same commit.** New
@@ -125,7 +126,7 @@ The catalogue is only worth having while it reflects the product; the user appro
   The tour targets literal English UI strings, so a copy change silently breaks a spotlight.
 ```
 
-- [ ] **Step 2: Commit + push** with `node scripts/changelog.mjs "docs: walkthrough maintenance rule in CLAUDE.md"` (fold into Task 1's commit if executing together).
+- [x] **Step 2: Commit + push** with `node scripts/changelog.mjs "docs: walkthrough maintenance rule in CLAUDE.md"` (fold into Task 1's commit if executing together).
 
 ---
 

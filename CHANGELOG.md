@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0346 — 2026-09-01
+docs: mark walkthrough continuation tasks 1-2 executed (3917872)
+
 ## v0.0345 — 2026-09-01
 walkthrough: tour driver + catalogue lazy-load out of the shell chunk (~11.9KB gz off every authed page); CLAUDE.md gains the catalogue maintenance rule
 
