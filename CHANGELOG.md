@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0348 — 2026-09-03
+docs(practice): implementation plan for the Nhiệm vụ practice tracker (3 phases + overnight verification), written for an unattended Opus 5 run
+
 ## v0.0347 — 2026-09-01
 docs: continuation plan file-map row updated for the lazy mount
 
