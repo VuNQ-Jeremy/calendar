@@ -29,6 +29,7 @@ export const MUTATION_DOMAINS = [
   'previews',
   'garden',
   'checkin',
+  'practice',
 ] as const;
 
 export type MutationDomain = (typeof MUTATION_DOMAINS)[number];

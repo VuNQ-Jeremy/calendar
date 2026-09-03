@@ -14,6 +14,7 @@ export const BEHAVIOR_TYPES = [
   'late',
   'absent',
   'missing_homework',
+  'missing_practice',
   'disruptive',
   'praise',
   'other',
@@ -25,6 +26,7 @@ export const NEGATIVE_TYPES: BehaviorTypeId[] = [
   'late',
   'absent',
   'missing_homework',
+  'missing_practice',
   'disruptive',
   'other',
 ];
@@ -34,6 +36,10 @@ export const BEHAVIOR_META: Record<BehaviorTypeId, { tk: string; color: string }
   late: { tk: 'bh_late', color: 'orange' },
   absent: { tk: 'bh_absent', color: 'rose' },
   missing_homework: { tk: 'bh_missing_homework', color: 'violet' },
+  // Written only by the nightly practice finalize job (server/services/practice-notify.ts).
+  // 'blue' is shared with `other`: all six ColorIds were already spoken for and this is the
+  // least-loaded of them.
+  missing_practice: { tk: 'bh_missing_practice', color: 'blue' },
   disruptive: { tk: 'bh_disruptive', color: 'cocoa' },
   praise: { tk: 'bh_praise', color: 'green' },
   other: { tk: 'bh_other', color: 'blue' },

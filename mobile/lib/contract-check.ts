@@ -120,4 +120,16 @@ type _ParentTuitionResponse = Expect<
   Extends<Infer<typeof c.ParentTuitionResponse>, t.ParentTuitionResponse>
 >;
 
+/* ── Practice ──────────────────────────────────────────────────────────────────────────────── */
+type _PracticeStudentTask = Expect<
+  Extends<Infer<typeof c.PracticeStudentTask>, t.PracticeStudentTask>
+>;
+type _PracticeMonthSummary = Expect<
+  Extends<Infer<typeof c.PracticeMonthSummary>, t.PracticeMonthSummary>
+>;
+type _PracticeExcuse = Expect<Extends<Infer<typeof c.PracticeExcuse>, t.PracticeExcuse>>;
+type _PracticeMyResponse = Expect<
+  Extends<Infer<typeof c.PracticeMyResponse>, t.PracticeMyResponse>
+>;
+
 export {};

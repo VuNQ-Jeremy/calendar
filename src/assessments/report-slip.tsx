@@ -73,6 +73,20 @@ type ReportLoaderData = {
   } | null;
   /** Túi mù (check-in) month tally, or null while the admin toggle is off. */
   tuiMu: { bags: number; misses: number } | null;
+  /** Nhiệm vụ, or null when the student is in no Practice-enabled class. */
+  practice: {
+    summary: {
+      doneTasks: number;
+      totalTasks: number;
+      excusedUsed: number;
+      excusedQuota: number;
+      unexcused: number;
+      level: number;
+      pendingMultiplier: number;
+      pendingForDate: string | null;
+    };
+    feedback: { date: string; title: string; feedback: string }[];
+  } | null;
 };
 
 const SLIP_CSS = `
@@ -291,6 +305,7 @@ export function ReportSlipView() {
     homework,
     garden,
     tuiMu,
+    practice,
     teacher,
   } = useLoaderData() as ReportLoaderData;
   const { t, lang } = useLang();
@@ -578,6 +593,42 @@ export function ReportSlipView() {
                       >
                         {h.done}/{h.requiredCount} {h.completed ? '✓' : ''}
                       </span>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {practice && practice.summary.totalTasks > 0 && (
+                <>
+                  <p className="rslip__section-title">
+                    {t('pr_slip_title')}
+                    {' — '}
+                    <span className="rslip__hw-summary">
+                      {t('pr_slip_done', {
+                        done: practice.summary.doneTasks,
+                        total: practice.summary.totalTasks,
+                      })}
+                    </span>
+                  </p>
+                  <div className="rslip__hw">
+                    <span className="rslip__hw-name">
+                      {t('pr_slip_misses', {
+                        excused: practice.summary.excusedUsed,
+                        unexcused: practice.summary.unexcused,
+                      })}
+                    </span>
+                    {practice.summary.level > 0 && (
+                      <span className="rslip__hw-count">
+                        {t('pr_slip_warning', { n: practice.summary.level })}
+                      </span>
+                    )}
+                  </div>
+                  {practice.feedback.map((f) => (
+                    <div key={`${f.date}-${f.title}`} className="rslip__hw">
+                      <span className="rslip__hw-name">
+                        {f.date.slice(8, 10)}/{f.date.slice(5, 7)} · {f.title}
+                      </span>
+                      <span className="rslip__hw-count">{f.feedback}</span>
                     </div>
                   ))}
                 </>

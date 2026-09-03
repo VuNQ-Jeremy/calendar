@@ -119,6 +119,8 @@ export default {
    *   `*​/15 * * * *`  — class-starting-soon sweep
    *   `0 1 * * *`     — 01:00 UTC = 08:00 Vietnam (ICT, UTC+7), the daily digest
    *   `0 12 * * *`    — 12:00 UTC = 19:00 ICT, tomorrow's session previews
+   *   `0 13 * * *`    — 13:00 UTC = 20:00 ICT, the practice nudge for tasks still open tonight
+   *   `0 17 * * *`    — 17:00 UTC = 00:00 ICT, the practice finalize (yesterday's misses)
    *
    * `waitUntil` rather than a bare await so a slow Expo response cannot make the invocation
    * itself look like a timeout; the work still runs to completion.

@@ -59,8 +59,8 @@ describe('walkthrough story data', () => {
 
   // The whole catalogue, and the journeys it is grouped under. A story that lost its journey, or a
   // journey nothing points at, would render an empty group on the checklist.
-  it('covers all 27 stories across all 7 journeys', () => {
-    expect(STORIES).toHaveLength(27);
+  it('covers all 29 stories across all 7 journeys', () => {
+    expect(STORIES).toHaveLength(29);
     expect(new Set(JOURNEYS.map((j) => j.id)).size).toBe(JOURNEYS.length);
     for (const j of JOURNEYS) expect(STORIES.some((s) => s.journey === j.id)).toBe(true);
   });

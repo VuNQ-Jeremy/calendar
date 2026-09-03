@@ -20,6 +20,7 @@ const EXTRA: Record<string, string> = {
   '/signup': 'signup_title',
   '/verify-email': 'verify_email_title',
   '/profile': 'prof_title',
+  '/practice/review': 'pr_review_queue',
   '/logs/notifications': 'logs_tab_notifications',
   '/logs/activity': 'logs_tab_activity',
   '/logs/usage': 'logs_tab_usage',

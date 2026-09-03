@@ -28,6 +28,7 @@ import type {
   ParentInput,
   ProfileInput,
   PlantPatchInput,
+  PracticeExcuseRequestInput,
   PushRegisterInput,
   RedeemInviteInput,
   RemarkCriterionInput,
@@ -56,6 +57,9 @@ import type {
   EventRow,
   GardenPlantResponse,
   GardenSnapshotResponse,
+  PracticeExcuse,
+  PracticeMyResponse,
+  PracticeStudentTask,
   FeedbackRow,
   FlashcardTopicRow,
   FlashcardWordRow,
@@ -498,4 +502,19 @@ export const push = {
     apiFetch<{ ok: true }>('/api/push/register', { method: 'POST', body: input }),
   unregister: (expoToken: string) =>
     apiFetch<{ ok: true }>('/api/push/unregister', { method: 'POST', body: { expoToken } }),
+};
+
+// ---- Practice (Nhiệm vụ), student side ----
+
+/**
+ * `submit` goes through `apiUpload` (XHR) rather than `apiFetch`: a 50 MB video needs a real
+ * progress number, and fetch cannot give one. The form carries `studentTaskId`, the optional
+ * `timeFrom`/`timeTo`/`note`, and an optional `file` part.
+ */
+export const practice = {
+  my: () => apiFetch<PracticeMyResponse>('/api/practice/my'),
+  submit: (form: FormData, onProgress?: (pct: number) => void) =>
+    apiUpload<PracticeStudentTask>('/api/practice/submit', form, { onProgress }),
+  requestExcuse: (input: PracticeExcuseRequestInput) =>
+    apiFetch<PracticeExcuse>('/api/practice/excuse', { method: 'POST', body: input }),
 };

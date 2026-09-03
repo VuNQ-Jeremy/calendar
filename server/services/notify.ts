@@ -16,6 +16,9 @@ import * as zalo from './zalo';
 import * as vocabImages from './vocab-images';
 import { record, setActorTenant } from './audit';
 import { listActiveTenantIds } from './tenants';
+// Namespace import, not named: practice-notify.ts imports `deliver`/`ledgerKey`/`ictNow` back out
+// of this module, and a namespace import keeps that cycle to runtime lookups only.
+import * as practiceNotify from './practice-notify';
 
 /**
  * The scheduled notification jobs. Called from `scheduled()` in workers/app.ts, and from the
@@ -91,6 +94,9 @@ export const ledgerKey = {
   gardenWilt: (studentId: string, dateIso: string) => `garden-wilt:${studentId}:${dateIso}`,
   gardenDrop: (studentId: string, nextDropDate: string) =>
     `garden-drop:${studentId}:${nextDropDate}`,
+  practiceMiss: (studentId: string, classId: string, date: string) =>
+    `practice-miss:${studentId}:${classId}:${date}`,
+  practiceRemind: (studentId: string, date: string) => `practice-remind:${studentId}:${date}`,
 } as const;
 
 /**
@@ -719,8 +725,8 @@ async function zaloDeliver(db: TenantDb, env: Env | undefined, jobs: ZaloJob[]):
   }
 }
 
-/** Send, then delete whatever Expo said is gone. */
-async function deliver(db: TenantDb, messages: ExpoPushMessage[]): Promise<void> {
+/** Send, then delete whatever Expo said is gone. Exported for ./practice-notify.ts. */
+export async function deliver(db: TenantDb, messages: ExpoPushMessage[]): Promise<void> {
   if (!messages.length) return;
   const { dead } = await push.sendPush(messages);
   if (dead.length) {
@@ -763,7 +769,11 @@ export async function runScheduled(cron: string, env: Env, at: Date = new Date()
           ? await runDailyDigest(db, at, env)
           : cron === '0 12 * * *'
             ? await runEveningPreview(db, at, env)
-            : await runClassReminders(db, at, env);
+            : cron === '0 13 * * *'
+              ? await practiceNotify.runPracticeReminders(db, at, env)
+              : cron === '0 17 * * *'
+                ? await practiceNotify.runPracticeFinalize(db, at, env)
+                : await runClassReminders(db, at, env);
       let garden = 0;
       if (cron === '0 1 * * *') {
         garden = await runGardenAlerts(db, at);

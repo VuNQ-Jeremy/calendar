@@ -206,6 +206,7 @@ export const BehaviorType = z.enum([
   'late',
   'absent',
   'missing_homework',
+  'missing_practice',
   'disruptive',
   'praise',
   'other',
@@ -895,6 +896,8 @@ export const NotifPrefsInput = z.object({
    * about is a garden that quietly dies, which is the opposite of the point.
    */
   gardenAlerts: FormBool.default(true),
+  /** The 20:00 ICT "you still have practice tasks open today" push. On by default. */
+  practiceReminders: FormBool.default(true),
 });
 export type NotifPrefsInput = z.infer<typeof NotifPrefsInput>;
 
@@ -1590,3 +1593,116 @@ export const GiftRedeemInput = z.object({
   note: z.string().trim().max(300).nullish(),
 });
 export type GiftRedeemInput = z.infer<typeof GiftRedeemInput>;
+
+// ---------------------------------------------------------------------------
+// Practice (Nhiệm vụ) — docs/superpowers/plans/2026-09-03-practice-tracker.md
+// ---------------------------------------------------------------------------
+
+export const PracticeDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+export const PracticeProofType = z.enum(['photo', 'video', 'either', 'none']);
+export type PracticeProofType = z.infer<typeof PracticeProofType>;
+export const PracticeTaskStatus = z.enum([
+  'open',
+  'submitted',
+  'accepted',
+  'rejected',
+  'teacher_done',
+]);
+export type PracticeTaskStatus = z.infer<typeof PracticeTaskStatus>;
+
+/** Comma list of ICT weekday numbers, 0=Sun … 6=Sat, e.g. "1,3,5". */
+export const PracticeWeekdays = z
+  .string()
+  .regex(/^([0-6](,[0-6])*)?$/, 'Expected weekday numbers 0-6 separated by commas');
+
+export const PracticeSettingsInput = z.object({
+  classId: z.string().min(1),
+  enabled: FormBool.default(true),
+  weekdays: PracticeWeekdays.default('1,2,3,4,5,6'),
+});
+export type PracticeSettingsInput = z.infer<typeof PracticeSettingsInput>;
+
+export const PracticeDayOverrideInput = z.object({
+  classId: z.string().min(1),
+  date: PracticeDate,
+  /** true = force a practice day, false = day off; null removes the override. */
+  isPractice: z.union([FormBool, z.null()]),
+});
+export type PracticeDayOverrideInput = z.infer<typeof PracticeDayOverrideInput>;
+
+export const PracticeTaskInput = z.object({
+  classId: z.string().min(1),
+  date: PracticeDate,
+  title: z.string().trim().min(1).max(500),
+  materialId: z.string().nullish(),
+  url: z
+    .string()
+    .trim()
+    .url()
+    .max(2000)
+    .nullish()
+    .or(z.literal('').transform(() => null)),
+  proofType: PracticeProofType.default('either'),
+  /** When set, the task is created for this student only (no class-level row). */
+  studentId: z.string().nullish(),
+});
+export type PracticeTaskInput = z.infer<typeof PracticeTaskInput>;
+
+/** Multi-line quick add: one task per non-empty line, all sharing material + proof type. */
+export const PracticeQuickAddInput = z.object({
+  classId: z.string().min(1),
+  date: PracticeDate,
+  lines: z.string().min(1).max(10_000),
+  materialId: z.string().nullish(),
+  proofType: PracticeProofType.default('either'),
+});
+export type PracticeQuickAddInput = z.infer<typeof PracticeQuickAddInput>;
+
+export const PracticeReviewInput = z.object({
+  studentTaskId: z.string().min(1),
+  decision: z.enum(['accept', 'reject', 'feedback', 'teacher_done']),
+  feedback: z.string().trim().max(4000).nullish(),
+  rejectReason: z.string().trim().max(1000).nullish(),
+});
+export type PracticeReviewInput = z.infer<typeof PracticeReviewInput>;
+
+export const PracticeExcuseRequestInput = z.object({
+  classId: z.string().min(1),
+  date: PracticeDate,
+  reason: z.string().trim().min(1).max(1000),
+});
+export type PracticeExcuseRequestInput = z.infer<typeof PracticeExcuseRequestInput>;
+
+export const PracticeExcuseDecideInput = z.object({
+  excuseId: z.string().min(1),
+  decision: z.enum(['approve', 'reject']),
+});
+export type PracticeExcuseDecideInput = z.infer<typeof PracticeExcuseDecideInput>;
+
+/** Teacher excuses a miss after the fact (creates an approved excuse and flips the miss). */
+export const PracticeExcuseMissInput = z.object({
+  missId: z.string().min(1),
+  reason: z.string().trim().max(1000).default('Teacher excused'),
+});
+export type PracticeExcuseMissInput = z.infer<typeof PracticeExcuseMissInput>;
+
+export const PracticeClearWarningInput = z.object({
+  classId: z.string().min(1),
+  studentId: z.string().min(1),
+});
+export type PracticeClearWarningInput = z.infer<typeof PracticeClearWarningInput>;
+
+/** Student submit (multipart; the file arrives as form field `file`, validated in the route). */
+export const PracticeSubmitInput = z.object({
+  studentTaskId: z.string().min(1),
+  timeFrom: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullish(),
+  timeTo: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullish(),
+  note: z.string().trim().max(2000).nullish(),
+});
+export type PracticeSubmitInput = z.infer<typeof PracticeSubmitInput>;

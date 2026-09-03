@@ -130,6 +130,15 @@ export default function NotificationSettings() {
               onChange={(v) => set({ studyNudges: v })}
             />
             <Muted>{t('notif_study_sub')}</Muted>
+
+            <View style={{ height: 1, backgroundColor: th.color.borderSubtle }} />
+
+            <Switch
+              label={t('notif_practice_reminders')}
+              checked={prefs.practiceReminders}
+              onChange={(v) => set({ practiceReminders: v })}
+            />
+            <Muted>{t('notif_practice_reminders_sub')}</Muted>
           </Card>
         ) : null}
 

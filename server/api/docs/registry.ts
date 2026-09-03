@@ -32,6 +32,8 @@ import {
   ParentInput,
   ParentPortalInput,
   PlantPatchInput,
+  PracticeExcuseRequestInput,
+  PracticeSubmitInput,
   ProfileInput,
   PushRegisterInput,
   PvpRoomInput,
@@ -426,6 +428,74 @@ const app: PathDoc[] = [
           'person row, whose shape depends on whether the caller is staff, a student or a parent.',
         request: { schema: ProfileInput, patch: true },
         responses: { 200: ok(c.ProfilePatchResult, 'The updated person row.') },
+      },
+    ],
+  },
+  {
+    path: '/api/practice/my',
+    routePattern: 'api/practice/my',
+    tag: 'Practice',
+    operations: [
+      {
+        method: 'get',
+        auth: 'user',
+        summary: "The student's practice tasks and standing",
+        description:
+          'Student-only (a teacher plans practice on the web). Returns today plus the next seven ' +
+          "days, this month's summary, and the server's own ICT date — the deadline the nightly " +
+          'job will apply is the one the phone must draw.',
+        responses: {
+          200: ok(c.PracticeMyResponse, 'Tasks, per-class summaries and pending excuses.'),
+          403: err('forbidden', 'a staff or parent caller'),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/practice/submit',
+    routePattern: 'api/practice/submit',
+    tag: 'Practice',
+    operations: [
+      {
+        method: 'post',
+        auth: 'user',
+        summary: 'Submit proof for one practice task',
+        description:
+          'multipart/form-data, NOT JSON: the fields below plus an optional `file` part carrying ' +
+          'the photo or video (jpeg/png/webp/mp4/quicktime, at most 50 MB). A resubmit after a ' +
+          'rejection overwrites the previous submission.',
+        request: { schema: PracticeSubmitInput },
+        responses: {
+          200: ok(c.PracticeStudentTask, 'The updated task.'),
+          403: err('forbidden', 'a staff or parent caller'),
+          404: err('not_found', "no such task, or it is not the caller's"),
+          409: err('deadline_passed', 'the practice day is over, or the task is already accepted'),
+          413: err('file_too_large', 'over 50 MB'),
+          415: err('bad_media_type', 'not an accepted image or video type'),
+          422: err('proof_required', 'the task needs proof, or the wrong kind was sent'),
+        },
+      },
+    ],
+  },
+  {
+    path: '/api/practice/excuse',
+    routePattern: 'api/practice/excuse',
+    tag: 'Practice',
+    operations: [
+      {
+        method: 'post',
+        auth: 'user',
+        summary: 'Ask to be excused for one practice day',
+        description:
+          'Only before that day ends. Afterwards the day has already been judged and only a ' +
+          'teacher can excuse the resulting miss.',
+        request: { schema: PracticeExcuseRequestInput },
+        responses: {
+          200: ok(c.PracticeExcuse, 'The pending request.'),
+          403: err('forbidden', 'a staff or parent caller'),
+          404: err('not_found', 'the student is not enrolled in that class'),
+          409: err('deadline_passed', 'the date is in the past'),
+        },
       },
     ],
   },
@@ -1764,6 +1834,12 @@ export const TAGS: { name: string; description: string }[] = [
   {
     name: 'Materials',
     description: 'Documents and links, with the only file upload in the API.',
+  },
+  {
+    name: 'Practice',
+    description:
+      'Nhiệm vụ — the daily self-study tasks a teacher plans on the web and a student submits ' +
+      'proof for here. Student-only: there is no teacher surface in the API.',
   },
   {
     name: 'Assessments',

@@ -241,3 +241,13 @@ UPDATE accounts SET tenant_id = 'tnt_mochi_0001' WHERE email = 'mina.park@mochi.
 INSERT INTO zalo_chats (id, tenant_id, chat_id, kind, parent_id, created_at)
 VALUES ('zc-e2e-family-0001', 'tnt_mochi_0001', 'chat-e2e-family-0001', 'user', 'p1', datetime('now'))
 ON CONFLICT(chat_id) DO UPDATE SET parent_id = excluded.parent_id, student_id = NULL, class_id = NULL, account_id = NULL;
+
+-- Practice (migration 0057). Nothing seeds these; a failed spec must not leave a class opted in
+-- or a stray task for the next run. Children first, though every FK cascades from classes anyway.
+DELETE FROM practice_warnings;
+DELETE FROM practice_misses;
+DELETE FROM practice_excuses;
+DELETE FROM practice_student_tasks;
+DELETE FROM practice_tasks;
+DELETE FROM practice_day_overrides;
+DELETE FROM practice_settings;

@@ -105,6 +105,13 @@ export const qk = {
   gardenClass: (classId: string, ictDay: string) => ['garden', 'class', classId, ictDay] as const,
   gardenSnapshots: (classId: string) => ['garden', 'album', classId] as const,
   gardenSnapshot: (classId: string, month: string) => ['garden', 'album', classId, month] as const,
+
+  /**
+   * Practice (Nhiệm vụ). Deliberately NOT keyed by the ICT day, unlike the garden: the response
+   * carries the server's own `todayIct`, and the hook below never serves it stale, so a phone
+   * opened the next morning refetches rather than restoring yesterday's list from disk.
+   */
+  practice: ['practice'] as const,
 };
 
 export const queryClient = new QueryClient({

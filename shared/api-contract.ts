@@ -766,6 +766,80 @@ export const TuiMuMonthTally = z
  * The same payload the printable slip renders. The phone draws only part of it; the document
  * uses the rest. `garden` and `homework` degrade to null/[] rather than failing the request.
  */
+
+/* ── Practice (Nhiệm vụ) ───────────────────────────────────────────────────────────────────── */
+
+export const PracticeStudentTask = z
+  .object({
+    id: z.string(),
+    classId: z.string(),
+    className: z.string(),
+    date: z.string(),
+    title: z.string(),
+    materialId: Nullable(z.string()),
+    materialTitle: Nullable(z.string()),
+    url: Nullable(z.string()),
+    proofType: z.enum(['photo', 'video', 'either', 'none']),
+    status: z.enum(['open', 'submitted', 'accepted', 'rejected', 'teacher_done']),
+    submittedAt: Nullable(z.string()),
+    timeFrom: Nullable(z.string()),
+    timeTo: Nullable(z.string()),
+    /** Same-origin path to the proof, e.g. /practice-media/<key>; null until submitted. */
+    mediaPath: Nullable(z.string()),
+    mediaType: Nullable(z.string()),
+    note: Nullable(z.string()),
+    feedback: Nullable(z.string()),
+    rejectReason: Nullable(z.string()),
+    recordedByTeacher: z.boolean(),
+  })
+  .meta({ id: 'PracticeStudentTask' });
+
+export const PracticeMonthSummary = z
+  .object({
+    month: z.string(),
+    doneTasks: z.number().int(),
+    totalTasks: z.number().int(),
+    excusedUsed: z.number().int(),
+    excusedQuota: z.number().int(),
+    unexcused: z.number().int(),
+    level: z.number().int(),
+    pendingMultiplier: z.number().int(),
+    pendingForDate: Nullable(z.string()),
+  })
+  .meta({ id: 'PracticeMonthSummary' });
+
+export const PracticeExcuse = z
+  .object({
+    id: z.string(),
+    classId: z.string(),
+    date: z.string(),
+    reason: z.string(),
+    status: z.enum(['pending', 'approved', 'rejected']),
+    requestedAt: z.string(),
+  })
+  .meta({ id: 'PracticeExcuse' });
+
+/** GET /api/practice/my — computed against the server clock, hence `serverNow`/`todayIct`. */
+export const PracticeMyResponse = z
+  .object({
+    serverNow: z.string(),
+    todayIct: z.string(),
+    /** Per enrolled class with Practice enabled. */
+    classes: z.array(
+      z.object({
+        classId: z.string(),
+        className: z.string(),
+        /** Practice days in [today, today+7]. */
+        practiceDays: z.array(z.string()),
+        summary: PracticeMonthSummary,
+        excuses: z.array(PracticeExcuse),
+      }),
+    ),
+    /** Tasks dated today … today+7, plus yesterday's still-open ones for context. */
+    tasks: z.array(PracticeStudentTask),
+  })
+  .meta({ id: 'PracticeMyResponse' });
+
 export const ParentReportResponse = z
   .object({
     month: z.string(),
@@ -805,6 +879,14 @@ export const ParentReportResponse = z
     ),
     /** Null when the túi mù module is switched off. */
     tuiMu: Nullable(TuiMuMonthTally),
+    /** Null when the student is in no Practice-enabled class. */
+    practice: Nullable(
+      z.object({
+        summary: PracticeMonthSummary,
+        /** Up to 5 most recent non-empty teacher feedback lines this month. */
+        feedback: z.array(z.object({ date: z.string(), title: z.string(), feedback: z.string() })),
+      }),
+    ),
   })
   .meta({ id: 'ParentReportResponse' });
 

@@ -726,6 +726,83 @@ export const STORIES: TourStory[] = [
     ],
   },
   {
+    id: 'practice-plan-week',
+    journey: 'content',
+    title: 'Enable Practice for a class and plan a day with quick add',
+    tag: 'write',
+    route: '/practice',
+    account: 'staff',
+    specs: ['crud-practice.spec.ts'],
+    steps: [
+      { kind: 'goto', text: 'Open Practice', route: '/practice' },
+      {
+        kind: 'click',
+        text: 'On a class card click Enable Practice',
+        target: { button: 'Enable Practice' },
+        opensDialog: 'Enable Practice',
+      },
+      {
+        kind: 'check',
+        text: 'Leave the weekdays untouched the first time — Mochi derives Mon–Sat minus the days this class meets, Sunday off',
+      },
+      { kind: 'submit', text: 'Press Save', target: { button: 'Save' }, post: '/practice-actions' },
+      { kind: 'click', text: 'Click Open week', target: { button: 'Open week' } },
+      {
+        kind: 'click',
+        text: "On today's column click Add tasks",
+        target: { button: 'Add tasks' },
+        opensDialog: 'Add tasks',
+      },
+      {
+        kind: 'fill',
+        text: 'One task per line',
+        dialog: 'Add tasks',
+        fields: [
+          {
+            field: 'Tasks (one per line)',
+            value: 'WALKTHROUGH Workbook p.4-7\nWALKTHROUGH Grammar in Use unit 4',
+          },
+        ],
+      },
+      { kind: 'submit', text: 'Press Save', target: { button: 'Save' }, post: '/practice-actions' },
+      {
+        kind: 'check',
+        text: 'Two task cards appear under today; each shows a proof tag and a done/total count',
+      },
+      {
+        kind: 'check',
+        text: 'Cleanup: delete both WALKTHROUGH tasks from the column, then Disable Practice on the class card',
+      },
+    ],
+  },
+  {
+    id: 'practice-review-ledger',
+    journey: 'content',
+    title: 'Review a submission and read the ledger',
+    tag: 'read',
+    route: '/practice/review',
+    account: 'staff',
+    specs: ['crud-practice.spec.ts'],
+    steps: [
+      { kind: 'goto', text: 'Open the review queue', route: '/practice/review' },
+      {
+        kind: 'check',
+        text: 'Submitted proofs are listed newest first with photo/video, time worked and the student note; Accept, Reject (with reason) and Save feedback act on one row',
+      },
+      { kind: 'check', text: 'Excuse requests sit above the queue with Approve / Reject' },
+      { kind: 'goto', text: 'Open a class ledger for this month', route: '/practice' },
+      {
+        kind: 'click',
+        text: 'Click Open ledger on an enabled class',
+        target: { button: 'Open ledger' },
+      },
+      {
+        kind: 'check',
+        text: 'Each student row shows done/total, excused used out of quota, unexcused, the ×N badge and warning level, and "No Zalo pairing" when parents cannot be messaged',
+      },
+    ],
+  },
+  {
     id: 'content-pronounce',
     journey: 'content',
     title: 'Hear a word and score one pronunciation attempt',

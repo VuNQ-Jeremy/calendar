@@ -395,7 +395,7 @@ document is where scope quietly shrinks if you don't look.
 | Permission timing | Fresh install → the prompt should appear **after** a meaningful action, not on first launch |
 | Delivery with app closed | Trigger a send, **fully close the app**, wait. The notification must arrive on the lock screen |
 | Deep links | Tap each notification type — it must open the specific event / homework / topic, not the home screen |
-| Channels | Android Settings → Apps → Mochi → Notifications. Three separate channels, independently mutable |
+| Channels | Android Settings → Apps → Mochi → Notifications. Two separate channels (`reminders`, `study`), independently mutable |
 | No duplicates | The class reminder cron runs every 15 min against a 30-min window. **Let it run through at least three ticks for one class and confirm you got exactly one notification** |
 | Recurrence | A weekly class must trigger a reminder on each occurrence |
 | Digest timing | The daily digest arrives at **08:00 Vietnam time** |
@@ -445,6 +445,31 @@ phone draws is genuine decay rather than a fake.
 | Album | A saved month opens and shows the frozen garden. Streaks and fruit counts are the frozen ones, not today's |
 | Garden push | With the app closed, trigger the 08:00 sweep (`POST /api/push/run?job=garden` as an admin) on a wilting plant. Tapping the notification must land on the vocabulary screen with the widget on top |
 | Staff has none | Sign in as `dev@mochi.edu`: no widget, no garden link, and a round played as staff shows no note |
+
+---
+
+## Practice — Nhiệm vụ (student half, 2026-09)
+
+**Sign in as the student** (`vunq@mochi.edu`); staff plan practice on the web only. Set the class
+up first from the web at `/practice`: enable it for the student's class, force today to be a
+practice day if the derived mask made it a day off, and quick-add one photo task and one video
+task.
+
+| Test | Look for |
+|---|---|
+| Tab exists | A student has FOUR tabs: Vocabulary, My schedule, Practice, Profile. Staff and parents see no Practice tab at all |
+| Today vs upcoming | Today's tasks sit above "Upcoming"; the day labels come from the server's ICT date, not the phone's clock |
+| Timer survives a kill | Start the timer, force-close the app, reopen the task. The elapsed number must have kept counting — it is derived from a stored instant, not a tick count |
+| Edited time | Stop the timer, tap Edit, type `20:00` / `20:40`. A malformed value must block Submit rather than post silently |
+| Photo proof | Take photo → thumbnail appears → Submit. Progress runs to 100% and the screen pops back to the list showing "Submitted" |
+| Video proof | Add video (≤ 60 s) → "Compressing video…" → upload. A clip over 60 s must be refused with the message, not truncated |
+| Proof enforced | A task whose proof is Photo must keep Submit disabled until something is attached |
+| Offline | Airplane mode on a task screen: Submit is disabled and "You are offline — connect to submit" shows. There is deliberately NO offline queue here — see the note in `app/(app)/practice/[id].tsx` |
+| Rejected → resubmit | Have the teacher reject from `/practice/review`. The card shows the reason and the button reads "Resubmit" |
+| Excuse before the deadline | Request excuse → pick a date → reason → send. It appears in the list as pending, and the teacher sees it above the review queue |
+| Excuse after the deadline | Open yesterday's task: no Submit, only the "only your teacher can excuse this day now" line |
+| Reminder push | With the app closed, `POST /api/push/run?job=practice-remind` as an admin while a task is still open. The notification must land and open the Practice tab |
+| Penalty push | `POST /api/push/run?job=practice-finalize` after a missed day. The body names the next practice day and its ×N |
 
 ---
 

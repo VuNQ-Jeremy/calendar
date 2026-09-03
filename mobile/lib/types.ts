@@ -445,3 +445,72 @@ export interface GardenSnapshotResponse {
   month: string;
   data: GardenSnapshotData;
 }
+
+/* ── Practice (Nhiệm vụ) ───────────────────────────────────────────────────────────────────── */
+
+/** One copy of a task, as the student's app sees it. Mirrors `c.PracticeStudentTask`. */
+export interface PracticeStudentTask {
+  id: string;
+  classId: string;
+  className: string;
+  date: string;
+  title: string;
+  materialId: string | null;
+  materialTitle: string | null;
+  url: string | null;
+  proofType: 'photo' | 'video' | 'either' | 'none';
+  status: 'open' | 'submitted' | 'accepted' | 'rejected' | 'teacher_done';
+  submittedAt: string | null;
+  timeFrom: string | null;
+  timeTo: string | null;
+  /** Same-origin path under the API base; null until something was submitted. */
+  mediaPath: string | null;
+  mediaType: string | null;
+  note: string | null;
+  feedback: string | null;
+  rejectReason: string | null;
+  recordedByTeacher: boolean;
+}
+
+export interface PracticeMonthSummary {
+  month: string;
+  doneTasks: number;
+  totalTasks: number;
+  excusedUsed: number;
+  excusedQuota: number;
+  unexcused: number;
+  level: number;
+  pendingMultiplier: number;
+  pendingForDate: string | null;
+}
+
+export interface PracticeExcuse {
+  id: string;
+  classId: string;
+  date: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+}
+
+export interface PracticeClassBlock {
+  classId: string;
+  className: string;
+  practiceDays: string[];
+  summary: PracticeMonthSummary;
+  excuses: PracticeExcuse[];
+}
+
+/**
+ * `GET /api/practice/my`.
+ *
+ * `todayIct` is the SERVER's day, and the screens must use it rather than the device clock: the
+ * deadline is an ICT midnight the nightly job applies, and a phone set to another timezone (or
+ * simply wrong) would otherwise draw a different one.
+ */
+export interface PracticeMyResponse {
+  serverNow: string;
+  todayIct: string;
+  classes: PracticeClassBlock[];
+  tasks: PracticeStudentTask[];
+}

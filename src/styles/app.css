@@ -4444,3 +4444,286 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
     flex-basis: 100%;
   }
 }
+
+/* ── Practice (Nhiệm vụ) ─────────────────────────────────────────────────────────────────────
+   Every selector is namespaced `pr-`: this stylesheet is global to the whole app shell, so a
+   generic name here (`.week`, `.day`) would reach into other screens. See the `.month` incident
+   in the tuition work. Layout only — colour and type come from the DS tokens. */
+
+.pr-home__list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.pr-home__card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-4);
+}
+.pr-home__name,
+.pr-home__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.pr-home__days {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) 0;
+}
+
+/* Seven columns that scroll horizontally rather than crushing: a task title needs room to be
+   readable, and a teacher on a laptop is happy to scroll a week sideways. */
+.pr-week__grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+.pr-week__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  background: var(--surface-sunken, var(--bg-subtle, transparent));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--space-3);
+}
+.pr-week__col[data-today='true'] {
+  border-color: var(--accent, var(--border-strong, currentColor));
+}
+.pr-week__colhead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.pr-week__dow {
+  font-weight: 700;
+}
+.pr-week__date {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.pr-week__menu {
+  position: relative;
+  margin-left: auto;
+}
+.pr-week__menu-pop {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised, #fff);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 10px);
+  box-shadow: var(--shadow-md, 0 6px 18px rgb(0 0 0 / 12%));
+  padding: var(--space-1);
+}
+.pr-week__menu-item {
+  background: none;
+  border: 0;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  font: inherit;
+  color: var(--text-body);
+}
+.pr-week__menu-item:hover {
+  background: var(--bg-hover, rgb(0 0 0 / 5%));
+}
+.pr-week__tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+}
+.pr-week__empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: var(--space-2) 0;
+}
+.pr-week__task {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pr-week__task-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pr-week__task-meta,
+.pr-week__task-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.pr-week__count {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.pr-week__colfoot {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.pr-week__roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.pr-week__student {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 10px);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pr-week__student-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.pr-week__copy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.pr-week__copy-title {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+.pr-week__addone {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pr-week__addone h4 {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.pr-review__queue,
+.pr-review__excuses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.pr-review__card,
+.pr-review__excuse {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pr-review__head {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.pr-review__head strong {
+  color: var(--text-body);
+}
+.pr-review__title {
+  font-weight: 600;
+}
+.pr-review__line {
+  font-size: var(--text-sm);
+}
+.pr-review__label {
+  color: var(--text-muted);
+  margin-right: var(--space-2);
+}
+/* Capped rather than natural size: a queue of thirty portrait phone photos is otherwise a
+   kilometre of scrolling, and the teacher only needs to recognise the page. */
+.pr-review__media {
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  border-radius: var(--radius-md, 10px);
+  align-self: flex-start;
+}
+.pr-review__actions,
+.pr-review__excuse-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.pr-review__reason {
+  font-size: var(--text-sm);
+}
+
+.pr-ledger__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-4);
+}
+.pr-ledger__table th,
+.pr-ledger__table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+.pr-ledger__table th {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.pr-ledger__name {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-body);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.pr-ledger__misses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pr-ledger__misses li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  /* One column at a time on a phone; the grid keeps its horizontal scroll. */
+  .pr-week__grid {
+    grid-auto-columns: 84vw;
+  }
+}

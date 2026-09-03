@@ -7,6 +7,7 @@ import * as gardenSvc from './garden';
 import * as attendanceSvc from './attendance';
 import * as subjectsSvc from './subjects';
 import * as checkinSvc from './checkin';
+import * as practiceSvc from './practice';
 import { NEGATIVE_TYPES, scoreStats, scoreStatsByClass } from '../../shared/logic/assess';
 import { ictDateOf } from '../../shared/logic/tests';
 
@@ -39,6 +40,7 @@ export async function buildReportCard(db: TenantDb, studentId: string, month: st
     subjects,
     staffList,
     tuiMu,
+    practice,
   ] = await Promise.all([
     peopleSvc.listStudents(db),
     classesSvc.listLite(db),
@@ -58,6 +60,8 @@ export async function buildReportCard(db: TenantDb, studentId: string, month: st
     checkinSettings.showParentReport
       ? checkinSvc.studentMonthTally(db, studentId, month).catch(() => null)
       : Promise.resolve(null),
+    // Same degrade-do-not-die posture as the garden line above: null just drops the block.
+    practiceSvc.studentPracticeForReport(db, studentId, month).catch(() => null),
   ]);
 
   const student = students.find((s) => s.id === studentId);
@@ -131,5 +135,8 @@ export async function buildReportCard(db: TenantDb, studentId: string, month: st
         : null,
     // Túi mù month tally, only while the admin has switched on parent-facing check-in reporting.
     tuiMu,
+    // Nhiệm vụ: done/total, the excused balance, the active warning and recent feedback lines.
+    // Null when the student is in no Practice-enabled class, which hides the block entirely.
+    practice,
   };
 }

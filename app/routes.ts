@@ -41,6 +41,12 @@ export default [
   route('garden-month', 'routes/garden-month.tsx'),
   // Cookie-authed attendance + homework for the report tab's rail — same twin reasoning.
   route('report-extras', 'routes/report-extras.tsx'),
+  // Every Practice web mutation, cookie-authed: /api/* is bearer-only, so a browser fetcher
+  // there gets a 401. One route dispatching on `intent`, so e2e can `posted()` a single path.
+  route('practice-actions', 'routes/practice-actions.tsx'),
+  // Proof photos/videos out of R2. Guarded, not a capability URL: staff of the school by cookie,
+  // the owning student by bearer. See the route file.
+  route('practice-media/:key', 'routes/practice-media.$key.tsx'),
   // Printable test document — outside the _app layout on purpose: no app shell, no nav chrome.
   route('tests/:id/print', 'routes/tests.$id.print.tsx'),
   // Printable tuition slip (phiếu thu), same reasoning.
@@ -133,6 +139,10 @@ export default [
   route('api/garden/snapshots', 'routes/api.garden.snapshots.tsx'),
   route('api/feedback/:id?', 'routes/api.feedback.tsx'),
   route('api/checkin/summary', 'routes/api.checkin.summary.tsx'),
+  // Practice (Nhiệm vụ), student side. The teacher's screens are web-only.
+  route('api/practice/my', 'routes/api.practice.my.tsx'),
+  route('api/practice/submit', 'routes/api.practice.submit.tsx'),
+  route('api/practice/excuse', 'routes/api.practice.excuse.tsx'),
   route('api/profile', 'routes/api.profile.tsx'),
   route('api/settings/theme', 'routes/api.settings.theme.tsx'),
   route('api/settings/ui-prefs', 'routes/api.settings.ui-prefs.tsx'),
@@ -181,6 +191,12 @@ export default [
     route('classes', 'routes/classes.tsx'),
     route('people', 'routes/people.tsx'),
     route('materials', 'routes/materials.tsx'),
+    // Practice (Nhiệm vụ). Static segments before the dynamic ones for the same reason as
+    // logs/notifications below: `/practice/review` must not be read as a class id.
+    route('practice', 'routes/practice.tsx'),
+    route('practice/review', 'routes/practice.review.tsx'),
+    route('practice/:classId/week/:monday', 'routes/practice.$classId.week.$monday.tsx'),
+    route('practice/:classId/ledger/:month', 'routes/practice.$classId.ledger.$month.tsx'),
     route('tests', 'routes/tests.tsx'),
     route('tests/:id', 'routes/tests.$id.tsx'),
     route('my-tests', 'routes/my-tests.tsx'),

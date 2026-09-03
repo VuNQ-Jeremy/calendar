@@ -41,6 +41,8 @@ export const DEFAULT_NOTIF_PREFS: NotifPrefs = {
   studyNudges: false,
   previewEvening: true,
   gardenAlerts: true,
+  /** The 20:00 ICT nudge when today's practice is still open, and the penalty alert. */
+  practiceReminders: true,
 };
 
 export const NOTIF_PREFS_KEY = 'notif-prefs';
@@ -108,12 +110,13 @@ export async function getNotifPrefsByAccount(db: TenantDb): Promise<ResolvedNoti
 export type ResolvedNotifPrefs = { school: NotifPrefs; byAccount: Map<string, NotifPrefs> };
 
 /**
- * The four switches that are genuinely personal.
+ * The five switches that are genuinely personal.
  *
  * `classLeadMinutes` is deliberately not one of them: it decides when a sweep FIRES, and the
  * ledger keys carry no recipient, so a per-person lead would mean a per-person ledger.
  */
-export type NotifSwitch = 'classReminders' | 'studyNudges' | 'previewEvening' | 'gardenAlerts';
+export type NotifSwitch =
+  'classReminders' | 'studyNudges' | 'previewEvening' | 'gardenAlerts' | 'practiceReminders';
 
 /** Does this account still want `sw`? An account that never chose follows the school. */
 export function wantsNotif(

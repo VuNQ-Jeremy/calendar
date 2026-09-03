@@ -84,6 +84,7 @@ export const NAV: NavSection[] = [
       { id: 'classes', path: '/classes', tk: 'nav_classes', icon: 'book', staffOnly: true },
       { id: 'people', path: '/people', tk: 'nav_people', icon: 'users', staffOnly: true },
       { id: 'materials', path: '/materials', tk: 'nav_materials', icon: 'folder', staffOnly: true },
+      { id: 'practice', path: '/practice', tk: 'nav_practice', icon: 'repeat', staffOnly: true },
     ],
   },
   {

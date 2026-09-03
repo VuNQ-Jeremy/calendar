@@ -322,6 +322,19 @@ function ReportExtrasCards({ studentId, month }: { studentId: string; month: str
       attendance: ClassAttendanceSummary[];
       homework: StudentMonthAssignment[];
       tuiMu: TuiMuMonthTally | null;
+      practice: {
+        summary: {
+          doneTasks: number;
+          totalTasks: number;
+          excusedUsed: number;
+          excusedQuota: number;
+          unexcused: number;
+          level: number;
+          pendingMultiplier: number;
+          pendingForDate: string | null;
+        };
+        feedback: { date: string; title: string; feedback: string }[];
+      } | null;
     };
     error?: string;
   }>();
@@ -402,6 +415,31 @@ function ReportExtrasCards({ studentId, month }: { studentId: string; month: str
           <p style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
             {t('rep_tm_line', { bags: d.tuiMu.bags, misses: d.tuiMu.misses })}
           </p>
+        </Card>
+      )}
+
+      {d.practice && d.practice.summary.totalTasks > 0 && (
+        <Card style={{ padding: 14 }}>
+          <h2 style={{ margin: '0 0 10px', fontSize: 'var(--text-base)' }}>{t('pr_slip_title')}</h2>
+          <div className="m-spread" style={{ gap: 8 }}>
+            <span style={{ fontSize: 'var(--text-sm)' }}>
+              {t('pr_slip_done', {
+                done: d.practice.summary.doneTasks,
+                total: d.practice.summary.totalTasks,
+              })}
+            </span>
+            <Badge color={d.practice.summary.unexcused > 0 ? 'rose' : 'green'}>
+              {t('pr_slip_misses', {
+                excused: d.practice.summary.excusedUsed,
+                unexcused: d.practice.summary.unexcused,
+              })}
+            </Badge>
+          </div>
+          {d.practice.summary.level > 0 && (
+            <p className="m-muted" style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)' }}>
+              {t('pr_slip_warning', { n: d.practice.summary.level })}
+            </p>
+          )}
         </Card>
       )}
     </>

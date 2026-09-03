@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
  * ranges line up. The games' actual logic lives in `@mochi/shared/logic/flashcards`, which the
  * repo-root suite already covers.
  *
- * The aliases below replace the three native modules `lib/` touches. Aliasing the NATIVE module
+ * The aliases below replace the native modules `lib/` touches. Aliasing the NATIVE module
  * rather than mocking this app's own `lib/db.ts` is load-bearing twice over:
  *
  *   1. `vi.mock('./db')` still lets `expo-sqlite` be imported, which pulls in React Native's
@@ -32,6 +32,7 @@ export default defineConfig({
       'expo-constants': at('./test/stubs/expo-constants.ts'),
       'expo-sqlite': at('./test/stubs/expo-sqlite.ts'),
       'expo-crypto': at('./test/stubs/expo-crypto.ts'),
+      '@react-native-async-storage/async-storage': at('./test/stubs/async-storage.ts'),
     },
   },
   test: {

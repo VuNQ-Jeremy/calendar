@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarClock,
   CalendarDays,
+  ClipboardCheck,
   Home,
   Layers,
   MoreHorizontal,
@@ -31,7 +32,7 @@ import { useParentPortalEnabled } from '~/lib/use-parent-portal';
  * `href` values, not with the file tree.
  */
 const STAFF_TAB_ROOTS = ['/dashboard', '/calendar', '/classes', '/vocabulary', '/more'];
-const STUDENT_TAB_ROOTS = ['/vocabulary', '/schedule', '/profile'];
+const STUDENT_TAB_ROOTS = ['/vocabulary', '/schedule', '/practice', '/profile'];
 /**
  * A parent has one tab, or two once an admin opens the portal — so the list is computed from the
  * flag rather than fixed. Getting this wrong strands back on a tab that is no longer a root.
@@ -122,8 +123,9 @@ function useTabRootsEndTheBackStack(
  *
  *   Staff   — 5 tabs: Dashboard, Calendar, Classes, Flashcards, More. Five is the practical
  *             maximum; everything else lives behind More.
- *   Student — 2 tabs: Flashcards, Profile. Mirrors the server exactly: `requireStaff` bounces
- *             students to /vocabulary, so those are the only two places they can be.
+ *   Student — 4 tabs: Vocabulary, My schedule, Practice, Profile. Mirrors the server exactly:
+ *             `requireStaff` bounces students to /vocabulary, so these are the only places they
+ *             can be.
  *   Parent  — 1 tab: Profile. Plus Children once an admin opens the parent portal in System
  *             Config, which is the only tab in here gated on a setting rather than a role.
  *
@@ -266,6 +268,16 @@ export default function AppLayout() {
           }}
         />
         <Tabs.Screen
+          name="practice"
+          options={{
+            title: t('m_pr_tab'),
+            // Student-only, like `schedule` above: planning practice is a web screen, and a
+            // parent has no tasks of their own.
+            href: staff || parent ? null : undefined,
+            tabBarIcon: TabIconPractice,
+          }}
+        />
+        <Tabs.Screen
           name="more"
           options={{ title: t('m_more'), href: staff ? undefined : null, tabBarIcon: TabIconMore }}
         />
@@ -346,6 +358,10 @@ const TabIconProfile = ({ color, size }: IconArgs) => <UserRound color={hex(colo
 // A clock, not the plain calendar staff get: this list is "what is coming up", not a month grid.
 const TabIconSchedule = ({ color, size }: IconArgs) => (
   <CalendarClock color={hex(color)} size={size} />
+);
+// A ticked clipboard: the tab is about finishing a list, not about a schedule.
+const TabIconPractice = ({ color, size }: IconArgs) => (
+  <ClipboardCheck color={hex(color)} size={size} />
 );
 // Plural, unlike Profile's single figure: a parent's tab is about the children, not themselves.
 const TabIconChildren = ({ color, size }: IconArgs) => <Users color={hex(color)} size={size} />;

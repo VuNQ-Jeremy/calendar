@@ -18,7 +18,7 @@ import * as api from './endpoints';
  */
 
 /**
- * Three channels, no more.
+ * Two channels, no more.
  *
  * Android groups notifications by channel and lets the user mute each one independently — which
  * is the point: someone who does not want study nudges can silence those without also losing
@@ -193,6 +193,12 @@ export function useNotificationRouting(ready: boolean): void {
       // needs no server deploy (server/services/notify.ts sends `{url:'/flashcards', kind:'garden'}`).
       if (payload?.kind === 'garden') {
         router.push('/vocabulary' as Href);
+        return;
+      }
+      // Practice reminders and penalty alerts. Same reasoning as the garden branch: keyed on
+      // `kind`, so the web keeps its own '/practice' destination and this needs no server deploy.
+      if (payload?.kind === 'practice') {
+        router.push('/practice' as Href);
         return;
       }
       // The tuition announcement is gone (fees are staff-only), but a phone can still be holding

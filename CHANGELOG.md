@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0349 — 2026-09-03
+feat(practice): Nhiệm vụ tracker — teacher weekly grid + review queue + ledger, student mobile tab with timer and photo/video proof, nightly miss/penalty crons, parent slip block; runtimeVersion 3→4
+
 ## v0.0348 — 2026-09-03
 docs(practice): implementation plan for the Nhiệm vụ practice tracker (3 phases + overnight verification), written for an unattended Opus 5 run
 

@@ -5,6 +5,7 @@ import {
   runEveningPreview,
   runGardenAlerts,
 } from '../../server/services/notify';
+import { runPracticeFinalize, runPracticeReminders } from '../../server/services/practice-notify';
 
 /**
  * Run a notification job on demand. **Admin only.**
@@ -25,6 +26,8 @@ import {
  *   POST /api/push/run?job=digest   — the daily digest
  *   POST /api/push/run?job=preview  — the evening "tomorrow's sessions" preview
  *   POST /api/push/run?job=garden   — the garden sweep: missed deadlines, decay, album, alerts
+ *   POST /api/push/run?job=practice-remind   — the 20:00 ICT practice nudge
+ *   POST /api/push/run?job=practice-finalize — the 00:00 ICT practice close (writes misses)
  *
  * `garden` does more than send: it also charges missed assignment deadlines and writes the
  * month-end album. That is deliberately on this endpoint too, because the e2e environment has its
@@ -32,9 +35,15 @@ import {
  */
 export const action = withAuth('admin', async ({ request, db, env }) => {
   const job = new URL(request.url).searchParams.get('job');
-  if (job !== 'class' && job !== 'digest' && job !== 'preview' && job !== 'garden') {
-    throw fail('bad_job', 400);
-  }
+  const JOBS = [
+    'class',
+    'digest',
+    'preview',
+    'garden',
+    'practice-remind',
+    'practice-finalize',
+  ] as const;
+  if (!job || !(JOBS as readonly string[]).includes(job)) throw fail('bad_job', 400);
 
   // `env` is what carries the Zalo credentials, so passing it is also what makes this endpoint
   // the way to test a real Zalo delivery without waiting for 19:00 ICT.
@@ -45,6 +54,10 @@ export const action = withAuth('admin', async ({ request, db, env }) => {
         ? await runEveningPreview(db, new Date(), env)
         : job === 'garden'
           ? await runGardenAlerts(db)
-          : await runClassReminders(db, new Date(), env);
+          : job === 'practice-remind'
+            ? await runPracticeReminders(db, new Date(), env)
+            : job === 'practice-finalize'
+              ? await runPracticeFinalize(db, new Date(), env)
+              : await runClassReminders(db, new Date(), env);
   return { job, sent };
 });

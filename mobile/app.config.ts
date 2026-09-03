@@ -79,7 +79,17 @@ const config: ExpoConfig = {
       foregroundImage: './assets/images/adaptive-icon.png',
       backgroundColor: BRAND,
     },
-    permissions: ['INTERNET', 'POST_NOTIFICATIONS'],
+    // CAMERA/RECORD_AUDIO/READ_MEDIA_* were added on 2026-09-04 for Practice (Nhiệm vụ): a
+    // student photographs or films their finished work as proof. Adding them is a NATIVE change,
+    // which is why shared/version.json's runtimeVersion went 3 -> 4 in the same commit.
+    permissions: [
+      'INTERNET',
+      'POST_NOTIFICATIONS',
+      'CAMERA',
+      'RECORD_AUDIO',
+      'READ_MEDIA_IMAGES',
+      'READ_MEDIA_VIDEO',
+    ],
   },
   plugins: [
     'expo-router',
@@ -102,6 +112,16 @@ const config: ExpoConfig = {
     // long-press "Move to…" reschedule. Installed BEFORE the first APK on purpose — adding a
     // native module after one ships means a runtimeVersion bump and a reinstall for every phone.
     '@react-native-community/datetimepicker',
+    // Practice proof: on-device video compression before upload. A minute of 1080p is far past
+    // the 50 MB ceiling, and a student on 4G should not be paying for the raw file.
+    'react-native-compressor',
+    [
+      'expo-image-picker',
+      {
+        cameraPermission: 'Mochi dùng camera để chụp minh chứng nhiệm vụ.',
+        microphonePermission: 'Mochi dùng micro khi quay video minh chứng.',
+      },
+    ],
     [
       'expo-splash-screen',
       { image: './assets/images/splash-icon.png', resizeMode: 'contain', backgroundColor: BRAND },

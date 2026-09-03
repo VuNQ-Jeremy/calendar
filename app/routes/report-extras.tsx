@@ -5,10 +5,11 @@ import { requireStaff } from '../../server/services/auth';
 import * as attendanceSvc from '../../server/services/attendance';
 import * as gardenSvc from '../../server/services/garden';
 import * as checkinSvc from '../../server/services/checkin';
+import * as practiceSvc from '../../server/services/practice';
 import { TuitionMonth } from '../../shared/schemas';
 
 /**
- * Attendance + vocabulary homework for one (student, month) — the report tab's rail cards.
+ * Attendance, vocabulary homework and practice for one (student, month) — the report rail.
  *
  * Cookie-authenticated twin pattern of routes/garden-month.tsx, for the same reason: everything
  * under /api/* authenticates by `Authorization: Bearer` only, so a browser `useFetcher().load`
@@ -28,12 +29,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (!parsed.success) return Response.json({ error: 'bad_month' }, { status: 400 });
 
   const checkinSettings = await checkinSvc.getCheckinSettings(db);
-  const [attendance, homework, tuiMu] = await Promise.all([
+  const [attendance, homework, tuiMu, practice] = await Promise.all([
     attendanceSvc.studentMonthAttendance(db, studentId, parsed.data),
     gardenSvc.studentAssignmentsInMonth(db, studentId, parsed.data),
     checkinSettings.showParentReport
       ? checkinSvc.studentMonthTally(db, studentId, parsed.data)
       : Promise.resolve(null),
+    practiceSvc.studentPracticeForReport(db, studentId, parsed.data).catch(() => null),
   ]);
-  return { data: { attendance, homework, tuiMu } };
+  return { data: { attendance, homework, tuiMu, practice } };
 }

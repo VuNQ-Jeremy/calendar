@@ -2599,46 +2599,46 @@ Each step names the section with the code. "Check" steps must actually be run; p
 their output into the Execution log if anything is red.
 
 ### Phase 0 — preflight
-- [ ] **Step 0.** `cd f:/code/calendar && git status --short` is empty and `git rev-parse --abbrev-ref HEAD` is `main`. `git pull --ff-only`. `node -v` starts with `v24`. `ls migrations | tail -1` is `0056_logo_library.sql` (else renumber every `0057` in this plan to the next free number).
-- [ ] **Step 1.** Read the files listed at the top of §6, §7, §8.3, §8.5, §9 (about 25 minutes of reading). Do not skip — the plan's code assumes their exact exports.
+- [x] **Step 0.** `cd f:/code/calendar && git status --short` is empty and `git rev-parse --abbrev-ref HEAD` is `main`. `git pull --ff-only`. `node -v` starts with `v24`. `ls migrations | tail -1` is `0056_logo_library.sql` (else renumber every `0057` in this plan to the next free number).
+- [x] **Step 1.** Read the files listed at the top of §6, §7, §8.3, §8.5, §9 (about 25 minutes of reading). Do not skip — the plan's code assumes their exact exports.
 
 ### Phase 1 — schema, rules, server, web
-- [ ] **Step 2.** Create `migrations/0057_practice.sql` (§3.1). Apply locally to prove it parses: `cd f:/code/calendar && npx wrangler d1 migrations apply mochi-class --local` (creates a throwaway local D1; harmless).
-- [ ] **Step 3.** Append the Drizzle tables to `server/db/schema.ts` (§3.2). `npm run typecheck`.
-- [ ] **Step 4.** `shared/schemas.ts` (§4.1), `shared/logic/assess.ts` (§4.2), `server/services/notif-prefs.ts` + `server/services/report-card.ts:74-79` unchanged but verify `missing_practice` now reaches `NEGATIVE_TYPES` (it does via assess.ts). Add `bh_missing_practice` + `nav_practice` + `notif_practice_reminders*` to strings (§5) now; the rest of §5 in Step 12.
-- [ ] **Step 5.** Create `shared/logic/practice.ts` (§4.3) and `test/practice-logic.test.ts` (§4.4). Run `cd f:/code/calendar && npx vitest run test/practice-logic.test.ts` → all green. If `parseISO`/`iso`/`addDays` are not exported from `shared/logic/dates.ts` under those names, open the file and use its real names — do not reimplement.
-- [ ] **Step 6.** `shared/api-contract.ts` (§4.5) including the `practice` field on `ParentReportResponse`. `npm run typecheck`.
-- [ ] **Step 7.** Create `server/services/practice.ts` (§6). `npm run typecheck` until clean (expect 2–4 rounds: Drizzle inferred types, `db.batch` tuple typing, unused imports).
-- [ ] **Step 8.** `server/services/notify.ts` edits + `wrangler.jsonc` crons + `workers/app.ts` docblock + `notif-prefs.ts` + `api.push.run.tsx` (§7.1); create `server/services/practice-notify.ts` (§7.2). `npm run typecheck`.
-- [ ] **Step 9.** Create `test-worker/practice.test.js` (§7.3). Run `cd f:/code/calendar && npx vitest run --config vitest.workers.config.js test-worker/practice.test.js` → green. Then the tripwire: `npx vitest run test/tenant-scope.test.ts` → green.
-- [ ] **Step 10.** Routes: `app/routes.ts` (§8.1), nav/title/cache/live (§8.2), `practice-actions.tsx` (§8.3), the four page routes (§8.4), the three API routes + media route (§8.6, §8.7), registry + `ROUTE_FILES` + `docs/api.md` (§8.8), report card/slip/extras (§8.9), sweeps (§8.10). `npm run typecheck`, then `npx vitest run test/api-docs-completeness.test.ts test/api-contract.test.ts test/page-title.test.ts test/sidebar-sections.test.tsx test/routes.test.tsx`.
-- [ ] **Step 11.** Web screens `src/practice/practice-home.tsx`, `practice-week.tsx`, `practice-review.tsx`, `practice-ledger.tsx` (§8.5). Wire default exports from the four page routes. Every string through `t()`; every button the e2e spec names has exactly that accessible name.
-- [ ] **Step 12.** All remaining §5 strings in both blocks. `npm run check:i18n` → clean (only "unused" informational lines allowed).
-- [ ] **Step 13.** Create `e2e/crud-practice.spec.ts` (§8.11). `npx tsc --noEmit -p tsconfig.json` still clean (the e2e dir is type-checked by the root config — if it is not, run `npx tsc --noEmit e2e/crud-practice.spec.ts --esModuleInterop --skipLibCheck` to catch typos).
-- [ ] **Step 14.** Check: `npm run typecheck && npm run lint && npm run check:i18n`; `npx prettier --write` on every file you created or edited (list them from `git status --short`).
-- [ ] **Step 15.** Check (granted): `cd f:/code/calendar && npm test`. Fix anything red that your changes caused. Log the final counts.
+- [x] **Step 2.** Create `migrations/0057_practice.sql` (§3.1). Apply locally to prove it parses: `cd f:/code/calendar && npx wrangler d1 migrations apply mochi-class --local` (creates a throwaway local D1; harmless).
+- [x] **Step 3.** Append the Drizzle tables to `server/db/schema.ts` (§3.2). `npm run typecheck`.
+- [x] **Step 4.** `shared/schemas.ts` (§4.1), `shared/logic/assess.ts` (§4.2), `server/services/notif-prefs.ts` + `server/services/report-card.ts:74-79` unchanged but verify `missing_practice` now reaches `NEGATIVE_TYPES` (it does via assess.ts). Add `bh_missing_practice` + `nav_practice` + `notif_practice_reminders*` to strings (§5) now; the rest of §5 in Step 12.
+- [x] **Step 5.** Create `shared/logic/practice.ts` (§4.3) and `test/practice-logic.test.ts` (§4.4). Run `cd f:/code/calendar && npx vitest run test/practice-logic.test.ts` → all green. If `parseISO`/`iso`/`addDays` are not exported from `shared/logic/dates.ts` under those names, open the file and use its real names — do not reimplement.
+- [x] **Step 6.** `shared/api-contract.ts` (§4.5) including the `practice` field on `ParentReportResponse`. `npm run typecheck`.
+- [x] **Step 7.** Create `server/services/practice.ts` (§6). `npm run typecheck` until clean (expect 2–4 rounds: Drizzle inferred types, `db.batch` tuple typing, unused imports).
+- [x] **Step 8.** `server/services/notify.ts` edits + `wrangler.jsonc` crons + `workers/app.ts` docblock + `notif-prefs.ts` + `api.push.run.tsx` (§7.1); create `server/services/practice-notify.ts` (§7.2). `npm run typecheck`.
+- [x] **Step 9.** Create `test-worker/practice.test.js` (§7.3). Run `cd f:/code/calendar && npx vitest run --config vitest.workers.config.js test-worker/practice.test.js` → green. Then the tripwire: `npx vitest run test/tenant-scope.test.ts` → green.
+- [x] **Step 10.** Routes: `app/routes.ts` (§8.1), nav/title/cache/live (§8.2), `practice-actions.tsx` (§8.3), the four page routes (§8.4), the three API routes + media route (§8.6, §8.7), registry + `ROUTE_FILES` + `docs/api.md` (§8.8), report card/slip/extras (§8.9), sweeps (§8.10). `npm run typecheck`, then `npx vitest run test/api-docs-completeness.test.ts test/api-contract.test.ts test/page-title.test.ts test/sidebar-sections.test.tsx test/routes.test.tsx`.
+- [x] **Step 11.** Web screens `src/practice/practice-home.tsx`, `practice-week.tsx`, `practice-review.tsx`, `practice-ledger.tsx` (§8.5). Wire default exports from the four page routes. Every string through `t()`; every button the e2e spec names has exactly that accessible name.
+- [x] **Step 12.** All remaining §5 strings in both blocks. `npm run check:i18n` → clean (only "unused" informational lines allowed).
+- [x] **Step 13.** Create `e2e/crud-practice.spec.ts` (§8.11). `npx tsc --noEmit -p tsconfig.json` still clean (the e2e dir is type-checked by the root config — if it is not, run `npx tsc --noEmit e2e/crud-practice.spec.ts --esModuleInterop --skipLibCheck` to catch typos).
+- [x] **Step 14.** Check: `npm run typecheck && npm run lint && npm run check:i18n`; `npx prettier --write` on every file you created or edited (list them from `git status --short`).
+- [x] **Step 15.** Check (granted): `cd f:/code/calendar && npm test`. Fix anything red that your changes caused. Log the final counts.
 
 ### Phase 2 — mobile
-- [ ] **Step 16.** Types/contract/endpoints/keys (§9.1). `cd f:/code/calendar/mobile && npx tsc --noEmit`.
-- [ ] **Step 17.** `mobile/lib/practice-timer.ts` + `mobile/test/practice-timer.test.ts` (§9.2); `mobile/lib/use-practice.ts` (§9.3); `mobile/test/practice-endpoints.test.ts` (§9.6). `cd f:/code/calendar/mobile && npm test` → green.
-- [ ] **Step 18.** Screens (§9.4) and tab registration + push routing + notifications switch (§9.5). Regenerate route types (§9.5 item 7). `npx tsc --noEmit`.
-- [ ] **Step 19.** Check: `cd f:/code/calendar/mobile && npm test && npx tsc --noEmit`.
+- [x] **Step 16.** Types/contract/endpoints/keys (§9.1). `cd f:/code/calendar/mobile && npx tsc --noEmit`.
+- [x] **Step 17.** `mobile/lib/practice-timer.ts` + `mobile/test/practice-timer.test.ts` (§9.2); `mobile/lib/use-practice.ts` (§9.3); `mobile/test/practice-endpoints.test.ts` (§9.6). `cd f:/code/calendar/mobile && npm test` → green.
+- [x] **Step 18.** Screens (§9.4) and tab registration + push routing + notifications switch (§9.5). Regenerate route types (§9.5 item 7). `npx tsc --noEmit`.
+- [x] **Step 19.** Check: `cd f:/code/calendar/mobile && npm test && npx tsc --noEmit`.
 
 ### Phase 3 — video
-- [ ] **Step 20.** Install deps, plugins, permissions, `runtimeVersion: 4` (§10 items 1–3). Confirm `git diff shared/version.json` shows exactly one changed line.
-- [ ] **Step 21.** Video pick + compress + submit in `[id].tsx` (§10 item 4). Docs (§10 item 5).
-- [ ] **Step 22.** Check: `cd f:/code/calendar/mobile && npm test && npx tsc --noEmit`. Then (granted, ~1 min) `cd f:/code/calendar/mobile && npm run test:bundle` — the packaging guard must pass; it needs `EXPO_PUBLIC_API_URL` from `mobile/.env.local` (if that file is missing, set `$env:EXPO_PUBLIC_API_URL='https://calendar.ngqv0712.workers.dev'` for the command).
+- [x] **Step 20.** Install deps, plugins, permissions, `runtimeVersion: 4` (§10 items 1–3). Confirm `git diff shared/version.json` shows exactly one changed line.
+- [x] **Step 21.** Video pick + compress + submit in `[id].tsx` (§10 item 4). Docs (§10 item 5).
+- [x] **Step 22.** Check: `cd f:/code/calendar/mobile && npm test && npx tsc --noEmit`. Then (granted, ~1 min) `cd f:/code/calendar/mobile && npm run test:bundle` — the packaging guard must pass; it needs `EXPO_PUBLIC_API_URL` from `mobile/.env.local` (if that file is missing, set `$env:EXPO_PUBLIC_API_URL='https://calendar.ngqv0712.workers.dev'` for the command).
 
 ### Phase 4a — walkthrough
-- [ ] **Step 23.** Two stories + count bump (§11). `npx vitest run test/walkthrough.test.ts` → green.
-- [ ] **Step 24.** Add to `docs/superpowers/plans/2026-09-01-walkthrough-continuation.md` under its file map a one-line note that `/practice` stories exist (keeps that living doc honest).
+- [x] **Step 23.** Two stories + count bump (§11). `npx vitest run test/walkthrough.test.ts` → green.
+- [x] **Step 24.** Add to `docs/superpowers/plans/2026-09-01-walkthrough-continuation.md` under its file map a one-line note that `/practice` stories exist (keeps that living doc honest).
 
 ### Phase 4b — full verification before the commit
-- [ ] **Step 25.** `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n && npm test` — all green (log counts).
-- [ ] **Step 26.** `cd f:/code/calendar/mobile && npm test && npx tsc --noEmit` — green.
-- [ ] **Step 27.** Deploy the test env WITH the new migration: `cd f:/code/calendar && npm run test:env:setup` (5–8 min; rebuilds with `CLOUDFLARE_ENV=test`, applies migrations to `mochi-class-test`, redeploys, reseeds). Verify the stamp changed: `curl -s https://calendar-test.ngqv0712.workers.dev/login | Select-String -Pattern 'v0\.\d{4}'` shows a build number one higher than `git rev-list --count HEAD` minus 135… simpler: `curl -s -o /dev/null -w "%{http_code}" https://calendar-test.ngqv0712.workers.dev/practice-actions` must be `405`/`400`/`302`, not `404`.
-- [ ] **Step 28.** `npm run test:e2e:staging -- --grep "practice"` → the new spec green. Fix and rerun (max 3 laps). Then the whole suite: `npm run test:e2e:staging` (≈4–13 min). Compare against the 4 known failures (§0.4 item 7); anything else red is yours — fix and rerun the affected spec.
-- [ ] **Step 29.** Re-run Step 25 + 26 after any fix.
+- [x] **Step 25.** `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n && npm test` — all green (log counts).
+- [x] **Step 26.** `cd f:/code/calendar/mobile && npm test && npx tsc --noEmit` — green.
+- [x] **Step 27.** Deploy the test env WITH the new migration: `cd f:/code/calendar && npm run test:env:setup` (5–8 min; rebuilds with `CLOUDFLARE_ENV=test`, applies migrations to `mochi-class-test`, redeploys, reseeds). Verify the stamp changed: `curl -s https://calendar-test.ngqv0712.workers.dev/login | Select-String -Pattern 'v0\.\d{4}'` shows a build number one higher than `git rev-list --count HEAD` minus 135… simpler: `curl -s -o /dev/null -w "%{http_code}" https://calendar-test.ngqv0712.workers.dev/practice-actions` must be `405`/`400`/`302`, not `404`.
+- [x] **Step 28.** `npm run test:e2e:staging -- --grep "practice"` → the new spec green. Fix and rerun (max 3 laps). Then the whole suite: `npm run test:e2e:staging` (≈4–13 min). Compare against the 4 known failures (§0.4 item 7); anything else red is yours — fix and rerun the affected spec.
+- [x] **Step 29.** Re-run Step 25 + 26 after any fix.
 
 ### Phase 4c — the single commit + push + prod follow-through
 - [ ] **Step 30.** Stage by name: every file in `git status --short` that you created or edited (there must be no untracked `.js` files from a stray `tsc -b`; `mobile/.expo/` is gitignored — confirm with `git status --short | Select-String expo`). Include this plan file.

@@ -1742,3 +1742,200 @@ export const logoLibrary = sqliteTable(
     index('idx_logo_library_subject').on(t.subject),
   ],
 );
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Practice (Nhiệm vụ) — migration 0057.
+ *
+ * Teacher-planned daily self-study tasks, copied per student, with proof submissions and the
+ * miss economy (excuses, monthly quota, escalating ×N badge). Distinct from the dead `homework`
+ * tables of 0001/0007. Every table carries `tenantId` so test/tenant-scope.test.ts fences it
+ * automatically; the rules that read these rows live in shared/logic/practice.ts.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/** One row per class that opted in. `weekdays` is a comma list of ICT weekday numbers (0=Sun). */
+export const practiceSettings = sqliteTable(
+  'practice_settings',
+  {
+    classId: text('class_id')
+      .primaryKey()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    tenantId: text('tenant_id').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    weekdays: text('weekdays').notNull().default('1,2,3,4,5,6'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [index('idx_practice_settings_tenant').on(t.tenantId)],
+);
+
+/** A per-date decision that beats the weekday mask: true = practice day, false = day off. */
+export const practiceDayOverrides = sqliteTable(
+  'practice_day_overrides',
+  {
+    tenantId: text('tenant_id').notNull(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    isPractice: integer('is_practice', { mode: 'boolean' }).notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.classId, t.date] }),
+    index('idx_practice_day_overrides_tenant').on(t.tenantId),
+  ],
+);
+
+/** The class-level task as the teacher typed it. Copies are what students see. */
+export const practiceTasks = sqliteTable(
+  'practice_tasks',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    title: text('title').notNull(),
+    /** SET NULL, not CASCADE: deleting a library file must not delete the task. */
+    materialId: text('material_id').references(() => materials.id, { onDelete: 'set null' }),
+    url: text('url'),
+    proofType: text('proof_type').notNull().default('either'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    staffId: text('staff_id').references(() => staff.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    index('idx_practice_tasks_class_date').on(t.classId, t.date),
+    index('idx_practice_tasks_tenant').on(t.tenantId),
+  ],
+);
+
+/**
+ * One row per (student, task), carrying the submission itself — one submission per copy, a
+ * resubmit overwrites it. `taskId` is NULL for a task added for one student only, and becomes
+ * NULL when the class task is deleted after this copy was already submitted.
+ */
+export const practiceStudentTasks = sqliteTable(
+  'practice_student_tasks',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    taskId: text('task_id').references(() => practiceTasks.id, { onDelete: 'set null' }),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    title: text('title').notNull(),
+    materialId: text('material_id').references(() => materials.id, { onDelete: 'set null' }),
+    url: text('url'),
+    proofType: text('proof_type').notNull().default('either'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    /** open | submitted | accepted | rejected | teacher_done */
+    status: text('status').notNull().default('open'),
+    submittedAt: text('submitted_at'),
+    /** ICT HH:mm, self-reported by the student's timer. */
+    timeFrom: text('time_from'),
+    timeTo: text('time_to'),
+    mediaKey: text('media_key'),
+    mediaType: text('media_type'),
+    note: text('note'),
+    feedback: text('feedback'),
+    rejectReason: text('reject_reason'),
+    reviewedAt: text('reviewed_at'),
+    reviewedBy: text('reviewed_by').references(() => staff.id, { onDelete: 'set null' }),
+    recordedByTeacher: integer('recorded_by_teacher', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => [
+    index('idx_practice_student_tasks_student_date').on(t.studentId, t.date),
+    index('idx_practice_student_tasks_class_date').on(t.classId, t.date),
+    index('idx_practice_student_tasks_status').on(t.status, t.submittedAt),
+    index('idx_practice_student_tasks_tenant').on(t.tenantId),
+  ],
+);
+
+/** A request to be excused for one practice day. At most one per (class, student, date). */
+export const practiceExcuses = sqliteTable(
+  'practice_excuses',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    reason: text('reason').notNull(),
+    /** pending | approved | rejected */
+    status: text('status').notNull().default('pending'),
+    /** 'student' | 'teacher' — a teacher-made one is always already approved. */
+    requestedBy: text('requested_by').notNull(),
+    requestedAt: text('requested_at').notNull(),
+    decidedAt: text('decided_at'),
+    decidedBy: text('decided_by').references(() => staff.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    unique('uq_practice_excuses').on(t.classId, t.studentId, t.date),
+    index('idx_practice_excuses_status').on(t.status, t.requestedAt),
+    index('idx_practice_excuses_tenant').on(t.tenantId),
+  ],
+);
+
+/**
+ * One row per missed practice day, written only by the nightly finalize job (or flipped to
+ * excused by a teacher afterwards). `multiplier` is the ×N this miss imposed on the next day.
+ */
+export const practiceMisses = sqliteTable(
+  'practice_misses',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    date: text('date').notNull(),
+    excused: integer('excused', { mode: 'boolean' }).notNull().default(false),
+    multiplier: integer('multiplier').notNull().default(0),
+    behaviorRecordId: text('behavior_record_id'),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [
+    unique('uq_practice_misses').on(t.classId, t.studentId, t.date),
+    index('idx_practice_misses_student').on(t.studentId, t.date),
+    index('idx_practice_misses_tenant').on(t.tenantId),
+  ],
+);
+
+/**
+ * The escalation state per (class, student). `level` counts unexcused misses since the teacher
+ * last cleared the warning; `pendingMultiplier`/`pendingForDate` are the ×N currently owed.
+ */
+export const practiceWarnings = sqliteTable(
+  'practice_warnings',
+  {
+    tenantId: text('tenant_id').notNull(),
+    classId: text('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    level: integer('level').notNull().default(0),
+    pendingMultiplier: integer('pending_multiplier').notNull().default(0),
+    pendingForDate: text('pending_for_date'),
+    pendingFromMiss: text('pending_from_miss'),
+    updatedAt: text('updated_at').notNull(),
+    clearedAt: text('cleared_at'),
+    clearedBy: text('cleared_by').references(() => staff.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.classId, t.studentId] }),
+    index('idx_practice_warnings_tenant').on(t.tenantId),
+  ],
+);
