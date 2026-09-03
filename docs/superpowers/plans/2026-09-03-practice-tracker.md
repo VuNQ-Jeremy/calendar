@@ -2641,31 +2641,31 @@ their output into the Execution log if anything is red.
 - [x] **Step 29.** Re-run Step 25 + 26 after any fix.
 
 ### Phase 4c — the single commit + push + prod follow-through
-- [ ] **Step 30.** Stage by name: every file in `git status --short` that you created or edited (there must be no untracked `.js` files from a stray `tsc -b`; `mobile/.expo/` is gitignored — confirm with `git status --short | Select-String expo`). Include this plan file.
-- [ ] **Step 31.** `node scripts/changelog.mjs "feat(practice): Nhiệm vụ tracker — teacher weekly grid + review queue + ledger, student mobile tab with timer and photo/video proof, nightly miss/penalty crons, parent slip block; runtimeVersion 3→4"` (it stages CHANGELOG.md).
-- [ ] **Step 32.** Commit (one commit). Message body: bullet the four phases, the migration number, the runtimeVersion bump, and the test counts. End with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` (that is the attribution for this repo per the session instructions — copy it exactly).
-- [ ] **Step 33.** `git push origin main`. On 403 apply §0.4 item 16 and retry once.
-- [ ] **Step 34.** Wait for Workers Builds (2–4 min), then verify the deploy: `curl -s -o /dev/null -w "%{http_code}" https://calendar.ngqv0712.workers.dev/practice-actions` → not `404`. If still 404 after 6 minutes, check `curl -s "https://api.github.com/repos/VuNQ-Jeremy/calendar/actions/runs?per_page=3"` and log; continue.
-- [ ] **Step 35.** Prod migration (granted): `cd f:/code/calendar && npx wrangler d1 migrations list mochi-class --remote`. If `0057_practice.sql` is listed as pending: `npx wrangler d1 migrations apply mochi-class --remote`. Re-list to confirm empty. If wrangler reports an auth error, the account token is wrong — do NOT `wrangler login`; log it and move on.
-- [ ] **Step 36.** Live smoke on prod as staff (cookie flow per memory `live-verify-authed-pages`, or simply Playwright headless): sign in as `dev@mochi.edu`, `GET /practice` renders the class list with **Enable Practice** buttons. Do not enable anything yet (Step 46 does, with cleanup).
+- [x] **Step 30.** Stage by name: every file in `git status --short` that you created or edited (there must be no untracked `.js` files from a stray `tsc -b`; `mobile/.expo/` is gitignored — confirm with `git status --short | Select-String expo`). Include this plan file.
+- [x] **Step 31.** `node scripts/changelog.mjs "feat(practice): Nhiệm vụ tracker — teacher weekly grid + review queue + ledger, student mobile tab with timer and photo/video proof, nightly miss/penalty crons, parent slip block; runtimeVersion 3→4"` (it stages CHANGELOG.md).
+- [x] **Step 32.** Commit (one commit). Message body: bullet the four phases, the migration number, the runtimeVersion bump, and the test counts. End with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` (that is the attribution for this repo per the session instructions — copy it exactly).
+- [x] **Step 33.** `git push origin main`. On 403 apply §0.4 item 16 and retry once.
+- [x] **Step 34.** Wait for Workers Builds (2–4 min), then verify the deploy: `curl -s -o /dev/null -w "%{http_code}" https://calendar.ngqv0712.workers.dev/practice-actions` → not `404`. If still 404 after 6 minutes, check `curl -s "https://api.github.com/repos/VuNQ-Jeremy/calendar/actions/runs?per_page=3"` and log; continue.
+- [x] **Step 35.** Prod migration (granted): `cd f:/code/calendar && npx wrangler d1 migrations list mochi-class --remote`. If `0057_practice.sql` is listed as pending: `npx wrangler d1 migrations apply mochi-class --remote`. Re-list to confirm empty. If wrangler reports an auth error, the account token is wrong — do NOT `wrangler login`; log it and move on.
+- [x] **Step 36.** Live smoke on prod as staff (cookie flow per memory `live-verify-authed-pages`, or simply Playwright headless): sign in as `dev@mochi.edu`, `GET /practice` renders the class list with **Enable Practice** buttons. Do not enable anything yet (Step 46 does, with cleanup).
 
 ### Phase 4d — OTA, APK, emulator
-- [ ] **Step 37.** OTA: `cd f:/code/calendar/mobile && npx eas-cli workflow:runs` — top entry should be your commit, `SUCCESS`, trigger `GitHub` (allow 3 min). If `FAILURE`/missing (free-tier CI quota), publish manually (granted): `npx eas-cli update --branch preview --platform android --environment preview --message "practice tracker (runtime 4)"`. Verify what runtime 4 serves:
+- [x] **Step 37.** OTA: `cd f:/code/calendar/mobile && npx eas-cli workflow:runs` — top entry should be your commit, `SUCCESS`, trigger `GitHub` (allow 3 min). If `FAILURE`/missing (free-tier CI quota), publish manually (granted): `npx eas-cli update --branch preview --platform android --environment preview --message "practice tracker (runtime 4)"`. Verify what runtime 4 serves:
   ```
   cd f:/code/calendar; $rv = node -p "require('./shared/version.json').runtimeVersion"; curl -s -H "expo-platform: android" -H "expo-runtime-version: $rv" -H "expo-channel-name: preview" -H "expo-protocol-version: 1" -H "accept: multipart/mixed" https://u.expo.dev/83251f6c-1fa9-4724-ba61-39a9eb806aab | Select-String gitSha
   ```
   The `gitSha` must be your commit. Log it.
-- [ ] **Step 38.** APK (granted): `cd f:/code/calendar/mobile && npx eas-cli build -p android --profile preview --non-interactive --no-wait` → note the build id/URL. Poll every 3 minutes (max 45 min): `npx eas-cli build:view <id> --json` (or `build:list --platform android --limit 1 --json --non-interactive`) until `status` is `FINISHED`; take `artifacts.buildUrl`. If `ERRORED`, fetch logs with `npx eas-cli build:view <id>`, fix if it is a config error in files you touched (typical: plugin name, permission string), re-run once; otherwise log and skip to Step 47.
-- [ ] **Step 39.** Download: `curl -L -o "$env:TEMP\mochi-practice.apk" <buildUrl>` (PowerShell) — file size must be > 30 MB.
-- [ ] **Step 40.** Emulator up: `& "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd mochi_dev -no-snapshot-load -no-boot-anim` in the background (Bash tool `run_in_background`, or PowerShell `Start-Process`). Wait: loop `adb shell getprop sys.boot_completed` until `1` (max 4 min). Probe: `adb shell am force-stop com.mochi.lms` must return within 5 s (else kill emulator and reboot once).
-- [ ] **Step 41.** `adb install -r "$env:TEMP\mochi-practice.apk"`. If it fails with a signature mismatch, `adb uninstall com.mochi.lms` then install (this loses the dev-client build — acceptable, log it).
-- [ ] **Step 42.** Create `scripts/adb-ui.mjs` (commit it in Step 48) — a tiny helper used by the smoke: `dump()` (`adb shell uiautomator dump /sdcard/ui.xml` + `adb pull` + parse `bounds="[x1,y1][x2,y2]"` per node with `text`/`content-desc`), `tapText(t)` (center of the first node whose text or content-desc equals `t`), `type(text)` (`adb shell input text` with spaces as `%s`), `shot(name)` (`adb shell screencap -p /sdcard/s.png` + `adb pull` to `docs/superpowers/reviews/2026-09-03-practice-smoke/<name>.png`), `back()` (`adb shell input keyevent 4`), `wait(ms)`. Node 24, no deps.
-- [ ] **Step 43.** Prepare prod fixtures as staff, via Playwright headless against `https://calendar.ngqv0712.workers.dev` (a throwaway script in the scratchpad, NOT a repo spec): sign in `dev@mochi.edu`, enable Practice for **Biology 9A**, force today as a practice day if it shows **Day off**, quick-add one task `WALKTHROUGH smoke photo ${Date.now()}` with proof **Photo**. Leave the browser context open for Step 45.
-- [ ] **Step 44.** Student flow on the emulator with `adb-ui.mjs`: launch `adb shell am start -n com.mochi.lms/.MainActivity`; wait 8 s; `shot('01-launch')`. If the login screen shows the Zalo tab, `tapText('Email')`. Tap the email field (text `you@school.edu`), `type('vunq@mochi.edu')`; tap the password field (the node below), `type('mochi123')`; `tapText('Sign in')`; wait 10 s; `shot('02-home')`. `tapText('Practice')` (bottom tab); wait 4 s; `shot('03-practice-list')` — the WALKTHROUGH task must be visible (assert via `dump()` containing the title; if not, pull-to-refresh: `adb shell input swipe 500 600 500 1400`). Tap the task; `shot('04-task')`; `tapText('Start timer')`; wait 3 s; `tapText('Stop timer')`. Photo: push an image first — `adb push <any small jpg from mobile/assets/images> /sdcard/Pictures/proof.jpg` and `adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/proof.jpg`; `tapText('Add photo')`; in the system picker tap the first thumbnail (dump; pick the first node with `class="android.widget.ImageView"` inside the picker, or `tapText('Pictures')` then the image); wait; `shot('05-photo-picked')`; `tapText('Submit')`; wait 8 s; `shot('06-submitted')` — dump must contain `Submitted`. Then `back()` twice and `shot('07-list-after')`. Each `tapText` that fails to find its node: `shot('err-<step>')`, log, and continue to the cleanup.
-- [ ] **Step 45.** Teacher review via the Step 43 Playwright context: open `/practice/review`, assert the WALKTHROUGH submission is listed with an `<img src="/practice-media/…">` that returns 200 (fetch it with the page's cookies), click **Accept**; `screenshot` → `docs/superpowers/reviews/2026-09-03-practice-smoke/08-review-accepted.png`. Open the ledger for this month; screenshot `09-ledger.png` (Leo Park: `1 / 1`).
-- [ ] **Step 46.** Cleanup on prod (mandatory): delete the WALKTHROUGH task (its accepted copy survives by design — remove it via the students dialog is not possible for non-open copies, so instead run, from `f:/code/calendar`, `npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH smoke%'"`), remove any day override you created (**Use weekly default**), then **Disable Practice** on Biology 9A. Delete the R2 object: `npx wrangler r2 object delete mochi-files/<mediaKey>` (the key is in the ledger row / the `img src`). Confirm `/practice` shows **Enable Practice** for Biology 9A again. Sign out of the emulator app is not required.
-- [ ] **Step 47.** Fill the **Execution log** below: unit counts, e2e counts vs baseline, prod migration state, OTA `gitSha`, APK URL + size, emulator results per screenshot, anything skipped and why.
-- [ ] **Step 48.** The single allowed follow-up commit, docs only: this plan file (ticked + log), `scripts/adb-ui.mjs`, `docs/superpowers/reviews/2026-09-03-practice-smoke/*.png` (≤ 9 PNGs, each < 400 KB — downscale with `magick`/`sharp` only if available, else leave). `node scripts/changelog.mjs "docs(practice): overnight verification log + adb smoke helper"`, commit with the same trailer, push. (This second push republishes an identical bundle; harmless.)
+- [x] **Step 38.** APK (granted): `cd f:/code/calendar/mobile && npx eas-cli build -p android --profile preview --non-interactive --no-wait` → note the build id/URL. Poll every 3 minutes (max 45 min): `npx eas-cli build:view <id> --json` (or `build:list --platform android --limit 1 --json --non-interactive`) until `status` is `FINISHED`; take `artifacts.buildUrl`. If `ERRORED`, fetch logs with `npx eas-cli build:view <id>`, fix if it is a config error in files you touched (typical: plugin name, permission string), re-run once; otherwise log and skip to Step 47.
+- [x] **Step 39.** Download: `curl -L -o "$env:TEMP\mochi-practice.apk" <buildUrl>` (PowerShell) — file size must be > 30 MB.
+- [x] **Step 40.** Emulator up: `& "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd mochi_dev -no-snapshot-load -no-boot-anim` in the background (Bash tool `run_in_background`, or PowerShell `Start-Process`). Wait: loop `adb shell getprop sys.boot_completed` until `1` (max 4 min). Probe: `adb shell am force-stop com.mochi.lms` must return within 5 s (else kill emulator and reboot once).
+- [x] **Step 41.** `adb install -r "$env:TEMP\mochi-practice.apk"`. If it fails with a signature mismatch, `adb uninstall com.mochi.lms` then install (this loses the dev-client build — acceptable, log it).
+- [x] **Step 42.** Create `scripts/adb-ui.mjs` (commit it in Step 48) — a tiny helper used by the smoke: `dump()` (`adb shell uiautomator dump /sdcard/ui.xml` + `adb pull` + parse `bounds="[x1,y1][x2,y2]"` per node with `text`/`content-desc`), `tapText(t)` (center of the first node whose text or content-desc equals `t`), `type(text)` (`adb shell input text` with spaces as `%s`), `shot(name)` (`adb shell screencap -p /sdcard/s.png` + `adb pull` to `docs/superpowers/reviews/2026-09-03-practice-smoke/<name>.png`), `back()` (`adb shell input keyevent 4`), `wait(ms)`. Node 24, no deps.
+- [x] **Step 43.** Prepare prod fixtures as staff, via Playwright headless against `https://calendar.ngqv0712.workers.dev` (a throwaway script in the scratchpad, NOT a repo spec): sign in `dev@mochi.edu`, enable Practice for **Biology 9A**, force today as a practice day if it shows **Day off**, quick-add one task `WALKTHROUGH smoke photo ${Date.now()}` with proof **Photo**. Leave the browser context open for Step 45.
+- [x] **Step 44.** Student flow on the emulator with `adb-ui.mjs`: launch `adb shell am start -n com.mochi.lms/.MainActivity`; wait 8 s; `shot('01-launch')`. If the login screen shows the Zalo tab, `tapText('Email')`. Tap the email field (text `you@school.edu`), `type('vunq@mochi.edu')`; tap the password field (the node below), `type('mochi123')`; `tapText('Sign in')`; wait 10 s; `shot('02-home')`. `tapText('Practice')` (bottom tab); wait 4 s; `shot('03-practice-list')` — the WALKTHROUGH task must be visible (assert via `dump()` containing the title; if not, pull-to-refresh: `adb shell input swipe 500 600 500 1400`). Tap the task; `shot('04-task')`; `tapText('Start timer')`; wait 3 s; `tapText('Stop timer')`. Photo: push an image first — `adb push <any small jpg from mobile/assets/images> /sdcard/Pictures/proof.jpg` and `adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/proof.jpg`; `tapText('Add photo')`; in the system picker tap the first thumbnail (dump; pick the first node with `class="android.widget.ImageView"` inside the picker, or `tapText('Pictures')` then the image); wait; `shot('05-photo-picked')`; `tapText('Submit')`; wait 8 s; `shot('06-submitted')` — dump must contain `Submitted`. Then `back()` twice and `shot('07-list-after')`. Each `tapText` that fails to find its node: `shot('err-<step>')`, log, and continue to the cleanup.
+- [x] **Step 45.** Teacher review via the Step 43 Playwright context: open `/practice/review`, assert the WALKTHROUGH submission is listed with an `<img src="/practice-media/…">` that returns 200 (fetch it with the page's cookies), click **Accept**; `screenshot` → `docs/superpowers/reviews/2026-09-03-practice-smoke/08-review-accepted.png`. Open the ledger for this month; screenshot `09-ledger.png` (Leo Park: `1 / 1`).
+- [x] **Step 46.** Cleanup on prod (mandatory): delete the WALKTHROUGH task (its accepted copy survives by design — remove it via the students dialog is not possible for non-open copies, so instead run, from `f:/code/calendar`, `npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH smoke%'"`), remove any day override you created (**Use weekly default**), then **Disable Practice** on Biology 9A. Delete the R2 object: `npx wrangler r2 object delete mochi-files/<mediaKey>` (the key is in the ledger row / the `img src`). Confirm `/practice` shows **Enable Practice** for Biology 9A again. Sign out of the emulator app is not required.
+- [x] **Step 47.** Fill the **Execution log** below: unit counts, e2e counts vs baseline, prod migration state, OTA `gitSha`, APK URL + size, emulator results per screenshot, anything skipped and why.
+- [x] **Step 48.** The single allowed follow-up commit, docs only: this plan file (ticked + log), `scripts/adb-ui.mjs`, `docs/superpowers/reviews/2026-09-03-practice-smoke/*.png` (≤ 9 PNGs, each < 400 KB — downscale with `magick`/`sharp` only if available, else leave). `node scripts/changelog.mjs "docs(practice): overnight verification log + adb smoke helper"`, commit with the same trailer, push. (This second push republishes an identical bundle; harmless.)
 
 ### If something blocks
 - A failing unit/e2e test you cannot fix in 3 attempts: mark the spec `test.fixme` with a one-line reason, log it, continue. Never delete a test.
@@ -2685,19 +2685,104 @@ their output into the Execution log if anything is red.
 
 ## Execution log
 
-_(executor fills this in; keep it terse, one line per fact)_
+Run: 2026-09-03 23:30 → 2026-09-04 02:40 ICT, unattended, Claude Opus 5. Every step 0–48 executed.
 
-- Started:
-- Step counts / deviations:
-- Unit: `npm test` →
-- Mobile: `npm test` → ; `tsc` →
-- e2e staging: passed / failed / skipped → ; new failures vs baseline:
-- Commit sha:
-- Prod migration 0057:
-- OTA runtime 4 gitSha:
-- APK build id / URL / size:
-- Emulator smoke: 01…09 →
-- Cleanup confirmed on prod:
-- Decisions taken by the executor:
-- Open issues for the morning:
+- **Started:** 2026-09-03 23:32 ICT. Tree clean, `main`, node v24.16.0, last migration `0056` (so `0057` was free).
+- **Unit (web):** `npx vitest run` → **912 passed, 1 failed** (60 files). The failure is
+  `test/tenant-scope.test.ts` → `app/routes/logo-library.tsx` imports `createRawDb` outside the
+  allowlist. Pre-existing and unrelated; nothing in this commit touches that file.
+- **Unit (worker):** `npm run test:worker` → **437 passed, 17 failed** across 5 files. All 17 are
+  `env` being undefined (`env.GAME_ROOM`, `env.EMAIL_API_KEY`) — missing local secrets and DO
+  bindings on this machine. Verified pre-existing: `git stash -u` on a clean tree reproduced the
+  same failure in `test-worker/services.test.js` exactly.
+- **Mobile:** `npm test` → **91 passed** (10 files, incl. the two new ones). `npx tsc --noEmit` clean.
+  `npm run test:bundle` passes with `EXPO_PUBLIC_API_URL` set (8 MB android bundle, URL baked in).
+- **Static:** `npm run typecheck`, `npm run lint` (only the two pre-existing warnings) and
+  `npm run check:i18n` (2038 en / 2038 vi) all clean. Prettier run on every touched file only.
+- **e2e staging:** `npm run test:env:setup` then `npm run test:e2e:staging` →
+  **139 passed, 4 failed, 2 flaky (27.3 min)**. `crud-practice.spec.ts` **passed**.
+  Failures vs the §0.4 baseline: `pvp` "room battle" ✔ baseline, `crud-feedback-profile`
+  "changelog: hide" ✔ baseline, `crud-vocab-curriculum` "grade filter" ✔ baseline, plus
+  `crud-calendar-drag` "dragging a recurring event asks which occurrences" — NOT on the baseline
+  list, but it times out waiting for the calendar's own "Previous month" button and this commit
+  touches no calendar code (see the memory note `mochi-calendar-drag-opens-editor`). The baseline's
+  fourth item (`sidebar-collapse` "hairline scrollbar") passed this run. Flaky-then-passed:
+  `crud-calendar-drag` one-off drag, `pvp` face-off.
+- **Commit:** `d271e74`, pushed to `main`. Workers Builds deployed it (`/practice-actions` answers
+  400, not 404).
+- **Prod migration 0057:** already applied when checked (`No migrations to apply!`); confirmed by
+  querying `sqlite_master` — all **7** `practice_*` tables exist on `mochi-class`.
+- **OTA runtime 4 gitSha:** workflow `publish-preview-update.yml` run `01a0686b` **SUCCESS** for
+  `d271e74`; the manifest for `expo-runtime-version: 4` serves `"gitSha":"d271e74"`.
+- **APK:** first build `711c8bee` **ERRORED** — Gradle could not resolve four core Expo modules
+  because `repo.maven.apache.org` answered **429 Too Many Requests**. Infrastructure, not config,
+  so it was re-run once as the plan allows: `694df0a6` **finished**,
+  `https://expo.dev/artifacts/eas/cN2HdPaQJdInlgKHCuE1FNQmJ08uzjs7fWnCJNt1xn8.apk`, **132 MB**,
+  version code 7, runtime 4. Installed on `mochi_dev` with `adb install -r` (no signature clash).
+- **Emulator smoke** (`scripts/adb-ui.mjs`, screenshots in
+  `docs/superpowers/reviews/2026-09-03-practice-smoke/`):
+  - The in-app version row read `v0.0000 · rt4 · d271e74 · embedded` — the right binary.
+  - Staff (`dev@mochi.edu`) sees **no** Practice tab. Correct: it is student-only.
+  - Student (`vunq@mochi.edu`) has four tabs — Vocabulary, My schedule, **Practice**, Your profile.
+  - `03-practice-list`: the balance line "Bamblebee · Excused 0/4 · Unexcused 0" (quota 4 = the
+    carried month) and the task under **Today**.
+  - `04-task`: "Proof: Photo", the timer at 0:00, the student note, Take photo / Add photo, and the
+    "This task needs a Photo before you can submit" hint above a disabled Submit.
+  - `04c/04e`: timer ran and stopped — "Time worked 1:14", reported as the ICT range **02:24–02:26**
+    with an Edit button.
+  - `05b`/`06`: photo attached from the system picker, Submit uploaded, the screen popped back and
+    the card now carries the **Submitted** tag.
+  - `08`/`09`: on the web the submission appeared in the review queue, its
+    `/practice-media/…` URL returned **200** to the teacher's cookie, Accept worked, and the ledger
+    rendered.
+- **Cleanup confirmed on prod:** proof object deleted from R2; every one of the seven `practice_*`
+  tables and `behavior_records WHERE type='missing_practice'` back to **0 rows**; the day override
+  removed and Practice switched off, then the settings row deleted so prod is byte-for-byte as
+  found. `/practice` shows **Enable Practice** again.
 
+### Decisions taken by the executor
+
+1. **Commit trailer** is `Co-Authored-By: Claude Opus 5 (1M context)`, not the plan's Fable line —
+   the session's own attribution instruction explicitly replaces earlier guidance.
+2. **Per-page cache keys.** §8.2 said every `/practice*` page shares `K.practice`. `swrLoad` is
+   keyed, so two weeks under one key would serve week A's grid at week B's URL. Added
+   `practiceWeekKey` / `practiceLedgerKey` / `PRACTICE_REVIEW_KEY`, all under the `route:practice`
+   prefix, so one invalidation still drops them together.
+3. **The dialogs must not own the fetcher.** They close optimistically, and `useFetcher`'s unmount
+   cleanup aborts the request it just started — the edit-task POST vanished about half the time.
+   `usePracticeSubmit` is now created in the screen and passed down; the rule is written into its
+   doc comment.
+4. **Blank `<select>` values are nulled in the action.** A cleared Material posts `''`, which Zod
+   accepts as a string and D1 then rejects on the FK. `nullBlanks()` in `practice-actions.tsx`.
+   This was the real cause of the first e2e failure.
+5. **`practice-actions` catches service throws** and returns a JSON error instead of a 500 that
+   would take down the route the (already-closed) dialog was on. Auth redirects are re-thrown.
+6. **Screens got a stylesheet.** The plan did not mention CSS; the screens are unusable without it,
+   so `src/styles/app.css` gained a namespaced `.pr-*` block.
+7. **`pr_disable_confirm`** added: the disable confirm had no message key of its own.
+8. **The prod smoke used class "Bamblebee", not `c1`.** Production has no seeded demo data — its
+   two classes are the school's real ones. Bamblebee's only enrolled student is the test account
+   (`vunq@mochi.edu` → "Moon"), so the smoke touched no other child; anything else would have put a
+   WALKTHROUGH task in front of real students.
+9. **`PracticeSubmitResponse` dropped** from `shared/api-contract.ts`: it aliased
+   `PracticeStudentTask`, and `test/api-contract.test.ts` requires every export's `meta.id` to match
+   its own name. The registry points at `PracticeStudentTask` directly.
+10. **A `Practice` tag description** was added to `TAGS` in the registry — `test/api-docs-spec.ts`
+    fails on an undescribed tag.
+11. **e2e Zalo assertion split across two students.** `seed.sql` pairs Leo Park's mother and nobody
+    else, so "No Zalo pairing" absent on Leo and present on Mia Chen is what actually proves the
+    indicator reads the pairing.
+
+### Open issues for the morning
+
+- `uiautomator dump` cannot settle while the practice timer ticks ("could not get idle state") and
+  silently returns the previous dump. The smoke worked around it by tapping the coordinates captured
+  before the timer started and verifying with screenshots. Worth knowing before anyone writes a
+  Maestro flow over this screen.
+- `crud-calendar-drag` "dragging a recurring event" failed this run and is not on the known-failures
+  list. It is the drag flakiness already recorded in memory, but it now fails often enough to be
+  worth a look.
+- The two crons (`0 13 * * *`, `0 17 * * *`) have never fired in production yet. The first real
+  finalize will be at 00:00 ICT after a class opts in; `POST /api/push/run?job=practice-finalize`
+  as an admin is the way to force one.
+- Nothing has been enabled on production. `class_teachers` scoping stays backlog, as decided.
