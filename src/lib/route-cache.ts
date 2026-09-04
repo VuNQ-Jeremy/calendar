@@ -88,18 +88,15 @@ export const gardenAlbumKey = (classId: string, month: string) =>
   `route:garden:${classId}:${month}`;
 
 /**
- * Practice keys. Same prefix trick as tuition/garden — K.practice ('route:practice') is a prefix
- * of all of them, so one `invalidate(K.practice)` after any practice mutation drops the landing
- * page, every cached week and every cached ledger month together.
+ * Practice sheet key. Same prefix trick as tuition/garden — K.practice ('route:practice') is a
+ * prefix of it, so one `invalidate(K.practice)` after any practice mutation drops the landing page
+ * and every cached class-month together.
  *
- * They must NOT collapse to K.practice itself: swrLoad is keyed, so two weeks sharing one key
- * would serve week A's grid at week B's URL.
+ * ONLY the pathname is in the key: the student tab lives in `?student=` and every tab of a
+ * class-month renders from the same loader payload, so sharing one entry is correct here.
  */
-export const practiceWeekKey = (classId: string, monday: string) =>
-  `route:practice:${classId}:week:${monday}`;
-export const practiceLedgerKey = (classId: string, month: string) =>
-  `route:practice:${classId}:ledger:${month}`;
-export const PRACTICE_REVIEW_KEY = 'route:practice:review';
+export const practiceMonthKey = (classId: string, month: string) =>
+  `route:practice:${classId}:${month}`;
 
 /** Same prefix trick: K.tuiMu stales every cached class-month board at once. */
 export const tuiMuKey = (classId: string, month: string) => `route:tui-mu:${classId}:${month}`;
@@ -351,14 +348,10 @@ export function cacheKeyForPath(pathname: string): string | null {
   // month lives in the path: a `?month=` would give every month the same cache entry.
   const rm = pathname.match(/^\/rankings\/(\d{4}-\d{2})\/?$/);
   if (rm) return rankingsMonthKey(rm[1]);
-  // Practice: one key per page, all under the 'route:practice' prefix — see practiceWeekKey.
-  const pw = pathname.match(/^\/practice\/([^/]+)\/week\/(\d{4}-\d{2}-\d{2})\/?$/);
-  if (pw) return practiceWeekKey(decodeURIComponent(pw[1]), pw[2]);
-  const pl = pathname.match(/^\/practice\/([^/]+)\/ledger\/(\d{4}-\d{2})\/?$/);
-  if (pl) return practiceLedgerKey(decodeURIComponent(pl[1]), pl[2]);
-  if (pathname === '/practice/review' || pathname === '/practice/review/') {
-    return PRACTICE_REVIEW_KEY;
-  }
+  // Practice: the sheet is one key per class-month under the 'route:practice' prefix. The old
+  // /practice/review, /week and /ledger URLs are redirects and deliberately fall through to null.
+  const pm = pathname.match(/^\/practice\/([^/]+)\/(\d{4}-\d{2})\/?$/);
+  if (pm) return practiceMonthKey(decodeURIComponent(pm[1]), pm[2]);
   if (pathname === '/practice' || pathname === '/practice/') return K.practice;
   // The notifications tab is a sibling PAGE, not a student filter — it must be matched before the
   // filter regex below, which would otherwise read 'notifications' as a student id. (The string it

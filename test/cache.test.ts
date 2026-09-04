@@ -13,6 +13,7 @@ import {
   invalidateAfterMutation,
   cacheKeyForPath,
   testDetailKey,
+  practiceMonthKey,
   K,
 } from '../src/lib/route-cache.js';
 
@@ -207,6 +208,16 @@ describe('cacheKeyForPath', () => {
   it('no longer matches the pre-rename /flashcards paths', () => {
     expect(cacheKeyForPath('/flashcards')).toBeNull();
     expect(cacheKeyForPath('/flashcards/animals')).toBeNull();
+  });
+
+  it('gives each practice class-month its own key, and forgets the pre-sheet pages', () => {
+    expect(cacheKeyForPath('/practice')).toBe(K.practice);
+    expect(cacheKeyForPath('/practice/c1/2026-09')).toBe(practiceMonthKey('c1', '2026-09'));
+    expect(practiceMonthKey('c1', '2026-09').startsWith(K.practice)).toBe(true);
+    // The old pages are 301 redirects now; a redirect has nothing to cache.
+    expect(cacheKeyForPath('/practice/review')).toBeNull();
+    expect(cacheKeyForPath('/practice/c1/week/2026-09-07')).toBeNull();
+    expect(cacheKeyForPath('/practice/c1/ledger/2026-09')).toBeNull();
   });
 
   it('/logs/activity is never cached, and is not misread as a student filter', () => {
