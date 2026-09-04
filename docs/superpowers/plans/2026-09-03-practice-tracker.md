@@ -2773,6 +2773,29 @@ Run: 2026-09-03 23:30 → 2026-09-04 02:40 ICT, unattended, Claude Opus 5. Every
     else, so "No Zalo pairing" absent on Leo and present on Mia Chen is what actually proves the
     indicator reads the pairing.
 
+### Post-run verification (author, 2026-09-04)
+
+Re-verified fresh in a separate session: typecheck, lint (2 pre-existing warnings), check:i18n
+(2038/2038), mobile vitest 91/91 + tsc, targeted unit files (the only red is the pre-existing
+`tenant-scope` → `logo-library.tsx` import, unchanged by this work), prod migration applied, routes
+live (`/practice-actions` 400, `/api/practice/my` 401), runtime-4 OTA serves the pushed sha, all
+three workflow runs SUCCESS, smoke screenshots match the log. Inline code review of the service,
+actions route, media route, submit/excuse routes and the mobile task screen found two defects, fixed
+in the follow-up commit with worker tests:
+
+1. **Stuck ×N debt.** `finalizeDay` returned early on a day off or an empty practice day, so a
+   debt whose `pendingForDate` was that day never cleared or moved — the badge would show a past
+   date forever (until the next unexcused miss). Now the debt shifts to the next practice day
+   (`shiftPendingDebts`), also per-student when only that student has no copy that day.
+2. **Duplicate excuse request → 500.** A second request for the same day while one was pending or
+   approved hit the UNIQUE index as a raw D1 error. Now `already_requested` → 409.
+
+Noted, not changed: the mobile Submit button reads `onlineManager.isOnline()` at render time only
+(not subscribed), so a connectivity change re-enables it on the next re-render rather than
+instantly; `classLedger` issues ~4 queries per student (fine at class size, watch it school-wide);
+the 46-minute EAS run for `ddd9fa0` used up September's free CI minutes — every push until 1 Oct
+needs the manual `eas update` fallback.
+
 ### Open issues for the morning
 
 - `uiautomator dump` cannot settle while the practice timer ticks ("could not get idle state") and

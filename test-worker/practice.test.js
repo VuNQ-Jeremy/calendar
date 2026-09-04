@@ -162,6 +162,64 @@ describe('practice — finalize', () => {
     ).toHaveLength(0);
   });
 
+  it('a ×N debt due on a day off or an empty day moves to the next practice day instead of sticking', async () => {
+    const d = db();
+    const { b, cls } = await fixture(d);
+    // Miss on Mon 03 → ×2 due Tue 04.
+    await practiceSvc.createTask(d, taskInput(cls.id, '2031-03-03', 'T'), null);
+    await practiceSvc.finalizeDay(d, cls.id, '2031-03-03');
+    expect(await practiceSvc.getWarning(d, cls.id, b.id)).toMatchObject({
+      pendingMultiplier: 2,
+      pendingForDate: '2031-03-04',
+    });
+    // Tue 04 becomes a day off: finalizing it must carry the debt to Wed 05, not leave it on the 4th.
+    await practiceSvc.setOverride(d, { classId: cls.id, date: '2031-03-04', isPractice: false });
+    expect(await practiceSvc.finalizeDay(d, cls.id, '2031-03-04')).toEqual([]);
+    expect(await practiceSvc.getWarning(d, cls.id, b.id)).toMatchObject({
+      pendingMultiplier: 2,
+      pendingForDate: '2031-03-05',
+    });
+    // Wed 05 is a practice day with no tasks at all: same shift, to Thu 06.
+    expect(await practiceSvc.finalizeDay(d, cls.id, '2031-03-05')).toEqual([]);
+    expect(await practiceSvc.getWarning(d, cls.id, b.id)).toMatchObject({
+      pendingForDate: '2031-03-06',
+    });
+  });
+
+  it('a second excuse request for the same day is refused while one is pending or approved', async () => {
+    const d = db();
+    const { a, cls } = await fixture(d);
+    const staffId = await someStaffId(d);
+    await practiceSvc.requestExcuse(
+      d,
+      a.id,
+      { classId: cls.id, date: '2031-03-08', reason: 'Sick' },
+      '2031-03-08',
+    );
+    await expect(
+      practiceSvc.requestExcuse(
+        d,
+        a.id,
+        { classId: cls.id, date: '2031-03-08', reason: 'Again' },
+        '2031-03-08',
+      ),
+    ).rejects.toThrow('already_requested');
+    // A rejected one may be replaced.
+    const [pending] = await practiceSvc.listExcuses(d, {
+      classId: cls.id,
+      studentId: a.id,
+      status: 'pending',
+    });
+    await practiceSvc.decideExcuse(d, { excuseId: pending.id, decision: 'reject' }, staffId);
+    const again = await practiceSvc.requestExcuse(
+      d,
+      a.id,
+      { classId: cls.id, date: '2031-03-08', reason: 'Really sick' },
+      '2031-03-08',
+    );
+    expect(again.status).toBe('pending');
+  });
+
   it('the cron runner finalizes yesterday ICT for every enabled class', async () => {
     const d = db();
     const { cls } = await fixture(d);

@@ -471,17 +471,15 @@ export async function createTask(
   ];
   for (const part of chunk(roster, rowsPerStatement(12))) {
     ops.push(
-      db
-        .insert(practiceStudentTasks)
-        .values(
-          part.map((studentId) => ({
-            id: crypto.randomUUID(),
-            taskId: id,
-            studentId,
-            sortOrder,
-            ...base,
-          })),
-        ),
+      db.insert(practiceStudentTasks).values(
+        part.map((studentId) => ({
+          id: crypto.randomUUID(),
+          taskId: id,
+          studentId,
+          sortOrder,
+          ...base,
+        })),
+      ),
     );
   }
   await db.batch(ops as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
@@ -677,6 +675,12 @@ export async function requestExcuse(
   if (input.date < todayIct) throw new Error('deadline_passed');
   const enrolled = (await rosterIds(db, input.classId)).includes(studentId);
   if (!enrolled) throw new Error('not_found');
+  // One request per day (UNIQUE). A pending or approved one stands; only a rejected one is
+  // replaced below — otherwise the insert would surface as a raw constraint error (a 500).
+  const standing = (
+    await listExcuses(db, { classId: input.classId, studentId, from: input.date, to: input.date })
+  ).find((e) => e.status !== 'rejected');
+  if (standing) throw new Error('already_requested');
   await db.delete(
     practiceExcuses,
     eq(practiceExcuses.classId, input.classId),
@@ -968,22 +972,40 @@ export async function finalizeDay(
   classId: string,
   date: string,
 ): Promise<FinalizeOutcome[]> {
-  const [settings, overrides] = await Promise.all([
+  const [settings, overrides, farOverrides] = await Promise.all([
     getSettings(db, classId),
     listOverrides(db, classId, date, date),
+    listOverrides(db, classId, date, addDaysStr(date, 60)),
   ]);
-  if (!isPracticeDay(settings, overrides, date)) return [];
+  // A day that cannot be judged — a day off, or a practice day the teacher left empty — must not
+  // strand a ×N debt that was due on it: the debt moves to the next practice day instead.
+  if (!isPracticeDay(settings, overrides, date)) {
+    await shiftPendingDebts(db, classId, date, settings, farOverrides);
+    return [];
+  }
   const copies = await listStudentTasks(db, classId, date, date);
-  if (!copies.length) return [];
+  if (!copies.length) {
+    await shiftPendingDebts(db, classId, date, settings, farOverrides);
+    return [];
+  }
   const byStudent = new Map<string, StudentTaskRow[]>();
   for (const c of copies) byStudent.set(c.studentId, [...(byStudent.get(c.studentId) ?? []), c]);
+  // A student with a debt due today but no copy today (e.g. removed per-student) is judged like an
+  // empty day for them: the debt shifts rather than sticking to a date that will never be finalized.
+  for (const w of await listWarnings(db, classId)) {
+    if (w.pendingForDate === date && !byStudent.has(w.studentId)) {
+      await saveWarning(db, classId, w.studentId, {
+        ...w,
+        pendingForDate: nextPracticeDay(settings, farOverrides, date),
+      });
+    }
+  }
   const existing = await listMisses(db, { classId, from: date, to: date });
   const approved = new Set(
     (await listExcuses(db, { classId, status: 'approved', from: date, to: date })).map(
       (e) => e.studentId,
     ),
   );
-  const farOverrides = await listOverrides(db, classId, date, addDaysStr(date, 60));
   const out: FinalizeOutcome[] = [];
   for (const [studentId, tasks] of byStudent) {
     const w = await getWarning(db, classId, studentId);
@@ -1020,22 +1042,36 @@ export async function finalizeDay(
       // An excused ×N day: the debt moves to the next practice day rather than being forgiven.
       await saveWarning(db, classId, studentId, { ...w, pendingForDate: nextDay });
     }
-    await db
-      .insert(practiceMisses)
-      .values({
-        id: missId,
-        classId,
-        studentId,
-        date,
-        excused,
-        multiplier,
-        behaviorRecordId,
-        createdAt: nowIso(),
-      });
+    await db.insert(practiceMisses).values({
+      id: missId,
+      classId,
+      studentId,
+      date,
+      excused,
+      multiplier,
+      behaviorRecordId,
+      createdAt: nowIso(),
+    });
     recordCreate('practice_miss', missId, { classId, studentId, date, excused, multiplier });
     out.push({ classId, studentId, date, excused, multiplier, nextDay, missId });
   }
   return out;
+}
+
+/** Move every ×N debt due on `date` to the next practice day (see finalizeDay). */
+async function shiftPendingDebts(
+  db: TenantDb,
+  classId: string,
+  date: string,
+  settings: PracticeSettingsRow | null,
+  farOverrides: DayOverrideRow[],
+): Promise<void> {
+  const due = (await listWarnings(db, classId)).filter((w) => w.pendingForDate === date);
+  if (!due.length) return;
+  const nextDay = nextPracticeDay(settings, farOverrides, date);
+  for (const w of due) {
+    await saveWarning(db, classId, w.studentId, { ...w, pendingForDate: nextDay });
+  }
 }
 
 function addDaysStr(date: string, n: number): string {

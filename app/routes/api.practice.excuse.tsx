@@ -29,7 +29,13 @@ export const action = withAuth(
       };
     } catch (err) {
       const code = err instanceof Error ? err.message : 'internal_error';
-      throw fail(code, code === 'deadline_passed' ? 409 : code === 'not_found' ? 404 : 500);
+      const status =
+        code === 'deadline_passed' || code === 'already_requested'
+          ? 409
+          : code === 'not_found'
+            ? 404
+            : 500;
+      throw fail(code, status);
     }
   },
   { live: 'practice' },
