@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0355 — 2026-09-04
+Two dev SQL scripts to seed and remove Practice demo data (a full review queue, pending excuses, a level-2 warning) so the feature can be clicked through by hand.
+
 ## v0.0354 — 2026-09-04
 Practice pages now sit in the standard .content rail (they had no page padding) and carry a breadcrumb trail above the title. New PageHeader breadcrumbs prop + Breadcrumbs component in src/ui.tsx.
 
