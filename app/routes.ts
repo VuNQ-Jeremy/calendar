@@ -191,12 +191,14 @@ export default [
     route('classes', 'routes/classes.tsx'),
     route('people', 'routes/people.tsx'),
     route('materials', 'routes/materials.tsx'),
-    // Practice (Nhiệm vụ). Static segments before the dynamic ones for the same reason as
-    // logs/notifications below: `/practice/review` must not be read as a class id.
+    // Practice (Nhiệm vụ). The sheet is `/practice/:classId/:month` (month in the PATH for the
+    // cache key; the student tab is `?student=`). The three older URLs stay as 301s for bookmarks —
+    // static `review` first, and the 4-segment week/ledger shapes cannot collide with the sheet's 3.
     route('practice', 'routes/practice.tsx'),
     route('practice/review', 'routes/practice.review.tsx'),
     route('practice/:classId/week/:monday', 'routes/practice.$classId.week.$monday.tsx'),
     route('practice/:classId/ledger/:month', 'routes/practice.$classId.ledger.$month.tsx'),
+    route('practice/:classId/:month', 'routes/practice.$classId.$month.tsx'),
     route('tests', 'routes/tests.tsx'),
     route('tests/:id', 'routes/tests.$id.tsx'),
     route('my-tests', 'routes/my-tests.tsx'),
