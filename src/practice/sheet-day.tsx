@@ -51,7 +51,7 @@ export function DayHeader({
     <div
       className={`pr-sheet__dayhead is-${day.kind}${day.isToday ? ' is-today' : ''}${
         day.isPractice ? '' : ' is-off'
-      }`}
+      }${menuOpen ? ' has-menu' : ''}`}
       data-testid="pr-day"
       data-date={day.date}
       data-today={day.isToday ? 'true' : 'false'}

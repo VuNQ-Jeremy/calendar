@@ -4660,6 +4660,14 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
   top: 44px;
   z-index: 1;
 }
+/* An OPEN day menu has to out-rank the next date band and the column header. Every day header is
+   a sticky `z-index: 1` element, so it opens a stacking context and the popup's own z-index is
+   resolved INSIDE it — against a later sibling at the same level, DOM order wins and the menu
+   paints underneath the following day. Lifting the header itself is what actually moves the
+   popup; the number on `.pr-sheet__menu-pop` never could. */
+.pr-sheet__dayhead.has-menu {
+  z-index: 4;
+}
 .pr-sheet__dayhead.is-today {
   background: var(--brand-soft);
 }
