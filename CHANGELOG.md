@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0369 — 2026-09-04
+Practice is one sheet per class-month: tasks grouped by date with every column edited in place, a blank row to add tasks, review and the ledger folded in. Week planner, review queue and ledger URLs redirect.
+
 ## v0.0358 — 2026-09-04
 docs(practice): plan reworked for an unattended Opus 5 run — survival kit, exact grants, staging + prod smoke verification phase with unconditional cleanup
 
