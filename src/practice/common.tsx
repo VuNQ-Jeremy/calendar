@@ -1,6 +1,8 @@
 import React from 'react';
 import { useFetcher } from 'react-router';
 import { DS } from '../ds/index.js';
+import { getCal } from '../../shared/i18n/strings.js';
+import { parseWeekdays } from '../../shared/logic/practice.js';
 
 /**
  * The pieces all four Practice screens share.
@@ -117,3 +119,25 @@ export function shiftDays(date: string, n: number): string {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+/** Sentinel for "no material" in the material selects — a `<select>` cannot hold null. */
+export const NO_MATERIAL = '__none__';
+
+export function materialOptions(
+  materials: { id: string; title: string }[],
+  t: (k: string) => string,
+): { value: string; label: string }[] {
+  return [
+    { value: NO_MATERIAL, label: t('pr_material_none') },
+    ...materials.map((m) => ({ value: m.id, label: m.title })),
+  ];
+}
+
+/** '1,3,5' → 'Mon, Wed, Fri' in the UI language, Monday first. */
+export const weekdayLabels = (mask: string, lang: string) => {
+  const cal = getCal(lang);
+  return [...parseWeekdays(mask)]
+    .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+    .map((wd) => cal.dow[wd])
+    .join(', ');
+};
