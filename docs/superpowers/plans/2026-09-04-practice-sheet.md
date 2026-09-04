@@ -1,6 +1,15 @@
 # Practice sheet — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For the executor (Claude Opus 5, unattended):** This plan is ONE linear run for a single
+> developer, start to finish — Build phase (Tasks 1–10, each with a LOCAL commit, no push) and then
+> the Verification phase (V.0–V.10, which pushes twice: the feature, then the log). Tick the `- [ ]`
+> boxes in THIS file as you go. Every decision is already made — do not re-open one, do not ask, do
+> not stop to confirm, and do not assume anything this file does not state; when a step says "read
+> file X first", do that before writing. **§0.2 is the whole authorization**: a command not listed
+> there is not granted — tick the step `skipped — not authorized` and continue. If a step is
+> impossible after 3 attempts, write what happened under **Execution log** and continue with the
+> next step. The tree must pass `npm run typecheck` at every commit. Read §0 first, then the repo
+> skill `.claude/skills/unattended-verification/` (`playwright.md`) before V.4 and V.7.
 
 **Goal:** Replace the Practice week planner, review queue and ledger with ONE sheet-like screen per class-month — rows are the student's tasks grouped by date, every column is edited in place, and a blank row on each practice day adds tasks — so a teacher does the whole evening routine without leaving the page.
 
@@ -8,19 +17,120 @@
 
 **Tech Stack:** React Router 7 (SSR on Cloudflare Workers, `useLoaderData`/`useFetcher`/`useSearchParams`), Mochi DS (`src/ds`: Button, Card, IconButton, Tag, Tabs; `src/ui.tsx`: Modal, MSelect, PageHeader, Empty, useConfirm), Zod 4, vitest (`test/` jsdom; `test-worker/` cloudflare pool), Playwright (`e2e/`, calendar-test only).
 
-**Spec:** `docs/superpowers/specs/2026-09-04-practice-sheet-design.md` (read it first; the prototype it links is the visual reference).
+**Spec:** `docs/superpowers/specs/2026-09-04-practice-sheet-design.md` (read it first; the prototype it links — https://claude.ai/code/artifact/3e218969-8c4f-435c-9830-0546509026a0 — is the visual reference, but the code in Task 7 is the contract).
 
 ## Global Constraints
 
-- Work on `main`. Commit after every task with the exact message given; **push only in Task 11** (one push = one changelog entry = one OTA verification, per CLAUDE.md).
-- **Never run a test suite on your own** (`npm test`, `npm run test:worker`, `npm run test:e2e*`, `npm run test:env:setup`). The steps below that say "Run: `npx vitest run test/<file>`" are the ONE exception the user pre-authorised for this plan: a single file, in the jsdom project, for the pure-logic tests you just wrote. Everything else stays with the user. Never run `test-worker/` (it needs miniflare + D1) — write the test, say it is unrun.
+- Work on `main`. Commit after every Build task with the exact message given (LOCAL commits); the ONLY pushes are V.5 (the feature) and V.10 (the log). One push = one `node scripts/changelog.mjs "…"` entry, per CLAUDE.md.
+- Test suites run ONLY where §0.2 grants them, at the steps that name them. `npx vitest run test/<one file>` for a test you just wrote is covered by the unit grant. Never run `npm run test:device`.
 - Free checks, run as often as you like: `npm run typecheck`, `npm run lint`, `npm run check:i18n`, `npx prettier --write <the files you changed>` (never `npm run format` — the tree is CRLF and it would rewrite hundreds of files).
-- No paid API calls (none are needed). No `wrangler deploy`, no `wrangler login`, no `git add -A`, no `npx tsc -b`.
+- No paid API calls (none are needed). No `wrangler deploy`, no `wrangler login`, no `eas login`, no `git add -A` / `git add .`, no `git push --force`, no `git reset --hard`, no `git checkout -- <file>` on a file you did not create, no `npx tsc -b`.
 - Every new file starts with a doc comment saying WHY it exists (house style).
-- Every new i18n key goes in BOTH blocks of `shared/i18n/strings.ts`: the `en` block (`const en_strings = { … } as const;`) and the `vi` block (`vi: { … }`). English strings are also the e2e/walkthrough selectors — copy them exactly as written here.
+- Every new i18n key goes in BOTH blocks of `shared/i18n/strings.ts`: the `en` block (`const en_strings = { … } as const;`) and the `vi` block (`vi: { … }`). English strings are also the e2e/walkthrough/smoke selectors — copy them exactly as written here.
 - Every tenant-table write uses `db.update(table, set, ...where)` / `db.delete(table, ...where)`; reads use `db.raw.select().from(t).where(db.own(t, …))`.
 - CSS selectors are namespaced `pr-sheet__…` (app.css is global; see the `.month` incident note at the top of the Practice CSS block).
-- Dates are ICT `YYYY-MM-DD`; "today" is `ictDateOf(new Date().toISOString())` from `shared/logic/tests`, never `new Date()` math.
+- Dates are ICT `YYYY-MM-DD`; "today" is `ictDateOf(new Date().toISOString())` from `shared/logic/tests`, never `new Date()` math. In a scratch script, today's ICT date is `new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10)`.
+- Scratch scripts live in `C:\Users\ADMIN\AppData\Local\Temp\claude\f--code-calendar\<session>\scratchpad\` (whatever scratchpad the session reports), never in the repo; they import Playwright by `file:///F:/code/calendar/node_modules/playwright/index.mjs`.
+- No foreground `sleep`. Long processes start with `run_in_background`; polls use the Monitor tool or a bounded background loop.
+
+---
+
+## 0. Session survival kit — read before the first step
+
+### 0.1 Machine facts (verified 2026-09-04)
+
+| Thing | Value | Verify with |
+|---|---|---|
+| Shells | Windows 11. Bash tool for git/curl/grep/heredocs; PowerShell only where a step says so (`curl` there is `Invoke-WebRequest` — write `curl.exe`). `cd` does not persist: every command starts `cd f:/code/calendar && …`. | — |
+| Node | v24.16.0 | `node -v` |
+| Repo | `f:\code\calendar`, branch `main`. Other worktree: `.worktrees/vocab` (branch `vocab-games`) — **exclude `.worktrees/**` from every grep** or every hit doubles. | `git worktree list` |
+| Head at plan time | `44de481` — `main` is **ahead 1** of `origin/main` (a one-line spec fix that rides with the V.5 push). Starting from a different sha is fine; record it in V.0. | `git rev-parse --short HEAD`, `git status -sb` |
+| adb / emulator / APK | **Not used by this run** (web-only change; no `runtimeVersion` bump, no native code). Java is not installed. | — |
+| runtimeVersion | unchanged by this plan | `node -p "require('./shared/version.json').runtimeVersion"` |
+| EAS | `npx eas-cli` from `mobile/`, logged in as `vu-nguyen` (owner of `vu-nguyens-team`, project `mochi-class`). Never `eas login`. | `cd mobile && npx eas-cli whoami` |
+| Cloudflare | account `ngqv0712@gmail.com` (OAuth token). Never `wrangler login`, never `wrangler deploy` — Workers Builds deploys on push. | `npx wrangler whoami` |
+| GitHub | no `gh`; Actions via `curl -s "https://api.github.com/repos/VuNQ-Jeremy/calendar/actions/runs?per_page=3"`. Push 403 → see §0.5. | — |
+| Accounts | staff/admin `dev@mochi.edu` / `mochi123`; student `vunq@mochi.edu` / `mochi123`. On **calendar-test** the student is `s1` "Leo Park" in class `c1` "Biology 9A" (with "Mia Chen"; only Leo's mother `p1` has a Zalo chat). On **prod** the student account is "Moon" (`975c53c0-5400-4d29-90d9-1f0a964f7ef6`). | seed.sql / `scripts/test-accounts.sql`; prod by the D1 query in V.0 |
+| Prod smoke class | **Bamblebee**, id `7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7` — its ONLY student is Moon, Practice is already enabled, it has no tasks. The other enabled class, "Viết chữ đẹp" (`80da975f-…`), holds the user's `seedtest-` demo rows: **never touch it.** | V.0 query |
+| Prod practice rows at plan time (N0, 2026-09-04) | `practice_tasks` 3 · `practice_student_tasks` 6 · `practice_excuses` 2 · `practice_misses` 2 (all `seedtest-…`, all on Viết chữ đẹp) · `practice_settings` enabled 2 · WALKTHROUGH-titled rows 0 · `practice_day_overrides` for Bamblebee: record in V.0 | V.0 query |
+| URLs | prod `https://calendar.ngqv0712.workers.dev`; test `https://calendar-test.ngqv0712.workers.dev`; manifest `https://u.expo.dev/83251f6c-1fa9-4724-ba61-39a9eb806aab` | — |
+| Playwright | `playwright.config.ts`: 1 worker, 1 retry, 90 s timeout, viewport 1400×900, channel `msedge`. `scripts/test-e2e-staging.mjs` supplies `MOCHI_EMAIL`/`MOCHI_PASSWORD` defaults. | — |
+
+### 0.2 Authorizations granted for THIS run (user, 2026-09-04) — and what stays forbidden
+
+Granted (manual-trigger only per CLAUDE.md; the user ticked exactly these):
+- `npm test` and `npm run test:worker` — and their single-file forms `npx vitest run test/<file>` and `npx vitest run --config vitest.workers.config.js test-worker/practice.test.js`.
+- `npm run test:env:setup` then `npm run test:e2e:staging` (and `npm run test:e2e:staging -- e2e/crud-practice.spec.ts` for one spec). Setup and suite run as a pair.
+- **Prod smoke on Bamblebee only:** a scratchpad Playwright script signs in as `dev@mochi.edu` and, on class Bamblebee, adds `WALKTHROUGH sheet smoke <stamp>` task rows through the sheet, edits/feedbacks/screenshots them, deletes them through the sheet, and — if today was a day off — may set today to a practice day and MUST put it back to the weekly default. Cleanup runs unconditionally and ends with the zero-count query in V.9. Fallback if the UI delete fails: `npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH%'"` then the same for `practice_tasks`, and `DELETE FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7' AND date='<today ICT>'`.
+- Read-only prod D1 `SELECT`s (counts) via `npx wrangler d1 execute mochi-class --remote --json --command "SELECT …"`.
+- Two pushes to `main` (V.5 feature, V.10 log), each with a changelog entry.
+- **Fix commits: max 3** after the Build phase, only for defects V.1–V.9 prove; each is `fix(practice): <what V.x proved>`.
+
+NOT granted (tick `skipped — not authorized` if a step would need it):
+- The manual OTA publish `npx eas-cli update …`. V.8 only RECORDS the workflow status (the change is web-only; the served bundle is unchanged either way).
+- Any emulator / adb / `eas build` work. Any prod D1 migration (none exists in this plan). Any write on a prod class other than Bamblebee. Removing the `seedtest-` demo rows.
+
+Forbidden, no exceptions: paid API routes (`/enrich-vocab`, `/generate-vocab`, `/vocab-image-generate`, `/speech-assess`); `wrangler deploy` in any form; `wrangler login`; `eas login`; `npm run format` / `prettier --write .`; `git add -A`, `git add .`, `git push --force`, `git reset --hard`, `git checkout -- <file>` on a file you did not create; `npx tsc -b` at the root; `npm run test:device`; new feature code beyond Tasks 1–10.
+
+### 0.3 Names this run depends on — confirm from the tree at V.0
+
+| Name | Expected | Confirm with |
+|---|---|---|
+| Migration | **none** (no schema change) | `ls migrations \| tail -2` still ends at `0057_practice.sql` |
+| Sheet route | `route('practice/:classId/:month', 'routes/practice.$classId.$month.tsx')` | `grep -n "practice" app/routes.ts` |
+| Redirect routes | `practice.review.tsx`, `practice.$classId.week.$monday.tsx`, `practice.$classId.ledger.$month.tsx` each `throw redirect(…, 301)` | `grep -ln "redirect(" app/routes/practice.*` |
+| Action route + intents | `app/routes/practice-actions.tsx` cases: `settings day-override quick-add create-task update-task update-copy delete-task remove-copy review excuse-decide excuse-miss clear-warning` | `grep -n "case '" app/routes/practice-actions.tsx` |
+| English UI strings (selectors) | `Open sheet` · `Practice weekdays` · `All` · `Needs review` · `Misses` · `Day menu` · `Day off` · `Make practice day` · `Use weekly default` · `Task` · `Feedback` · `Mark done` · `Accept` · `Reject` · `Approve` · `Mark excused` · `Delete task` · `Clear warning` · `Saved` · `Done (teacher)` · `Recorded by teacher` · `No Zalo pairing` · `Nothing to review for {name}` | `grep -n "pr_" shared/i18n/strings.ts` |
+| e2e spec | `e2e/crud-practice.spec.ts` (rewritten, Task 9) | `ls e2e` |
+| Reset sweep | unchanged — the seven `DELETE FROM practice_*;` lines already exist | `grep -n practice scripts/test-accounts.sql` |
+| Walkthrough story count | stays **29** (two stories replaced) | `grep -n toHaveLength test/walkthrough.test.ts` |
+| Cache key | `practiceMonthKey` in `src/lib/route-cache.ts`; `practiceWeekKey`/`practiceLedgerKey`/`PRACTICE_REVIEW_KEY` gone | `grep -n "practice" src/lib/route-cache.ts` |
+| Deleted screens | `src/practice/practice-week.tsx`, `practice-review.tsx`, `practice-ledger.tsx` absent | `ls src/practice` |
+
+### 0.4 Baselines — already red, not yours
+
+- **Web unit (`test/`)**: expected green (the cascade failure was fixed 2026-07-31). Record the exact `N passed` line.
+- **Worker unit (`test-worker/`)**: expected green. Record the line.
+- **e2e (2026-09-01, main@7976464: 140 passed / 5 skipped / 4 known failures)** — compare by spec file + test title:
+  1. `pvp.spec.ts` › "room battle" (180 s timeout; multi-context spec invisible to the trace)
+  2. `crud-feedback-profile.spec.ts` › "changelog: hide" (`waitForResponse` timeout despite a 200)
+  3. `sidebar-collapse.spec.ts` › "hairline scrollbar" (3 px vs ≤ 2 px cap)
+  4. `crud-vocab-curriculum.spec.ts` › "grade filter"
+  The two zalo specs skip without `ZALO_BOT_TOKEN`. `crud-tests3.spec.ts:27` has been flaky-then-green; a retry pass is not a failure. Anything else red is yours.
+- **lint**: 2 pre-existing warnings (`src/screens-activity.tsx:197` no-underscore-dangle, `src/ui.tsx:354` no-shadow), 0 errors.
+
+### 0.5 Traps
+
+See `.claude/skills/unattended-verification/playwright.md` (spec recipe, staging run, deploy probe, authed curl) — read it before V.4 and V.7. Feature-specific, on top of that:
+
+1. **`useFetcher` aborts an in-flight submit when the next one starts.** That is why the blank row posts ONE `quick-add` (with `studentId` for the "only <name>" scope) and never loops `create-task`. Do not "simplify" it back.
+2. **The sheet's own fetcher is owned by the screen** (`usePracticeSubmit` in `practice-sheet.tsx`) and passed down. A row unmounts when a filter hides it; a fetcher created inside the row would abort its own write.
+3. **A new route needs `npm run typecheck`** (it runs `react-router typegen`) before `.react-router/types` knows `params.month`. A red typecheck right after Task 6 Step 1 is the stale types, not your code.
+4. **`import type { SheetLoaderData } from '../../app/routes/practice.$classId.$month.js'`** — type-only, so the `$` in the path is fine and there is no runtime cycle. Quote the path in shell commands: `"app/routes/practice.\$classId.\$month.tsx"`.
+5. **DS `Tabs` renders `role="tablist"` / `role="tab"`**; Playwright reaches a tab with `getByRole('tab', { name: 'Leo Park' })` (substring, so a `· 1` count suffix is fine).
+6. **`MSelect` in a cell has no label**, so the e2e kit's `pickSel(label, …)` cannot reach it. The spec never picks a material/proof in a cell; the blank-row defaults are what get saved.
+7. **Row handles**: `[data-testid="pr-row"][data-title="<exact title>"]`; the title input and the blank textarea both carry `aria-label="Task"` (`getByRole('textbox', { name: 'Task' })`), the feedback textarea `aria-label="Feedback"`.
+8. **A `teacher_done` copy survives `delete-task`** (task_id → NULL). The staging spec relies on it; the **prod smoke must therefore never Mark done** — a surviving WALKTHROUGH copy would break the zero count.
+9. **`/practice-actions` is posted by the fetcher to `/practice-actions.data`** (turbo-stream); `k.posted('/practice-actions')` checks status only. Never `.json()` it.
+10. **Deploy-live probe for the new bundle**: anonymous `curl -sI https://calendar.ngqv0712.workers.dev/practice/review` — old bundle answers `302` (to `/login`), new bundle `301` with `location: /practice`.
+11. **Another session may redeploy calendar-test or main.** Before diagnosing a red spec, read the sidebar stamp `v0.NNNN · <sha>` in `test-results/<spec>/error-context.md`; not your sha → rerun setup + spec, do not debug.
+12. **Push 403** → `printf "protocol=https\nhost=github.com\n\n" | git credential fill`; if it names `tech-entag`, `printf "protocol=https\nhost=github.com\nusername=tech-entag\n\n" | git credential reject`, retry.
+13. **CRLF tree**: `prettier --check` flags almost every file. Format only files you changed, by name.
+14. **`test-worker/*.test.js` must stay `.js`** (the workers vitest project is configured for JS).
+
+### 0.6 Time budget and hard stop
+
+| Phase | Budget |
+|---|---|
+| Build Tasks 1–6 | 75 min |
+| Task 7 (the screen) | 60 min |
+| Tasks 8–10 | 30 min |
+| V.0–V.2 (static + unit) | 20 min |
+| V.3–V.4 (staging + e2e, incl. ≤ 3 red laps) | 60 min |
+| V.5–V.8 (push, deploy probe, prod smoke, OTA record) | 45 min |
+| V.9–V.10 (cleanup, log, push) | 20 min |
+| Slack | 50 min |
+| **Total / hard stop** | **6 h after the V.0 start time written in the Execution log.** At the hard stop: abandon the open step, run V.9 then V.10 whatever state things are in. |
 
 ---
 
@@ -55,6 +165,8 @@
 | Modify | `CHANGELOG.md` (via script) | Entry for the push |
 
 ---
+
+## Build phase
 
 ### Task 1: Pure sheet grouping
 
@@ -403,7 +515,10 @@ git commit -m "feat(practice): one cache key per class-month"
   });
 ```
 
-- [ ] **Step 2: Do NOT run the worker suite.** Note in your handoff that these two cases are written and unrun.
+- [ ] **Step 2: Run the file to verify the new cases fail** (granted, §0.2)
+
+Run: `cd f:/code/calendar && npx vitest run --config vitest.workers.config.js test-worker/practice.test.js`
+Expected: the two new cases FAIL (`updateStudentTask is not a function`; `studentId` ignored so `classTasks` has length 1). Re-run after Step 5 — expected PASS.
 
 - [ ] **Step 3: Schema** — in `shared/schemas.ts`, `PracticeQuickAddInput` becomes:
 
@@ -2323,7 +2438,7 @@ git commit -m "chore(practice): drop the week, review and ledger screens"
 **Interfaces:**
 - Consumes the handles fixed in Task 7 and the seed facts: staff `dev@mochi.edu`, class **Biology 9A** (`c1`) with **Leo Park** (paired parent → no "No Zalo pairing" tag) and **Mia Chen** (unpaired). Runs only on calendar-test (`crudGuard`).
 
-- [ ] **Step 1: Write the spec** (not run — the user runs `npm run test:e2e:staging -- --grep "practice"`)
+- [ ] **Step 1: Write the spec** (it runs in V.4, after `npm run test:env:setup`)
 
 ```ts
 import { test, expect } from '@playwright/test';
@@ -2580,56 +2695,295 @@ git commit -m "docs(walkthrough): practice sheet stories"
 
 ---
 
-### Task 11: Ship
+## Verification phase
 
-**Files:**
-- Modify: `CHANGELOG.md` (via script), `docs/superpowers/plans/2026-09-04-practice-sheet.md` (tick boxes)
-- Memory: `C:\Users\ADMIN\.claude\projects\f--code-calendar\memory\practice-tracker-decisions.md` (one line)
+Order matters: unit → staging (setup then suite, as a pair) → push → prod deploy probe → prod smoke →
+OTA record → cleanup → log. Cleanup (V.9) and the log commit (V.10) run **unconditionally** — after a
+failure, after the hard stop, after a skipped step.
 
-- [ ] **Step 1: Final static pass**
+### V.0 Preflight
 
-Run: `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n`
-Expected: all clean.
-
-- [ ] **Step 2: Sweep for leftovers**
+- [ ] Write the start time (local clock, `date`) and `HARD STOP = start + 6 h` at the top of the Execution log.
+- [ ] `cd f:/code/calendar && git status -sb && git rev-parse --short HEAD && node -v` — expected: `## main...origin/main [ahead N]` where N = the number of Build commits + 1 (the pre-existing docs commit), no untracked files except this plan's own edits; Node v24.
+- [ ] Confirm every row of §0.3 with its command; paste the results into the log.
+- [ ] Record N0 on prod (read-only, granted):
 
 ```bash
-cd f:/code/calendar && grep -rn "practice/review\|/week/\|/ledger/\|pr-week\|pr-review\|pr-ledger\|practiceWeekKey\|practiceLedgerKey\|PRACTICE_REVIEW_KEY\|Open week\|Open ledger\|Review queue" src app shared e2e test docs/*.md --include=*.ts --include=*.tsx --include=*.css --include=*.md | grep -v "docs/superpowers/"
+cd f:/code/calendar && npx wrangler d1 execute mochi-class --remote --json --command "SELECT (SELECT COUNT(*) FROM practice_tasks) AS tasks, (SELECT COUNT(*) FROM practice_student_tasks) AS copies, (SELECT COUNT(*) FROM practice_excuses) AS excuses, (SELECT COUNT(*) FROM practice_misses) AS misses, (SELECT COUNT(*) FROM practice_tasks WHERE title LIKE 'WALKTHROUGH%') AS wt, (SELECT COUNT(*) FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH%') AS wc, (SELECT COUNT(*) FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7') AS bb_overrides, (SELECT COUNT(*) FROM class_students WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7') AS bb_students" | grep -A10 '"results"'
 ```
 
-Expected: only the three redirect route files (their comments name the old URLs) and `CHANGELOG.md` history. Anything else is a miss — fix it.
+Expected on 2026-09-04: `tasks 3, copies 6, excuses 2, misses 2, wt 0, wc 0, bb_students 1`; `bb_overrides` whatever it is — write all eight numbers into the log as **N0**. If `wt` or `wc` is not 0, a previous run left rows: run the V.9 fallback deletes FIRST and re-record.
 
-- [ ] **Step 3: Changelog + commit + push**
+### V.1 Static (free)
+
+- [ ] `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n` — 0 errors; lint shows only the 2 baseline warnings; check:i18n exits 0.
+- [ ] Leftover sweep:
+
+```bash
+cd f:/code/calendar && grep -rn "practice/review\|/week/\|/ledger/\|pr-week\|pr-review\|pr-ledger\|practiceWeekKey\|practiceLedgerKey\|PRACTICE_REVIEW_KEY\|Open week\|Open ledger\|Review queue" src app shared e2e test --include=*.ts --include=*.tsx --include=*.css
+```
+
+Expected: hits only inside the three redirect route files' comments. Anything else → fix (counts against the 3 fix commits only if it needs a code change beyond the current uncommitted Build task).
+
+### V.2 Unit (granted)
+
+- [ ] `cd f:/code/calendar && npm test` (runs `test/` then `test-worker/`). Expected: both green; `test/practice-sheet-logic.test.ts` (6), `test/cache.test.ts` and `test/walkthrough.test.ts` pass; `test-worker/practice.test.js` includes the two new cases green. Paste both summary lines into the log. A failure outside the files this plan touched: compare with §0.4, record, do not fix.
+
+### V.3 Test env (granted)
+
+- [ ] `cd f:/code/calendar && npm run test:env:setup` (deploys calendar-test with `CLOUDFLARE_ENV=test` at build time; ~3–5 min; `run_in_background` + Monitor).
+- [ ] Probe the new bundle on calendar-test: `curl -sI https://calendar-test.ngqv0712.workers.dev/practice/review | head -3` → `HTTP/2 301` and `location: /practice`. A `302` means the old bundle is still serving — wait for the setup to finish, do not debug.
+
+### V.4 e2e (granted)
+
+- [ ] `cd f:/code/calendar && npm run test:e2e:staging -- e2e/crud-practice.spec.ts` → 1 passed. Red → `playwright.md` §C: stamp check first, then trace, fix, `npm run test:env:setup` again if server code changed, rerun the spec; three laps max, then `test.fixme` with a one-line reason and log it.
+- [ ] `cd f:/code/calendar && npm run test:e2e:staging` (full; ~4–13 min; background + Monitor). Paste the summary line. Every failure must be in §0.4 by spec + title; anything else is yours → same lap rule. Never rerun the full suite to "confirm" a count.
+
+### V.5 Ship the feature (push #1)
+
+- [ ] Fix commits so far ≤ 3; `npm run typecheck && npm run lint` green.
 
 ```bash
 cd f:/code/calendar && node scripts/changelog.mjs "Practice is one sheet per class-month: tasks grouped by date with every column edited in place, a blank row to add tasks, review and the ledger folded in. Week planner, review queue and ledger URLs redirect."
-git add CHANGELOG.md docs/superpowers/plans/2026-09-04-practice-sheet.md docs/superpowers/specs/2026-09-04-practice-sheet-design.md
+git add CHANGELOG.md docs/superpowers/plans/2026-09-04-practice-sheet.md
 git commit -m "feat(practice): one-screen sheet replaces week planner, review queue and ledger
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git push origin main
+git rev-parse --short HEAD
+```
+
+Write the pushed sha into the log as **SHA1**. (The Build tasks' commits and the pre-existing docs commit ride along.) Push 403 → §0.5 #12.
+
+### V.6 Prod deploy probe
+
+- [ ] Workers Builds deploys on push (10–15 min). Poll — background loop, never a foreground sleep:
+
+```bash
+cd f:/code/calendar && for i in $(seq 1 30); do s=$(curl -s -o /dev/null -w "%{http_code}" https://calendar.ngqv0712.workers.dev/practice/review); echo "$(date +%T) $s"; [ "$s" = "301" ] && break; sleep 30; done
+```
+
+(run with `run_in_background`; read its output when it finishes). Expected: ends on `301` within 15 min. Then `curl -sI https://calendar.ngqv0712.workers.dev/practice/review | grep -i location` → `location: /practice`. If still `302` after 15 min: check `curl -s "https://api.github.com/repos/VuNQ-Jeremy/calendar/actions/runs?per_page=3"` and the Cloudflare build in the dashboard is not reachable from here — skip V.7 (nothing new to smoke), record, continue with V.8.
+
+### V.7 Prod smoke on Bamblebee (granted, write-scoped) — read `playwright.md` §B first
+
+- [ ] Write the script to the scratchpad as `practice-sheet-smoke.mjs` **exactly** as below (the cleanup half is part of the same run and runs even when an earlier step throws):
+
+```js
+// practice-sheet-smoke.mjs — prod smoke of the Practice sheet on class Bamblebee.
+// Usage: node practice-sheet-smoke.mjs [run|cleanup]
+import { chromium } from 'file:///F:/code/calendar/node_modules/playwright/index.mjs';
+import { mkdirSync } from 'node:fs';
+
+const BASE = 'https://calendar.ngqv0712.workers.dev';
+const OUT = 'F:/code/calendar/docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/';
+const CLASS_NAME = 'Bamblebee';
+const MODE = process.argv[2] ?? 'run';
+const STAMP = Date.now();
+const TITLE = `WALKTHROUGH sheet smoke ${STAMP}`;
+mkdirSync(OUT, { recursive: true });
+
+const browser = await chromium.launch({ channel: 'msedge' });
+const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+const page = await ctx.newPage();
+await page.addInitScript(() => localStorage.setItem('mochi_lang_v1', 'en'));
+const posted = () =>
+  page.waitForResponse(
+    (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/practice-actions.data' && r.ok(),
+  );
+const shot = async (name) => {
+  await page.screenshot({ path: `${OUT}${name}.png`, fullPage: false });
+  console.log('shot', name);
+};
+const rows = () => page.locator('[data-testid="pr-row"][data-title^="WALKTHROUGH"]');
+let forcedPracticeDay = false;
+
+async function openSheet() {
+  await page.goto(`${BASE}/practice`);
+  const card = page.locator('.mochi-card', { hasText: CLASS_NAME });
+  await card.getByRole('link', { name: 'Open sheet' }).click();
+  await page.waitForURL(/\/practice\/[^/]+\/\d{4}-\d{2}/);
+  await page.getByRole('tab', { name: 'Moon' }).click();
+  await page.locator('[data-testid="pr-day"][data-today="true"]').waitFor();
+}
+
+async function cleanup() {
+  console.log('cleanup: start');
+  try {
+    await openSheet();
+    // Delete every WALKTHROUGH row that exists, one confirm each.
+    while ((await rows().count()) > 0) {
+      await rows().first().getByRole('button', { name: 'Delete task' }).click();
+      const p = posted();
+      await page.locator('.m-dialog').last().locator('.mochi-btn.is-danger').click();
+      await p;
+      await page.waitForTimeout(500);
+    }
+    if (forcedPracticeDay) {
+      const today = page.locator('[data-testid="pr-day"][data-today="true"]');
+      await today.getByRole('button', { name: 'Day menu' }).click();
+      const p = posted();
+      await page.getByRole('menuitem', { name: 'Use weekly default' }).click();
+      await p;
+    }
+    await shot('09-after-cleanup');
+    console.log('cleanup: rows left', await rows().count());
+  } catch (e) {
+    console.log('cleanup: FAILED', String(e).slice(0, 300), '→ use the D1 fallback in V.9');
+  }
+}
+
+try {
+  await page.goto(`${BASE}/login`);
+  await page.getByRole('button', { name: 'Email', exact: true }).click();
+  await page.fill('input[name="email"]', 'dev@mochi.edu');
+  await page.fill('input[name="password"]', 'mochi123');
+  await page.click('form[action="/login"] button[type="submit"]');
+  await page.waitForURL(/\/(dashboard|vocabulary)/, { timeout: 30_000 });
+  console.log('stamp', await page.locator('.sb__version').innerText());
+
+  if (MODE === 'cleanup') {
+    await cleanup();
+  } else {
+    await openSheet();
+    await shot('01-sheet');
+
+    const today = page.locator('[data-testid="pr-day"][data-today="true"]');
+    if (await today.getByText('Day off', { exact: true }).count()) {
+      await today.getByRole('button', { name: 'Day menu' }).click();
+      const p = posted();
+      await page.getByRole('menuitem', { name: 'Make practice day' }).click();
+      await p;
+      forcedPracticeDay = true;
+      console.log('today was a day off → forced practice day (will reset)');
+    }
+    const todayDate = await today.getAttribute('data-date');
+    const blank = page.locator(`[data-testid="pr-blank"][data-date="${todayDate}"]`);
+    await blank.getByRole('textbox', { name: 'Task' }).fill(`${TITLE}\n${TITLE} B`);
+    let p = posted();
+    await blank.getByRole('textbox', { name: 'Task' }).press('Enter');
+    await p;
+    await page.locator(`[data-testid="pr-row"][data-title="${TITLE}"]`).waitFor();
+    console.log('rows after add', await rows().count()); // 2
+    await shot('02-two-rows-added');
+
+    const rowA = page.locator(`[data-testid="pr-row"][data-title="${TITLE}"]`);
+    await rowA.getByRole('textbox', { name: 'Task' }).fill(`${TITLE} edited`);
+    p = posted();
+    await rowA.getByRole('textbox', { name: 'Task' }).press('Enter');
+    await p;
+    await page.locator(`[data-testid="pr-row"][data-title="${TITLE} edited"]`).waitFor();
+    await shot('03-title-edited');
+
+    const rowB = page.locator(`[data-testid="pr-row"][data-title="${TITLE} B"]`);
+    await rowB.getByRole('textbox', { name: 'Feedback' }).fill('WALKTHROUGH feedback');
+    p = posted();
+    await rowB.getByRole('textbox', { name: 'Feedback' }).press('Tab');
+    await p;
+    await rowB.getByText('Saved', { exact: true }).waitFor();
+    await shot('04-feedback-saved');
+
+    await page.getByRole('button', { name: /^Needs review/ }).click();
+    await page.getByText('Nothing to review for Moon', { exact: true }).waitFor();
+    await shot('05-filter-review-empty');
+    await page.getByRole('button', { name: /^Misses/ }).click();
+    await shot('06-filter-misses');
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    await rowB.waitFor();
+
+    const standing = page.locator('[data-testid="pr-standing"]', { hasText: 'Moon' });
+    console.log('standing text', (await standing.innerText()).replace(/\s+/g, ' '));
+    await shot('07-standing');
+
+    await page.evaluate(() => localStorage.setItem('mochi_lang_v1', 'vi'));
+    await page.reload();
+    await page.locator('[data-testid="pr-day"]').first().waitFor();
+    await shot('08-vi');
+    const raw = await page.locator('body').innerText();
+    console.log('raw i18n keys visible?', /\bpr_[a-z_]+\b/.test(raw) ? 'YES — BUG' : 'no');
+    await page.evaluate(() => localStorage.setItem('mochi_lang_v1', 'en'));
+    await page.reload();
+
+    await cleanup();
+  }
+} catch (e) {
+  console.log('RUN FAILED', String(e).slice(0, 500));
+  await cleanup();
+} finally {
+  await browser.close();
+}
+```
+
+- [ ] Run it: `cd <scratchpad> && node practice-sheet-smoke.mjs run` (background + Monitor; ~2 min). Expected console: `stamp v0.NNNN · <SHA1>` (must be SHA1 — else another session redeployed: stop, log, skip to V.8), `rows after add 2`, `raw i18n keys visible? no`, `cleanup: rows left 0`.
+- [ ] **Read every PNG** in `docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/` with the Read tool and write one line per image into the log: 01 header/standing/tabs/day headers present and today highlighted; 02 two rows under today with Everyone markers; 03 edited title; 04 "Saved" under the feedback cell; 05 empty-state text; 06 misses filter (empty or the miss line); 07 standing card numbers; 08 Vietnamese labels, no `pr_…` keys; 09 no WALKTHROUGH rows. A dialog or row cut off by the viewport, a raw key, or a missing element is a finding — log it; it is a fix only if it fits within the 3-commit cap and is a code defect (not a data condition).
+
+### V.8 OTA — record only (manual publish NOT granted)
+
+- [ ] `cd f:/code/calendar/mobile && npx eas-cli workflow:runs | head -12`. Expected top run: `Trigger refs/heads/main@<SHA1>`. Record `Status`. `FAILURE` within ~1 s is the exhausted free CI quota (known); the change is web-only so phones are not missing anything — write `open issue: OTA workflow FAILURE for <SHA1>; manual publish not authorized for this run` and continue. Do **not** run `eas update`.
+
+### V.9 Cleanup (unconditional — runs after a failure or the hard stop too)
+
+- [ ] If V.7's `cleanup: rows left` was not `0`, or V.7 aborted before its cleanup: `cd <scratchpad> && node practice-sheet-smoke.mjs cleanup`.
+- [ ] Zero-count query (read-only):
+
+```bash
+cd f:/code/calendar && npx wrangler d1 execute mochi-class --remote --json --command "SELECT (SELECT COUNT(*) FROM practice_tasks WHERE title LIKE 'WALKTHROUGH%') AS wt, (SELECT COUNT(*) FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH%') AS wc, (SELECT COUNT(*) FROM practice_tasks) AS tasks, (SELECT COUNT(*) FROM practice_student_tasks) AS copies, (SELECT COUNT(*) FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7') AS bb_overrides" | grep -A8 '"results"'
+```
+
+Expected: `wt 0, wc 0`, `tasks`/`copies`/`bb_overrides` equal to N0. Not zero → the granted fallback, in this order, then re-run the query:
+
+```bash
+cd f:/code/calendar && npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH%'"
+npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_tasks WHERE title LIKE 'WALKTHROUGH%'"
+# only if bb_overrides > N0 (the smoke forced today and could not reset it):
+npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7' AND date='<today ICT, YYYY-MM-DD>'"
+```
+
+- [ ] `cd f:/code/calendar && git status --short` — only this plan and the PNGs under `docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/` may be modified/untracked. Anything else (a stray `.mjs`, a formatted file you did not intend) → move it out or unstage it; never `git add -A`.
+
+### V.10 Log + docs commit (push #2)
+
+- [ ] Fill the **Execution log** below: start/end time, SHA1, N0 and the V.9 counts, every suite's summary line, path taken per step (`done` / `skipped — not authorized` / `skipped — <why>`), one line per PNG, fix commits made (≤ 3) with shas, **Decisions taken by the executor**, **Open issues for the morning** (at least: OTA workflow status; any `test.fixme`).
+- [ ] Memory: append to `C:\Users\ADMIN\.claude\projects\f--code-calendar\memory\practice-tracker-decisions.md`, after the implementation-plan paragraph: `2026-09-04: teacher web UI collapsed into one sheet per class-month (/practice/:classId/:month?student=); week/review/ledger URLs 301. Spec docs/superpowers/specs/2026-09-04-practice-sheet-design.md, plan docs/superpowers/plans/2026-09-04-practice-sheet.md (execution log at the bottom).`
+- [ ] Commit and push, staging by name:
+
+```bash
+cd f:/code/calendar && node scripts/changelog.mjs "docs(practice): overnight verification log and prod smoke screenshots for the Practice sheet"
+git add CHANGELOG.md docs/superpowers/plans/2026-09-04-practice-sheet.md docs/superpowers/reviews/2026-09-04-practice-sheet-smoke
+git commit -m "docs(practice): sheet verification log + smoke screenshots
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 git push origin main
 ```
 
-If the push 403s: `printf "protocol=https\nhost=github.com\n\n" | git credential fill` — when it names `tech-entag`, run `printf "protocol=https\nhost=github.com\nusername=tech-entag\n\n" | git credential reject` and push again.
+- [ ] `cd f:/code/calendar/mobile && npx eas-cli workflow:runs | head -6` once more for this sha; record the status (no manual publish).
 
-- [ ] **Step 4: Verify the OTA workflow (CLAUDE.md: every push ends with a published update)**
+### If something blocks
 
-Run (after ~2 min): `cd f:/code/calendar/mobile && npx eas-cli workflow:runs`
-Expected: top row = this commit, `Status SUCCESS`, `Trigger Type GitHub`. If it is missing or FAILED (the free CI quota has been exhausted before — memory *EAS publish workflow failing*), publish by hand:
-`cd f:/code/calendar/mobile && npx eas-cli update --branch preview --platform android --environment preview --message "practice sheet (web-only change)"`
-then confirm delivery with the curl from CLAUDE.md, reading the runtime version from `shared/version.json`.
-
-- [ ] **Step 5: Verify the deploy** — Workers Builds deploys on push; observe the behaviour, not the output: `curl -sI https://<prod host>/practice/review` should return `301` with `location: /practice` once the build lands (a minute or two). Use the host from `wrangler.jsonc` `routes`; do not `wrangler deploy`.
-
-- [ ] **Step 6: Say what is unrun** — in the handoff list: `test-worker/practice.test.js` (2 new cases), `e2e/crud-practice.spec.ts`, and that `npm test` was not run. Mention the user's command for each.
-
-- [ ] **Step 7: Memory** — append one line to the memory file `practice-tracker-decisions.md` under the implementation-plan paragraph: `2026-09-04: teacher web UI collapsed into one sheet per class-month (/practice/:classId/:month?student=); week/review/ledger URLs redirect. Spec docs/superpowers/specs/2026-09-04-practice-sheet-design.md, plan docs/superpowers/plans/2026-09-04-practice-sheet.md.`
+| Situation | Do |
+|---|---|
+| §0.2 does not list the step's command | tick `skipped — not authorized`, continue |
+| A Build task cannot pass `npm run typecheck` after 3 attempts | Never leave the tree red and never stash (shared tree). Reduce the task to what compiles, commit that, log the gap under Open issues |
+| A test stays red after 3 laps | `test.fixme` with a one-line reason; never delete a test |
+| calendar-test stamp is not your sha mid-run | another session deployed; rerun `npm run test:env:setup` + the spec, do not debug |
+| Prod never reaches 301 in 15 min | skip V.7; still V.8, V.9, V.10 |
+| The smoke's `cleanup: rows left` ≠ 0 | V.9 fallback deletes, then the count query again |
+| Hard stop reached | V.9 then V.10, whatever step was open |
+| A decision is needed | choose the option touching the fewest files; record it under **Decisions taken by the executor** |
 
 ---
 
 ## Self-review (author, 2026-09-04)
 
-- **Spec coverage:** header/month nav/weekday gear → T7 §4; filter chips → T7 §4; standing strip → T7 §1; tabs via `?student=` → T7 §4 + T2 key comment; date header (today/day off/meta/miss/×N/excuse/menu) → T7 §2 + T1 rule; task row columns, editable-only-while-open, class vs student scope → T7 §3 + T3; proof thumbnail modal → T7 §3; blank row rule + scope pill + one post → T1 + T7 §3 + T3 (`quick-add.studentId`); not-enabled Empty → T7 §4; redirects → T6; removed screens/keys/CSS → T7 §5 + T8; e2e → T9; walkthrough → T10; changelog/push/OTA → T11.
-- **Placeholder scan:** none; every code step is full code.
-- **Type consistency:** `SheetLoaderData` (T6) is what T7 imports type-only; `buildSheet`'s generic `SheetDay<StudentTaskRow, MissRow, ExcuseRow>` is aliased `Day` in `sheet-day.tsx`; `PracticeSubmit` from `common.tsx` is the one submit type everywhere; `updateStudentTask` (T3) is what `update-copy` (T3) calls and `TaskRow` (T7) posts; `practiceMonthKey` (T2) is what T6's `clientLoader` uses; `needsReviewCount` (T1) feeds tabs and chips (T7).
-- **Deviation from the spec, called out:** the spec says "one new intent"; this plan also widens `quick-add` with an optional `studentId` because `useFetcher` aborts an in-flight submit when the next starts — a per-line `create-task` loop would lose lines. Same user-visible behaviour, one post.
+- **Spec coverage:** header/month nav/weekday gear → T7 §4; filter chips → T7 §4; standing strip → T7 §1; tabs via `?student=` → T7 §4 + T2 key comment; date header (today/day off/meta/miss/×N/excuse/menu) → T7 §2 + T1 rule; task row columns, editable-only-while-open, class vs student scope → T7 §3 + T3; proof thumbnail modal → T7 §3; blank row rule + scope pill + one post → T1 + T7 §3 + T3 (`quick-add.studentId`); not-enabled Empty → T7 §4; redirects → T6; removed screens/keys/CSS → T7 §5 + T8; e2e → T9; walkthrough → T10; static/unit/staging/prod/OTA/cleanup/log → V.1–V.10.
+- **Placeholder scan:** none; every code step is full code; the smoke script is complete including its cleanup half.
+- **Type consistency:** `SheetLoaderData` (T6) is what T7 imports type-only; `buildSheet`'s generic `SheetDay<StudentTaskRow, MissRow, ExcuseRow>` is aliased `Day` in `sheet-day.tsx`; `PracticeSubmit` from `common.tsx` is the one submit type everywhere; `updateStudentTask` (T3) is what `update-copy` (T3) calls and `TaskRow` (T7) posts; `practiceMonthKey` (T2) is what T6's `clientLoader` uses; `needsReviewCount` (T1) feeds tabs and chips (T7); the e2e (T9) and the smoke (V.7) use the same handles listed in T7's Interfaces and §0.3.
+- **Deviation from the spec, called out:** the spec says "one new intent"; this plan also widens `quick-add` with an optional `studentId` because `useFetcher` aborts an in-flight submit when the next starts — a per-line `create-task` loop would lose lines. Same user-visible behaviour, one post. Recorded in the spec's Data flow section.
+- **Unattended-run facts verified 2026-09-04:** Node v24.16.0; HEAD `44de481` ahead 1; worktree `.worktrees/vocab`; EAS `vu-nguyen`; Cloudflare `ngqv0712@gmail.com`; lint 2 warnings / 0 errors; prod Bamblebee = 1 student (Moon), Practice on, 0 tasks; prod practice rows 3/6/2/2 all `seedtest-`; Java absent; EAS workflow for today's docs push already `FAILURE` in 1 s (quota).
+
+## Execution log
+_(filled by the executor — see V.10)_
+
+### Decisions taken by the executor
+
+### Open issues for the morning
