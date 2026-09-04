@@ -4598,7 +4598,10 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
 .pr-sheet__table {
   background: var(--surface-card);
   border: var(--border-width) solid var(--border-subtle);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) var(--radius-lg);
+  /* One radius on all four corners. The square top-left was written as if the student tabs were a
+     folder tab welded to the table; DS Tabs is a detached pill strip, so there was nothing to
+     meet. The table already hides its overflow, so the sticky header clips to the curve. */
+  border-radius: var(--radius-lg);
   overflow-x: auto;
 }
 .pr-sheet__head,
@@ -4662,6 +4665,39 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
 }
 .pr-sheet__dayhead.is-off {
   color: var(--text-disabled);
+}
+
+/* The day-kind rail. An INSET shadow rather than a border or a grid column: the row grid is
+   already pinned to the sum of its column minimums, and a real 4px column would have to be added
+   to the header, every task row and the blank row to stay aligned. The rail sits at the far left,
+   so it survives the sideways scroll that hides everything but the date. */
+.pr-sheet__dayhead,
+.pr-sheet__row {
+  box-shadow: inset 4px 0 0 var(--border-subtle);
+}
+.pr-sheet__dayhead.is-class {
+  box-shadow: inset 4px 0 0 var(--cat-blue);
+}
+.pr-sheet__dayhead.is-off,
+.pr-sheet__dayhead.is-sunday {
+  box-shadow: none;
+}
+/* Sunday closes the week: a heavier rule above the standing rest day breaks a 30-row month into
+   weeks, and the outlined label tells it apart from a day the teacher switched off. */
+.pr-sheet__dayhead.is-sunday {
+  border-top: 3px solid var(--border-subtle);
+  background: var(--bg-page);
+}
+.pr-sheet__dayhead.is-off {
+  background: var(--bg-page);
+}
+.pr-sheet__sunday {
+  font-size: var(--text-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-disabled);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
 }
 .pr-sheet__date {
   font-family: var(--font-display);

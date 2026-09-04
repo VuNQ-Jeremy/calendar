@@ -22,6 +22,7 @@ export type Day = SheetDay<StudentTaskRow, MissRow, ExcuseRow>;
 export function DayHeader({
   day,
   classId,
+  classTime,
   penalty,
   menuOpen,
   onToggleMenu,
@@ -29,6 +30,8 @@ export function DayHeader({
 }: {
   day: Day;
   classId: string;
+  /** 'HH:MM' when the lesson on this date carries a start time; null when it does not. */
+  classTime: string | null;
   /** The student's pending ×N when it falls on this date, else 0. */
   penalty: number;
   menuOpen: boolean;
@@ -46,14 +49,29 @@ export function DayHeader({
 
   return (
     <div
-      className={`pr-sheet__dayhead${day.isToday ? ' is-today' : ''}${day.isPractice ? '' : ' is-off'}`}
+      className={`pr-sheet__dayhead is-${day.kind}${day.isToday ? ' is-today' : ''}${
+        day.isPractice ? '' : ' is-off'
+      }`}
       data-testid="pr-day"
       data-date={day.date}
       data-today={day.isToday ? 'true' : 'false'}
+      data-kind={day.kind}
     >
       <span className="pr-sheet__date">{`${cal.dow[weekdayOf(day.date)]} ${dm(day.date)}`}</span>
       {day.isToday && <Tag color="orange">{t('pr_today')}</Tag>}
-      {!day.isPractice && <Tag>{t('pr_day_off')}</Tag>}
+      {day.isClass && (
+        <Tag color="blue">
+          <MIcon name="book" size={14} />
+          {classTime ? t('pr_class_at', { time: classTime }) : t('pr_class_day')}
+        </Tag>
+      )}
+      {/* Sunday is off by rule and a switched-off day is off by choice; the outline says which. */}
+      {!day.isPractice &&
+        (day.isSunday ? (
+          <span className="pr-sheet__sunday">{t('pr_sunday')}</span>
+        ) : (
+          <Tag>{t('pr_day_off')}</Tag>
+        ))}
       {day.rows.length > 0 && (
         <span className="pr-sheet__meta">{t('pr_day_meta', { n: day.rows.length, done })}</span>
       )}

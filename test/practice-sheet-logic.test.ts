@@ -34,6 +34,7 @@ describe('practice sheet — grouping', () => {
     month: '2026-09',
     today: '2026-09-04',
     practiceDays: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05'],
+    classDays: ['2026-09-07'],
     misses: [{ id: 'm1', date: '2026-09-03', excused: false }],
     excuses: [{ id: 'e1', date: '2026-09-04', status: 'pending', reason: 'sick' }],
     copies: [
@@ -79,5 +80,22 @@ describe('practice sheet — grouping', () => {
 
   it('counts submitted copies for the tab badge', () => {
     expect(needsReviewCount(base.copies)).toBe(1);
+  });
+
+  it('names each day: a lesson, the standing Sunday, a switched-off day, or practice', () => {
+    const days = buildSheet({ ...base, filter: 'all' });
+    const on = (date: string) => days.find((d) => d.date === date)!;
+    expect(on('2026-09-02').kind).toBe('practice');
+    // 07/09 is a Monday the class meets. A lesson wins even though the mask would allow practice.
+    expect(on('2026-09-07').isClass).toBe(true);
+    expect(on('2026-09-07').kind).toBe('class');
+    // 06/09 is a Sunday: off by rule, and told apart from a day the teacher switched off.
+    expect(on('2026-09-06').isSunday).toBe(true);
+    expect(on('2026-09-06').kind).toBe('sunday');
+    expect(on('2026-09-08').isSunday).toBe(false);
+    expect(on('2026-09-08').kind).toBe('off');
+    // A lesson day is still a practice day if the weekday mask says so — the blank row stays.
+    const meeting = buildSheet({ ...base, filter: 'all', classDays: ['2026-09-04'] });
+    expect(meeting.find((d) => d.date === '2026-09-04')!.showBlank).toBe(true);
   });
 });

@@ -5,6 +5,8 @@
  * place the "blank row from today on, practice days only, unfiltered only" rule is written down.
  */
 
+import { weekdayOf } from './practice.js';
+
 export type SheetFilter = 'all' | 'review' | 'misses';
 
 export type SheetCopy = { id: string; taskId: string | null; date: string; status: string };
@@ -14,10 +16,22 @@ export type SheetExcuse = { id: string; date: string; status: string };
 /** `scope` is what the row's edit/delete post to: a class task, or this student's own copy. */
 export type SheetRow<C extends SheetCopy> = { copy: C; scope: 'class' | 'student' };
 
+/**
+ * What the date band says this day IS, in the order a teacher reads it: a lesson beats everything
+ * (it is why there is no practice), Sunday is the standing rest day, a day off is one the teacher
+ * switched off, and everything else is an ordinary practice day.
+ */
+export type DayKind = 'class' | 'sunday' | 'off' | 'practice';
+
 export type SheetDay<C extends SheetCopy, M extends SheetMiss, E extends SheetExcuse> = {
   date: string;
   isPractice: boolean;
   isToday: boolean;
+  /** The class itself meets on this date (a recurring event), practice day or not. */
+  isClass: boolean;
+  /** Sunday is off by rule, not by choice — the sheet says so differently (decision #5). */
+  isSunday: boolean;
+  kind: DayKind;
   rows: SheetRow<C>[];
   miss: M | null;
   excuse: E | null;
@@ -29,6 +43,8 @@ export type SheetInput<C extends SheetCopy, M extends SheetMiss, E extends Sheet
   today: string;
   filter: SheetFilter;
   practiceDays: readonly string[];
+  /** Dates the class itself meets, expanded from its recurring events by the loader. */
+  classDays: readonly string[];
   /** Already narrowed to ONE student, in the service's (date, sortOrder) order. */
   copies: readonly C[];
   misses: readonly M[];
@@ -56,6 +72,7 @@ export function buildSheet<C extends SheetCopy, M extends SheetMiss, E extends S
   input: SheetInput<C, M, E>,
 ): SheetDay<C, M, E>[] {
   const practice = new Set(input.practiceDays);
+  const meets = new Set(input.classDays);
   const out: SheetDay<C, M, E>[] = [];
   for (const date of monthDates(input.month)) {
     let rows: SheetRow<C>[] = input.copies
@@ -69,10 +86,15 @@ export function buildSheet<C extends SheetCopy, M extends SheetMiss, E extends S
     }
     if (input.filter === 'misses' && !miss) continue;
     const isPractice = practice.has(date);
+    const isClass = meets.has(date);
+    const isSunday = weekdayOf(date) === 0;
     out.push({
       date,
       isPractice,
       isToday: date === input.today,
+      isClass,
+      isSunday,
+      kind: isClass ? 'class' : isPractice ? 'practice' : isSunday ? 'sunday' : 'off',
       rows,
       miss,
       excuse,

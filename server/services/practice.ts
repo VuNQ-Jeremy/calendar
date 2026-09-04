@@ -43,6 +43,8 @@ import {
   type MonthSummary,
   type WarningLike,
 } from '../../shared/logic/practice';
+import { expandEvents } from '../../shared/logic/recurrence';
+import { parseISO } from '../../shared/logic/dates';
 import type {
   PracticeDayOverrideInput,
   PracticeExcuseDecideInput,
@@ -511,6 +513,42 @@ export async function quickAdd(
     );
   }
   return out;
+}
+
+/** One date the class itself meets, with the lesson's start time when the event carries one. */
+export type ClassDayRow = { date: string; startTime: string | null };
+
+/**
+ * The dates this class MEETS in a range, expanded from its recurring calendar events.
+ *
+ * The sheet marks them so a teacher can see at a glance why a day has no practice on it — the
+ * default weekday mask is Mon–Sat minus exactly these days (decision #5), and until now the sheet
+ * showed the result without ever showing the reason.
+ */
+export async function classDays(
+  db: TenantDb,
+  classId: string,
+  from: string,
+  to: string,
+): Promise<ClassDayRow[]> {
+  const evs = await db.raw
+    .select({
+      date: events.date,
+      startTime: events.startTime,
+      recurrence: events.recurrence,
+      until: events.until,
+      exdates: events.exdates,
+    })
+    .from(events)
+    .where(db.own(events, eq(events.classId, classId)));
+  const expanded = expandEvents(
+    evs.map((e) => ({ ...e, exdates: parseExdates(e.exdates) })),
+    parseISO(from),
+    parseISO(to),
+  );
+  const byDate = new Map<string, string | null>();
+  for (const e of expanded) if (!byDate.has(e.date)) byDate.set(e.date, e.startTime ?? null);
+  return [...byDate].map(([date, startTime]) => ({ date, startTime }));
 }
 
 /** Edit a class task; the change propagates to copies still `open` (decision #8). */

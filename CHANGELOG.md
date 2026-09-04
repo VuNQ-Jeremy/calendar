@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0373 — 2026-09-04
+Practice sheet date column now says what each day is: a blue rail and Class chip for days the class meets, a sand rail for practice days, Sunday as an outlined label under a week rule, and a plain Day off tag for days you switched off. Table corners rounded evenly.
+
 ## v0.0372 — 2026-09-04
 fix(practice): the sheet no longer scrolls past its own header on load — today is only brought into view when it is off screen
 

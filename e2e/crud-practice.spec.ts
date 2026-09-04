@@ -44,6 +44,13 @@ test.describe('CRUD: practice', () => {
     const today = page.locator('[data-testid="pr-day"][data-today="true"]');
     await expect(today).toBeVisible();
 
+    // Every date band says what kind of day it is. Sunday is the one that is guaranteed in any
+    // month and is off by RULE, so it carries its own kind rather than the "Day off" a teacher
+    // chooses; a class day depends on this class's events and is not asserted here.
+    await expect(page.locator('[data-testid="pr-day"][data-kind="sunday"]').first()).toBeVisible();
+    await expect(page.getByText('Sunday', { exact: true }).first()).toBeVisible();
+    expect(await today.getAttribute('data-kind')).toMatch(/^(class|practice|off|sunday)$/);
+
     // Today may be a day off by default (the derived mask skips this class's own lesson days).
     let forcedPracticeDay = false;
     if (await today.getByText('Day off', { exact: true }).count()) {

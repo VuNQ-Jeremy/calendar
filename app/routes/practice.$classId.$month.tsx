@@ -10,6 +10,7 @@ import * as zalo from '../../server/services/zalo';
 import type { ClassRow } from '../../server/services/classes';
 import type { MaterialRow } from '../../server/services/materials';
 import type {
+  ClassDayRow,
   ExcuseRow,
   LedgerRow,
   PracticeSettingsRow,
@@ -27,6 +28,8 @@ export interface SheetLoaderData {
   cls: ClassRow;
   settings: PracticeSettingsRow | null;
   practiceDays: string[];
+  /** Dates the class meets this month — the sheet marks them, and they are why practice skips them. */
+  classDays: ClassDayRow[];
   copies: StudentTaskRow[];
   roster: { classId: string; id: string; name: string }[];
   materials: MaterialRow[];
@@ -62,15 +65,17 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const cls = await classesSvc.get(db, classId);
   if (!cls) throw new Response(null, { status: 404 });
 
-  const [settings, practiceDays, copies, roster, materials, excuses, base] = await Promise.all([
-    practiceSvc.getSettings(db, classId),
-    practiceSvc.practiceDays(db, classId, from, to),
-    practiceSvc.listStudentTasks(db, classId, from, to),
-    classesSvc.listRosterNames(db).then((r) => r.filter((x) => x.classId === classId)),
-    materialsSvc.list(db),
-    practiceSvc.listExcuses(db, { classId, status: 'pending', from, to }),
-    practiceSvc.classLedger(db, classId, month),
-  ]);
+  const [settings, practiceDays, classDays, copies, roster, materials, excuses, base] =
+    await Promise.all([
+      practiceSvc.getSettings(db, classId),
+      practiceSvc.practiceDays(db, classId, from, to),
+      practiceSvc.classDays(db, classId, from, to),
+      practiceSvc.listStudentTasks(db, classId, from, to),
+      classesSvc.listRosterNames(db).then((r) => r.filter((x) => x.classId === classId)),
+      materialsSvc.list(db),
+      practiceSvc.listExcuses(db, { classId, status: 'pending', from, to }),
+      practiceSvc.classLedger(db, classId, month),
+    ]);
   const ledger: LedgerRow[] = await Promise.all(
     base.map(async (r) => ({
       ...r,
@@ -85,6 +90,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     cls,
     settings,
     practiceDays,
+    classDays,
     copies,
     roster,
     materials,

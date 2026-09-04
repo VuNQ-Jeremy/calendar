@@ -749,7 +749,11 @@ export const STORIES: TourStory[] = [
       { kind: 'click', text: 'Click Open sheet', target: { button: 'Open sheet' } },
       {
         kind: 'check',
-        text: 'The sheet shows this month for the first student: a standing card per student above, one tab per student, and the days of the month as sticky group headers with today highlighted',
+        text: 'The sheet shows this month for the first student: a standing card per student above, one tab per student, and the days of the month as group headers with today highlighted',
+      },
+      {
+        kind: 'check',
+        text: 'Read the date column: a blue rail and a Class chip mark the days the class meets, a sand rail marks an ordinary practice day, and a day with no rail is off — Sunday as an outlined label under a heavier rule that closes the week, a day you switched off as a solid Day off tag',
       },
       {
         kind: 'check',

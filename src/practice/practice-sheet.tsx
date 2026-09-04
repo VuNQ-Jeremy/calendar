@@ -36,6 +36,7 @@ export function PracticeSheetScreen() {
     cls,
     settings,
     practiceDays,
+    classDays,
     copies,
     roster,
     materials,
@@ -101,12 +102,15 @@ export function PracticeSheetScreen() {
   }
 
   const mine = student ? copies.filter((c) => c.studentId === student.id) : [];
+  // The lesson's start time is display only, so it rides beside buildSheet rather than through it.
+  const classTimes = new Map(classDays.map((d) => [d.date, d.startTime]));
   const days = student
     ? buildSheet({
         month,
         today,
         filter,
         practiceDays,
+        classDays: classDays.map((d) => d.date),
         copies: mine,
         misses: standing?.misses ?? [],
         excuses: excuses.filter((e) => e.studentId === student.id),
@@ -200,6 +204,7 @@ export function PracticeSheetScreen() {
                 <DayHeader
                   day={day}
                   classId={classId}
+                  classTime={classTimes.get(day.date) ?? null}
                   penalty={
                     standing && standing.summary.pendingForDate === day.date
                       ? standing.summary.pendingMultiplier
