@@ -36,8 +36,12 @@ export function PracticeReviewScreen() {
   const classOf = (id: string) => classes.find((c) => c.id === id)?.name ?? '';
 
   return (
-    <div className="pr-review">
-      <PageHeader title={t('pr_review_queue')} subtitle={t('pr_sub')} />
+    <div className="content pr-review">
+      <PageHeader
+        breadcrumbs={[{ label: t('pr_title'), to: '/practice' }, { label: t('pr_review_queue') }]}
+        title={t('pr_review_queue')}
+        subtitle={t('pr_sub')}
+      />
 
       {excuses.length > 0 && (
         <section className="pr-review__excuses">

@@ -73,7 +73,7 @@ export function PracticeHomeScreen() {
   };
 
   return (
-    <div className="pr-home">
+    <div className="content pr-home">
       <PageHeader
         title={t('pr_title')}
         subtitle={t('pr_sub')}

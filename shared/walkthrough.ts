@@ -800,6 +800,10 @@ export const STORIES: TourStory[] = [
         kind: 'check',
         text: 'Each student row shows done/total, excused used out of quota, unexcused, the ×N badge and warning level, and "No Zalo pairing" when parents cannot be messaged',
       },
+      {
+        kind: 'check',
+        text: 'Above the title a breadcrumb trail reads Practice › class › Ledger — click the class name to land on that class’s week planner, or Practice to go back to the class list',
+      },
     ],
   },
   {

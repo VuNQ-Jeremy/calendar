@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router';
 import { DS } from './ds/index.js';
 import { MIcon } from './icons.jsx';
 import { PALETTE, iso, addDays, TODAY } from './lib/core.js';
@@ -554,16 +555,59 @@ function ColorPicker({ value, onChange, label }: ColorPickerProps) {
   );
 }
 
+/** One step of a breadcrumb trail. `to` is omitted on the last crumb — you are already there. */
+export interface Crumb {
+  label: React.ReactNode;
+  to?: string;
+}
+
+/**
+ * The trail above a page title, for pages you arrive at FROM another page.
+ *
+ * The sidebar highlights a section, not a path, so a page two levels in (a class's practice week,
+ * a month's ledger) otherwise has no way back but the browser button. A trail beats a lone Back
+ * arrow here because these pages fan out: the ledger is reachable from the week and from the
+ * landing list, and a trail says which parent it means instead of guessing at history.
+ *
+ * The last crumb never links — it is rendered as the current page even if a `to` is passed.
+ */
+function Breadcrumbs({ items }: { items: Crumb[] }) {
+  return (
+    <nav className="m-crumbs" aria-label="Breadcrumb">
+      {items.map((c, i) => {
+        const last = i === items.length - 1;
+        return (
+          <React.Fragment key={i}>
+            {i > 0 && <MIcon name="chevronRight" size={14} className="m-crumbs__sep" />}
+            {c.to && !last ? (
+              <Link className="m-crumbs__link" to={c.to}>
+                {c.label}
+              </Link>
+            ) : (
+              <span className="m-crumbs__current" aria-current={last ? 'page' : undefined}>
+                {c.label}
+              </span>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </nav>
+  );
+}
+
 interface PageHeaderProps {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
+  /** Trail shown above the title. Omit on a page the sidebar links to directly. */
+  breadcrumbs?: Crumb[];
 }
 
-function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
+function PageHeader({ title, subtitle, actions, breadcrumbs }: PageHeaderProps) {
   return (
     <div className="m-pagehead">
       <div>
+        {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
         <h1 className="m-pagehead__title">{title}</h1>
         {subtitle && <div className="m-pagehead__sub">{subtitle}</div>}
       </div>
@@ -652,6 +696,7 @@ export {
   DatePicker as MDatePicker,
   TimePicker as MTimePicker,
   ColorPicker,
+  Breadcrumbs,
   PageHeader,
   Empty,
   useConfirm,

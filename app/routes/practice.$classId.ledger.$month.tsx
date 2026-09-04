@@ -7,6 +7,7 @@ import * as classesSvc from '../../server/services/classes';
 import * as practiceSvc from '../../server/services/practice';
 import * as zalo from '../../server/services/zalo';
 import { TuitionMonth } from '../../shared/schemas';
+import { ictDateOf } from '../../shared/logic/tests';
 import { K, practiceLedgerKey, swrLoad } from '../../src/lib/route-cache.js';
 
 /**
@@ -44,7 +45,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     })),
   );
 
-  return { classId, cls, month, rows, pendingExcuses };
+  return { classId, cls, month, today: ictDateOf(new Date().toISOString()), rows, pendingExcuses };
 }
 
 export async function clientLoader({ params, serverLoader }: ClientLoaderFunctionArgs) {

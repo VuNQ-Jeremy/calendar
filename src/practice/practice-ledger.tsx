@@ -6,7 +6,7 @@ import { useLang } from '../lib/i18n.jsx';
 import { shiftMonth } from '../../shared/logic/tuition.js';
 import type { ExcuseRow, LedgerRow } from '../../server/services/practice.js';
 import type { ClassRow } from '../../server/services/classes.js';
-import { dm, usePracticeSubmit } from './common.jsx';
+import { dm, mondayOf, usePracticeSubmit } from './common.jsx';
 
 const { Button, Tag } = DS;
 
@@ -14,6 +14,7 @@ interface LedgerLoaderData {
   classId: string;
   cls: ClassRow;
   month: string;
+  today: string;
   rows: LedgerRow[];
   pendingExcuses: ExcuseRow[];
 }
@@ -26,7 +27,7 @@ interface LedgerLoaderData {
  * (decision #25) — the teacher needs to see that before they wonder why nobody reacted.
  */
 export function PracticeLedgerScreen() {
-  const { classId, cls, month, rows } = useLoaderData() as LedgerLoaderData;
+  const { classId, cls, month, today, rows } = useLoaderData() as LedgerLoaderData;
   const { t } = useLang();
   const submit = usePracticeSubmit();
   const [confirm, confirmNode] = useConfirm();
@@ -44,8 +45,13 @@ export function PracticeLedgerScreen() {
   };
 
   return (
-    <div className="pr-ledger">
+    <div className="content pr-ledger">
       <PageHeader
+        breadcrumbs={[
+          { label: t('pr_title'), to: '/practice' },
+          { label: cls.name, to: `/practice/${classId}/week/${mondayOf(today)}` },
+          { label: t('pr_ledger') },
+        ]}
         title={cls.name}
         subtitle={`${t('pr_ledger')} · ${month}`}
         actions={

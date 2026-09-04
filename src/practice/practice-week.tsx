@@ -71,8 +71,12 @@ export function PracticeWeekScreen() {
 
   if (!settings || !settings.enabled) {
     return (
-      <div className="pr-week">
-        <PageHeader title={cls.name} subtitle={t('pr_title')} />
+      <div className="content pr-week">
+        <PageHeader
+          breadcrumbs={[{ label: t('pr_title'), to: '/practice' }, { label: cls.name }]}
+          title={cls.name}
+          subtitle={t('pr_title')}
+        />
         <Empty
           icon="repeat"
           title={t('pr_not_enabled')}
@@ -106,8 +110,9 @@ export function PracticeWeekScreen() {
     id ? (materials.find((m) => m.id === id)?.title ?? null) : null;
 
   return (
-    <div className="pr-week">
+    <div className="content pr-week">
       <PageHeader
+        breadcrumbs={[{ label: t('pr_title'), to: '/practice' }, { label: cls.name }]}
         title={cls.name}
         subtitle={`${dm(monday)} – ${dm(shiftDays(monday, 6))}`}
         actions={

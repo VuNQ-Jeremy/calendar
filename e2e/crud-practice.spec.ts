@@ -100,9 +100,15 @@ test.describe('CRUD: practice', () => {
     await expect(miaRow.getByText('0 / 2', { exact: true })).toBeVisible();
     await expect(miaRow.getByText('No Zalo pairing', { exact: true })).toBeVisible();
 
-    // Back to the week; delete both tasks (B's teacher_done copy survives by design, the task
-    // row does not).
-    await page.goBack();
+    // The breadcrumb trail is the way back out of a page two levels in — the sidebar only
+    // highlights the section, so without this the ledger has no exit but the browser button.
+    // Scoped to .m-crumbs because the sidebar carries its own "Practice" link.
+    const crumbs = page.locator('.m-crumbs');
+    await expect(crumbs.getByRole('link', { name: 'Practice' })).toBeVisible();
+    await crumbs.getByRole('link', { name: 'Biology 9A' }).click();
+    await page.waitForURL(/\/practice\/[^/]+\/week\/\d{4}-\d{2}-\d{2}/);
+
+    // Delete both tasks (B's teacher_done copy survives by design, the task row does not).
     await expect(todayCol).toBeVisible();
     for (const title of [`${line1} edited`, line2]) {
       const card = todayCol.locator('.mochi-card', { hasText: title });
