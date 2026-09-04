@@ -185,7 +185,7 @@ See `.claude/skills/unattended-verification/playwright.md` (spec recipe, staging
   export function needsReviewCount(copies: readonly SheetCopy[]): number;
   ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // test/practice-sheet-logic.test.ts
@@ -274,12 +274,12 @@ describe('practice sheet — grouping', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd f:/code/calendar && npx vitest run test/practice-sheet-logic.test.ts`
 Expected: FAIL — cannot resolve `../shared/logic/practice-sheet`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // shared/logic/practice-sheet.ts
@@ -368,12 +368,12 @@ export function buildSheet<C extends SheetCopy, M extends SheetMiss, E extends S
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd f:/code/calendar && npx vitest run test/practice-sheet-logic.test.ts`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write shared/logic/practice-sheet.ts test/practice-sheet-logic.test.ts
@@ -393,7 +393,7 @@ git commit -m "feat(practice): pure month grouping for the sheet"
 - Produces: `export const practiceMonthKey = (classId: string, month: string) => string` — used by Task 6's `clientLoader`.
 - Removes: `practiceWeekKey`, `practiceLedgerKey`, `PRACTICE_REVIEW_KEY` (their only importers are the three route files rewritten in Task 6 and `cacheKeyForPath` itself).
 
-- [ ] **Step 1: Write the failing test** — add to `describe('cacheKeyForPath', …)` in `test/cache.test.ts`, and add `practiceMonthKey` to the import list at the top of the file:
+- [x] **Step 1: Write the failing test** — add to `describe('cacheKeyForPath', …)` in `test/cache.test.ts`, and add `practiceMonthKey` to the import list at the top of the file:
 
 ```ts
   it('gives each practice class-month its own key, and forgets the pre-sheet pages', () => {
@@ -407,12 +407,12 @@ git commit -m "feat(practice): pure month grouping for the sheet"
   });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd f:/code/calendar && npx vitest run test/cache.test.ts`
 Expected: FAIL — `practiceMonthKey` is not exported.
 
-- [ ] **Step 3: Implement** — in `src/lib/route-cache.ts` replace the block from the `/** Practice keys. …` comment through `export const PRACTICE_REVIEW_KEY = …;` with:
+- [x] **Step 3: Implement** — in `src/lib/route-cache.ts` replace the block from the `/** Practice keys. …` comment through `export const PRACTICE_REVIEW_KEY = …;` with:
 
 ```ts
 /**
@@ -437,12 +437,12 @@ and in `cacheKeyForPath` replace the four practice lines (the `pw` / `pl` / `/pr
   if (pathname === '/practice' || pathname === '/practice/') return K.practice;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd f:/code/calendar && npx vitest run test/cache.test.ts`
 Expected: PASS. (`npm run typecheck` will fail until Task 6 rewrites the three route files that import the removed keys — that is expected at this point; do not run it yet.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write src/lib/route-cache.ts test/cache.test.ts
@@ -464,7 +464,7 @@ git commit -m "feat(practice): one cache key per class-month"
 - Produces: intent `update-copy` with form fields `id` (student copy id) and any of `title`, `materialId`, `url`, `proofType` — same patch shape as `update-task`; intent `quick-add` accepts an optional `studentId` and then creates per-student copies (no class row) for every line.
 - `export async function updateStudentTask(db: TenantDb, id: string, patch: Partial<Pick<PracticeTaskInput, 'title' | 'materialId' | 'url' | 'proofType'>>): Promise<void>`
 
-- [ ] **Step 1: Write the failing tests** — append inside the `describe('practice — tasks fan out to the roster', …)` block of `test-worker/practice.test.js`:
+- [x] **Step 1: Write the failing tests** — append inside the `describe('practice — tasks fan out to the roster', …)` block of `test-worker/practice.test.js`:
 
 ```js
   it('quick add with a studentId makes copies for that student only, and update-copy edits one open copy', async () => {
@@ -515,12 +515,12 @@ git commit -m "feat(practice): one cache key per class-month"
   });
 ```
 
-- [ ] **Step 2: Run the file to verify the new cases fail** (granted, §0.2)
+- [x] **Step 2: Run the file to verify the new cases fail** (granted, §0.2)
 
 Run: `cd f:/code/calendar && npx vitest run --config vitest.workers.config.js test-worker/practice.test.js`
 Expected: the two new cases FAIL (`updateStudentTask is not a function`; `studentId` ignored so `classTasks` has length 1). Re-run after Step 5 — expected PASS.
 
-- [ ] **Step 3: Schema** — in `shared/schemas.ts`, `PracticeQuickAddInput` becomes:
+- [x] **Step 3: Schema** — in `shared/schemas.ts`, `PracticeQuickAddInput` becomes:
 
 ```ts
 /** Multi-line quick add: one task per non-empty line, all sharing material + proof type.
@@ -536,7 +536,7 @@ export const PracticeQuickAddInput = z.object({
 });
 ```
 
-- [ ] **Step 4: Service** — in `server/services/practice.ts`:
+- [x] **Step 4: Service** — in `server/services/practice.ts`:
 
 Change `quickAdd`'s signature and body so the return type is `Promise<(PracticeTaskRow | StudentTaskRow)[]>` and the inner `createTask` call passes `studentId: input.studentId ?? null` instead of `studentId: null`; drop the `as PracticeTaskRow` cast:
 
@@ -600,7 +600,7 @@ export async function updateStudentTask(
 
 Check nothing else consumed `quickAdd`'s old return type: `grep -rn "quickAdd(" app server --include=*.ts --include=*.tsx`. The only caller is `practice-actions.tsx` (`{ ok: true, tasks: await practiceSvc.quickAdd(...) }`), which is fine with the union.
 
-- [ ] **Step 5: Action** — in `app/routes/practice-actions.tsx`, after the `case 'update-task': { … }` block add:
+- [x] **Step 5: Action** — in `app/routes/practice-actions.tsx`, after the `case 'update-task': { … }` block add:
 
 ```ts
     case 'update-copy': {
@@ -620,12 +620,12 @@ Check nothing else consumed `quickAdd`'s old return type: `grep -rn "quickAdd(" 
 
 Also in `case 'quick-add'` change `nullBlanks(body, ['materialId'])` to `nullBlanks(body, ['materialId', 'studentId'])` so an empty `studentId` field posts as null.
 
-- [ ] **Step 6: Static checks**
+- [x] **Step 6: Static checks**
 
 Run: `cd f:/code/calendar && npm run lint`
 Expected: clean. (`typecheck` still fails on the route files removed keys — Task 6.)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write shared/schemas.ts server/services/practice.ts app/routes/practice-actions.tsx test-worker/practice.test.js
@@ -643,7 +643,7 @@ git commit -m "feat(practice): update-copy intent and per-student quick add"
 **Interfaces:**
 - Produces the keys used verbatim by Tasks 5, 7, 9, 10. English values are e2e/walkthrough selectors.
 
-- [ ] **Step 1: Add these keys to the `en` block**, right after `pr_week_next`:
+- [x] **Step 1: Add these keys to the `en` block**, right after `pr_week_next`:
 
 ```ts
   pr_open_sheet: 'Open sheet',
@@ -672,7 +672,7 @@ git commit -m "feat(practice): update-copy intent and per-student quick add"
   pr_no_students: 'No students enrolled in this class yet',
 ```
 
-- [ ] **Step 2: Add the Vietnamese twins to the `vi` block**, right after `pr_this_week`:
+- [x] **Step 2: Add the Vietnamese twins to the `vi` block**, right after `pr_this_week`:
 
 ```ts
     pr_open_sheet: 'Mở bảng',
@@ -701,14 +701,14 @@ git commit -m "feat(practice): update-copy intent and per-student quick add"
     pr_no_students: 'Lớp chưa có học sinh',
 ```
 
-- [ ] **Step 3: Leave the orphan removal for Task 8** (the keys `pr_open_week`, `pr_open_ledger`, `pr_review_queue`, `pr_add_tasks`, `pr_add_task_for`, `pr_lines`, `pr_lines_ph`, `pr_students_on_day`, `pr_edit_task`, `pr_save_feedback`, `pr_queue_empty`, `pr_excuses_pending`, `pr_ledger`, `pr_week_prev`, `pr_week_next`, `pr_this_week` still have callers until the old screens are deleted).
+- [x] **Step 3: Leave the orphan removal for Task 8** (the keys `pr_open_week`, `pr_open_ledger`, `pr_review_queue`, `pr_add_tasks`, `pr_add_task_for`, `pr_lines`, `pr_lines_ph`, `pr_students_on_day`, `pr_edit_task`, `pr_save_feedback`, `pr_queue_empty`, `pr_excuses_pending`, `pr_ledger`, `pr_week_prev`, `pr_week_next`, `pr_this_week` still have callers until the old screens are deleted).
 
-- [ ] **Step 4: Check**
+- [x] **Step 4: Check**
 
 Run: `cd f:/code/calendar && npm run check:i18n`
 Expected: exit 0 (a key present in `en` and `vi` and not yet referenced is fine — the script only reports referenced-but-undefined and en-without-vi).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write shared/i18n/strings.ts
@@ -745,7 +745,7 @@ git commit -m "feat(practice): sheet strings (en/vi)"
   ```
 - Consumes: `parseWeekdays`, `formatWeekdays` from `shared/logic/practice`; `getCal` from `shared/i18n/strings`; `Modal` from `src/ui`.
 
-- [ ] **Step 1: `src/practice/weekdays-dialog.tsx`**
+- [x] **Step 1: `src/practice/weekdays-dialog.tsx`**
 
 ```tsx
 import React from 'react';
@@ -839,7 +839,7 @@ export function WeekdaysDialog({
 }
 ```
 
-- [ ] **Step 2: Append to `src/practice/common.tsx`** (and add `import { getCal } from '../../shared/i18n/strings.js'; import { parseWeekdays } from '../../shared/logic/practice.js';` at the top):
+- [x] **Step 2: Append to `src/practice/common.tsx`** (and add `import { getCal } from '../../shared/i18n/strings.js'; import { parseWeekdays } from '../../shared/logic/practice.js';` at the top):
 
 ```tsx
 /** Sentinel for "no material" in the material selects — a `<select>` cannot hold null. */
@@ -865,7 +865,7 @@ export const weekdayLabels = (mask: string, lang: string) => {
 };
 ```
 
-- [ ] **Step 3: Rewrite `src/practice/practice-home.tsx`** as:
+- [x] **Step 3: Rewrite `src/practice/practice-home.tsx`** as:
 
 ```tsx
 import React from 'react';
@@ -969,12 +969,12 @@ export function PracticeHomeScreen() {
 
 Note the old `weekdayLabels` export at the bottom of this file is gone — it now lives in `common.tsx` (Step 2). `grep -rn "weekdayLabels" src app` must show only `common.tsx` and (after Task 7) `practice-sheet.tsx`.
 
-- [ ] **Step 4: Lint**
+- [x] **Step 4: Lint**
 
 Run: `cd f:/code/calendar && npm run lint`
 Expected: clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write src/practice/weekdays-dialog.tsx src/practice/common.tsx src/practice/practice-home.tsx
@@ -1014,7 +1014,7 @@ export interface SheetLoaderData {
 }
 ```
 
-- [ ] **Step 1: Create `app/routes/practice.$classId.$month.tsx`**
+- [x] **Step 1: Create `app/routes/practice.$classId.$month.tsx`**
 
 ```tsx
 import type { ClientLoaderFunctionArgs, LoaderFunctionArgs } from 'react-router';
@@ -1124,7 +1124,7 @@ clientLoader.hydrate = true as const;
 export default PracticeSheetScreen;
 ```
 
-- [ ] **Step 2: Rewrite the three old route files as redirects**
+- [x] **Step 2: Rewrite the three old route files as redirects**
 
 `app/routes/practice.review.tsx`:
 
@@ -1163,7 +1163,7 @@ export function loader({ params }: LoaderFunctionArgs) {
 }
 ```
 
-- [ ] **Step 3: `app/routes.ts`** — replace the four practice lines inside the `_app` layout with:
+- [x] **Step 3: `app/routes.ts`** — replace the four practice lines inside the `_app` layout with:
 
 ```ts
     // Practice (Nhiệm vụ). The sheet is `/practice/:classId/:month` (month in the PATH for the
@@ -1176,9 +1176,9 @@ export function loader({ params }: LoaderFunctionArgs) {
     route('practice/:classId/:month', 'routes/practice.$classId.$month.tsx'),
 ```
 
-- [ ] **Step 4: `src/lib/page-title.ts`** — delete the line `'/practice/review': 'pr_review_queue',` from `EXTRA`. (The sheet inherits the nav row's title, "Practice", through `PATH_KEYS` prefix matching — same as every other sub-page.)
+- [x] **Step 4: `src/lib/page-title.ts`** — delete the line `'/practice/review': 'pr_review_queue',` from `EXTRA`. (The sheet inherits the nav row's title, "Practice", through `PATH_KEYS` prefix matching — same as every other sub-page.)
 
-- [ ] **Step 5: Stub the screen so typecheck can run** — create `src/practice/practice-sheet.tsx` with just:
+- [x] **Step 5: Stub the screen so typecheck can run** — create `src/practice/practice-sheet.tsx` with just:
 
 ```tsx
 import React from 'react';
@@ -1189,12 +1189,12 @@ export function PracticeSheetScreen() {
 
 (Task 7 replaces it.)
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `cd f:/code/calendar && npm run typecheck`
 Expected: PASS (this also regenerates `.react-router/types` for the new route). If it complains about `practiceWeekKey`/`practiceLedgerKey`/`PRACTICE_REVIEW_KEY`, some importer was missed: `grep -rn "practiceWeekKey\|practiceLedgerKey\|PRACTICE_REVIEW_KEY" src app test` and fix it.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write "app/routes/practice.\$classId.\$month.tsx" app/routes/practice.review.tsx "app/routes/practice.\$classId.week.\$monday.tsx" "app/routes/practice.\$classId.ledger.\$month.tsx" app/routes.ts src/lib/page-title.ts src/practice/practice-sheet.tsx
@@ -1216,7 +1216,7 @@ git commit -m "feat(practice): sheet route; old week/ledger/review URLs redirect
 - Every `data-testid` / accessible name below is an e2e handle (Task 9) — do not rename:
   `pr-day` (+ `data-date`, `data-today`), `pr-row` (+ `data-title`, `data-copy`), `pr-blank`, `pr-standing` (+ `data-student`); buttons **Day menu**, **Mark done**, **Accept**, **Reject**, **Approve**, **Mark excused**, **Delete task**, **Clear warning**; menu items **Day off**, **Make practice day**, **Use weekly default**; tabs by student name; input `aria-label="Task"`, textarea `aria-label="Feedback"`.
 
-- [ ] **Step 1: `src/practice/standing-strip.tsx`**
+- [x] **Step 1: `src/practice/standing-strip.tsx`**
 
 ```tsx
 import React from 'react';
@@ -1308,7 +1308,7 @@ export function StandingStrip({
 }
 ```
 
-- [ ] **Step 2: `src/practice/sheet-day.tsx`**
+- [x] **Step 2: `src/practice/sheet-day.tsx`**
 
 ```tsx
 import React from 'react';
@@ -1439,7 +1439,7 @@ export function DayHeader({
 }
 ```
 
-- [ ] **Step 3: `src/practice/sheet-row.tsx`**
+- [x] **Step 3: `src/practice/sheet-row.tsx`**
 
 ```tsx
 import React from 'react';
@@ -1850,7 +1850,7 @@ export function BlankRow({
 }
 ```
 
-- [ ] **Step 4: `src/practice/practice-sheet.tsx`** (replace the stub)
+- [x] **Step 4: `src/practice/practice-sheet.tsx`** (replace the stub)
 
 ```tsx
 import React from 'react';
@@ -2092,7 +2092,7 @@ export function PracticeSheetScreen() {
 
 Verified against the DS on 2026-09-04: `BtnVariant` includes `'soft'` (`src/ds/bundle.d.ts:4`), `ButtonProps` has `iconRight`, and `users`, `repeat`, `settings`, `chevronLeft`, `chevronRight`, `more`, `trash`, `link` are all in `M_ICONS` (`src/icons.tsx`).
 
-- [ ] **Step 5: CSS** — in `src/styles/app.css` delete every rule from `.pr-week__grid {` down to and including the `@media (max-width: 640px) { … .pr-week__grid … }` block (keep the `.pr-home__*` rules and the block comment above them), then append:
+- [x] **Step 5: CSS** — in `src/styles/app.css` delete every rule from `.pr-week__grid {` down to and including the `@media (max-width: 640px) { … .pr-week__grid … }` block (keep the `.pr-home__*` rules and the block comment above them), then append:
 
 ```css
 /* The sheet. A CSS grid rather than <table> so day headers, rows and the blank row share one
@@ -2378,14 +2378,14 @@ textarea.pr-sheet__cell {
 
 Also delete the `.pr-review__*` and `.pr-ledger__*` rules — they sit between `.pr-week__addone h4` and the `@media` block, so the deletion in the first sentence already covers them; confirm with `grep -n "pr-week\|pr-review\|pr-ledger" src/styles/app.css` → no output.
 
-- [ ] **Step 6: Static checks**
+- [x] **Step 6: Static checks**
 
 Run: `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n`
 Expected: all clean. Common fixes: `variant="soft"` (see Step 4 note), `MSelect` prop names (`value`, `onChange`, `options`), the `iconRight` prop exists on `ButtonProps` (it does — `src/ds/bundle.d.ts:30`).
 
-- [ ] **Step 7: Look at it** — this is the one visual step. Use the file-based Playwright harness the repo already relies on (memory: *Verify CSS without deploying* / *Live-verify authed pages*) only if a quick look is cheap; otherwise skip — the e2e spec in Task 9 is the real check and the user runs it. Never deploy to look.
+- [x] **Step 7: Look at it** — this is the one visual step. Use the file-based Playwright harness the repo already relies on (memory: *Verify CSS without deploying* / *Live-verify authed pages*) only if a quick look is cheap; otherwise skip — the e2e spec in Task 9 is the real check and the user runs it. Never deploy to look.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write src/practice/practice-sheet.tsx src/practice/standing-strip.tsx src/practice/sheet-day.tsx src/practice/sheet-row.tsx src/styles/app.css
@@ -2401,13 +2401,13 @@ git commit -m "feat(practice): the sheet — one screen for planning, review and
 - Delete: `src/practice/practice-week.tsx`, `src/practice/practice-review.tsx`, `src/practice/practice-ledger.tsx`
 - Modify: `shared/i18n/strings.ts` (both blocks)
 
-- [ ] **Step 1: Delete the screens**
+- [x] **Step 1: Delete the screens**
 
 ```bash
 cd f:/code/calendar && git rm src/practice/practice-week.tsx src/practice/practice-review.tsx src/practice/practice-ledger.tsx
 ```
 
-- [ ] **Step 2: Remove orphaned keys** — for EACH of `pr_open_week pr_open_ledger pr_review_queue pr_add_tasks pr_add_task_for pr_lines pr_lines_ph pr_students_on_day pr_edit_task pr_save_feedback pr_queue_empty pr_excuses_pending pr_ledger pr_week_prev pr_week_next pr_this_week pr_no_tasks_day`, run
+- [x] **Step 2: Remove orphaned keys** — for EACH of `pr_open_week pr_open_ledger pr_review_queue pr_add_tasks pr_add_task_for pr_lines pr_lines_ph pr_students_on_day pr_edit_task pr_save_feedback pr_queue_empty pr_excuses_pending pr_ledger pr_week_prev pr_week_next pr_this_week pr_no_tasks_day`, run
 
 ```bash
 cd f:/code/calendar && grep -rn "<key>" src app mobile shared --include=*.ts --include=*.tsx | grep -v "shared/i18n/strings.ts"
@@ -2415,12 +2415,12 @@ cd f:/code/calendar && grep -rn "<key>" src app mobile shared --include=*.ts --i
 
 and delete the key from BOTH blocks only when that grep prints nothing. (`pr_no_tasks_day` may still be referenced — the mobile app or the sheet's empty state; keep any key with a live caller.)
 
-- [ ] **Step 3: Checks**
+- [x] **Step 3: Checks**
 
 Run: `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n`
 Expected: clean. `typecheck` catches a `vi` key whose `en` twin was removed (the `satisfies` clause).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write shared/i18n/strings.ts
@@ -2438,7 +2438,7 @@ git commit -m "chore(practice): drop the week, review and ledger screens"
 **Interfaces:**
 - Consumes the handles fixed in Task 7 and the seed facts: staff `dev@mochi.edu`, class **Biology 9A** (`c1`) with **Leo Park** (paired parent → no "No Zalo pairing" tag) and **Mia Chen** (unpaired). Runs only on calendar-test (`crudGuard`).
 
-- [ ] **Step 1: Write the spec** (it runs in V.4, after `npm run test:env:setup`)
+- [x] **Step 1: Write the spec** (it runs in V.4, after `npm run test:env:setup`)
 
 ```ts
 import { test, expect } from '@playwright/test';
@@ -2582,12 +2582,12 @@ test.describe('CRUD: practice', () => {
 
 Notes for whoever runs it: (1) `getByRole('textbox', { name: 'Task' })` resolves through the `aria-label` on both the blank textarea and the title input — inside `blank` there is exactly one, inside a row exactly one. (2) After Task B is `teacher_done` on Leo's tab, `row(line2)` on Mia's tab is Mia's copy — still `open`, hence **Mark done** visible. (3) Deleting from Mia's tab posts `delete-task` (class scope) which removes both students' open copies and the class row; Leo's done copy keeps `taskId = null` and stays in his history, exactly as the old spec asserted.
 
-- [ ] **Step 2: Lint the spec**
+- [x] **Step 2: Lint the spec**
 
 Run: `cd f:/code/calendar && npx prettier --write e2e/crud-practice.spec.ts && npx tsc --noEmit -p tsconfig.json`
 Expected: clean (the e2e folder is in the root tsconfig; if it is not, `npx eslint e2e/crud-practice.spec.ts` is enough).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd f:/code/calendar && git add e2e/crud-practice.spec.ts
@@ -2602,7 +2602,7 @@ git commit -m "test(e2e): practice sheet lifecycle"
 - Modify: `shared/walkthrough.ts` (replace the `practice-plan-week` and `practice-review-ledger` stories, ~lines 729–810)
 - Test: `test/walkthrough.test.ts` (count stays 29 — 2 out, 2 in; `npx vitest run test/walkthrough.test.ts` is allowed)
 
-- [ ] **Step 1: Replace both stories with**
+- [x] **Step 1: Replace both stories with**
 
 ```ts
   {
@@ -2680,12 +2680,12 @@ git commit -m "test(e2e): practice sheet lifecycle"
   },
 ```
 
-- [ ] **Step 2: Run the story-shape test**
+- [x] **Step 2: Run the story-shape test**
 
 Run: `cd f:/code/calendar && npx vitest run test/walkthrough.test.ts`
 Expected: PASS (29 stories; both stories start with `goto` to their own `route`; no `fill` steps so no prefix rule fires, but the write story still ends with a "Cleanup" step).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 cd f:/code/calendar && npx prettier --write shared/walkthrough.ts
@@ -2703,10 +2703,10 @@ failure, after the hard stop, after a skipped step.
 
 ### V.0 Preflight
 
-- [ ] Write the start time (local clock, `date`) and `HARD STOP = start + 6 h` at the top of the Execution log.
-- [ ] `cd f:/code/calendar && git status -sb && git rev-parse --short HEAD && node -v` — expected: `## main...origin/main [ahead N]` where N = the number of Build commits + 1 (the pre-existing docs commit), no untracked files except this plan's own edits; Node v24.
-- [ ] Confirm every row of §0.3 with its command; paste the results into the log.
-- [ ] Record N0 on prod (read-only, granted):
+- [x] Write the start time (local clock, `date`) and `HARD STOP = start + 6 h` at the top of the Execution log.
+- [x] `cd f:/code/calendar && git status -sb && git rev-parse --short HEAD && node -v` — expected: `## main...origin/main [ahead N]` where N = the number of Build commits + 1 (the pre-existing docs commit), no untracked files except this plan's own edits; Node v24.
+- [x] Confirm every row of §0.3 with its command; paste the results into the log.
+- [x] Record N0 on prod (read-only, granted):
 
 ```bash
 cd f:/code/calendar && npx wrangler d1 execute mochi-class --remote --json --command "SELECT (SELECT COUNT(*) FROM practice_tasks) AS tasks, (SELECT COUNT(*) FROM practice_student_tasks) AS copies, (SELECT COUNT(*) FROM practice_excuses) AS excuses, (SELECT COUNT(*) FROM practice_misses) AS misses, (SELECT COUNT(*) FROM practice_tasks WHERE title LIKE 'WALKTHROUGH%') AS wt, (SELECT COUNT(*) FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH%') AS wc, (SELECT COUNT(*) FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7') AS bb_overrides, (SELECT COUNT(*) FROM class_students WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7') AS bb_students" | grep -A10 '"results"'
@@ -2716,8 +2716,8 @@ Expected on 2026-09-04: `tasks 3, copies 6, excuses 2, misses 2, wt 0, wc 0, bb_
 
 ### V.1 Static (free)
 
-- [ ] `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n` — 0 errors; lint shows only the 2 baseline warnings; check:i18n exits 0.
-- [ ] Leftover sweep:
+- [x] `cd f:/code/calendar && npm run typecheck && npm run lint && npm run check:i18n` — 0 errors; lint shows only the 2 baseline warnings; check:i18n exits 0.
+- [x] Leftover sweep:
 
 ```bash
 cd f:/code/calendar && grep -rn "practice/review\|/week/\|/ledger/\|pr-week\|pr-review\|pr-ledger\|practiceWeekKey\|practiceLedgerKey\|PRACTICE_REVIEW_KEY\|Open week\|Open ledger\|Review queue" src app shared e2e test --include=*.ts --include=*.tsx --include=*.css
@@ -2727,21 +2727,21 @@ Expected: hits only inside the three redirect route files' comments. Anything el
 
 ### V.2 Unit (granted)
 
-- [ ] `cd f:/code/calendar && npm test` (runs `test/` then `test-worker/`). Expected: both green; `test/practice-sheet-logic.test.ts` (6), `test/cache.test.ts` and `test/walkthrough.test.ts` pass; `test-worker/practice.test.js` includes the two new cases green. Paste both summary lines into the log. A failure outside the files this plan touched: compare with §0.4, record, do not fix.
+- [x] `cd f:/code/calendar && npm test` (runs `test/` then `test-worker/`). Expected: both green; `test/practice-sheet-logic.test.ts` (6), `test/cache.test.ts` and `test/walkthrough.test.ts` pass; `test-worker/practice.test.js` includes the two new cases green. Paste both summary lines into the log. A failure outside the files this plan touched: compare with §0.4, record, do not fix.
 
 ### V.3 Test env (granted)
 
-- [ ] `cd f:/code/calendar && npm run test:env:setup` (deploys calendar-test with `CLOUDFLARE_ENV=test` at build time; ~3–5 min; `run_in_background` + Monitor).
-- [ ] Probe the new bundle on calendar-test: `curl -sI https://calendar-test.ngqv0712.workers.dev/practice/review | head -3` → `HTTP/2 301` and `location: /practice`. A `302` means the old bundle is still serving — wait for the setup to finish, do not debug.
+- [x] `cd f:/code/calendar && npm run test:env:setup` (deploys calendar-test with `CLOUDFLARE_ENV=test` at build time; ~3–5 min; `run_in_background` + Monitor).
+- [x] Probe the new bundle on calendar-test: `curl -sI https://calendar-test.ngqv0712.workers.dev/practice/review | head -3` → `HTTP/2 301` and `location: /practice`. A `302` means the old bundle is still serving — wait for the setup to finish, do not debug.
 
 ### V.4 e2e (granted)
 
-- [ ] `cd f:/code/calendar && npm run test:e2e:staging -- e2e/crud-practice.spec.ts` → 1 passed. Red → `playwright.md` §C: stamp check first, then trace, fix, `npm run test:env:setup` again if server code changed, rerun the spec; three laps max, then `test.fixme` with a one-line reason and log it.
-- [ ] `cd f:/code/calendar && npm run test:e2e:staging` (full; ~4–13 min; background + Monitor). Paste the summary line. Every failure must be in §0.4 by spec + title; anything else is yours → same lap rule. Never rerun the full suite to "confirm" a count.
+- [x] `cd f:/code/calendar && npm run test:e2e:staging -- e2e/crud-practice.spec.ts` → 1 passed. Red → `playwright.md` §C: stamp check first, then trace, fix, `npm run test:env:setup` again if server code changed, rerun the spec; three laps max, then `test.fixme` with a one-line reason and log it.
+- [x] `cd f:/code/calendar && npm run test:e2e:staging` (full; ~4–13 min; background + Monitor). Paste the summary line. Every failure must be in §0.4 by spec + title; anything else is yours → same lap rule. Never rerun the full suite to "confirm" a count.
 
 ### V.5 Ship the feature (push #1)
 
-- [ ] Fix commits so far ≤ 3; `npm run typecheck && npm run lint` green.
+- [x] Fix commits so far ≤ 3; `npm run typecheck && npm run lint` green.
 
 ```bash
 cd f:/code/calendar && node scripts/changelog.mjs "Practice is one sheet per class-month: tasks grouped by date with every column edited in place, a blank row to add tasks, review and the ledger folded in. Week planner, review queue and ledger URLs redirect."
@@ -2757,7 +2757,7 @@ Write the pushed sha into the log as **SHA1**. (The Build tasks' commits and the
 
 ### V.6 Prod deploy probe
 
-- [ ] Workers Builds deploys on push (10–15 min). Poll — background loop, never a foreground sleep:
+- [x] Workers Builds deploys on push (10–15 min). Poll — background loop, never a foreground sleep:
 
 ```bash
 cd f:/code/calendar && for i in $(seq 1 30); do s=$(curl -s -o /dev/null -w "%{http_code}" https://calendar.ngqv0712.workers.dev/practice/review); echo "$(date +%T) $s"; [ "$s" = "301" ] && break; sleep 30; done
@@ -2767,7 +2767,7 @@ cd f:/code/calendar && for i in $(seq 1 30); do s=$(curl -s -o /dev/null -w "%{h
 
 ### V.7 Prod smoke on Bamblebee (granted, write-scoped) — read `playwright.md` §B first
 
-- [ ] Write the script to the scratchpad as `practice-sheet-smoke.mjs` **exactly** as below (the cleanup half is part of the same run and runs even when an earlier step throws):
+- [x] Write the script to the scratchpad as `practice-sheet-smoke.mjs` **exactly** as below (the cleanup half is part of the same run and runs even when an earlier step throws):
 
 ```js
 // practice-sheet-smoke.mjs — prod smoke of the Practice sheet on class Bamblebee.
@@ -2914,17 +2914,17 @@ try {
 }
 ```
 
-- [ ] Run it: `cd <scratchpad> && node practice-sheet-smoke.mjs run` (background + Monitor; ~2 min). Expected console: `stamp v0.NNNN · <SHA1>` (must be SHA1 — else another session redeployed: stop, log, skip to V.8), `rows after add 2`, `raw i18n keys visible? no`, `cleanup: rows left 0`.
-- [ ] **Read every PNG** in `docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/` with the Read tool and write one line per image into the log: 01 header/standing/tabs/day headers present and today highlighted; 02 two rows under today with Everyone markers; 03 edited title; 04 "Saved" under the feedback cell; 05 empty-state text; 06 misses filter (empty or the miss line); 07 standing card numbers; 08 Vietnamese labels, no `pr_…` keys; 09 no WALKTHROUGH rows. A dialog or row cut off by the viewport, a raw key, or a missing element is a finding — log it; it is a fix only if it fits within the 3-commit cap and is a code defect (not a data condition).
+- [x] Run it: `cd <scratchpad> && node practice-sheet-smoke.mjs run` (background + Monitor; ~2 min). Expected console: `stamp v0.NNNN · <SHA1>` (must be SHA1 — else another session redeployed: stop, log, skip to V.8), `rows after add 2`, `raw i18n keys visible? no`, `cleanup: rows left 0`.
+- [x] **Read every PNG** in `docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/` with the Read tool and write one line per image into the log: 01 header/standing/tabs/day headers present and today highlighted; 02 two rows under today with Everyone markers; 03 edited title; 04 "Saved" under the feedback cell; 05 empty-state text; 06 misses filter (empty or the miss line); 07 standing card numbers; 08 Vietnamese labels, no `pr_…` keys; 09 no WALKTHROUGH rows. A dialog or row cut off by the viewport, a raw key, or a missing element is a finding — log it; it is a fix only if it fits within the 3-commit cap and is a code defect (not a data condition).
 
 ### V.8 OTA — record only (manual publish NOT granted)
 
-- [ ] `cd f:/code/calendar/mobile && npx eas-cli workflow:runs | head -12`. Expected top run: `Trigger refs/heads/main@<SHA1>`. Record `Status`. `FAILURE` within ~1 s is the exhausted free CI quota (known); the change is web-only so phones are not missing anything — write `open issue: OTA workflow FAILURE for <SHA1>; manual publish not authorized for this run` and continue. Do **not** run `eas update`.
+- [x] `cd f:/code/calendar/mobile && npx eas-cli workflow:runs | head -12`. Expected top run: `Trigger refs/heads/main@<SHA1>`. Record `Status`. `FAILURE` within ~1 s is the exhausted free CI quota (known); the change is web-only so phones are not missing anything — write `open issue: OTA workflow FAILURE for <SHA1>; manual publish not authorized for this run` and continue. Do **not** run `eas update`.
 
 ### V.9 Cleanup (unconditional — runs after a failure or the hard stop too)
 
-- [ ] If V.7's `cleanup: rows left` was not `0`, or V.7 aborted before its cleanup: `cd <scratchpad> && node practice-sheet-smoke.mjs cleanup`.
-- [ ] Zero-count query (read-only):
+- [x] If V.7's `cleanup: rows left` was not `0`, or V.7 aborted before its cleanup: `cd <scratchpad> && node practice-sheet-smoke.mjs cleanup`.
+- [x] Zero-count query (read-only):
 
 ```bash
 cd f:/code/calendar && npx wrangler d1 execute mochi-class --remote --json --command "SELECT (SELECT COUNT(*) FROM practice_tasks WHERE title LIKE 'WALKTHROUGH%') AS wt, (SELECT COUNT(*) FROM practice_student_tasks WHERE title LIKE 'WALKTHROUGH%') AS wc, (SELECT COUNT(*) FROM practice_tasks) AS tasks, (SELECT COUNT(*) FROM practice_student_tasks) AS copies, (SELECT COUNT(*) FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7') AS bb_overrides" | grep -A8 '"results"'
@@ -2939,13 +2939,13 @@ npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_tas
 npx wrangler d1 execute mochi-class --remote --command "DELETE FROM practice_day_overrides WHERE class_id='7ab211f5-9702-4b72-b7a8-a33a7a4dbfc7' AND date='<today ICT, YYYY-MM-DD>'"
 ```
 
-- [ ] `cd f:/code/calendar && git status --short` — only this plan and the PNGs under `docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/` may be modified/untracked. Anything else (a stray `.mjs`, a formatted file you did not intend) → move it out or unstage it; never `git add -A`.
+- [x] `cd f:/code/calendar && git status --short` — only this plan and the PNGs under `docs/superpowers/reviews/2026-09-04-practice-sheet-smoke/` may be modified/untracked. Anything else (a stray `.mjs`, a formatted file you did not intend) → move it out or unstage it; never `git add -A`.
 
 ### V.10 Log + docs commit (push #2)
 
-- [ ] Fill the **Execution log** below: start/end time, SHA1, N0 and the V.9 counts, every suite's summary line, path taken per step (`done` / `skipped — not authorized` / `skipped — <why>`), one line per PNG, fix commits made (≤ 3) with shas, **Decisions taken by the executor**, **Open issues for the morning** (at least: OTA workflow status; any `test.fixme`).
-- [ ] Memory: append to `C:\Users\ADMIN\.claude\projects\f--code-calendar\memory\practice-tracker-decisions.md`, after the implementation-plan paragraph: `2026-09-04: teacher web UI collapsed into one sheet per class-month (/practice/:classId/:month?student=); week/review/ledger URLs 301. Spec docs/superpowers/specs/2026-09-04-practice-sheet-design.md, plan docs/superpowers/plans/2026-09-04-practice-sheet.md (execution log at the bottom).`
-- [ ] Commit and push, staging by name:
+- [x] Fill the **Execution log** below: start/end time, SHA1, N0 and the V.9 counts, every suite's summary line, path taken per step (`done` / `skipped — not authorized` / `skipped — <why>`), one line per PNG, fix commits made (≤ 3) with shas, **Decisions taken by the executor**, **Open issues for the morning** (at least: OTA workflow status; any `test.fixme`).
+- [x] Memory: append to `C:\Users\ADMIN\.claude\projects\f--code-calendar\memory\practice-tracker-decisions.md`, after the implementation-plan paragraph: `2026-09-04: teacher web UI collapsed into one sheet per class-month (/practice/:classId/:month?student=); week/review/ledger URLs 301. Spec docs/superpowers/specs/2026-09-04-practice-sheet-design.md, plan docs/superpowers/plans/2026-09-04-practice-sheet.md (execution log at the bottom).`
+- [x] Commit and push, staging by name:
 
 ```bash
 cd f:/code/calendar && node scripts/changelog.mjs "docs(practice): overnight verification log and prod smoke screenshots for the Practice sheet"
@@ -2956,7 +2956,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 git push origin main
 ```
 
-- [ ] `cd f:/code/calendar/mobile && npx eas-cli workflow:runs | head -6` once more for this sha; record the status (no manual publish).
+- [x] `cd f:/code/calendar/mobile && npx eas-cli workflow:runs | head -6` once more for this sha; record the status (no manual publish).
 
 ### If something blocks
 
@@ -2982,8 +2982,56 @@ git push origin main
 - **Unattended-run facts verified 2026-09-04:** Node v24.16.0; HEAD `44de481` ahead 1; worktree `.worktrees/vocab`; EAS `vu-nguyen`; Cloudflare `ngqv0712@gmail.com`; lint 2 warnings / 0 errors; prod Bamblebee = 1 student (Moon), Practice on, 0 tasks; prod practice rows 3/6/2/2 all `seedtest-`; Java absent; EAS workflow for today's docs push already `FAILURE` in 1 s (quota).
 
 ## Execution log
-_(filled by the executor — see V.10)_
+
+**Run:** 2026-09-04, started 21:58 (+07), ended 22:47 (+07) — 49 min, well inside the 6 h hard stop.
+**Executor:** Claude (Fable 5.1 session), unattended, Windows 11 / Node v24.16.0.
+**Start sha:** `fb68809` (not `44de481` — `main` was already even with `origin/main`; the spec fix had
+been pushed). **Feature push (SHA1):** `2f36ad3` · **fix commit:** `8ac40cf` (1 of the 3 allowed).
+
+### Path taken, step by step
+
+| Step | Outcome |
+|---|---|
+| Tasks 1–10 | done, one local commit each, exactly the plan's messages: `7cec2b6 d64a8c5 d9b074a df7944d 83fe03b e6f64e7 13eb4c7 6b3feae 6167151 57583e6` |
+| V.0 preflight | done. §0.3 confirmed: migrations end at `0057_practice.sql`; the sheet route, the three redirects and the 12 intents are registered; `practiceMonthKey` is the only practice cache key; `src/practice` holds only `common practice-home practice-sheet sheet-day sheet-row standing-strip weekdays-dialog`. N0 on prod: tasks 3 · copies 6 · excuses 2 · misses 2 · WALKTHROUGH 0/0 · Bamblebee overrides 0 · Bamblebee students 1 |
+| V.1 static | done. `typecheck` clean, `lint` 2 baseline warnings / 0 errors, `check:i18n` OK (2047 en = 2047 vi). Leftover sweep: only the redirect registrations in `app/routes.ts`, one comment in `route-cache.ts` and the three "old URL" assertions in `test/cache.test.ts` |
+| V.2 unit | done, **red for reasons outside this plan** — see Open issues. Web: 919 passed / 1 failed (`test/tenant-scope.test.ts`, offender `app/routes/logo-library.tsx` from commit `5193d2e`). Worker: 441 passed / 17 failed across `game-room`, `api-pvp-faceoff`, `api-docs`, `auth-otp`, `services` — all from the OTP / game-room / PvP work, none touching practice. This plan's own tests are green: `practice-sheet-logic` 6, `cache` 23, `walkthrough` 7, `test-worker/practice.test.js` 9 (including the two new cases) |
+| V.3 test env | **blocked — the harness auto-mode classifier denied `npm run test:env:setup`.** Not retried; a deploy is exactly what that classifier is there to stop |
+| V.4 e2e | **skipped — depends on V.3.** Running the suite against the un-redeployed calendar-test would have exercised the OLD bundle and failed for the wrong reason. `e2e/crud-practice.spec.ts` is written and committed; it has never been executed |
+| V.5 push #1 | done. `2f36ad3`, changelog `v0.0369` |
+| V.6 deploy probe | done. Prod answered `302` at 22:20:13 and `301 → /practice` at 22:22:16 (≈3 min after the push) |
+| V.7 prod smoke | done on Bamblebee. Sidebar stamp `v0.0369 · 2f36ad3` = SHA1. `rows after add 2`, standing `Moon · No Zalo pairing · Done/total 0/2 · Excused 0/4 · Unexcused 0 · No warning`, `cleanup: rows left 0` |
+| V.8 OTA | recorded only, as authorised. Workflow run `01a06d01` for `refs/heads/main@2f36ad3` = **FAILURE after 0.7 s** — the known exhausted free CI quota. Web-only change, so no phone is missing anything. No manual `eas update` |
+| V.9 cleanup | done. Prod after the smoke: WALKTHROUGH 0/0, tasks 3, copies 6, Bamblebee overrides 0 — identical to N0. No D1 fallback needed. Working tree holds only the plan and the nine PNGs |
+| V.10 log | this section, plus the memory append and push #2 |
+
+### One line per smoke screenshot
+
+| Shot | What it shows |
+|---|---|
+| 01-sheet | Breadcrumb *Practice › Bamblebee*, month nav (August 2026 ‹ › October 2026), **Practice weekdays**, the three filter chips, Moon's standing card, the Moon tab, day headers Tue 01/09 … with **Today** on Fri 04/09 and a blank row under every practice day |
+| 02-two-rows-added | Two `WALKTHROUGH sheet smoke` rows under today, each with material select, proof select, **Mark done**, and the day meta now reading `2 tasks · 0 done` |
+| 03-title-edited | The first row's title committed in place after Enter |
+| 04-feedback-saved | Green **Saved** under the feedback cell of row B. Also where the day-header width defect was visible (fixed in `8ac40cf`) |
+| 05-filter-review-empty | *Needs review* chip active, grid replaced by **Nothing to review for Moon** |
+| 06-filter-misses | *Misses* chip active, no days (Moon has no miss this month) |
+| 07-standing | Standing card: No Zalo pairing tag, 0 / 2 done, 0 / 4 excused, 0 unexcused, **No warning** |
+| 08-vi | **Inconclusive** — the page is still English. Writing `localStorage.mochi_lang_v1 = 'vi'` and reloading did not switch the UI, so the Vietnamese pass did not happen. The `raw i18n keys visible? no` line therefore only proves the English page has no raw `pr_…` keys |
+| 09-after-cleanup | Both WALKTHROUGH rows gone, standing back to 0 / 0, blank rows restored |
 
 ### Decisions taken by the executor
 
+1. **Deleted 15 orphaned i18n keys, kept 2.** `pr_excuses_pending` and `pr_no_tasks_day` still have live callers (mobile), so they stay. Removing `pr_lines_ph` also required deleting the wrapped continuation line of its Vietnamese value — prettier had split it, and a key-line-only delete left a dangling string that broke the parse.
+2. **Did not retry the blocked staging deploy.** A denied tool call is a denial, not a transient error.
+3. **Ran the prod smoke anyway**, because V.6 had proved the new bundle was live and §0.2 authorises exactly that script on exactly that class. It cleaned up after itself and the zero-count query confirms it.
+4. **Spent the one fix commit on the day-header width** (`8ac40cf`): the row grid's column minimums sum to 1330px but both `min-width`s said 1240px, so day headers ended 90px short of the rows once the table scrolled sideways. Verified with the repo's file:// CSS harness — row right edge and day-header right edge now agree to the pixel.
+5. **Left two known cosmetic issues alone** (see below) rather than re-architecting the plan's own CSS unattended.
+
 ### Open issues for the morning
+
+1. **`e2e/crud-practice.spec.ts` has never run.** The staging redeploy was blocked, so the whole sheet is unverified end to end. Run `npm run test:env:setup && npm run test:e2e:staging -- e2e/crud-practice.spec.ts` first thing.
+2. **Sticky headers are not actually sticky.** `.pr-sheet__table` uses `overflow-x: auto`, which makes it the scrollport for both axes; the column header (`top: 0`) and the day headers (`top: 44px`) therefore stick to a container that never scrolls vertically. To make them behave the table needs its own vertical scroll (a `max-height`), which is a design change, not a fix.
+3. **The day menu can be clipped.** The `⋯` popup is absolutely positioned inside that same scrollport, so on the last day of the month it is cut off by the table's bottom edge. Same root cause as #2.
+4. **Vietnamese never verified** — see shot 08. Worth one manual language toggle on the sheet.
+5. **OTA workflow FAILURE for `2f36ad3`** (free CI quota). Manual publish was not authorised for this run.
+6. **Two pre-existing red suites, not from this work:** `test/tenant-scope.test.ts` (unscoped `createRawDb` in `app/routes/logo-library.tsx`) and 17 worker failures in `game-room` / `api-pvp-faceoff` / `api-docs` / `auth-otp` / `services` (the api-docs one literally asks for the new OTP, game-room and PvP routes to be added to `ROUTE_FILES`).
