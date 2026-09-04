@@ -86,7 +86,7 @@ Proof thumbnail (`<img>`/`<video>` from `/practice-media/:key`) opens the full m
 *All*. A one-line textarea: **Enter** saves, Shift+Enter is a newline, a paste with several lines
 creates one task per line (`quick-add` semantics). Material select defaults to the day's last row's
 material; proof-type select defaults to *Photo or video*; the **scope** pill toggles **Everyone** ↔
-**Only <name>**. Everyone → `quick-add`; only-<name> → one `create-task` with `studentId` per line.
+**Only <name>**. Both post ONE `quick-add`; the only-<name> variant carries `studentId` (see Data flow).
 
 **Scope and editing rules** (unchanged server semantics, made visible): a row whose copy has a
 `taskId` is a class task — editing its title/material/link/proof posts `update-task` and propagates
