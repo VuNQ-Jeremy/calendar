@@ -1655,6 +1655,9 @@ export const PracticeQuickAddInput = z.object({
   lines: z.string().min(1).max(10_000),
   materialId: z.string().nullish(),
   proofType: PracticeProofType.default('either'),
+  /** With a studentId every line becomes that student's own copy (no class-level row) — the
+   *  sheet's "only <name>" blank row; without it, class tasks fan out to the roster as before. */
+  studentId: z.string().nullish(),
 });
 export type PracticeQuickAddInput = z.infer<typeof PracticeQuickAddInput>;
 

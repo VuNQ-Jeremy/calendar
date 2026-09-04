@@ -95,6 +95,63 @@ describe('practice — tasks fan out to the roster', () => {
     expect(after[0].studentId).toBe(a.id);
     expect(after[0].taskId).toBe(null); // FK SET NULL kept the submission
   });
+
+  it('quick add with a studentId makes copies for that student only, and update-copy edits one open copy', async () => {
+    const d = db();
+    const { a, b, cls } = await fixture(d);
+    const made = await practiceSvc.quickAdd(
+      d,
+      {
+        classId: cls.id,
+        date: '2031-03-03',
+        lines: 'Only A line 1\nOnly A line 2',
+        materialId: null,
+        proofType: 'none',
+        studentId: a.id,
+      },
+      await someStaffId(d),
+    );
+    expect(made).toHaveLength(2);
+    const classTasks = await practiceSvc.listTasks(d, cls.id, '2031-03-03', '2031-03-03');
+    expect(classTasks).toHaveLength(0); // no class-level row
+    const forA = await practiceSvc.listStudentTasksFor(d, a.id, '2031-03-03', '2031-03-03');
+    const forB = await practiceSvc.listStudentTasksFor(d, b.id, '2031-03-03', '2031-03-03');
+    expect(forA.map((t) => t.title)).toEqual(['Only A line 1', 'Only A line 2']);
+    expect(forB).toHaveLength(0);
+    expect(forA[0].taskId).toBeNull();
+
+    await practiceSvc.updateStudentTask(d, forA[0].id, {
+      title: 'Only A renamed',
+      proofType: 'photo',
+    });
+    const after = await practiceSvc.getStudentTask(d, forA[0].id);
+    expect(after.title).toBe('Only A renamed');
+    expect(after.proofType).toBe('photo');
+  });
+
+  it('update-copy leaves a submitted copy alone', async () => {
+    const d = db();
+    const { a, cls } = await fixture(d);
+    const [made] = await practiceSvc.quickAdd(
+      d,
+      {
+        classId: cls.id,
+        date: '2031-03-03',
+        lines: 'Submitted one',
+        materialId: null,
+        proofType: 'none',
+        studentId: a.id,
+      },
+      await someStaffId(d),
+    );
+    await practiceSvc.review(
+      d,
+      { studentTaskId: made.id, decision: 'teacher_done', feedback: null, rejectReason: null },
+      await someStaffId(d),
+    );
+    await practiceSvc.updateStudentTask(d, made.id, { title: 'Should not apply' });
+    expect((await practiceSvc.getStudentTask(d, made.id)).title).toBe('Submitted one');
+  });
 });
 
 describe('practice — finalize', () => {

@@ -93,7 +93,7 @@ async function dispatch({ request, context }: ActionFunctionArgs) {
       return { ok: true };
     }
     case 'quick-add': {
-      const p = PracticeQuickAddInput.safeParse(nullBlanks(body, ['materialId']));
+      const p = PracticeQuickAddInput.safeParse(nullBlanks(body, ['materialId', 'studentId']));
       if (!p.success) return bad('validation_failed', 422);
       return { ok: true, tasks: await practiceSvc.quickAdd(db, p.data, staffId) };
     }
@@ -111,6 +111,19 @@ async function dispatch({ request, context }: ActionFunctionArgs) {
       );
       if (!p.success) return bad('validation_failed', 422);
       await practiceSvc.updateTask(db, id, p.data);
+      return { ok: true };
+    }
+    case 'update-copy': {
+      // A per-student task (copy with no class row) edited in place on the sheet. Same patch shape
+      // as update-task; the service only touches an `open` copy.
+      const id = String(fd.get('id') ?? '');
+      if (!id) return bad('missing_id');
+      const p = parsePatch(
+        PracticeTaskInput.pick({ title: true, materialId: true, url: true, proofType: true }),
+        nullBlanks(body, ['materialId', 'url']),
+      );
+      if (!p.success) return bad('validation_failed', 422);
+      await practiceSvc.updateStudentTask(db, id, p.data);
       return { ok: true };
     }
     case 'delete-task': {

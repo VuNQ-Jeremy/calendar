@@ -491,11 +491,11 @@ export async function quickAdd(
   db: TenantDb,
   input: PracticeQuickAddInput,
   staffId: string | null,
-): Promise<PracticeTaskRow[]> {
-  const out: PracticeTaskRow[] = [];
+): Promise<(PracticeTaskRow | StudentTaskRow)[]> {
+  const out: (PracticeTaskRow | StudentTaskRow)[] = [];
   for (const title of parseQuickAddLines(input.lines)) {
     out.push(
-      (await createTask(
+      await createTask(
         db,
         {
           classId: input.classId,
@@ -504,10 +504,10 @@ export async function quickAdd(
           materialId: input.materialId,
           url: null,
           proofType: input.proofType,
-          studentId: null,
+          studentId: input.studentId ?? null,
         },
         staffId,
-      )) as PracticeTaskRow,
+      ),
     );
   }
   return out;
@@ -533,6 +533,37 @@ export async function updateTask(
     eq(practiceStudentTasks.status, 'open'),
   );
   record({ action: 'update', entityType: 'practice_task', entityId: id, after: set });
+}
+
+/**
+ * Edit a per-student task — a copy with no class task behind it (`taskId` null), created from the
+ * sheet's "only <name>" blank row. Only an `open` copy changes: once the student has submitted,
+ * the title they worked against is part of the record, exactly as updateTask leaves submitted
+ * copies alone.
+ */
+export async function updateStudentTask(
+  db: TenantDb,
+  id: string,
+  patch: Partial<Pick<PracticeTaskInput, 'title' | 'materialId' | 'url' | 'proofType'>>,
+): Promise<void> {
+  const set: Partial<typeof practiceStudentTasks.$inferInsert> = {};
+  if (patch.title !== undefined) set.title = patch.title;
+  if (patch.materialId !== undefined) set.materialId = patch.materialId ?? null;
+  if (patch.url !== undefined) set.url = patch.url ?? null;
+  if (patch.proofType !== undefined) set.proofType = patch.proofType;
+  if (!Object.keys(set).length) return;
+  await db.update(
+    practiceStudentTasks,
+    set,
+    eq(practiceStudentTasks.id, id),
+    eq(practiceStudentTasks.status, 'open'),
+  );
+  record({
+    action: 'update',
+    entityType: 'practice_task',
+    entityId: id,
+    after: { ...set, kind: 'copy' },
+  });
 }
 
 /** Delete a class task: open copies go, submitted copies survive with task_id NULL (FK SET NULL). */
