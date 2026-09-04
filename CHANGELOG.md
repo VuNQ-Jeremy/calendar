@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0353 — 2026-09-04
+Feedback board: every card is a fixed 152px box (message clamped to two lines, meta on one row) so the columns read as a grid instead of a ragged stack.
+
 ## v0.0352 — 2026-09-04
 docs(skills): unattended-verification — Playwright, curl and emulator runbook plus the plan template for overnight runs
 
