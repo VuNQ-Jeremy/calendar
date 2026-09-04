@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0352 — 2026-09-04
+docs(skills): unattended-verification — Playwright, curl and emulator runbook plus the plan template for overnight runs
+
 ## v0.0351 — 2026-09-04
 fix(practice): a ×N debt due on a day off or an empty day now moves to the next practice day; a duplicate excuse request answers 409 instead of a raw D1 constraint 500
 
