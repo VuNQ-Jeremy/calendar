@@ -63,15 +63,22 @@ export function PracticeSheetScreen() {
       { replace: true },
     );
 
-  // Today into view once per class-month, after the first paint of the grid.
+  // Today into view once per class-month, after the first paint of the grid — but ONLY when it is
+  // off screen. The app shell scrolls an inner container, not the window, so an unconditional
+  // `scrollIntoView({ block: 'start' })` threw the header, the filters, the standing cards and the
+  // student tabs off the top and dropped the teacher into the middle of the month with no context.
+  // Early in the month today is already visible and the right amount to scroll is none; later in
+  // the month `nearest` moves the minimum that brings the day on screen.
   const scrolled = React.useRef<string | null>(null);
   React.useEffect(() => {
     const key = `${classId}:${month}`;
     if (scrolled.current === key) return;
     scrolled.current = key;
-    document
-      .querySelector('[data-testid="pr-day"][data-today="true"]')
-      ?.scrollIntoView({ block: 'start' });
+    const el = document.querySelector('[data-testid="pr-day"][data-today="true"]');
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    if (box.top >= 0 && box.bottom <= window.innerHeight) return;
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [classId, month]);
 
   const crumbs = [{ label: t('pr_title'), to: '/practice' }, { label: cls.name }];

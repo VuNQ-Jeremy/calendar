@@ -6,6 +6,9 @@ One entry per push to `main`. Newest first. Add one with:
 Version is `v{major}.{build}`. `major` lives in `shared/version.json`; the build number is
 derived from the git commit count and is never stored.
 
+## v0.0372 — 2026-09-04
+fix(practice): the sheet no longer scrolls past its own header on load — today is only brought into view when it is off screen
+
 ## v0.0371 — 2026-09-04
 docs(practice): overnight verification log and prod smoke screenshots for the Practice sheet
 
