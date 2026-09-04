@@ -4604,12 +4604,14 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
 .pr-sheet__head,
 .pr-sheet__row {
   display: grid;
-  grid-template-columns: minmax(220px, 27fr) 170px 150px 110px 280px minmax(120px, 15fr) minmax(
-      160px,
-      22fr
-    ) 120px;
+  grid-template-columns:
+    minmax(220px, 27fr) 170px 150px 110px 280px minmax(120px, 15fr) minmax(160px, 22fr)
+    120px;
   align-items: center;
-  min-width: 1240px;
+  /* 1330px = the sum of the column minimums above; the day header (a flex row, not a grid) must
+     use the SAME number or its background and its ⋯ menu stop short of the rows once the table
+     is scrolled sideways — seen on the 2026-09-04 prod smoke. */
+  min-width: 1330px;
 }
 .pr-sheet__head {
   position: sticky;
@@ -4646,7 +4648,7 @@ html[data-vocab-card='tint'] .topic-card__head .topic-card__name {
   gap: var(--space-3);
   flex-wrap: wrap;
   padding: var(--space-2) var(--space-3);
-  min-width: 1240px;
+  min-width: 1330px;
   box-sizing: border-box;
   background: var(--surface-raised);
   border-top: var(--border-width) solid var(--border-subtle);
